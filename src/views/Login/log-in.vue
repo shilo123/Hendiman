@@ -1,0 +1,517 @@
+<template>
+  <div class="login-page">
+    <div class="login-wrapper">
+      <!-- צד שמאל - טקסטים מעוצבים -->
+      <div class="login-sidebar">
+        <div class="sidebar-content">
+          <div class="logo-circle-large">H</div>
+          <h1 class="sidebar-title">Hendiman</h1>
+          <div class="tagline-box">
+            <p class="tagline-main">תיקונים קטנים</p>
+            <p class="tagline-sub">פתרונות גדולים</p>
+          </div>
+          <div class="features-list">
+            <div class="feature-item">
+              <span class="feature-icon">⚡</span>
+              <span>הזמנה מהירה ונוחה</span>
+            </div>
+            <div class="feature-item">
+              <span class="feature-icon">🔒</span>
+              <span>תשלום מאובטח</span>
+            </div>
+            <div class="feature-item">
+              <span class="feature-icon">⭐</span>
+              <span>הנדימנים מאומתים</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- צד ימין - טופס -->
+      <div class="login-form-section">
+        <div class="login-card">
+          <div class="logo-circle">H</div>
+          <h1 class="login-title">התחברות</h1>
+          <p class="login-subtitle">ברוך שובך להנדימן</p>
+
+          <form @submit.prevent="handleLogin" class="login-form">
+            <div class="input-group">
+              <label for="username">שם משתמש</label>
+              <input
+                id="username"
+                v-model="username"
+                type="text"
+                placeholder="הכנס שם משתמש"
+                required
+              />
+            </div>
+
+            <div class="input-group">
+              <label for="password">סיסמה</label>
+              <input
+                id="password"
+                v-model="password"
+                type="password"
+                placeholder="הכנס סיסמה"
+                required
+              />
+            </div>
+
+            <button type="submit" class="login-button">התחבר</button>
+          </form>
+
+          <div class="divider">
+            <span>או</span>
+          </div>
+
+          <div class="social-login">
+            <button class="social-button google">
+              <img src="@/assets/Google.png" alt="Google" />
+              התחבר עם Google
+            </button>
+            <button class="social-button facebook">
+              <img src="@/assets/FaceBook.png" alt="Facebook" />
+              התחבר עם Facebook
+            </button>
+          </div>
+
+          <p class="register-link">
+            עדיין לא רשום?
+            <a href="#" @click.prevent="goToRegister">הרשם כאן</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import axios from "axios";
+import { URL } from "@/Url/url";
+import { useToast } from "@/composables/useToast";
+
+export default {
+  name: "logIn",
+  data() {
+    return {
+      username: "שלמה",
+      password: "יחזקאל",
+      toast: null,
+    };
+  },
+  created() {
+    this.toast = useToast();
+  },
+  methods: {
+    async handleLogin() {
+      try {
+        // כאן תוכל להוסיף את לוגיקת ההתחברות
+        // eslint-disable-next-line no-undef
+        const { data } = await axios.post(`${URL}/login-user`, {
+          username: this.username,
+          password: this.password,
+        });
+        if (data.message === "Success") {
+          this.toast.showSuccess("התחברות בוצעה בהצלחה");
+        } else if (data.message === "NoUser") {
+          this.toast.showError("שם משתמש לא נכון");
+        } else if (data.message === "NoPass") {
+          this.toast.showError("סיסמה לא נכון");
+        }
+        console.log(data);
+      } catch (error) {
+        this.toast.showError("שגיאה בהתחברות");
+        console.error(error);
+      }
+    },
+    goToRegister() {
+      this.$router.push({ name: "Register" });
+    },
+  },
+};
+</script>
+
+<style lang="scss" scoped>
+.login-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+  padding: 20px;
+}
+
+.login-wrapper {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: calc(100vh - 40px);
+  max-width: 1400px;
+  margin: 0 auto;
+  gap: 40px;
+  align-items: center;
+}
+
+/* צד שמאל - טקסטים מעוצבים */
+.login-sidebar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  direction: rtl;
+}
+
+.sidebar-content {
+  width: 100%;
+  max-width: 500px;
+  animation: fadeInLeft 0.6s ease-out;
+}
+
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.logo-circle-large {
+  width: 80px;
+  height: 80px;
+  border-radius: 999px;
+  background: #f97316;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #000000;
+  font-weight: 700;
+  font-size: 40px;
+  margin: 0 auto 30px;
+  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.4);
+}
+
+.sidebar-title {
+  color: #f97316;
+  font-size: 3rem;
+  font-weight: bold;
+  text-align: center;
+  margin: 0 0 40px 0;
+  text-shadow: 0 0 20px rgba(249, 115, 22, 0.5);
+  letter-spacing: 2px;
+}
+
+.tagline-box {
+  background: #111111;
+  border: 2px solid #f97316;
+  border-radius: 16px;
+  padding: 30px;
+  margin-bottom: 40px;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.2);
+}
+
+.tagline-main {
+  color: #f97316;
+  font-size: 2rem;
+  font-weight: bold;
+  margin: 0 0 10px 0;
+  text-shadow: 0 0 15px rgba(249, 115, 22, 0.4);
+}
+
+.tagline-sub {
+  color: #ffffff;
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+  opacity: 0.9;
+}
+
+.features-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  background: #111111;
+  border: 1px solid #2d2d2d;
+  border-radius: 12px;
+  padding: 16px 20px;
+  color: #ffffff;
+  font-size: 1.1rem;
+  transition: all 0.3s ease;
+
+  &:hover {
+    border-color: #f97316;
+    background: #1a1a1a;
+    transform: translateX(-5px);
+  }
+}
+
+.feature-icon {
+  font-size: 1.5rem;
+  filter: drop-shadow(0 0 8px rgba(249, 115, 22, 0.6));
+}
+
+/* צד ימין - טופס */
+.login-form-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.login-card {
+  background: #111111;
+  border: 2px solid #f97316;
+  border-radius: 16px;
+  padding: 40px;
+  box-shadow: 0 8px 32px rgba(249, 115, 22, 0.2);
+  animation: slideIn 0.5s ease-out;
+  width: 100%;
+  max-width: 420px;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.logo-circle {
+  width: 50px;
+  height: 50px;
+  border-radius: 999px;
+  background: #f97316;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #000000;
+  font-weight: 700;
+  font-size: 24px;
+  margin: 0 auto 20px;
+}
+
+.login-title {
+  color: #f97316;
+  font-size: 2rem;
+  font-weight: bold;
+  text-align: center;
+  margin: 0 0 8px 0;
+}
+
+.login-subtitle {
+  color: #9ca3af;
+  text-align: center;
+  margin: 0 0 30px 0;
+  font-size: 0.95rem;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  label {
+    color: #f97316;
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-align: right;
+  }
+
+  input {
+    background: #1f1f1f;
+    border: 2px solid #2d2d2d;
+    border-radius: 8px;
+    padding: 14px 16px;
+    color: #ffffff;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    text-align: right;
+    direction: rtl;
+
+    &::placeholder {
+      color: #666;
+    }
+
+    &:focus {
+      outline: none;
+      border-color: #f97316;
+      box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+      background: #2a2a2a;
+    }
+
+    &:hover {
+      border-color: #f97316;
+    }
+  }
+}
+
+.login-button {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  color: #000000;
+  border: none;
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 10px;
+  box-shadow: 0 4px 15px rgba(249, 115, 22, 0.3);
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(249, 115, 22, 0.4);
+    background: linear-gradient(135deg, #ea580c 0%, #f97316 100%);
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 10px rgba(249, 115, 22, 0.3);
+  }
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 24px 0;
+  color: #9ca3af;
+  font-size: 0.9rem;
+
+  &::before,
+  &::after {
+    content: "";
+    flex: 1;
+    border-bottom: 1px solid #2d2d2d;
+  }
+
+  span {
+    padding: 0 12px;
+  }
+}
+
+.social-login {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.social-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: #1f1f1f;
+  border: 2px solid #2d2d2d;
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  img {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    object-fit: cover;
+  }
+
+  &:hover {
+    border-color: #f97316;
+    background: #2a2a2a;
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+.register-link {
+  text-align: center;
+  margin-top: 24px;
+  color: #9ca3af;
+  font-size: 0.9rem;
+
+  a {
+    color: #f97316;
+    text-decoration: none;
+    font-weight: 600;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+@media (max-width: 1024px) {
+  .login-wrapper {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .login-sidebar {
+    padding: 20px;
+  }
+
+  .sidebar-title {
+    font-size: 2.5rem;
+  }
+
+  .tagline-main {
+    font-size: 1.5rem;
+  }
+
+  .tagline-sub {
+    font-size: 1.2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 30px 20px;
+  }
+
+  .login-title {
+    font-size: 1.75rem;
+  }
+
+  .logo-circle-large {
+    width: 60px;
+    height: 60px;
+    font-size: 30px;
+  }
+
+  .sidebar-title {
+    font-size: 2rem;
+  }
+
+  .tagline-box {
+    padding: 20px;
+  }
+
+  .tagline-main {
+    font-size: 1.3rem;
+  }
+
+  .tagline-sub {
+    font-size: 1rem;
+  }
+}
+</style>
