@@ -46,15 +46,27 @@
               />
             </div>
 
-            <div class="input-group">
+            <div class="input-group password-input-group">
               <label for="password">סיסמה</label>
-              <input
-                id="password"
-                v-model="password"
-                type="password"
-                placeholder="הכנס סיסמה"
-                required
-              />
+              <div class="password-input-wrapper">
+                <input
+                  id="password"
+                  v-model="password"
+                  placeholder="הכנס סיסמה"
+                  required
+                  :type="showPassword ? 'text' : 'password'"
+                />
+                <button
+                  type="button"
+                  class="show-password-button"
+                  @click="showPassword = !showPassword"
+                  :aria-label="showPassword ? 'הסתר סיסמה' : 'הראה סיסמה'"
+                >
+                  <font-awesome-icon
+                    :icon="showPassword ? ['fas', 'eye-slash'] : ['fas', 'eye']"
+                  />
+                </button>
+              </div>
             </div>
 
             <button type="submit" class="login-button">התחבר</button>
@@ -65,11 +77,14 @@
           </div>
 
           <div class="social-login">
-            <button class="social-button google">
+            <button class="social-button google" @click="ConenectWithGoogle">
               <img src="@/assets/Google.png" alt="Google" />
               התחבר עם Google
             </button>
-            <button class="social-button facebook">
+            <button
+              class="social-button facebook"
+              @click="ConenectWithFacebook"
+            >
               <img src="@/assets/FaceBook.png" alt="Facebook" />
               התחבר עם Facebook
             </button>
@@ -94,15 +109,70 @@ export default {
   name: "logIn",
   data() {
     return {
-      username: "שלמה",
-      password: "יחזקאל",
+      username: "",
+      password: "",
+      ifGoogleUser: false,
       toast: null,
+      showPassword: false,
     };
   },
   created() {
     this.toast = useToast();
+    // Check if returning from Google OAuth
+    this.handleGoogleCallback();
+  },
+  watch: {
+    // Watch for route changes (in case user navigates to login with params)
+    "$route.query": {
+      handler() {
+        // Wait for toast to be initialized
+        if (this.toast) {
+          this.handleGoogleCallback();
+        }
+      },
+    },
   },
   methods: {
+    handleGoogleCallback() {
+      // Make sure toast is initialized
+      if (!this.toast) {
+        this.toast = useToast();
+      }
+
+      // Check both route query and URL params
+      const googleAuth =
+        this.$route.query.googleAuth ||
+        new URLSearchParams(window.location.search).get("googleAuth");
+
+      // console.log("googleAuth", googleAuth);
+      if (googleAuth === "success") {
+        const userData =
+          this.$route.query.user ||
+          new URLSearchParams(window.location.search).get("user");
+        if (userData) {
+          try {
+            this.ifGoogleUser = true;
+            // console.log("userData", userData);
+            const user = JSON.parse(decodeURIComponent(userData));
+            this.toast.showSuccess("התחברות עם Google בוצעה בהצלחה!");
+            console.log("Google user:", user);
+            // כאן תוכל לשמור את המשתמש ב-store או לעשות redirect
+            // this.$router.push({ name: "home" });
+            // Clean URL - remove query params
+            // this.$router.replace({ path: this.$route.path });
+            this.username = user.username;
+            this.password = user.googleId;
+            this.showPassword = true;
+            this.handleLogin();
+          } catch (error) {
+            if (this.toast) {
+              this.toast.showError("שגיאה בעיבוד נתוני המשתמש");
+            }
+            console.error("Error parsing user data:", error);
+          }
+        }
+      }
+    },
     async handleLogin() {
       try {
         // כאן תוכל להוסיף את לוגיקת ההתחברות
@@ -110,19 +180,25 @@ export default {
         const { data } = await axios.post(`${URL}/login-user`, {
           username: this.username,
           password: this.password,
+          ifGoogleUser: this.ifGoogleUser,
         });
+
         if (data.message === "Success") {
           this.toast.showSuccess("התחברות בוצעה בהצלחה");
         } else if (data.message === "NoUser") {
           this.toast.showError("שם משתמש לא נכון");
         } else if (data.message === "NoPass") {
-          this.toast.showError("סיסמה לא נכון");
+          this.toast.showError("סיסמה לא נכונה");
         }
         console.log(data);
       } catch (error) {
         this.toast.showError("שגיאה בהתחברות");
         console.error(error);
       }
+    },
+    ConenectWithGoogle() {
+      // Redirect to Google OAuth
+      window.location.href = `${URL}/auth/google`;
     },
     goToRegister() {
       this.$router.push({ name: "Register" });
@@ -132,6 +208,60 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+.fas {
+  font-size: 1.2rem;
+  color: #f97316;
+}
+.fas.fa-eye {
+  font-size: 1.2rem;
+  color: #f97316;
+}
+.fas.fa-eye-slash {
+  font-size: 1.2rem;
+  color: #f97316;
+}
+
+.show-password-button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  margin: 0;
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  width: 32px;
+  height: 32px;
+
+  svg,
+  font-awesome-icon {
+    width: 20px;
+    height: 20px;
+    font-size: 20px;
+  }
+
+  &:hover {
+    color: #f97316;
+    background: rgba(249, 115, 22, 0.1);
+  }
+
+  &:active {
+    transform: translateY(-50%) scale(0.95);
+  }
+
+  &:focus {
+    outline: 2px solid #f97316;
+    outline-offset: 2px;
+  }
+}
+
 .login-page {
   min-height: 100vh;
   background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
@@ -342,6 +472,9 @@ export default {
     transition: all 0.3s ease;
     text-align: right;
     direction: rtl;
+    width: 100%;
+    box-sizing: border-box;
+    max-width: 100%;
 
     &::placeholder {
       color: #666;
@@ -357,6 +490,18 @@ export default {
     &:hover {
       border-color: #f97316;
     }
+  }
+}
+
+.password-input-group {
+  .password-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .password-input-wrapper input {
+    padding-left: 45px;
   }
 }
 
