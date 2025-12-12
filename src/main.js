@@ -7,9 +7,15 @@ import router from "./router";
 // FontAwesome
 import { library } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
-import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
+import {
+  faEye,
+  faEyeSlash,
+  faUpload,
+  faInfoCircle,
+  faCheckCircle,
+} from "@fortawesome/free-solid-svg-icons";
 
-library.add(faEye, faEyeSlash);
+library.add(faEye, faEyeSlash, faUpload, faInfoCircle, faCheckCircle);
 
 const app = createApp(App);
 const pinia = createPinia();

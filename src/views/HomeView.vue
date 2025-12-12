@@ -87,7 +87,6 @@ export default {
     },
     goToAbout() {
       // כאן תוכל להוסיף ניווט לדף "אודות" או לפתוח מודל
-      console.log("About clicked");
     },
   },
 };

@@ -155,7 +155,6 @@ export default {
             // console.log("userData", userData);
             const user = JSON.parse(decodeURIComponent(userData));
             this.toast.showSuccess("התחברות עם Google בוצעה בהצלחה!");
-            console.log("Google user:", user);
             // כאן תוכל לשמור את המשתמש ב-store או לעשות redirect
             // this.$router.push({ name: "home" });
             // Clean URL - remove query params
@@ -168,7 +167,6 @@ export default {
             if (this.toast) {
               this.toast.showError("שגיאה בעיבוד נתוני המשתמש");
             }
-            console.error("Error parsing user data:", error);
           }
         }
       }
@@ -190,15 +188,13 @@ export default {
         } else if (data.message === "NoPass") {
           this.toast.showError("סיסמה לא נכונה");
         }
-        console.log(data);
       } catch (error) {
         this.toast.showError("שגיאה בהתחברות");
-        console.error(error);
       }
     },
     ConenectWithGoogle() {
-      // Redirect to Google OAuth
-      window.location.href = `${URL}/auth/google`;
+      // Redirect to Google OAuth with source parameter
+      window.location.href = `${URL}/auth/google?source=login`;
     },
     goToRegister() {
       this.$router.push({ name: "Register" });
