@@ -114,11 +114,8 @@ function findAvailablePort(startPort) {
   });
 
   // Google OAuth Strategy
-  const GOOGLE_CLIENT_ID =
-    process.env.GOOGLE_CLIENT_ID ||
-    "884734090066-hk7m0kp8j4393s86f72hog2lbv5piq92.apps.googleusercontent.com";
-  const GOOGLE_CLIENT_SECRET =
-    process.env.GOOGLE_CLIENT_SECRET || "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";
+  const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+  const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
   if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
     passport.use(
@@ -169,46 +166,14 @@ function findAvailablePort(startPort) {
   const s3 = new S3Client({
     region: process.env.AWS_REGION || "us-east-1",
     credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID || "AKIASWXFMBWARBBNHUMG",
-      secretAccessKey:
-        process.env.AWS_SECRET_ACCESS_KEY ||
-        "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",
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     },
   });
 
   // Multer configuration for file uploads
   const storage = multer.memoryStorage();
   const upload = multer({ storage: storage });
-
-  // Routes
-  app.get("/", (req, res) => {
-    res.json({ message: "Hendiman Server API" });
-  });
-
-  app.post("/login-user", async (req, res) => {
-    try {
-      if (!collection) {
-        return res.json({ message: "Database not connected" });
-      }
-      console.log("req.body", req.body);
-
-      const { username, password } = req.body;
-      const user = await collection.findOne({ username });
-      console.log("user", user);
-
-      if (!user) {
-        return res.json({ message: "NoUser" });
-      } else if (user.password !== password) {
-        return res.json({ message: "NoPass" });
-      } else {
-        return res.json({ message: "Success" });
-      }
-    } catch (error) {
-      return res.json({ message: "Error", error: error.message });
-    }
-  });
-
-  // Upload image route
   app.post("/upload-image", upload.single("image"), async (req, res) => {
     try {
       if (!req.file) {
@@ -423,7 +388,6 @@ function findAvailablePort(startPort) {
       res.redirect(redirectUrl);
     }
   );
-
   // Logout route
   app.get("/auth/logout", (req, res) => {
     req.logout((err) => {
@@ -434,10 +398,42 @@ function findAvailablePort(startPort) {
     });
   });
 
+  // Routes
+  app.get("/", (req, res) => {
+    res.json({ message: "Hendiman Server API" });
+  });
+
+  app.post("/login-user", async (req, res) => {
+    try {
+      if (!collection) {
+        return res.json({ message: "Database not connected" });
+      }
+      console.log("req.body", req.body);
+
+      const { username, password } = req.body;
+      const user = await collection.findOne({ username });
+      console.log("user", user);
+
+      if (!user) {
+        return res.json({ message: "NoUser" });
+      } else if (user.password !== password) {
+        return res.json({ message: "NoPass" });
+      } else {
+        return res.json({ message: "Success" });
+      }
+    } catch (error) {
+      return res.json({ message: "Error", error: error.message });
+    }
+  });
+
+  // Upload image route
+
   app.post("/register-handyman", async (req, res) => {
     try {
       if (!collection) {
-        return res.status(500).json(false);
+        return res
+          .status(500)
+          .json({ message: "Database not connected", success: false });
       }
 
       let {
@@ -454,33 +450,63 @@ function findAvailablePort(startPort) {
         isHandyman,
       } = req.body;
 
-      // בדיקה אם המשתמש כבר קיים (לפי email או googleId)
-      // אם password הוא googleId, נחפש לפי googleId
-      let existingUser = null;
+      // Debug: בדוק מה מגיע
+      console.log("Received specialties type:", typeof specialties);
+      console.log("Received specialties value:", specialties);
+      console.log("Is array?", Array.isArray(specialties));
 
-      if (password && password.length > 20) {
-        // זה כנראה googleId (ארוך יותר מ-20 תווים)
-        existingUser = await collection.findOne({
-          $or: [
-            { email: email },
-            { password: password },
-            { googleId: password },
-          ],
-        });
-      } else {
-        existingUser = await collection.findOne({
-          $or: [{ email: email }, { password: password }],
-        });
-      }
+      const fullName = `${firstName || ""} ${lastName || ""}`.trim();
 
-      if (existingUser) {
+      // בדיקה אם השם כבר קיים במערכת
+      const existingUserByName = await collection.findOne({
+        username: fullName,
+      });
+
+      if (existingUserByName) {
         return res.status(400).json({
           success: false,
-          message: "משתמש כבר קיים במערכת",
+          message: "השם כבר קיים במערכת",
         });
       }
 
-      const fullName = `${firstName || ""}  ${lastName || ""}`.trim();
+      // בדיקה אם המייל כבר קיים במערכת
+      const existingUserByEmail = await collection.findOne({
+        email: email,
+      });
+
+      if (existingUserByEmail) {
+        return res.status(400).json({
+          success: false,
+          message: "המייל כבר קיים במערכת",
+        });
+      }
+
+      // בדיקה אם משתמש Google כבר קיים (לפי googleId)
+      if (password && password.length > 20) {
+        // זה כנראה googleId (ארוך יותר מ-20 תווים)
+        const existingUserByGoogleId = await collection.findOne({
+          $or: [{ googleId: password }, { password: password }],
+        });
+
+        if (existingUserByGoogleId) {
+          return res.status(400).json({
+            success: false,
+            message: "משתמש Google כבר קיים במערכת",
+          });
+        }
+      } else {
+        // בדיקה אם הסיסמה כבר קיימת (למשתמש רגיל)
+        const existingUserByPassword = await collection.findOne({
+          password: password,
+        });
+
+        if (existingUserByPassword) {
+          return res.status(400).json({
+            success: false,
+            message: "סיסמה כבר קיימת במערכת",
+          });
+        }
+      }
 
       // Build user object based on type
       const userData = {
@@ -491,7 +517,7 @@ function findAvailablePort(startPort) {
         address: address || "",
         howDidYouHear: howDidYouHear || "",
         imageUrl: imageUrl || "",
-        isHandyman: isHandyman === true || isHandyman === "true",
+        isHandyman: isHandyman || isHandyman === "true",
         createdAt: new Date(),
       };
 
@@ -502,24 +528,143 @@ function findAvailablePort(startPort) {
 
       // Add handyman-specific fields only if isHandyman is true
       if (userData.isHandyman) {
-        // אם specialties הוא array, המר ל-string מופרד בפסיקים
+        // ודא ש-specialties הוא מערך של אובייקטים עם name, price, typeWork
+        let specialtiesArray = [];
+
         if (Array.isArray(specialties)) {
-          userData.specialties = specialties.join(", ");
-        } else {
-          userData.specialties = specialties || "";
+          // אם זה כבר מערך, נמיר לאובייקטים
+          specialtiesArray = specialties
+            .filter((item) => item !== null && item !== undefined)
+            .map((item) => {
+              // אם זה אובייקט עם name, price, typeWork (הפורמט החדש)
+              if (typeof item === "object" && item.name) {
+                return {
+                  name: String(item.name).trim(),
+                  price: item.price || null,
+                  typeWork: item.typeWork || null,
+                };
+              }
+              // אם זה אובייקט ישן עם subcategory, workType
+              if (typeof item === "object" && item.subcategory) {
+                return {
+                  name: String(item.subcategory).trim(),
+                  price: item.price || null,
+                  typeWork: item.workType || item.typeWork || null,
+                };
+              }
+              // אם זה string (תאימות לאחור)
+              if (typeof item === "string") {
+                return {
+                  name: String(item).trim(),
+                  price: null,
+                  typeWork: null,
+                };
+              }
+              return null;
+            })
+            .filter(
+              (item) => item !== null && item.name && item.name.length > 0
+            );
+        } else if (specialties && typeof specialties === "string") {
+          // אם זה string, ננסה לפרסר אותו
+          try {
+            // ננסה לפרסר כ-JSON אם זה JSON string
+            const parsed = JSON.parse(specialties);
+            if (Array.isArray(parsed)) {
+              specialtiesArray = parsed
+                .map((item) => {
+                  if (typeof item === "object" && item.name) {
+                    return {
+                      name: String(item.name).trim(),
+                      price: item.price || null,
+                      typeWork: item.typeWork || null,
+                    };
+                  }
+                  if (typeof item === "string") {
+                    return {
+                      name: String(item).trim(),
+                      price: null,
+                      typeWork: null,
+                    };
+                  }
+                  return null;
+                })
+                .filter((item) => item !== null && item.name);
+            } else {
+              // אם זה לא JSON array, נמיר למערך עם אובייקט אחד
+              specialtiesArray = [
+                {
+                  name: String(specialties).trim(),
+                  price: null,
+                  typeWork: null,
+                },
+              ].filter((item) => item.name.length > 0);
+            }
+          } catch (e) {
+            // אם JSON.parse נכשל, נמיר למערך עם אובייקט אחד
+            specialtiesArray = [
+              {
+                name: String(specialties).trim(),
+                price: null,
+                typeWork: null,
+              },
+            ].filter((item) => item.name.length > 0);
+          }
         }
+
+        // ודא שזה מערך של אובייקטים לפני השמירה!
+        userData.specialties = Array.isArray(specialtiesArray)
+          ? specialtiesArray
+          : [];
+
+        console.log("=== BEFORE SAVE ===");
+        console.log(
+          "Final specialties:",
+          JSON.stringify(userData.specialties, null, 2)
+        );
+        console.log("Is Array?", Array.isArray(userData.specialties));
+        console.log(
+          "First item type:",
+          userData.specialties[0] ? typeof userData.specialties[0] : "empty"
+        );
+        console.log("===================");
+
         userData.logoUrl = logoUrl || "";
       }
 
+      // Debug: בדוק מה נשמר
+      console.log("=== BEFORE INSERT TO MONGO ===");
+      console.log("userData.specialties:", userData.specialties);
+      console.log("Type:", typeof userData.specialties);
+      console.log("Is Array?", Array.isArray(userData.specialties));
+      console.log("===============================");
+
       const result = await collection.insertOne(userData);
+
+      // Debug: בדוק מה נשמר בפועל
+      if (result.insertedId) {
+        const savedUser = await collection.findOne({ _id: result.insertedId });
+        console.log("=== AFTER INSERT TO MONGO ===");
+        console.log("savedUser.specialties:", savedUser.specialties);
+        console.log("Type:", typeof savedUser.specialties);
+        console.log("Is Array?", Array.isArray(savedUser.specialties));
+        console.log("==============================");
+      }
 
       if (result.insertedId) {
         return res.json(true);
       } else {
-        return res.status(500).json(false);
+        return res
+          .status(500)
+          .json({ message: "Failed to register", success: false });
       }
     } catch (error) {
-      return res.status(500).json(false);
+      console.error("Registration error:", error);
+      return res.status(500).json({
+        message: "Error registering user",
+        success: false,
+        error: error.message,
+      });
     }
   });
 

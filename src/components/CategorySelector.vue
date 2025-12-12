@@ -1,83 +1,75 @@
 <template>
   <div class="category-selector">
-    <label for="categoryDropdown">תחומי התמחות</label>
-    <div class="dropdown-wrapper">
-      <select
-        id="categoryDropdown"
-        v-model="selectedCategory"
-        @change="onCategoryChange"
-        class="category-dropdown"
-      >
-        <option value="">בחר קטגוריה</option>
-        <option
+    <label for="specialtiesTextarea">תחומי התמחות</label>
+    <div class="textarea-wrapper">
+      <textarea
+        id="specialtiesTextarea"
+        v-model="textareaValue"
+        readonly
+        @mouseenter="showDropdown = true"
+        @mouseleave="handleTextareaLeave"
+        class="specialties-textarea"
+        placeholder="עבור עם העכבר לבחירת תחומי התמחות"
+      ></textarea>
+    </div>
+
+    <!-- Dropdown עם קטגוריות -->
+    <div
+      v-if="showDropdown"
+      class="dropdown-container"
+      @mouseenter="keepDropdownVisible"
+      @mouseleave="hideDropdown"
+    >
+      <div class="categories-dropdown">
+        <div
           v-for="category in categories"
           :key="category.name"
-          :value="category.name"
+          class="category-item"
+          @mouseenter="showSubcategories(category)"
+          @mouseleave="hideSubcategories"
         >
-          {{ category.name }}
-        </option>
-      </select>
-    </div>
-
-    <!-- תת-קטגוריות עם צ'קבוקסים -->
-    <div
-      v-if="selectedCategory && selectedSubcategories.length > 0"
-      class="subcategories-section"
-    >
-      <div class="subcategories-header">
-        <h4>{{ selectedCategory }}</h4>
-      </div>
-      <div class="subcategories-list">
-        <div
-          v-for="subcategory in selectedSubcategories"
-          :key="`${selectedCategory}-${subcategory.name}`"
-          class="checkbox-item"
-        >
-          <input
-            :id="`subcategory-${selectedCategory}-${subcategory.name}`"
-            type="checkbox"
-            :value="subcategory.name"
-            v-model="selectedSubcategoriesList"
-            @change="onSubcategoryChange"
-            class="checkbox-input"
-          />
-          <label
-            :for="`subcategory-${selectedCategory}-${subcategory.name}`"
-            class="checkbox-label"
-          >
-            <CategoryTitle
-              :name="subcategory.name"
-              :price="subcategory.price"
-              :work-type="subcategory.workType"
-            />
-          </label>
+          <span class="category-name">{{ category.name }}</span>
+          <span class="arrow">←</span>
         </div>
       </div>
-    </div>
 
-    <!-- הצגת כל התת-קטגוריות שנבחרו מכל הקטגוריות -->
-    <div
-      v-if="selectedSubcategoriesList.length > 0"
-      class="selected-categories-section"
-    >
-      <div class="selected-header">
-        <h4>תחומי התמחות שנבחרו ({{ selectedSubcategoriesList.length }})</h4>
-      </div>
-      <div class="selected-list">
-        <div
-          v-for="(subName, index) in selectedSubcategoriesList"
-          :key="`selected-${index}`"
-          class="selected-item"
-        >
-          <span class="selected-name">{{ subName }}</span>
-          <button
-            type="button"
-            @click="removeSubcategory(subName)"
-            class="remove-button"
-          >
-            ×
-          </button>
+      <!-- תת-קטגוריות (מופיעות כשעוברים עם העכבר) -->
+      <div
+        v-if="hoveredCategory"
+        class="subcategories-dropdown-wrapper"
+        @mouseenter="keepSubcategoriesVisible"
+        @mouseleave="hideSubcategories"
+      >
+        <div class="subcategories-dropdown-scroll">
+          <div class="subcategories-dropdown" dir="rtl">
+            <div
+              v-for="subcategory in hoveredCategory.subcategories"
+              :key="subcategory.name"
+              class="subcategory-item"
+              @click="selectSubcategory(hoveredCategory.name, subcategory)"
+              @mouseenter="showTooltip($event, subcategory)"
+              @mouseleave="hideTooltip"
+              @mouseover="keepTooltipVisible(subcategory, $event)"
+            >
+              <span class="subcategory-name">{{ subcategory.name }}</span>
+            </div>
+          </div>
         </div>
+      </div>
+
+      <!-- Tooltip עם CategoryTitle -->
+      <div
+        v-if="tooltipSubcategory"
+        class="tooltip"
+        :style="tooltipStyle"
+        @mouseenter="keepTooltipVisible(tooltipSubcategory, $event)"
+        @mouseleave="hideTooltip"
+      >
+        <CategoryTitle
+          :name="tooltipSubcategory.name"
+          :price="tooltipSubcategory.price"
+          :work-type="tooltipSubcategory.workType"
+        />
       </div>
     </div>
   </div>
@@ -102,56 +94,263 @@ export default {
   data() {
     return {
       categories: categoriesData.categories || [],
-      selectedCategory: "",
-      selectedSubcategoriesList: [],
+      showDropdown: false,
+      hoveredCategory: null,
+      tooltipSubcategory: null,
+      tooltipStyle: {},
+      selectedItems: [],
+      keepSubcategories: false,
+      keepDropdown: false,
+      hideSubcategoriesTimeout: null,
+      hideTooltipTimeout: null,
     };
   },
   computed: {
-    selectedSubcategories() {
-      if (!this.selectedCategory) return [];
-      const category = this.categories.find(
-        (cat) => cat.name === this.selectedCategory
-      );
-      return category ? category.subcategories : [];
+    textareaValue() {
+      return this.selectedItems
+        .map((item) => {
+          const base = `${item.category}\\${item.subcategory}`;
+          if (item.price && item.workType) {
+            const priceText = `${item.price} ₪`;
+            const workTypeText = item.workType === "לשעה" ? "לשעה" : "קבלנות";
+            return `${base} - ${priceText} (${workTypeText})`;
+          }
+          return base;
+        })
+        .join("\n");
     },
   },
   watch: {
     modelValue: {
       handler(newValue) {
-        // עדכן את הרשימה לפי modelValue
-        if (Array.isArray(newValue)) {
-          this.selectedSubcategoriesList = [...newValue];
-        } else if (newValue && typeof newValue === "string") {
-          // אם זה string, המר ל-array
-          this.selectedSubcategoriesList = newValue
-            .split(",")
-            .map((s) => s.trim())
-            .filter((s) => s);
+        if (Array.isArray(newValue) && newValue.length > 0) {
+          // תמיכה גם באובייקטים (name, price, typeWork) וגם ב-strings ישנים
+          this.selectedItems = newValue
+            .filter((item) => item !== null && item !== undefined)
+            .map((item) => {
+              // אם זה אובייקט עם name, price, typeWork
+              if (typeof item === "object" && item.name) {
+                return {
+                  category: "", // לא נחוץ יותר, אבל נשמור למקרה
+                  subcategory: String(item.name).trim(),
+                  price: item.price || null,
+                  workType: item.typeWork || null,
+                };
+              }
+
+              // אם זה string, נסה לפרסר אותו (תאימות לאחור)
+              if (typeof item === "string") {
+                const itemStr = String(item).trim();
+                if (!itemStr || !itemStr.includes("\\")) {
+                  return null;
+                }
+
+                const parts = itemStr.split("\\");
+                if (parts.length < 2) {
+                  return null;
+                }
+
+                const category = parts[0].trim();
+                const rest = parts.slice(1).join("\\").trim();
+
+                if (!category || !rest) {
+                  return null;
+                }
+
+                // נסה לחלץ מחיר וסוג עבודה אם הם קיימים
+                let subcategory = rest;
+                let price = null;
+                let workType = null;
+
+                if (rest.includes(" - ")) {
+                  const [subcatPart, details] = rest.split(" - ");
+                  subcategory = subcatPart.trim();
+
+                  if (details) {
+                    // חפש מחיר (מספר עם ₪)
+                    const priceMatch = details.match(/(\d+)\s*₪/);
+                    if (priceMatch) {
+                      price = parseInt(priceMatch[1], 10);
+                    }
+
+                    // חפש סוג עבודה
+                    if (details.includes("לשעה")) {
+                      workType = "לשעה";
+                    } else if (details.includes("קבלנות")) {
+                      workType = "קבלנות";
+                    }
+                  }
+                }
+
+                return {
+                  category: category,
+                  subcategory: subcategory,
+                  price: price,
+                  workType: workType,
+                };
+              }
+
+              return null;
+            })
+            .filter((item) => item !== null); // הסר null items
         } else {
-          this.selectedSubcategoriesList = [];
+          this.selectedItems = [];
         }
       },
       immediate: true,
     },
   },
   methods: {
-    onCategoryChange() {
-      // אל תאפס את הרשימה - אפשר לבחור מכמה קטגוריות
-      // רק עדכן את הרשימה
-      this.updateModelValue();
+    handleTextareaLeave() {
+      setTimeout(() => {
+        if (!this.keepDropdown) {
+          this.showDropdown = false;
+          this.hoveredCategory = null;
+        }
+      }, 200);
     },
-    onSubcategoryChange() {
-      this.updateModelValue();
+    keepDropdownVisible() {
+      this.keepDropdown = true;
     },
-    updateModelValue() {
-      this.$emit("update:modelValue", [...this.selectedSubcategoriesList]);
+    hideDropdown() {
+      this.keepDropdown = false;
+      this.showDropdown = false;
+      this.hoveredCategory = null;
     },
-    removeSubcategory(subName) {
-      const index = this.selectedSubcategoriesList.indexOf(subName);
-      if (index > -1) {
-        this.selectedSubcategoriesList.splice(index, 1);
+    showSubcategories(category) {
+      // בטל את ה-timeout הקודם אם קיים
+      if (this.hideSubcategoriesTimeout) {
+        clearTimeout(this.hideSubcategoriesTimeout);
+        this.hideSubcategoriesTimeout = null;
+      }
+      this.hoveredCategory = category;
+      this.keepSubcategories = false;
+    },
+    hideSubcategories() {
+      // רק אם לא עוברים על התת-קטגוריות
+      // בטל את ה-timeout הקודם אם קיים
+      if (this.hideSubcategoriesTimeout) {
+        clearTimeout(this.hideSubcategoriesTimeout);
+      }
+      this.hideSubcategoriesTimeout = setTimeout(() => {
+        if (!this.keepSubcategories) {
+          this.hoveredCategory = null;
+        }
+        this.hideSubcategoriesTimeout = null;
+      }, 200);
+    },
+    keepSubcategoriesVisible() {
+      this.keepSubcategories = true;
+      // בטל את ה-timeout אם קיים
+      if (this.hideSubcategoriesTimeout) {
+        clearTimeout(this.hideSubcategoriesTimeout);
+        this.hideSubcategoriesTimeout = null;
+      }
+    },
+    selectSubcategory(categoryName, subcategory) {
+      // ודא שיש נתונים תקינים
+      if (!categoryName || !subcategory || !subcategory.name) {
+        return;
+      }
+
+      const item = {
+        category: String(categoryName).trim(),
+        subcategory: String(subcategory.name).trim(),
+        price: subcategory.price || null,
+        workType: subcategory.workType || null,
+      };
+
+      // בדוק אם כבר קיים (case-insensitive)
+      const exists = this.selectedItems.some(
+        (i) =>
+          i.category.toLowerCase() === item.category.toLowerCase() &&
+          i.subcategory.toLowerCase() === item.subcategory.toLowerCase()
+      );
+
+      if (!exists) {
+        // ודא ש-selectedItems הוא מערך
+        if (!Array.isArray(this.selectedItems)) {
+          this.selectedItems = [];
+        }
+        this.selectedItems.push(item);
         this.updateModelValue();
       }
+
+      // אל תסגור את ה-dropdown - תן למשתמש לבחור עוד
+      this.hoveredCategory = null;
+      this.keepSubcategories = false;
+    },
+    showTooltip(event, subcategory) {
+      // בטל את ה-timeout הקודם אם קיים
+      if (this.hideTooltipTimeout) {
+        clearTimeout(this.hideTooltipTimeout);
+        this.hideTooltipTimeout = null;
+      }
+
+      this.tooltipSubcategory = subcategory;
+      // חשב את המיקום של ה-tooltip - מצד שמאל (ימין ב-RTL) של התת-קטגוריות
+      if (event && event.target) {
+        const rect =
+          event.target.closest(".subcategory-item")?.getBoundingClientRect() ||
+          event.target.getBoundingClientRect();
+        const subcategoriesDropdown = event.target
+          .closest(".subcategories-dropdown")
+          ?.getBoundingClientRect();
+
+        if (subcategoriesDropdown) {
+          // מיקום מצד שמאל (ימין ב-RTL) של התת-קטגוריות
+          this.tooltipStyle = {
+            top: `${rect.top + rect.height / 2}px`,
+            right: `${window.innerWidth - subcategoriesDropdown.left + 10}px`,
+            transform: "translateY(-50%)",
+          };
+        } else {
+          this.tooltipStyle = {
+            top: `${rect.top - 5}px`,
+            right: `${window.innerWidth - rect.right}px`,
+            transform: "translateY(-100%)",
+          };
+        }
+      }
+    },
+    hideTooltip() {
+      // השתמש ב-timeout כדי לתת זמן למעבר בין תת-קטגוריות
+      if (this.hideTooltipTimeout) {
+        clearTimeout(this.hideTooltipTimeout);
+      }
+      this.hideTooltipTimeout = setTimeout(() => {
+        this.tooltipSubcategory = null;
+        this.hideTooltipTimeout = null;
+      }, 150);
+    },
+    keepTooltipVisible(subcategory, event) {
+      // בטל את ה-timeout אם קיים
+      if (this.hideTooltipTimeout) {
+        clearTimeout(this.hideTooltipTimeout);
+        this.hideTooltipTimeout = null;
+      }
+      // עדכן את ה-tooltip
+      this.showTooltip(event, subcategory);
+    },
+    updateModelValue() {
+      // ודא ש-selectedItems הוא מערך
+      if (!Array.isArray(this.selectedItems)) {
+        this.selectedItems = [];
+      }
+
+      // המר למערך של אובייקטים עם name, price, typeWork
+      const value = this.selectedItems
+        .filter((item) => item && item.subcategory)
+        .map((item) => {
+          return {
+            name: String(item.subcategory).trim(),
+            price: item.price || null,
+            typeWork: item.workType || null,
+          };
+        })
+        .filter((obj) => obj.name.length > 0); // הסר אובייקטים עם name ריק
+
+      this.$emit("update:modelValue", value);
     },
   },
 };
@@ -162,6 +361,7 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  position: relative;
 }
 
 .category-selector label {
@@ -171,28 +371,33 @@ export default {
   text-align: right;
 }
 
-.dropdown-wrapper {
+.textarea-wrapper {
   position: relative;
 }
 
-.category-dropdown {
+.specialties-textarea {
   width: 100%;
+  max-width: 100%;
+  min-height: 100px;
   background: #1f1f1f;
   border: 2px solid #2d2d2d;
   border-radius: 6px;
   padding: 10px 12px;
-  color: #ffffff;
+  color: #f97316;
   font-size: 0.9rem;
   transition: all 0.3s ease;
   text-align: right;
   direction: rtl;
+  resize: vertical;
   cursor: pointer;
   font-family: inherit;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23f97316' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: left 12px center;
-  padding-left: 35px;
+  box-sizing: border-box;
+  font-weight: 500;
+
+  &:hover {
+    border-color: #f97316;
+    background: #2a2a2a;
+  }
 
   &:focus {
     outline: none;
@@ -201,132 +406,252 @@ export default {
     background: #2a2a2a;
   }
 
-  &:hover {
-    border-color: #f97316;
-  }
-
-  option {
-    background: #1f1f1f;
-    color: #ffffff;
+  &::placeholder {
+    color: #888;
   }
 }
 
-.subcategories-section {
-  margin-top: 10px;
-  padding: 15px;
-  background: #1a1a1a;
-  border: 2px solid #2d2d2d;
-  border-radius: 8px;
-}
-
-.subcategories-list {
+.dropdown-container {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 5px;
+  z-index: 1000;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.checkbox-item {
-  display: flex;
+  gap: 0;
   align-items: flex-start;
-  gap: 10px;
 }
 
-.checkbox-input {
-  width: 20px;
-  height: 20px;
-  margin-top: 2px;
-  cursor: pointer;
-  accent-color: #f97316;
+.categories-dropdown {
+  background: #1a1a1a;
+  border: 2px solid #f97316;
+  border-radius: 8px;
+  width: 200px;
+  max-height: 300px;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  padding: 4px 0;
   flex-shrink: 0;
 }
 
-.checkbox-label {
-  flex: 1;
-  cursor: pointer;
+.category-item {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  min-height: 24px;
+  padding: 12px 15px;
+  margin: 4px 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 20px;
+  background: #2d2d2d;
+  border: 1px solid #2d2d2d;
+  direction: rtl;
+
+  &:hover {
+    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+    color: #000000;
+    border-color: #f97316;
+    transform: scale(1.02);
+  }
 }
 
-.subcategories-header {
-  margin-bottom: 15px;
-  padding-bottom: 10px;
-  border-bottom: 2px solid #2d2d2d;
+.category-name {
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 500;
 }
 
-.subcategories-header h4 {
+.arrow {
   color: #f97316;
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0;
-  text-align: right;
+  font-size: 1.2rem;
+  margin-left: 10px;
 }
 
-.selected-categories-section {
-  margin-top: 20px;
-  padding: 15px;
+.category-item:hover .arrow {
+  color: #000000;
+}
+
+.subcategories-dropdown-wrapper {
+  position: absolute;
+  right: calc(100% + 2px);
+  top: 0;
+  z-index: 1001;
+}
+
+.subcategories-dropdown-scroll {
   background: #1a1a1a;
   border: 2px solid #f97316;
   border-radius: 8px;
-}
-
-.selected-header {
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #2d2d2d;
-}
-
-.selected-header h4 {
-  color: #f97316;
-  font-size: 0.9rem;
-  font-weight: 600;
-  margin: 0;
-  text-align: right;
-}
-
-.selected-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.selected-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background: #1f1f1f;
-  border: 2px solid #f97316;
-  border-radius: 6px;
+  width: 280px;
+  max-height: 240px;
+  height: 240px;
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   direction: rtl;
+  scrollbar-width: auto;
+  scrollbar-color: #f97316 #2d2d2d;
 }
 
-.selected-name {
+.subcategories-dropdown {
+  direction: rtl;
+  padding: 4px 0;
+  min-height: 100%;
+}
+
+.subcategory-item {
+  padding: 10px 15px;
+  margin: 4px 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 20px;
+  background: #2d2d2d;
+  border: 1px solid #2d2d2d;
+  direction: ltr;
+  width: 60%;
+  text-align: right;
+
+  &:hover {
+    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+    color: #000000;
+    border-color: #f97316;
+    transform: scale(1.02);
+  }
+}
+
+.subcategory-name {
   color: #ffffff;
   font-size: 0.85rem;
 }
 
-.remove-button {
-  background: transparent;
-  border: none;
-  color: #f97316;
-  font-size: 1.5rem;
-  font-weight: bold;
-  cursor: pointer;
-  padding: 0;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  border-radius: 50%;
-  line-height: 1;
+.subcategory-item:hover .subcategory-name {
+  color: #000000;
 }
 
-.remove-button:hover {
-  background: #f97316;
-  color: #000000;
-  transform: scale(1.1);
+.tooltip {
+  position: fixed;
+  z-index: 1001;
+  pointer-events: none;
+  min-width: 250px;
+  margin-bottom: 5px;
+}
+
+/* Scrollbar styling */
+.categories-dropdown::-webkit-scrollbar,
+.subcategories-dropdown-scroll::-webkit-scrollbar {
+  width: 16px !important;
+  height: 100% !important;
+  display: block !important;
+  -webkit-appearance: none !important;
+  background: transparent !important;
+}
+
+.categories-dropdown::-webkit-scrollbar-track,
+.subcategories-dropdown-scroll::-webkit-scrollbar-track {
+  background: #2d2d2d !important;
+  border-radius: 8px !important;
+  margin: 2px 0 !important;
+}
+
+.categories-dropdown::-webkit-scrollbar-thumb,
+.subcategories-dropdown-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important;
+  border-radius: 8px !important;
+  border: 2px solid #1a1a1a !important;
+  min-height: 50px !important;
+}
+
+.categories-dropdown::-webkit-scrollbar-thumb:hover,
+.subcategories-dropdown-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #ea580c 0%, #f97316 100%) !important;
+}
+
+.categories-dropdown::-webkit-scrollbar-corner,
+.subcategories-dropdown-scroll::-webkit-scrollbar-corner {
+  background: #1a1a1a !important;
+}
+
+/* Firefox scrollbar */
+.categories-dropdown,
+.subcategories-dropdown-scroll {
+  scrollbar-width: auto !important;
+  scrollbar-color: #f97316 #2d2d2d !important;
+}
+
+/* Responsive design for mobile */
+@media (max-width: 768px) {
+  .dropdown-container {
+    position: fixed;
+    bottom: auto;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, -50%);
+    margin: 0;
+    max-width: 90vw;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .categories-dropdown {
+    width: 100%;
+    max-width: 300px;
+    max-height: 250px;
+  }
+
+  .subcategories-dropdown {
+    position: relative;
+    right: auto;
+    top: auto;
+    margin: 10px 0 0 0;
+    width: 100%;
+    max-width: 300px;
+    max-height: 250px;
+  }
+
+  .specialties-textarea {
+    min-height: 80px;
+    font-size: 0.85rem;
+  }
+
+  .category-item,
+  .subcategory-item {
+    padding: 10px 12px;
+    margin: 3px 5px;
+    font-size: 0.85rem;
+  }
+
+  .tooltip {
+    position: fixed;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translate(-50%, -50%) !important;
+    min-width: 200px;
+    max-width: 90vw;
+  }
+}
+
+@media (max-width: 480px) {
+  .dropdown-container {
+    max-width: 95vw;
+  }
+
+  .categories-dropdown,
+  .subcategories-dropdown {
+    max-width: 100%;
+    max-height: 200px;
+  }
+
+  .category-item,
+  .subcategory-item {
+    padding: 8px 10px;
+    margin: 2px 4px;
+    font-size: 0.8rem;
+  }
+
+  .arrow {
+    font-size: 1rem;
+  }
 }
 </style>

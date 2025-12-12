@@ -866,13 +866,14 @@ export default {
         delete formData.imagePreview;
 
         const { data } = await axios.post(`${URL}/register-handyman`, formData);
-        if (data) {
+        if (data === true || (data && data.success !== false)) {
           this.toast.showSuccess("הרשמה בוצעה בהצלחה!");
         } else {
-          this.toast.showError("שגיאה בהרשמה");
+          this.toast.showError(data?.message || "שגיאה בהרשמה");
         }
       } catch (error) {
-        this.toast.showError("שגיאה בהרשמה");
+        const errorMessage = error.response?.data?.message || "שגיאה בהרשמה";
+        this.toast.showError(errorMessage);
       } finally {
         this.isSubmitting = false;
       }
@@ -981,14 +982,70 @@ export default {
         delete formData.imagePreview;
         delete formData.logoPreview;
 
-        const { data } = await axios.post(`${URL}/register-handyman`, formData);
-        if (data) {
+        // ודא ש-specialties הוא מערך של אובייקטים (רק להנדימן)
+        if (formData.isHandyman) {
+          if (formData.specialties && Array.isArray(formData.specialties)) {
+            // ודא שכל האיברים הם אובייקטים עם name, price, typeWork
+            formData.specialties = formData.specialties
+              .filter((item) => item && (item.name || item.subcategory))
+              .map((item) => {
+                // אם זה אובייקט עם name, price, typeWork (הפורמט החדש)
+                if (item.name) {
+                  return {
+                    name: String(item.name).trim(),
+                    price: item.price || null,
+                    typeWork: item.typeWork || null,
+                  };
+                }
+                // אם זה אובייקט ישן עם subcategory, workType
+                if (item.subcategory) {
+                  return {
+                    name: String(item.subcategory).trim(),
+                    price: item.price || null,
+                    typeWork: item.workType || item.typeWork || null,
+                  };
+                }
+                // אם זה string (תאימות לאחור)
+                if (typeof item === "string") {
+                  return {
+                    name: String(item).trim(),
+                    price: null,
+                    typeWork: null,
+                  };
+                }
+                return null;
+              })
+              .filter((item) => item && item.name && item.name.length > 0);
+          } else if (formData.isHandyman) {
+            // אם זה הנדימן אבל אין specialties, הגדר כמערך ריק
+            formData.specialties = [];
+          }
+
+          // Debug: בדוק מה נשלח
+          console.log("=== CLIENT SENDING SPECIALTIES ===");
+          console.log("specialties:", formData.specialties);
+          console.log("Type:", typeof formData.specialties);
+          console.log("Is Array?", Array.isArray(formData.specialties));
+          console.log("===================================");
+        }
+
+        const { data } = await axios.post(
+          `${URL}/register-handyman`,
+          formData,
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        if (data === true || (data && data.success !== false)) {
           this.toast.showSuccess("הרשמה בוצעה בהצלחה!");
         } else {
-          this.toast.showError("שגיאה בהרשמה");
+          this.toast.showError(data?.message || "שגיאה בהרשמה");
         }
       } catch (error) {
-        this.toast.showError("שגיאה בהרשמה");
+        const errorMessage = error.response?.data?.message || "שגיאה בהרשמה";
+        this.toast.showError(errorMessage);
       } finally {
         this.isSubmitting = false;
       }

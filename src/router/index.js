@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import HomeView from "@/views/HomeView.vue";
 import LogIn from "@/views/Login/log-in.vue";
 import Register from "@/views/Login/register.vue";
-import UserProfile from "@/views/UserProfile.vue";
+import Dashboard from "@/views/Dashboard.vue";
 
 const routes = [
   {
@@ -26,9 +26,9 @@ const routes = [
     component: Register,
   },
   {
-    path: "/user/:id",
-    name: "UserProfile",
-    component: UserProfile,
+    path: "/Dashboard/:id",
+    name: "Dashboard",
+    component: Dashboard,
     props: true,
   },
 ];
