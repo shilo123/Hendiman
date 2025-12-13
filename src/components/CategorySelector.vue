@@ -42,8 +42,19 @@
       >
         <div class="subcategories-dropdown-scroll">
           <div class="subcategories-dropdown" dir="rtl">
+            <!-- שדה חיפוש -->
+            <div class="subcategories-search-wrapper">
+              <input
+                v-model="subcategorySearchQuery"
+                type="text"
+                class="subcategories-search-input"
+                placeholder="חפש תת-קטגוריה..."
+                @input="handleSearchInput"
+                @click.stop
+              />
+            </div>
             <div
-              v-for="subcategory in hoveredCategory.subcategories"
+              v-for="subcategory in filteredSubcategories"
               :key="subcategory.name"
               class="subcategory-item"
               @click="selectSubcategory(hoveredCategory.name, subcategory)"
@@ -52,6 +63,9 @@
               @mouseover="keepTooltipVisible(subcategory, $event)"
             >
               <span class="subcategory-name">{{ subcategory.name }}</span>
+            </div>
+            <div v-if="filteredSubcategories.length === 0" class="no-results">
+              לא נמצאו תוצאות
             </div>
           </div>
         </div>
@@ -103,6 +117,7 @@ export default {
       keepDropdown: false,
       hideSubcategoriesTimeout: null,
       hideTooltipTimeout: null,
+      subcategorySearchQuery: "",
     };
   },
   computed: {
@@ -118,6 +133,21 @@ export default {
           return base;
         })
         .join("\n");
+    },
+    filteredSubcategories() {
+      if (!this.hoveredCategory || !this.hoveredCategory.subcategories) {
+        return [];
+      }
+
+      const query = this.subcategorySearchQuery.trim().toLowerCase();
+
+      if (!query) {
+        return this.hoveredCategory.subcategories;
+      }
+
+      return this.hoveredCategory.subcategories.filter((subcategory) =>
+        subcategory.name.toLowerCase().includes(query)
+      );
     },
   },
   watch: {
@@ -225,6 +255,8 @@ export default {
       }
       this.hoveredCategory = category;
       this.keepSubcategories = false;
+      // אפס את שדה החיפוש כשעוברים לקטגוריה חדשה
+      this.subcategorySearchQuery = "";
     },
     hideSubcategories() {
       // רק אם לא עוברים על התת-קטגוריות
@@ -351,6 +383,10 @@ export default {
         .filter((obj) => obj.name.length > 0); // הסר אובייקטים עם name ריק
 
       this.$emit("update:modelValue", value);
+    },
+    handleSearchInput() {
+      // הפונקציה הזו קיימת רק כדי למנוע בועות אירועים
+      // החיפוש עצמו מתבצע דרך computed property
     },
   },
 };
@@ -497,6 +533,55 @@ export default {
   direction: rtl;
   padding: 4px 0;
   min-height: 100%;
+}
+
+.subcategories-search-wrapper {
+  padding: 8px;
+  margin-bottom: 4px;
+  position: sticky;
+  top: 0;
+  background: #1a1a1a;
+  z-index: 10;
+  border-bottom: 1px solid #2d2d2d;
+}
+
+.subcategories-search-input {
+  width: 100%;
+  background: #2d2d2d;
+  border: 2px solid #2d2d2d;
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #ffffff;
+  font-size: 0.85rem;
+  transition: all 0.3s ease;
+  text-align: right;
+  direction: rtl;
+  font-family: inherit;
+  box-sizing: border-box;
+
+  &::placeholder {
+    color: #666;
+    font-size: 0.8rem;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: #f97316;
+    box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.1);
+    background: #3a3a3a;
+  }
+
+  &:hover {
+    border-color: #f97316;
+  }
+}
+
+.no-results {
+  padding: 20px 15px;
+  text-align: center;
+  color: #888;
+  font-size: 0.85rem;
+  direction: rtl;
 }
 
 .subcategory-item {
