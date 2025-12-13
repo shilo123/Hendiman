@@ -64,6 +64,8 @@
       </div>
     </header>
 
+    <!-- Mobile Navigation Buttons (visible only on mobile) -->
+
     <!-- MAIN -->
     <main class="grid">
       <!-- LEFT ~60% JOBS -->
@@ -261,7 +263,7 @@
       <!-- RIGHT SIDE -->
       <aside class="side">
         <!-- CLIENT: create call + handyman search -->
-        <section v-if="!isHendiman" class="panel">
+        <section id="צור-קריאה" v-if="!isHendiman" class="panel">
           <div class="panel__head">
             <h2 class="h2">צור קריאה</h2>
             <p class="sub">
@@ -269,13 +271,20 @@
             </p>
           </div>
 
-          <div class="cta">
-            <button class="cta__btn" type="button" @click="onCreateCallCta">
-              <span class="cta__spark">⚡</span>
-              <span class="cta__txt">צור קריאה</span>
-              <span class="cta__arrow">→</span>
+          <!-- Button: צור קריאה (shown when form is hidden) -->
+          <div v-if="!showCallForm" class="cta">
+            <button
+              class="btn-create-call"
+              type="button"
+              @click="onCreateCallCta"
+            >
+              <span class="icon">⚡</span>
+              <span>צור קריאה</span>
             </button>
+          </div>
 
+          <!-- Form (shown when button is clicked) -->
+          <div v-if="showCallForm">
             <div class="field">
               <label class="label">תת־קטגוריה</label>
               <select class="select" v-model="call.subId" @change="onSubChange">
@@ -308,6 +317,42 @@
                 rows="4"
                 placeholder="תאר בקצרה מה הבעיה…"
               ></textarea>
+            </div>
+
+            <div class="field">
+              <label class="label">תמונה</label>
+              <div class="file-upload-wrapper">
+                <input
+                  id="callImage"
+                  type="file"
+                  accept="image/*"
+                  @change="handleCallImageUpload"
+                  class="file-input"
+                  required
+                />
+                <label
+                  for="callImage"
+                  class="file-label"
+                  :class="{ disabled: call.imageUrl || call.imagePreview }"
+                >
+                  📷
+                  {{
+                    call.imageUrl || call.imagePreview
+                      ? "תמונה נבחרה"
+                      : "בחר תמונה"
+                  }}
+                </label>
+                <div v-if="call.imagePreview" class="image-preview-small">
+                  <img :src="call.imagePreview" alt="Preview" />
+                  <button
+                    type="button"
+                    class="remove-image-btn"
+                    @click="removeCallImage"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div class="field">
@@ -357,80 +402,98 @@
 
           <div class="divider"></div>
 
-          <div class="panel__head">
-            <h2 class="h2">הזמנה אישית</h2>
-            <p class="sub">חיפוש לפי שם + פילטר דירוג/מספר עבודות</p>
+          <!-- Button: בחר הנדימן (shown when form is hidden) -->
+          <div v-if="!showPersonalRequestForm" class="cta">
+            <button
+              class="btn-create-call"
+              type="button"
+              @click="onOpenPersonalRequest"
+            >
+              <span class="icon">👤</span>
+              <span>בחר הנדימן</span>
+            </button>
           </div>
 
-          <div class="dir">
-            <div class="dir__filters">
-              <div class="field">
-                <label class="label">חפש הנדימן</label>
-                <input
-                  class="input"
-                  v-model="dirFilters.q"
-                  type="text"
-                  placeholder="לדוגמה: דני"
-                />
-              </div>
-
-              <div class="row row--2">
-                <div class="field">
-                  <label class="label">מינימום דירוג</label>
-                  <select class="select" v-model.number="dirFilters.minRating">
-                    <option :value="0">הכל</option>
-                    <option :value="3">3+</option>
-                    <option :value="4">4+</option>
-                    <option :value="4.5">4.5+</option>
-                  </select>
-                </div>
-
-                <div class="field">
-                  <label class="label">מינימום עבודות</label>
-                  <select class="select" v-model.number="dirFilters.minJobs">
-                    <option :value="0">הכל</option>
-                    <option :value="10">10+</option>
-                    <option :value="50">50+</option>
-                    <option :value="100">100+</option>
-                  </select>
-                </div>
-              </div>
+          <!-- Personal Request Form (shown when button is clicked) -->
+          <div v-if="showPersonalRequestForm">
+            <div class="panel__head">
+              <h2 class="h2">בחר הנדימן</h2>
+              <p class="sub">חיפוש לפי שם + פילטר דירוג/מספר עבודות</p>
             </div>
 
-            <div class="dir__list">
-              <div v-for="h in filteredHandymen" :key="h.id" class="hcard">
-                <div class="hcard__left">
-                  <img class="hcard__av" :src="h.avatarUrl" alt="handyman" />
-                  <div class="hcard__meta">
-                    <div class="hcard__name">{{ h.name }}</div>
-                    <div class="hcard__sub">
-                      ⭐ {{ h.rating }} · {{ h.jobsDone }} עבודות
-                    </div>
-                  </div>
+            <div class="dir">
+              <div class="dir__filters">
+                <div class="field">
+                  <label class="label">חפש הנדימן</label>
+                  <input
+                    class="input"
+                    v-model="dirFilters.q"
+                    type="text"
+                    placeholder="לדוגמה: דני"
+                  />
                 </div>
 
-                <div class="hcard__actions">
-                  <button
-                    class="mini mini--ghost"
-                    type="button"
-                    @click="onOpenUserChat(h.id)"
-                  >
-                    צ׳אט
-                  </button>
-                  <button
-                    class="mini mini--danger"
-                    type="button"
-                    @click="onBlockHandyman(h.id)"
-                  >
-                    חסום
-                  </button>
-                  <button
-                    class="mini mini--primary"
-                    type="button"
-                    @click="onPersonalRequest(h.id)"
-                  >
-                    הזמן
-                  </button>
+                <div class="row row--2">
+                  <div class="field">
+                    <label class="label">מינימום דירוג</label>
+                    <select
+                      class="select"
+                      v-model.number="dirFilters.minRating"
+                    >
+                      <option :value="0">הכל</option>
+                      <option :value="3">3+</option>
+                      <option :value="4">4+</option>
+                      <option :value="4.5">4.5+</option>
+                    </select>
+                  </div>
+
+                  <div class="field">
+                    <label class="label">מינימום עבודות</label>
+                    <select class="select" v-model.number="dirFilters.minJobs">
+                      <option :value="0">הכל</option>
+                      <option :value="10">10+</option>
+                      <option :value="50">50+</option>
+                      <option :value="100">100+</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="dir__list">
+                <div v-for="h in filteredHandymen" :key="h.id" class="hcard">
+                  <div class="hcard__left">
+                    <img class="hcard__av" :src="h.avatarUrl" alt="handyman" />
+                    <div class="hcard__meta">
+                      <div class="hcard__name">{{ h.name }}</div>
+                      <div class="hcard__sub">
+                        ⭐ {{ h.rating }} · {{ h.jobsDone }} עבודות
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="hcard__actions">
+                    <button
+                      class="mini mini--ghost"
+                      type="button"
+                      @click="onOpenUserChat(h.id)"
+                    >
+                      צ׳אט
+                    </button>
+                    <button
+                      class="mini mini--danger"
+                      type="button"
+                      @click="onBlockHandyman(h.id)"
+                    >
+                      חסום
+                    </button>
+                    <button
+                      class="mini mini--primary"
+                      type="button"
+                      @click="onPersonalRequest(h.id)"
+                    >
+                      הזמן
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -502,6 +565,9 @@ export default {
 
       stats: { clients: 128, handymen: 42, users: 170 },
 
+      showCallForm: false,
+      showPersonalRequestForm: false,
+
       me: {
         id: "u1",
         name: "קלאמזי",
@@ -536,7 +602,16 @@ export default {
         { id: "sc4", name: "החלפת שקע", price: 220, billingType: "fixed" },
       ],
 
-      call: { subId: "", desc: "", location: "", when: "asap", urgent: false },
+      call: {
+        subId: "",
+        desc: "",
+        location: "",
+        when: "asap",
+        urgent: false,
+        image: null,
+        imageUrl: "",
+        imagePreview: null,
+      },
 
       dirFilters: { q: "", minRating: 0, minJobs: 0 },
 
@@ -713,7 +788,11 @@ export default {
     },
 
     onCreateCallCta() {
-      console.log("create call cta");
+      this.showCallForm = true;
+    },
+
+    onOpenPersonalRequest() {
+      this.showPersonalRequestForm = true;
     },
 
     onSubChange() {
@@ -724,7 +803,25 @@ export default {
       console.log("toggle urgent");
       this.call.urgent = !this.call.urgent;
     },
-
+    handleCallImageUpload(event) {
+      const file = event.target.files[0];
+      if (file) {
+        this.call.image = file;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          this.call.imagePreview = e.target.result;
+        };
+        reader.readAsDataURL(file);
+        // TODO: Upload to server and set call.imageUrl
+      }
+    },
+    removeCallImage() {
+      this.call.image = null;
+      this.call.imageUrl = "";
+      this.call.imagePreview = null;
+      const input = document.getElementById("callImage");
+      if (input) input.value = "";
+    },
     onSubmitCall() {
       console.log("submit call", this.call, "selectedSub", this.selectedSub);
     },
@@ -785,7 +882,8 @@ $r2: 26px;
 
 .dash {
   direction: rtl;
-  min-height: 100%;
+  min-height: 100vh;
+  min-height: -webkit-fill-available; // iOS fix
   color: $text;
   padding: 16px;
   background: radial-gradient(
@@ -799,6 +897,12 @@ $r2: 26px;
       transparent 55%
     ),
     linear-gradient(180deg, $bg, $bg2);
+
+  @media (max-width: 768px) {
+    padding: 12px 10px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom)); // iOS safe area
+    padding-top: calc(12px + env(safe-area-inset-top)); // iOS safe area
+  }
 }
 
 /* TOP */
@@ -809,12 +913,35 @@ $r2: 26px;
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 14px;
+
+  @media (max-width: 768px) {
+    margin-bottom: 6px;
+    gap: 4px;
+    padding: 6px 8px;
+    background: linear-gradient(180deg, $card2, $card);
+    border-radius: 12px;
+    border: 1px solid $stroke;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    margin-left: calc(-6px - env(safe-area-inset-left));
+    margin-right: calc(-6px - env(safe-area-inset-right));
+    padding-left: calc(14px + env(safe-area-inset-left));
+    padding-right: calc(14px + env(safe-area-inset-right));
+  }
 }
 
 .kpi {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+
+  @media (max-width: 768px) {
+    gap: 4px;
+  }
 
   &__item {
     background: linear-gradient(180deg, $card2, $card);
@@ -829,6 +956,12 @@ $r2: 26px;
     cursor: pointer;
     position: relative;
     overflow: hidden;
+
+    @media (max-width: 768px) {
+      padding: 4px 6px;
+      gap: 4px;
+      border-radius: 12px;
+    }
 
     &::before {
       content: "";
@@ -876,6 +1009,10 @@ $r2: 26px;
     transition: all 0.25s ease;
     position: relative;
     z-index: 1;
+
+    @media (max-width: 768px) {
+      font-size: 11px;
+    }
   }
 
   &__label {
@@ -885,6 +1022,10 @@ $r2: 26px;
     transition: color 0.25s ease;
     position: relative;
     z-index: 1;
+
+    @media (max-width: 768px) {
+      font-size: 8px;
+    }
   }
 
   &__item--hot {
@@ -903,6 +1044,11 @@ $r2: 26px;
   gap: 16px;
   flex-wrap: wrap;
   flex: 1;
+
+  @media (max-width: 768px) {
+    gap: 4px;
+    flex: 0 0 auto;
+  }
 }
 
 .top__chats {
@@ -911,6 +1057,10 @@ $r2: 26px;
   flex-wrap: wrap;
   align-items: center;
   margin-left: 70px;
+
+  @media (max-width: 768px) {
+    display: none; // Hide on mobile
+  }
 }
 
 .top__right {
@@ -918,6 +1068,12 @@ $r2: 26px;
   gap: 10px;
   flex-wrap: wrap;
   align-items: center;
+
+  @media (max-width: 768px) {
+    gap: 6px;
+    flex: 1;
+    justify-content: flex-end;
+  }
 }
 
 .me {
@@ -931,6 +1087,12 @@ $r2: 26px;
   box-shadow: $shadow;
   cursor: pointer;
   transition: transform 140ms ease, box-shadow 140ms ease;
+
+  @media (max-width: 768px) {
+    padding: 4px 6px;
+    gap: 4px;
+    border-radius: 12px;
+  }
 
   &:hover {
     transform: translateY(-1px);
@@ -959,6 +1121,12 @@ $r2: 26px;
     border: 2px solid rgba($orange, 0.35);
     transition: all 0.25s ease;
     display: block;
+
+    @media (max-width: 768px) {
+      width: 28px;
+      height: 28px;
+      border-width: 1.5px;
+    }
   }
 
   &__status-indicator {
@@ -973,6 +1141,13 @@ $r2: 26px;
     font-weight: 900;
     font-size: 11px;
     white-space: nowrap;
+
+    @media (max-width: 768px) {
+      padding: 3px 5px;
+      font-size: 8px;
+      gap: 3px;
+      border-radius: 10px;
+    }
   }
 
   &__status-text {
@@ -1023,6 +1198,10 @@ $r2: 26px;
   &__meta {
     display: grid;
     gap: 2px;
+
+    @media (max-width: 768px) {
+      display: none; // Hide name and role on mobile
+    }
   }
 
   &__name {
@@ -1041,6 +1220,10 @@ $r2: 26px;
     font-weight: 1000;
     font-size: 18px;
     margin-right: 4px;
+
+    @media (max-width: 768px) {
+      display: none; // Hide chevron on mobile
+    }
   }
 }
 
@@ -1054,6 +1237,12 @@ $r2: 26px;
   @media (max-width: 980px) {
     grid-template-columns: 1fr;
   }
+
+  @media (max-width: 768px) {
+    gap: 10px;
+    display: flex;
+    flex-direction: column-reverse; // Jobs section at bottom on mobile
+  }
 }
 
 /* JOBS */
@@ -1063,6 +1252,12 @@ $r2: 26px;
   background: linear-gradient(180deg, $card2, rgba(255, 255, 255, 0.04));
   box-shadow: $shadow;
   overflow: hidden;
+
+  @media (max-width: 768px) {
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
 
   &__head {
     padding: 14px;
@@ -1082,6 +1277,12 @@ $r2: 26px;
         rgba(255, 255, 255, 0.06),
         rgba(255, 255, 255, 0.03)
       );
+
+    @media (max-width: 768px) {
+      padding: 8px 6px;
+      gap: 6px;
+      border-radius: 12px 12px 0 0;
+    }
   }
 }
 
@@ -1089,6 +1290,10 @@ $r2: 26px;
   margin: 0;
   font-size: 18px;
   font-weight: 1000;
+
+  @media (max-width: 768px) {
+    font-size: 14px;
+  }
 }
 
 .sub {
@@ -1096,6 +1301,11 @@ $r2: 26px;
   color: $muted;
   font-weight: 800;
   font-size: 12.5px;
+
+  @media (max-width: 768px) {
+    font-size: 9px;
+    margin: 2px 0 0;
+  }
 }
 
 .headActions {
@@ -1134,11 +1344,20 @@ $r2: 26px;
 .filters {
   padding: 12px 14px 0;
 
+  @media (max-width: 768px) {
+    padding: 6px 6px 0;
+  }
+
   &__card {
     border-radius: $r;
     border: 1px solid rgba($orange, 0.18);
     background: rgba($orange, 0.08);
     padding: 12px;
+
+    @media (max-width: 768px) {
+      padding: 6px;
+      border-radius: 10px;
+    }
   }
 
   &__row {
@@ -1165,6 +1384,10 @@ $r2: 26px;
   font-size: 12px;
   font-weight: 1000;
   color: rgba(255, 255, 255, 0.78);
+
+  @media (max-width: 768px) {
+    font-size: 10px;
+  }
 }
 
 .tabs {
@@ -1204,6 +1427,10 @@ $r2: 26px;
     font-weight: 1000;
     color: $text;
     white-space: nowrap;
+
+    @media (max-width: 768px) {
+      font-size: 9px;
+    }
   }
 
   &__count {
@@ -1214,6 +1441,11 @@ $r2: 26px;
     border: 1px solid rgba(255, 255, 255, 0.16);
     background: rgba(0, 0, 0, 0.25);
     white-space: nowrap;
+
+    @media (max-width: 768px) {
+      font-size: 8px;
+      padding: 2px 6px;
+    }
   }
 }
 
@@ -1268,6 +1500,14 @@ $r2: 26px;
   @media (max-width: 860px) {
     grid-template-columns: 1fr;
   }
+
+  @media (max-width: 768px) {
+    padding: 6px 4px;
+    gap: 6px;
+    // Smooth scrolling
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 .job {
@@ -1286,10 +1526,24 @@ $r2: 26px;
   box-shadow: $shadow;
   overflow: hidden;
   transition: transform 140ms ease, box-shadow 140ms ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+
+  @media (max-width: 768px) {
+    border-radius: 10px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
+    // App-like touch feedback
+    &:active {
+      transform: scale(0.98);
+      transition: transform 0.1s ease;
+    }
+  }
 
   &:hover {
-    transform: translateY(-2px);
-    box-shadow: $shadow, $shadowO;
+    @media (min-width: 769px) {
+      transform: translateY(-2px);
+      box-shadow: $shadow, $shadowO;
+    }
   }
 
   &__top {
@@ -1298,10 +1552,19 @@ $r2: 26px;
     justify-content: space-between;
     align-items: start;
     gap: 10px;
+
+    @media (max-width: 768px) {
+      padding: 5px 5px 0;
+      gap: 4px;
+    }
   }
 
   &__main {
     padding: 10px 12px 12px;
+
+    @media (max-width: 768px) {
+      padding: 4px 6px 6px;
+    }
   }
 
   &__actions {
@@ -1312,6 +1575,11 @@ $r2: 26px;
     align-items: center;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(0, 0, 0, 0.2);
+
+    @media (max-width: 768px) {
+      padding: 5px;
+      gap: 4px;
+    }
   }
 }
 
@@ -1329,6 +1597,12 @@ $r2: 26px;
   border: 1px solid rgba($orange, 0.18);
   background: rgba($orange, 0.12);
   color: $text;
+
+  @media (max-width: 768px) {
+    padding: 2px 4px;
+    font-size: 7px;
+    border-radius: 6px;
+  }
 
   &--urgent {
     border-color: rgba($danger, 0.45);
@@ -1369,6 +1643,13 @@ $r2: 26px;
   &:focus {
     @include focusRing;
   }
+
+  @media (max-width: 768px) {
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
+    font-size: 12px;
+  }
 }
 
 .job__titleRow {
@@ -1382,12 +1663,21 @@ $r2: 26px;
   margin: 0;
   font-size: 15.5px;
   font-weight: 1100;
+
+  @media (max-width: 768px) {
+    font-size: 11px;
+    line-height: 1.25;
+  }
 }
 
 .price {
   font-weight: 1200;
   color: $orange3;
   font-size: 14px;
+
+  @media (max-width: 768px) {
+    font-size: 9px;
+  }
 
   span {
     font-weight: 900;
@@ -1402,6 +1692,12 @@ $r2: 26px;
   font-weight: 800;
   font-size: 13px;
   line-height: 1.4;
+
+  @media (max-width: 768px) {
+    font-size: 9px;
+    margin: 3px 0 0;
+    line-height: 1.25;
+  }
 }
 
 .metaGrid {
@@ -1409,6 +1705,11 @@ $r2: 26px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+
+  @media (max-width: 768px) {
+    gap: 3px;
+    margin-top: 4px;
+  }
 
   @media (max-width: 520px) {
     grid-template-columns: 1fr;
@@ -1421,18 +1722,33 @@ $r2: 26px;
   background: rgba(0, 0, 0, 0.22);
   padding: 10px;
 
+  @media (max-width: 768px) {
+    padding: 4px;
+    border-radius: 8px;
+  }
+
   &__k {
     display: block;
     font-size: 12px;
     font-weight: 900;
     color: rgba(255, 255, 255, 0.62);
     margin-bottom: 4px;
+
+    @media (max-width: 768px) {
+      font-size: 8px;
+      margin-bottom: 2px;
+    }
   }
 
   &__v {
     font-size: 12.5px;
     font-weight: 1000;
     color: rgba(255, 255, 255, 0.9);
+
+    @media (max-width: 768px) {
+      font-size: 8px;
+      line-height: 1.2;
+    }
   }
 }
 
@@ -1447,6 +1763,16 @@ $r2: 26px;
   background: linear-gradient(180deg, $card2, rgba(255, 255, 255, 0.04));
   box-shadow: $shadow;
   padding: 14px;
+  width: 100%;
+  box-sizing: border-box;
+
+  @media (max-width: 768px) {
+    padding: 8px 6px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 8px;
+  }
 }
 
 .panel__head {
@@ -1458,51 +1784,137 @@ $r2: 26px;
   border: 1px solid rgba($orange, 0.18);
   background: rgba(0, 0, 0, 0.22);
   padding: 12px;
+  width: 100%;
+  box-sizing: border-box;
+
+  @media (max-width: 768px) {
+    padding: 8px;
+    border-radius: 12px;
+  }
 }
 
-.cta__btn {
+/* Button: "צור קריאה" (Orange + Black) */
+.btn-create-call {
+  --orange: #ff7a00;
+  --orange-2: #ff9a3c;
+  --black: #0b0b0f;
+  --black-2: #14141a;
+
   width: 100%;
-  border: none;
-  cursor: pointer;
-  border-radius: 22px;
-  padding: 14px 14px;
-  color: #111;
-  font-weight: 1200;
-  background: linear-gradient(135deg, $orange, $orange2);
-  box-shadow: $shadowO;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  transition: transform 140ms ease, box-shadow 140ms ease;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0.95rem 1.25rem;
+  min-height: 48px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 122, 0, 0.55);
+  color: #fff;
+  background: linear-gradient(
+    135deg,
+    var(--black) 0%,
+    var(--black-2) 55%,
+    rgba(255, 122, 0, 0.1) 100%
+  );
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45), 0 0 0 0 rgba(255, 122, 0, 0);
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  text-transform: none;
+  transition: transform 0.12s ease, box-shadow 0.18s ease,
+    border-color 0.18s ease, background 0.18s ease, filter 0.18s ease;
+  position: relative;
+  overflow: hidden;
+  font-size: 14px;
+  border: none;
+
+  .icon {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+  }
 
   &:hover {
-    transform: translateY(-2px);
-    box-shadow: $shadowO, 0 22px 50px rgba($orange, 0.18);
+    border-color: rgba(255, 122, 0, 0.9);
+    background: linear-gradient(
+      135deg,
+      #0f0f14 0%,
+      #1a1a22 55%,
+      rgba(255, 122, 0, 0.16) 100%
+    );
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55),
+      0 0 0 6px rgba(255, 122, 0, 0.12);
+    transform: translateY(-1px);
   }
 
   &:active {
-    transform: translateY(0) scale(0.99);
+    transform: translateY(0px) scale(0.99);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.5), 0 0 0 4px rgba(255, 122, 0, 0.1);
   }
 
-  &:focus {
-    @include focusRing;
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(255, 122, 0, 0.25),
+      0 16px 40px rgba(0, 0, 0, 0.55);
   }
-}
 
-.cta__spark,
-.cta__arrow {
-  width: 34px;
-  height: 34px;
-  border-radius: 16px;
-  display: grid;
-  place-items: center;
-  background: rgba(0, 0, 0, 0.18);
-  border: 1px solid rgba(0, 0, 0, 0.18);
-  color: #111;
-}
+  &:disabled,
+  &.is-disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+    filter: grayscale(0.2);
+    transform: none;
+    box-shadow: none;
+  }
 
-.cta__txt {
-  font-size: 14px;
+  // subtle animated shine
+  &::after {
+    content: "";
+    position: absolute;
+    inset: -40% -60%;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.1) 35%,
+      rgba(255, 255, 255, 0) 70%
+    );
+    transform: translateX(-40%) rotate(10deg);
+    transition: transform 0.55s ease;
+    pointer-events: none;
+  }
+
+  &:hover::after {
+    transform: translateX(40%) rotate(10deg);
+  }
+
+  // optional "urgent" variant
+  &.is-urgent {
+    border-color: rgba(255, 122, 0, 0.95);
+    background: linear-gradient(
+      135deg,
+      #0b0b0f 0%,
+      #1b1208 55%,
+      rgba(255, 122, 0, 0.22) 100%
+    );
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55),
+      0 0 0 6px rgba(255, 122, 0, 0.18);
+  }
+
+  @media (max-width: 768px) {
+    padding: 0.75rem 1rem;
+    min-height: 42px; // Smaller on mobile
+    font-size: 13px;
+    border-radius: 12px;
+    gap: 0.5rem;
+
+    .icon {
+      width: 16px;
+      height: 16px;
+    }
+  }
 }
 
 /* form controls */
@@ -1510,12 +1922,23 @@ $r2: 26px;
 .select,
 .textarea {
   width: 100%;
+  box-sizing: border-box;
   border-radius: 16px;
   border: 1px solid rgba($orange, 0.18);
   background: rgba(255, 255, 255, 0.06);
   color: $text;
   padding: 12px 12px;
   font-weight: 900;
+  -webkit-appearance: none; // Remove iOS styling
+  appearance: none;
+  font-size: 16px; // Prevent zoom on iOS
+
+  @media (max-width: 768px) {
+    padding: 10px 8px;
+    font-size: 16px; // Prevent iOS zoom
+    border-radius: 10px;
+    min-height: 40px; // Smaller on mobile
+  }
 
   &::placeholder {
     color: rgba(255, 255, 255, 0.45);
@@ -1564,6 +1987,112 @@ $r2: 26px;
   color: rgba(255, 255, 255, 0.62);
   font-weight: 800;
   font-size: 12px;
+
+  @media (max-width: 768px) {
+    font-size: 11px;
+    margin-top: 4px;
+  }
+}
+
+/* File upload styles for call image */
+.file-upload-wrapper {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.file-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.file-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: $r;
+  border: 1px solid rgba($orange, 0.18);
+  background: rgba($orange, 0.1);
+  color: $text;
+  font-weight: 900;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+
+  &:hover {
+    background: rgba($orange, 0.15);
+    border-color: rgba($orange, 0.3);
+  }
+
+  &.disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  @media (max-width: 768px) {
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+}
+
+.image-preview-small {
+  position: relative;
+  margin-top: 10px;
+  width: 100%;
+  max-width: 200px;
+  border-radius: $r;
+  overflow: hidden;
+  border: 1px solid rgba($orange, 0.2);
+
+  img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  @media (max-width: 768px) {
+    max-width: 150px;
+  }
+}
+
+.remove-image-btn {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 59, 59, 0.9);
+    transform: scale(1.1);
+  }
+
+  @media (max-width: 768px) {
+    width: 24px;
+    height: 24px;
+    font-size: 18px;
+    top: 6px;
+    left: 6px;
+  }
 }
 
 .row {
@@ -1639,12 +2168,22 @@ $r2: 26px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(0, 0, 0, 0.22);
   padding: 12px;
+
+  @media (max-width: 768px) {
+    padding: 8px;
+    border-radius: 12px;
+  }
 }
 
 .dir__list {
   margin-top: 12px;
   display: grid;
   gap: 10px;
+
+  @media (max-width: 768px) {
+    margin-top: 8px;
+    gap: 6px;
+  }
 }
 
 .hcard {
@@ -1657,6 +2196,12 @@ $r2: 26px;
   align-items: center;
   gap: 10px;
   transition: transform 120ms ease, box-shadow 120ms ease;
+
+  @media (max-width: 768px) {
+    padding: 6px;
+    border-radius: 12px;
+    gap: 6px;
+  }
 
   &:hover {
     transform: translateY(-1px);
@@ -1675,10 +2220,20 @@ $r2: 26px;
     border-radius: 999px;
     border: 2px solid rgba($orange, 0.28);
     object-fit: cover;
+
+    @media (max-width: 768px) {
+      width: 32px;
+      height: 32px;
+      border-width: 1.5px;
+    }
   }
 
   &__name {
     font-weight: 1100;
+
+    @media (max-width: 768px) {
+      font-size: 12px;
+    }
   }
 
   &__sub {
@@ -1686,12 +2241,21 @@ $r2: 26px;
     color: rgba(255, 255, 255, 0.62);
     font-weight: 900;
     font-size: 12px;
+
+    @media (max-width: 768px) {
+      font-size: 9px;
+      margin-top: 1px;
+    }
   }
 
   &__actions {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+
+    @media (max-width: 768px) {
+      gap: 4px;
+    }
   }
 }
 
@@ -1705,6 +2269,11 @@ $r2: 26px;
   font-weight: 1000;
   font-size: 12px;
   color: $text;
+
+  @media (max-width: 768px) {
+    padding: 4px 6px;
+    font-size: 9px;
+  }
 }
 
 /* buttons */
@@ -1717,6 +2286,14 @@ $r2: 26px;
   cursor: pointer;
   font-weight: 1000;
   transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  font-size: 13px;
+
+  @media (max-width: 768px) {
+    padding: 6px 8px;
+    font-size: 10px;
+    border-radius: 10px;
+    min-height: 32px;
+  }
 
   &:hover {
     transform: translateY(-1px);
@@ -1798,5 +2375,45 @@ $r2: 26px;
 .side {
   display: grid;
   gap: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+// Additional mobile app-like enhancements
+@media (max-width: 768px) {
+  // Smooth scrolling
+  .dash,
+  .jobs__list,
+  main {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  // Better text rendering on mobile
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  // Disable text selection on buttons for better UX
+  button,
+  .btn,
+  .tab,
+  .toggle {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  // Better focus states for accessibility
+  button:focus-visible,
+  .btn:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid rgba($orange, 0.6);
+    outline-offset: 2px;
+  }
 }
 </style>

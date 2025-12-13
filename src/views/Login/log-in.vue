@@ -48,7 +48,7 @@
 
             <div class="input-group password-input-group">
               <label for="password">סיסמה</label>
-              <div class="password-input-wrapper">
+              <div v-if="!ifGoogleUser" class="password-input-wrapper">
                 <input
                   id="password"
                   v-model="password"
@@ -67,6 +67,14 @@
                   />
                 </button>
               </div>
+              <input
+                v-else
+                id="password"
+                v-model="password"
+                type="email"
+                placeholder="הכנס כתובת מייל"
+                required
+              />
             </div>
 
             <button type="submit" class="login-button">התחבר</button>
@@ -111,6 +119,7 @@ export default {
     return {
       username: "",
       password: "",
+      email: "",
       ifGoogleUser: false,
       toast: null,
       showPassword: false,
@@ -133,7 +142,7 @@ export default {
     },
   },
   methods: {
-    handleGoogleCallback() {
+    async handleGoogleCallback() {
       // Make sure toast is initialized
       if (!this.toast) {
         this.toast = useToast();
@@ -144,7 +153,6 @@ export default {
         this.$route.query.googleAuth ||
         new URLSearchParams(window.location.search).get("googleAuth");
 
-      // console.log("googleAuth", googleAuth);
       if (googleAuth === "success") {
         const userData =
           this.$route.query.user ||
@@ -152,7 +160,6 @@ export default {
         if (userData) {
           try {
             this.ifGoogleUser = true;
-            // console.log("userData", userData);
             const user = JSON.parse(decodeURIComponent(userData));
             this.toast.showSuccess("התחברות עם Google בוצעה בהצלחה!");
             // כאן תוכל לשמור את המשתמש ב-store או לעשות redirect
@@ -160,9 +167,10 @@ export default {
             // Clean URL - remove query params
             // this.$router.replace({ path: this.$route.path });
             this.username = user.username;
-            this.password = user.googleId;
-            this.showPassword = true;
-            this.handleLogin();
+            this.password = user.email; // For Google users, password field contains email
+            this.ifGoogleUser = true;
+            // Call handleLogin to get the password (googleId) from server
+            await this.handleLogin();
           } catch (error) {
             if (this.toast) {
               this.toast.showError("שגיאה בעיבוד נתוני המשתמש");
@@ -177,16 +185,28 @@ export default {
         // eslint-disable-next-line no-undef
         const { data } = await axios.post(`${URL}/login-user`, {
           username: this.username,
-          password: this.password,
+          password: this.password, // For Google users, password contains email initially, then replaced with googleId
           ifGoogleUser: this.ifGoogleUser,
         });
 
         if (data.message === "Success") {
           this.toast.showSuccess("התחברות בוצעה בהצלחה");
+          // If Google user, update the password field with the googleId received from server
+          if (this.ifGoogleUser && data.password) {
+            this.password = data.password;
+          }
+          if (data.user && data.user._id) {
+            this.$router.push({
+              name: "Dashboard",
+              params: { id: data.user._id },
+            });
+          }
         } else if (data.message === "NoUser") {
           this.toast.showError("שם משתמש לא נכון");
         } else if (data.message === "NoPass") {
           this.toast.showError("סיסמה לא נכונה");
+        } else if (data.message === "NoEmail") {
+          this.toast.showError("מייל לא נכון");
         }
       } catch (error) {
         this.toast.showError("שגיאה בהתחברות");

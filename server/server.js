@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ObjectId } = require("mongodb");
@@ -12,7 +13,7 @@ const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const session = require("express-session");
 const app = express();
-const URL_CLIENT = "http://localhost:8080";
+const URL_CLIENT = process.env.CLIENT_URL || "http://localhost:8081";
 
 //מרשמלו
 
@@ -120,12 +121,14 @@ function findAvailablePort(startPort) {
   const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
   if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
+    const callbackURL = `${URL_SERVER}/auth/google/callback`;
+
     passport.use(
       new GoogleStrategy(
         {
           clientID: GOOGLE_CLIENT_ID,
           clientSecret: GOOGLE_CLIENT_SECRET,
-          callbackURL: `${URL_SERVER}/auth/google/callback`,
+          callbackURL: callbackURL,
           passReqToCallback: true, // Pass request to callback to access session
         },
         async (req, accessToken, refreshToken, profile, done) => {
@@ -345,11 +348,18 @@ function findAvailablePort(startPort) {
     const tab = req.query.tab || "client"; // Get tab parameter
 
     // Save source and tab to session
+    if (!req.session) {
+      return res.redirect(`${URL_CLIENT}/login?error=no_session`);
+    }
+
     req.session.oauthSource = source;
     req.session.oauthTab = tab;
 
     // Force save session synchronously before redirect
     req.session.save((err) => {
+      if (err) {
+        return res.redirect(`${URL_CLIENT}/login?error=session_error`);
+      }
       // Now authenticate with Google, pass source as state parameter
       passport.authenticate("google", {
         scope: ["profile", "email"],
@@ -360,34 +370,49 @@ function findAvailablePort(startPort) {
 
   app.get(
     "/auth/google/callback",
-    passport.authenticate("google", { failureRedirect: "/login" }),
+    passport.authenticate("google", {
+      failureRedirect: `${URL_CLIENT}/login?error=auth_failed`,
+    }),
     (req, res) => {
-      // Get the source from state parameter OR session
-      const stateSource = req.query.state;
-      const sessionSource = req.session ? req.session.oauthSource : null;
-      const source = stateSource || sessionSource || "login";
+      try {
+        // Check if user exists
+        if (!req.user) {
+          return res.redirect(`${URL_CLIENT}/login?error=no_user`);
+        }
 
-      // Get the tab from session (for register page)
-      const tab = req.session ? req.session.oauthTab : "client";
+        // Get the source from state parameter OR session
+        const stateSource = req.query.state;
+        const sessionSource = req.session ? req.session.oauthSource : null;
+        const source = stateSource || sessionSource || "login";
 
-      // Clear the source and tab from session
-      if (req.session) {
-        delete req.session.oauthSource;
-        delete req.session.oauthTab;
-        req.session.save();
+        // Get the tab from session (for register page)
+        const tab = req.session ? req.session.oauthTab : "client";
+
+        // Clear the source and tab from session
+        if (req.session) {
+          delete req.session.oauthSource;
+          delete req.session.oauthTab;
+          req.session.save();
+        }
+
+        // Successful authentication - redirect to frontend with token or user data
+        const userData = encodeURIComponent(JSON.stringify(req.user));
+        let redirectUrl;
+
+        if (source === "register") {
+          redirectUrl = `${URL_CLIENT}/register?googleAuth=success&user=${userData}&tab=${tab}`;
+        } else {
+          redirectUrl = `${URL_CLIENT}/login?googleAuth=success&user=${userData}`;
+        }
+
+        res.redirect(redirectUrl);
+      } catch (error) {
+        res.redirect(
+          `${URL_CLIENT}/login?error=callback_error&message=${encodeURIComponent(
+            error.message
+          )}`
+        );
       }
-
-      // Successful authentication - redirect to frontend with token or user data
-      const userData = encodeURIComponent(JSON.stringify(req.user));
-      let redirectUrl;
-
-      if (source === "register") {
-        redirectUrl = `${URL_CLIENT}/register?googleAuth=success&user=${userData}&tab=${tab}`;
-      } else {
-        redirectUrl = `${URL_CLIENT}/login?googleAuth=success&user=${userData}`;
-      }
-
-      res.redirect(redirectUrl);
     }
   );
   // Logout route
@@ -410,18 +435,50 @@ function findAvailablePort(startPort) {
       if (!collection) {
         return res.json({ message: "Database not connected" });
       }
-      console.log("req.body", req.body);
 
-      const { username, password } = req.body;
+      const { username, password, ifGoogleUser } = req.body;
+
+      // Find user by username
       const user = await collection.findOne({ username });
-      console.log("user", user);
 
       if (!user) {
         return res.json({ message: "NoUser" });
-      } else if (user.password !== password) {
-        return res.json({ message: "NoPass" });
+      }
+
+      // If Google user, the "password" field actually contains the email
+      if (ifGoogleUser) {
+        // Check if the provided value matches the user's email
+        if (!password || user.email !== password) {
+          return res.json({ message: "NoEmail" });
+        }
+        // For Google users, verify they have a googleId (registered via Google)
+        // The server automatically uses googleId as the password
+        if (!user.googleId) {
+          return res.json({ message: "NoUser" });
+        }
+        // Return success with the googleId as password for the client to use
+        return res.json({
+          message: "Success",
+          password: user.googleId,
+          user: {
+            _id: user._id,
+            username: user.username,
+            email: user.email,
+          },
+        });
       } else {
-        return res.json({ message: "Success" });
+        // Regular user, check password
+        if (user.password !== password) {
+          return res.json({ message: "NoPass" });
+        }
+        return res.json({
+          message: "Success",
+          user: {
+            _id: user._id,
+            username: user.username,
+            email: user.email,
+          },
+        });
       }
     } catch (error) {
       return res.json({ message: "Error", error: error.message });
@@ -451,11 +508,6 @@ function findAvailablePort(startPort) {
         logoUrl,
         isHandyman,
       } = req.body;
-
-      // Debug: בדוק מה מגיע
-      console.log("Received specialties type:", typeof specialties);
-      console.log("Received specialties value:", specialties);
-      console.log("Is array?", Array.isArray(specialties));
 
       const fullName = `${firstName || ""} ${lastName || ""}`.trim();
 
@@ -487,7 +539,7 @@ function findAvailablePort(startPort) {
       if (password && password.length > 20) {
         // זה כנראה googleId (ארוך יותר מ-20 תווים)
         const existingUserByGoogleId = await collection.findOne({
-          $or: [{ googleId: password }, { password: password }],
+          googleId: password,
         });
 
         if (existingUserByGoogleId) {
@@ -496,19 +548,8 @@ function findAvailablePort(startPort) {
             message: "משתמש Google כבר קיים במערכת",
           });
         }
-      } else {
-        // בדיקה אם הסיסמה כבר קיימת (למשתמש רגיל)
-        const existingUserByPassword = await collection.findOne({
-          password: password,
-        });
-
-        if (existingUserByPassword) {
-          return res.status(400).json({
-            success: false,
-            message: "סיסמה כבר קיימת במערכת",
-          });
-        }
       }
+      // לא בודקים אם סיסמה רגילה כבר קיימת - כל אחד יכול להשתמש באותה סיסמה
 
       // Build user object based on type
       const userData = {
@@ -519,7 +560,7 @@ function findAvailablePort(startPort) {
         address: address || "",
         howDidYouHear: howDidYouHear || "",
         imageUrl: imageUrl || "",
-        isHandyman: isHandyman || isHandyman === "true",
+        isHandyman: isHandyman === true || isHandyman === "true",
         createdAt: new Date(),
       };
 
@@ -619,51 +660,36 @@ function findAvailablePort(startPort) {
           ? specialtiesArray
           : [];
 
-        console.log("=== BEFORE SAVE ===");
-        console.log(
-          "Final specialties:",
-          JSON.stringify(userData.specialties, null, 2)
-        );
-        console.log("Is Array?", Array.isArray(userData.specialties));
-        console.log(
-          "First item type:",
-          userData.specialties[0] ? typeof userData.specialties[0] : "empty"
-        );
-        console.log("===================");
-
         userData.logoUrl = logoUrl || "";
       }
 
-      // Debug: בדוק מה נשמר
-      console.log("=== BEFORE INSERT TO MONGO ===");
-      console.log("userData.specialties:", userData.specialties);
-      console.log("Type:", typeof userData.specialties);
-      console.log("Is Array?", Array.isArray(userData.specialties));
-      console.log("===============================");
-
       const result = await collection.insertOne(userData);
 
-      // Debug: בדוק מה נשמר בפועל
       if (result.insertedId) {
-        const savedUser = await collection.findOne({ _id: result.insertedId });
-        console.log("=== AFTER INSERT TO MONGO ===");
-        console.log("savedUser.specialties:", savedUser.specialties);
-        console.log("Type:", typeof savedUser.specialties);
-        console.log("Is Array?", Array.isArray(savedUser.specialties));
-        console.log("==============================");
-      }
-
-      if (result.insertedId) {
-        return res.json(true);
+        try {
+          const savedUser = await collection.findOne({
+            _id: result.insertedId,
+          });
+          return res.json({ success: true, user: savedUser });
+        } catch (findError) {
+          // Return success anyway with the insertedId
+          return res.json({
+            success: true,
+            user: {
+              _id: result.insertedId,
+              username: userData.username,
+              email: userData.email,
+            },
+          });
+        }
       } else {
         return res
           .status(500)
           .json({ message: "Failed to register", success: false });
       }
     } catch (error) {
-      console.error("Registration error:", error);
       return res.status(500).json({
-        message: "Error registering user",
+        message: error.message || "Error registering user",
         success: false,
         error: error.message,
       });

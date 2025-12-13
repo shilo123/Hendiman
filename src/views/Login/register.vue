@@ -1020,13 +1020,6 @@ export default {
             // אם זה הנדימן אבל אין specialties, הגדר כמערך ריק
             formData.specialties = [];
           }
-
-          // Debug: בדוק מה נשלח
-          console.log("=== CLIENT SENDING SPECIALTIES ===");
-          console.log("specialties:", formData.specialties);
-          console.log("Type:", typeof formData.specialties);
-          console.log("Is Array?", Array.isArray(formData.specialties));
-          console.log("===================================");
         }
 
         const { data } = await axios.post(
@@ -1040,6 +1033,15 @@ export default {
         );
         if (data === true || (data && data.success !== false)) {
           this.toast.showSuccess("הרשמה בוצעה בהצלחה!");
+          if (data?.user?._id) {
+            this.$router.push({
+              name: "Dashboard",
+              params: { id: data.user._id },
+            });
+          } else {
+            // If no user data, redirect to login
+            this.$router.push({ name: "logIn" });
+          }
         } else {
           this.toast.showError(data?.message || "שגיאה בהרשמה");
         }
