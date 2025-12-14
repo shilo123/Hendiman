@@ -1,5 +1,13 @@
 <template>
   <div class="dash" dir="rtl">
+    <!-- Loading Overlay -->
+    <div v-if="isLoading" class="loading-overlay">
+      <div class="loading-spinner">
+        <div class="spinner"></div>
+        <p class="loading-text">טוען נתונים...</p>
+      </div>
+    </div>
+
     <!-- TOP BAR -->
     <header class="top">
       <div class="top__left">
@@ -65,7 +73,7 @@
     </header>
 
     <!-- Mobile Navigation Buttons (visible only on mobile) -->
-
+    <!-- http://10.0.0.81:8080 -->
     <!-- MAIN -->
     <main class="grid">
       <!-- LEFT ~60% JOBS -->
@@ -97,7 +105,7 @@
                 <label class="label">מצב קריאה</label>
                 <div class="tabs">
                   <button
-                    v-for="t in statusTabs"
+                    v-for="t in statusTabsWithCounts"
                     :key="t.value"
                     class="tab"
                     :class="{ 'tab--active': activeStatus === t.value }"
@@ -141,9 +149,9 @@
 
         <!-- Jobs list -->
         <div class="jobs__list">
-          <article v-for="job in filteredJobs" :key="job.id" class="job">
-            <div class="job__top">
-              <div class="tags">
+          <article v-for="job in filteredJobs" :key="job.id" class="job-card">
+            <div class="job-card__left">
+              <div class="job-card__tags">
                 <span v-if="job.isUrgent" class="tag tag--urgent">דחוף</span>
                 <span
                   class="tag tag--status"
@@ -161,83 +169,27 @@
                 </span>
               </div>
 
-              <button class="iconBtn" type="button" @click="onOpenJobMenu(job)">
-                ⋯
-              </button>
-            </div>
-
-            <div class="job__main">
-              <div class="job__titleRow">
-                <h3 class="job__title">{{ job.subcategoryName }}</h3>
-                <div class="price">{{ job.price }} <span>שקלות</span></div>
-              </div>
-
-              <p class="job__desc">{{ job.description }}</p>
-
-              <div class="metaGrid">
-                <div class="meta">
-                  <span class="meta__k">👤 שם מזמין</span>
-                  <b class="meta__v">{{ job.clientName }}</b>
+              <div class="job-card__meta">
+                <div class="job-card__title">{{ job.subcategoryName }}</div>
+                <div class="job-card__sub">
+                  👤 {{ job.clientName }} · 📍 {{ job.locationText }} ·
+                  {{ job.distanceKm }} ק״מ
                 </div>
-
-                <div class="meta" v-if="job.handymanName">
-                  <span class="meta__k">🧑‍🔧 שם מקבל</span>
-                  <b class="meta__v">{{ job.handymanName }}</b>
-                </div>
-
-                <div class="meta">
-                  <span class="meta__k">📍 מיקום</span>
-                  <b class="meta__v">{{ job.locationText }}</b>
-                </div>
-
-                <div class="meta">
-                  <span class="meta__k">🧭 מרחק</span>
-                  <b class="meta__v">{{ job.distanceKm }} ק״מ</b>
-                </div>
-
-                <div class="meta">
-                  <span class="meta__k">⏱️ זמן</span>
-                  <b class="meta__v">{{ job.whenLabel }}</b>
-                </div>
+                <div class="job-card__price">{{ job.price }} שקלות</div>
               </div>
             </div>
 
-            <div class="job__actions">
-              <button
-                class="btn btn--ghost"
-                type="button"
-                @click="onOpenJobChat(job)"
-              >
-                💬 צ׳אט עבודה
-              </button>
-              <button
-                class="btn btn--ghost"
-                type="button"
-                @click="onOpenUserChat(job.clientId)"
-              >
-                🗣️ צ׳אט עם המזמין
-              </button>
-              <button
-                v-if="job.handymanId"
-                class="btn btn--ghost"
-                type="button"
-                @click="onOpenUserChat(job.handymanId)"
-              >
-                🧑‍🔧 צ׳אט עם המקבל
-              </button>
-
-              <div class="spacer"></div>
-
+            <div class="job-card__actions">
               <template v-if="isHendiman">
                 <button
-                  class="btn btn--ghost"
+                  class="mini mini--ghost"
                   type="button"
                   @click="onSkip(job)"
                 >
                   דלג
                 </button>
                 <button
-                  class="btn btn--primary"
+                  class="mini mini--primary"
                   type="button"
                   :disabled="job.status !== 'open'"
                   @click="onAccept(job)"
@@ -245,10 +197,9 @@
                   קבל
                 </button>
               </template>
-
               <template v-else>
                 <button
-                  class="btn btn--primary"
+                  class="mini mini--primary"
                   type="button"
                   @click="onView(job)"
                 >
@@ -262,17 +213,15 @@
 
       <!-- RIGHT SIDE -->
       <aside class="side">
-        <!-- CLIENT: create call + handyman search -->
-        <section id="צור-קריאה" v-if="!isHendiman" class="panel">
+        <!-- CLIENT: handymen in area + action buttons -->
+        <section v-if="!isHendiman" class="panel">
           <div class="panel__head">
-            <h2 class="h2">צור קריאה</h2>
-            <p class="sub">
-              בחר תת־קטגוריה, תיאור, מיקום וזמן. ברירת מחדל: כמה שיותר מהר.
-            </p>
+            <h2 class="h2">הנדימנים באזורך</h2>
+            <p class="sub">הנדימנים הזמינים באזור שלך · לחץ על כפתור לפעולה</p>
           </div>
 
-          <!-- Button: צור קריאה (shown when form is hidden) -->
-          <div v-if="!showCallForm" class="cta">
+          <!-- Action Buttons -->
+          <div class="action-buttons">
             <button
               class="btn-create-call"
               type="button"
@@ -281,129 +230,7 @@
               <span class="icon">⚡</span>
               <span>צור קריאה</span>
             </button>
-          </div>
 
-          <!-- Form (shown when button is clicked) -->
-          <div v-if="showCallForm">
-            <div class="field">
-              <label class="label">תת־קטגוריה</label>
-              <select class="select" v-model="call.subId" @change="onSubChange">
-                <option disabled value="">בחר תת־קטגוריה…</option>
-                <option v-for="s in subcategories" :key="s.id" :value="s.id">
-                  {{ s.name }}
-                </option>
-              </select>
-            </div>
-
-            <div class="preview" v-if="selectedSub">
-              <div class="preview__row">
-                <span>מחיר</span>
-                <b>{{ selectedSub.price }} שקלות</b>
-              </div>
-              <div class="preview__row">
-                <span>סוג עבודה</span>
-                <b>{{
-                  selectedSub.billingType === "hourly" ? "לשעה" : "קבלנות"
-                }}</b>
-              </div>
-              <div class="apiNote">* מגיע מקובץ ה-API שלך</div>
-            </div>
-
-            <div class="field">
-              <label class="label">תיאור</label>
-              <textarea
-                class="textarea"
-                v-model="call.desc"
-                rows="4"
-                placeholder="תאר בקצרה מה הבעיה…"
-              ></textarea>
-            </div>
-
-            <div class="field">
-              <label class="label">תמונה</label>
-              <div class="file-upload-wrapper">
-                <input
-                  id="callImage"
-                  type="file"
-                  accept="image/*"
-                  @change="handleCallImageUpload"
-                  class="file-input"
-                  required
-                />
-                <label
-                  for="callImage"
-                  class="file-label"
-                  :class="{ disabled: call.imageUrl || call.imagePreview }"
-                >
-                  📷
-                  {{
-                    call.imageUrl || call.imagePreview
-                      ? "תמונה נבחרה"
-                      : "בחר תמונה"
-                  }}
-                </label>
-                <div v-if="call.imagePreview" class="image-preview-small">
-                  <img :src="call.imagePreview" alt="Preview" />
-                  <button
-                    type="button"
-                    class="remove-image-btn"
-                    @click="removeCallImage"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div class="field">
-              <label class="label">מיקום</label>
-              <input
-                class="input"
-                v-model="call.location"
-                type="text"
-                placeholder="עיר, רחוב, מספר…"
-              />
-            </div>
-
-            <div class="field">
-              <label class="label">זמן הגעה</label>
-              <select class="select" v-model="call.when">
-                <option value="asap">כמה שיותר מהר</option>
-                <option value="today">היום</option>
-                <option value="tomorrow">מחר</option>
-                <option value="pick">בחר זמן</option>
-              </select>
-            </div>
-
-            <div class="row">
-              <button
-                class="toggle"
-                :class="{ 'toggle--on': call.urgent }"
-                type="button"
-                @click="onToggleUrgent"
-              >
-                🚨 קריאה דחופה
-              </button>
-
-              <div class="fine">
-                <span class="fine__icon">⚠️</span>
-                <span>קנס על ביטול: <b>250 שקלות</b></span>
-              </div>
-            </div>
-
-            <button
-              class="btn btn--primary btn--full"
-              type="button"
-              @click="onSubmitCall"
-            >
-              שלח קריאה
-            </button>
-          </div>
-
-          <div class="divider"></div>
-
-          <!-- Button: בחר הנדימן (shown when form is hidden) -->
-          <div v-if="!showPersonalRequestForm" class="cta">
             <button
               class="btn-create-call"
               type="button"
@@ -414,87 +241,34 @@
             </button>
           </div>
 
-          <!-- Personal Request Form (shown when button is clicked) -->
-          <div v-if="showPersonalRequestForm">
-            <div class="panel__head">
-              <h2 class="h2">בחר הנדימן</h2>
-              <p class="sub">חיפוש לפי שם + פילטר דירוג/מספר עבודות</p>
-            </div>
-
-            <div class="dir">
-              <div class="dir__filters">
-                <div class="field">
-                  <label class="label">חפש הנדימן</label>
-                  <input
-                    class="input"
-                    v-model="dirFilters.q"
-                    type="text"
-                    placeholder="לדוגמה: דני"
-                  />
-                </div>
-
-                <div class="row row--2">
-                  <div class="field">
-                    <label class="label">מינימום דירוג</label>
-                    <select
-                      class="select"
-                      v-model.number="dirFilters.minRating"
-                    >
-                      <option :value="0">הכל</option>
-                      <option :value="3">3+</option>
-                      <option :value="4">4+</option>
-                      <option :value="4.5">4.5+</option>
-                    </select>
-                  </div>
-
-                  <div class="field">
-                    <label class="label">מינימום עבודות</label>
-                    <select class="select" v-model.number="dirFilters.minJobs">
-                      <option :value="0">הכל</option>
-                      <option :value="10">10+</option>
-                      <option :value="50">50+</option>
-                      <option :value="100">100+</option>
-                    </select>
+          <!-- Handymen List -->
+          <div class="handymen-list">
+            <div v-for="h in filteredHandymen" :key="h.id" class="hcard">
+              <div class="hcard__left">
+                <img class="hcard__av" :src="h.imageUrl" alt="handyman" />
+                <div class="hcard__meta">
+                  <div class="hcard__name">{{ h.username }}</div>
+                  <div class="hcard__sub">
+                    ⭐ {{ h.rating }} · {{ 0 }} עבודות
                   </div>
                 </div>
               </div>
 
-              <div class="dir__list">
-                <div v-for="h in filteredHandymen" :key="h.id" class="hcard">
-                  <div class="hcard__left">
-                    <img class="hcard__av" :src="h.avatarUrl" alt="handyman" />
-                    <div class="hcard__meta">
-                      <div class="hcard__name">{{ h.name }}</div>
-                      <div class="hcard__sub">
-                        ⭐ {{ h.rating }} · {{ h.jobsDone }} עבודות
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="hcard__actions">
-                    <button
-                      class="mini mini--ghost"
-                      type="button"
-                      @click="onOpenUserChat(h.id)"
-                    >
-                      צ׳אט
-                    </button>
-                    <button
-                      class="mini mini--danger"
-                      type="button"
-                      @click="onBlockHandyman(h.id)"
-                    >
-                      חסום
-                    </button>
-                    <button
-                      class="mini mini--primary"
-                      type="button"
-                      @click="onPersonalRequest(h.id)"
-                    >
-                      הזמן
-                    </button>
-                  </div>
-                </div>
+              <div class="hcard__actions">
+                <button
+                  class="mini mini--ghost"
+                  type="button"
+                  @click="onOpenUserChat(h.id)"
+                >
+                  צ׳אט
+                </button>
+                <button
+                  class="mini mini--primary"
+                  type="button"
+                  @click="onPersonalRequest(h.id)"
+                >
+                  הזמן
+                </button>
               </div>
             </div>
           </div>
@@ -510,14 +284,27 @@
           <div class="quick">
             <div class="quick__row">
               <div class="badgeLine">
-                <span class="badgeLine__k">תחומי התמחות</span>
+                <span class="badgeLine__k">תחומי ההתמחות שלי </span>
                 <div class="badgeLine__v">
                   <span
                     class="chip"
-                    v-for="subcat in me.specialties"
-                    :key="subcat"
+                    v-for="(subcat, index) in me.specialties"
+                    :key="subcat.name || subcat || index"
                   >
-                    {{ subcat }}
+                    <span class="chip__name">{{ subcat.name || subcat }}</span>
+                    <span v-if="subcat.price" class="chip__price"
+                      >{{ subcat.price }}₪</span
+                    >
+                    <span
+                      v-if="subcat.typeWork"
+                      class="chip__type"
+                      :class="{
+                        'chip__type--hourly': subcat.typeWork === 'לשעה',
+                        'chip__type--fixed': subcat.typeWork === 'קבלנות',
+                      }"
+                    >
+                      {{ subcat.typeWork }}
+                    </span>
                   </span>
                 </div>
               </div>
@@ -554,6 +341,7 @@
 </template>
 
 <script>
+import { useMainStore } from "@/store/index";
 export default {
   name: "DashboardView",
   data() {
@@ -562,11 +350,6 @@ export default {
       isHendiman: false,
 
       isAvailable: true,
-
-      stats: { clients: 128, handymen: 42, users: 170 },
-
-      showCallForm: false,
-      showPersonalRequestForm: false,
 
       me: {
         id: "u1",
@@ -584,151 +367,66 @@ export default {
       },
 
       statusTabs: [
-        { label: "פתוחות", value: "open", count: 6 },
-        { label: "שובצו", value: "assigned", count: 2 },
-        { label: "בדרך", value: "on_the_way", count: 1 },
-        { label: "בביצוע", value: "in_progress", count: 1 },
-        { label: "הושלמו", value: "done", count: 9 },
-        { label: "בוטלו", value: "cancelled", count: 1 },
+        { label: "הכל", value: "all" },
+        { label: "פתוחות", value: "open" },
+        { label: "שובצו", value: "assigned" },
+        { label: "בדרך", value: "on_the_way" },
+        { label: "בביצוע", value: "in_progress" },
+        { label: "הושלמו", value: "done" },
+        { label: "בוטלו", value: "cancelled" },
       ],
-      activeStatus: "open",
+      activeStatus: "all",
 
       handymanFilters: { maxKm: 10 },
 
-      subcategories: [
-        { id: "sc1", name: "פתיחת סתימה", price: 250, billingType: "fixed" },
-        { id: "sc2", name: "החלפת ברז", price: 300, billingType: "fixed" },
-        { id: "sc3", name: "הרכבת ארון", price: 180, billingType: "hourly" },
-        { id: "sc4", name: "החלפת שקע", price: 220, billingType: "fixed" },
-      ],
-
-      call: {
-        subId: "",
-        desc: "",
-        location: "",
-        when: "asap",
-        urgent: false,
-        image: null,
-        imageUrl: "",
-        imagePreview: null,
-      },
-
       dirFilters: { q: "", minRating: 0, minJobs: 0 },
-
-      jobs: [
-        {
-          id: "j1",
-          clientId: "c1",
-          clientName: "דניאל כהן",
-          handymanId: null,
-          handymanName: "",
-          status: "open",
-          categoryName: "אינסטלציה",
-          subcategoryName: "פתיחת סתימה",
-          price: 250,
-          billingType: "fixed",
-          description: "סתימה בכיור מטבח, מים עולים מהר",
-          locationText: "ת״א, אבן גבירול 10",
-          distanceKm: 3,
-          whenLabel: "כמה שיותר מהר",
-          isUrgent: true,
-        },
-        {
-          id: "j2",
-          clientId: "c2",
-          clientName: "רוני לוי",
-          handymanId: "h3",
-          handymanName: "מוטי הנדימן",
-          status: "assigned",
-          categoryName: "הרכבות",
-          subcategoryName: "הרכבת ארון",
-          price: 180,
-          billingType: "hourly",
-          description: "ארון איקאה 2 דלתות + יישור דלתות",
-          locationText: "ר״ג, ביאליק 3",
-          distanceKm: 8,
-          whenLabel: "היום",
-          isUrgent: false,
-        },
-        {
-          id: "j3",
-          clientId: "c3",
-          clientName: "אורית",
-          handymanId: "h2",
-          handymanName: "אלירן",
-          status: "in_progress",
-          categoryName: "חשמל",
-          subcategoryName: "החלפת שקע",
-          price: 220,
-          billingType: "fixed",
-          description: "שקע רופף בסלון, צריך להחליף",
-          locationText: "חולון, סוקולוב 22",
-          distanceKm: 6,
-          whenLabel: "מחר",
-          isUrgent: false,
-        },
-      ],
-
-      handymen: [
-        {
-          id: "h1",
-          name: "דני",
-          rating: 4.8,
-          jobsDone: 132,
-          avatarUrl:
-            "https://images.unsplash.com/photo-1520975682031-ae1f0f3bd7c1?w=160&h=160&fit=crop",
-        },
-        {
-          id: "h2",
-          name: "אלירן",
-          rating: 4.4,
-          jobsDone: 57,
-          avatarUrl:
-            "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=160&h=160&fit=crop",
-        },
-        {
-          id: "h3",
-          name: "מוטי הנדימן",
-          rating: 4.9,
-          jobsDone: 210,
-          avatarUrl:
-            "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=160&h=160&fit=crop",
-        },
-      ],
     };
   },
 
+  setup() {
+    const store = useMainStore();
+    return { store };
+  },
   computed: {
-    selectedSub() {
-      return this.subcategories.find((x) => x.id === this.call.subId) || null;
+    jobs() {
+      return this.store.jobs;
     },
-
+    handymen() {
+      return this.store.handymen;
+    },
+    stats() {
+      return this.store.stats;
+    },
+    isLoading() {
+      return this.store.isLoading;
+    },
     filteredJobs() {
-      let list = [...this.jobs];
-
-      if (this.isHendiman) {
-        list = list.filter((j) => j.status === this.activeStatus);
-        list = list.filter((j) => j.distanceKm <= this.handymanFilters.maxKm);
-      }
-
-      return list;
+      return this.store.filteredJobs(
+        this.isHendiman ? this.activeStatus : null,
+        this.isHendiman ? this.handymanFilters.maxKm : null,
+        this.isHendiman
+      );
     },
 
     filteredHandymen() {
-      let list = [...this.handymen];
+      return this.store.filteredHandymen(this.dirFilters);
+    },
+    statusTabsWithCounts() {
+      // חשב את הספירות לכל סטטוס
+      const allJobs = this.store.jobs;
+      const filteredByKm = this.isHendiman
+        ? allJobs.filter((j) => j.distanceKm <= this.handymanFilters.maxKm)
+        : allJobs;
 
-      if (this.dirFilters.q) {
-        const q = this.dirFilters.q.toLowerCase();
-        list = list.filter((h) => h.name.toLowerCase().includes(q));
-      }
-      if (this.dirFilters.minRating) {
-        list = list.filter((h) => h.rating >= this.dirFilters.minRating);
-      }
-      if (this.dirFilters.minJobs) {
-        list = list.filter((h) => h.jobsDone >= this.dirFilters.minJobs);
-      }
-
-      return list;
+      return this.statusTabs.map((tab) => {
+        let count = 0;
+        if (tab.value === "all") {
+          count = filteredByKm.length;
+        } else {
+          count = filteredByKm.filter((j) => j.status === tab.value).length;
+        }
+        return { ...tab, count };
+      });
     },
   },
 
@@ -788,42 +486,17 @@ export default {
     },
 
     onCreateCallCta() {
-      this.showCallForm = true;
+      this.$router.push({
+        name: "CreateCall",
+        params: { id: this.$route.params.id },
+      });
     },
 
     onOpenPersonalRequest() {
-      this.showPersonalRequestForm = true;
-    },
-
-    onSubChange() {
-      console.log("subcategory changed", this.call.subId);
-    },
-
-    onToggleUrgent() {
-      console.log("toggle urgent");
-      this.call.urgent = !this.call.urgent;
-    },
-    handleCallImageUpload(event) {
-      const file = event.target.files[0];
-      if (file) {
-        this.call.image = file;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          this.call.imagePreview = e.target.result;
-        };
-        reader.readAsDataURL(file);
-        // TODO: Upload to server and set call.imageUrl
-      }
-    },
-    removeCallImage() {
-      this.call.image = null;
-      this.call.imageUrl = "";
-      this.call.imagePreview = null;
-      const input = document.getElementById("callImage");
-      if (input) input.value = "";
-    },
-    onSubmitCall() {
-      console.log("submit call", this.call, "selectedSub", this.selectedSub);
+      this.$router.push({
+        name: "SelectHandyman",
+        params: { id: this.$route.params.id },
+      });
     },
 
     onGoProfile() {
@@ -849,6 +522,29 @@ export default {
       };
       return labels[status] || status;
     },
+  },
+  async mounted() {
+    try {
+      const data = await this.store.fetchDashboardData(this.$route.params.id);
+
+      // עדכן את הנתונים המקומיים מהמשתמש
+      if (data.User) {
+        this.me.name = data.User.username;
+        this.me.specialties = data.User.specialties;
+        this.me.avatarUrl = data.User.imageUrl;
+        this.me.id = data.User._id;
+        this.me.phone = data.User.phone;
+        this.me.email = data.User.email;
+        this.me.address = data.User.address;
+        this.me.city = data.User.city;
+        this.isHendiman = data.User.isHandyman;
+      } else {
+        this.toast.showError("משתמש לא נמצא");
+        this.$router.push({ name: "logIn" });
+      }
+    } catch (error) {
+      console.log("error", error);
+    }
   },
 };
 </script>
@@ -1494,90 +1190,110 @@ $r2: 26px;
 .jobs__list {
   padding: 14px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-
-  @media (max-width: 860px) {
-    grid-template-columns: 1fr;
-  }
+  grid-template-columns: 1fr;
+  gap: 10px;
 
   @media (max-width: 768px) {
     padding: 6px 4px;
     gap: 6px;
-    // Smooth scrolling
     scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
   }
 }
 
-.job {
-  border-radius: $r2;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: radial-gradient(
-      700px 260px at 20% 0%,
-      rgba($orange, 0.1),
-      transparent 60%
-    ),
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.07),
-      rgba(255, 255, 255, 0.04)
-    );
-  box-shadow: $shadow;
-  overflow: hidden;
-  transition: transform 140ms ease, box-shadow 140ms ease;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
+.job-card {
+  border-radius: 20px;
+  border: 1px solid rgba($orange, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  transition: transform 120ms ease, box-shadow 120ms ease;
 
   @media (max-width: 768px) {
-    border-radius: 10px;
-    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
-    // App-like touch feedback
-    &:active {
-      transform: scale(0.98);
-      transition: transform 0.1s ease;
-    }
+    padding: 6px;
+    border-radius: 12px;
+    gap: 6px;
   }
 
   &:hover {
-    @media (min-width: 769px) {
-      transform: translateY(-2px);
-      box-shadow: $shadow, $shadowO;
-    }
+    transform: translateY(-1px);
+    box-shadow: 0 14px 22px rgba($orange, 0.12);
   }
 
-  &__top {
-    padding: 12px 12px 0;
+  &__left {
     display: flex;
-    justify-content: space-between;
-    align-items: start;
     gap: 10px;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
 
     @media (max-width: 768px) {
-      padding: 5px 5px 0;
       gap: 4px;
     }
   }
 
-  &__main {
-    padding: 10px 12px 12px;
+  &__meta {
+    display: grid;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__title {
+    font-weight: 1100;
+    font-size: 14px;
+    color: $text;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 
     @media (max-width: 768px) {
-      padding: 4px 6px 6px;
+      font-size: 12px;
+    }
+  }
+
+  &__sub {
+    margin-top: 2px;
+    color: rgba(255, 255, 255, 0.62);
+    font-weight: 900;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    @media (max-width: 768px) {
+      font-size: 9px;
+      margin-top: 1px;
+    }
+  }
+
+  &__price {
+    font-weight: 1100;
+    color: $orange3;
+    font-size: 13px;
+
+    @media (max-width: 768px) {
+      font-size: 10px;
     }
   }
 
   &__actions {
-    padding: 12px;
     display: flex;
-    gap: 10px;
+    gap: 8px;
     flex-wrap: wrap;
-    align-items: center;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(0, 0, 0, 0.2);
+    flex-shrink: 0;
 
     @media (max-width: 768px) {
-      padding: 5px;
       gap: 4px;
     }
   }
@@ -1790,6 +1506,28 @@ $r2: 26px;
   @media (max-width: 768px) {
     padding: 8px;
     border-radius: 12px;
+  }
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
+.handymen-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+
+  @media (max-width: 768px) {
+    gap: 6px;
   }
 }
 
@@ -2262,17 +2000,67 @@ $r2: 26px;
 .chip {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   border-radius: 999px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border: 1px solid rgba($orange, 0.18);
   background: rgba($orange, 0.1);
   font-weight: 1000;
   font-size: 12px;
   color: $text;
+  flex-wrap: wrap;
+  margin: 4px;
 
   @media (max-width: 768px) {
-    padding: 4px 6px;
+    padding: 4px 8px;
     font-size: 9px;
+    gap: 4px;
+    margin: 3px;
+  }
+
+  &__name {
+    color: $text;
+    font-weight: 1000;
+  }
+
+  &__price {
+    color: $orange3;
+    font-weight: 1100;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba($orange, 0.15);
+    border: 1px solid rgba($orange, 0.25);
+
+    @media (max-width: 768px) {
+      font-size: 8px;
+      padding: 1px 4px;
+    }
+  }
+
+  &__type {
+    font-size: 10px;
+    font-weight: 900;
+    padding: 2px 6px;
+    border-radius: 999px;
+    border: 1px solid;
+
+    @media (max-width: 768px) {
+      font-size: 7px;
+      padding: 1px 4px;
+    }
+
+    &--hourly {
+      color: $orange2;
+      background: rgba($orange2, 0.15);
+      border-color: rgba($orange2, 0.25);
+    }
+
+    &--fixed {
+      color: $orange;
+      background: rgba($orange, 0.15);
+      border-color: rgba($orange, 0.25);
+    }
   }
 }
 
@@ -2377,6 +2165,77 @@ $r2: 26px;
   gap: 14px;
   width: 100%;
   box-sizing: border-box;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(
+      900px 520px at 10% -10%,
+      rgba($orange, 0.18),
+      transparent 55%
+    ),
+    radial-gradient(
+      700px 420px at 95% 10%,
+      rgba($orange2, 0.12),
+      transparent 55%
+    ),
+    linear-gradient(180deg, $bg, $bg2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.spinner {
+  width: 60px;
+  height: 60px;
+  border: 4px solid rgba($orange, 0.2);
+  border-top-color: $orange;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  box-shadow: 0 0 20px rgba($orange, 0.3);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  color: $text;
+  font-weight: 900;
+  font-size: 16px;
+  margin: 0;
+  animation: pulse 1.5s ease-in-out infinite;
+
+  @media (max-width: 768px) {
+    font-size: 14px;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 // Additional mobile app-like enhancements

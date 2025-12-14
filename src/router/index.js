@@ -3,6 +3,8 @@ import HomeView from "@/views/HomeView.vue";
 import LogIn from "@/views/Login/log-in.vue";
 import Register from "@/views/Login/register.vue";
 import Dashboard from "@/views/Dashboard.vue";
+import CreateCall from "@/views/CreateCall.vue";
+import SelectHandyman from "@/views/SelectHandyman.vue";
 
 const routes = [
   {
@@ -29,6 +31,18 @@ const routes = [
     path: "/Dashboard/:id",
     name: "Dashboard",
     component: Dashboard,
+    props: true,
+  },
+  {
+    path: "/Dashboard/:id/create-call",
+    name: "CreateCall",
+    component: CreateCall,
+    props: true,
+  },
+  {
+    path: "/Dashboard/:id/select-handyman",
+    name: "SelectHandyman",
+    component: SelectHandyman,
     props: true,
   },
 ];

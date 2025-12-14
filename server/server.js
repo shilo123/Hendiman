@@ -13,7 +13,7 @@ const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const session = require("express-session");
 const app = express();
-const URL_CLIENT = process.env.CLIENT_URL || "http://localhost:8081";
+const URL_CLIENT = process.env.CLIENT_URL || "http://localhost:8080";
 
 //מרשמלו
 
@@ -42,8 +42,6 @@ function findAvailablePort(startPort) {
 (async () => {
   const PORT = process.env.PORT || (await findAvailablePort(3003));
   const URL_SERVER = `http://localhost:${PORT}`;
-
-  // Save port to file for client
   fs.writeFileSync(
     path.join(__dirname, "..", "src", "Url", "port.json"),
     JSON.stringify({ port: PORT })
@@ -77,6 +75,7 @@ function findAvailablePort(startPort) {
 
   // MongoDB connection
   let collection;
+  let collectionJobs;
   let db;
   try {
     const url =
@@ -84,6 +83,7 @@ function findAvailablePort(startPort) {
     const connection = await MongoClient.connect(url);
     db = connection.db("Hendiman");
     collection = db.collection("Users-Hendiman");
+    collectionJobs = db.collection("Jobs");
   } catch (error) {
     // MongoDB connection error
   }
@@ -259,7 +259,6 @@ function findAvailablePort(startPort) {
       }
     }
   });
-
   // Upload logo route (to hendiman-pic-logo bucket)
   app.post("/upload-logo", upload.single("image"), async (req, res) => {
     try {
@@ -342,6 +341,15 @@ function findAvailablePort(startPort) {
   });
 
   // Google OAuth Routes
+  // Handle incorrect routes like /auth/google/0/login and redirect to correct route
+  app.get("/auth/google/:param1/:param2", (req, res) => {
+    // Extract source from param2 if it's "login" or "register"
+    const param2 = req.params.param2;
+    const source =
+      param2 === "login" || param2 === "register" ? param2 : "login";
+    res.redirect(`/auth/google?source=${source}`);
+  });
+
   app.get("/auth/google", (req, res, next) => {
     // Get the source (register/login) and tab (client/handyman) from query parameters
     const source = req.query.source || "login";
@@ -696,6 +704,57 @@ function findAvailablePort(startPort) {
     }
   });
 
+  app.get("/GetDataDeshboard/:id", async (req, res) => {
+    try {
+      if (!collection) {
+        return res.status(500).json({
+          success: false,
+          message: "Database not connected",
+        });
+      }
+
+      let { id } = req.params;
+      let User = await collection.findOne({ _id: new ObjectId(id) });
+      let Hendimands = await collection.find({ isHandyman: true }).toArray();
+      let Jobs = collectionJobs ? await collectionJobs.find({}).toArray() : [];
+      let handymenCount = await collection.countDocuments({
+        isHandyman: true,
+      });
+      let clientsCount = await collection.countDocuments({
+        $or: [{ isHandyman: false }, { isHandyman: { $exists: false } }],
+      });
+      let totalUsersCount = await collection.countDocuments({});
+
+      // console.log({
+      //   User,
+      //   Jobs,
+      //   Hendimands,
+      //   stats: {
+      //     handymen: handymenCount,
+      //     clients: clientsCount,
+      //     total: totalUsersCount,
+      //   },
+      // });
+
+      return res.json({
+        success: true,
+        User,
+        Jobs,
+        Hendimands,
+        stats: {
+          handymen: handymenCount,
+          clients: clientsCount,
+          total: totalUsersCount,
+        },
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching dashboard data",
+        error: error.message,
+      });
+    }
+  });
   // Global error handler for unhandled errors
   app.use((err, req, res, next) => {
     if (!res.headersSent) {
@@ -709,6 +768,7 @@ function findAvailablePort(startPort) {
   // Start server
   app
     .listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
       // Server is running on port ${PORT}
     })
     .on("error", (err) => {

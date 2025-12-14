@@ -519,8 +519,8 @@ export default {
   border: 2px solid #f97316;
   border-radius: 8px;
   width: 280px;
-  max-height: 240px;
-  height: 240px;
+  max-height: 400px;
+  height: 400px;
   overflow-y: scroll !important;
   overflow-x: hidden !important;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
@@ -691,7 +691,7 @@ export default {
     margin: 10px 0 0 0;
     width: 100%;
     max-width: 300px;
-    max-height: 250px;
+    max-height: 350px;
   }
 
   .specialties-textarea {
@@ -725,7 +725,7 @@ export default {
   .categories-dropdown,
   .subcategories-dropdown {
     max-width: 100%;
-    max-height: 200px;
+    max-height: 300px;
   }
 
   .category-item,
