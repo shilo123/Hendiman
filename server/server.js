@@ -85,6 +85,7 @@ function findAvailablePort(startPort) {
     collection = db.collection("Users-Hendiman");
     collectionJobs = db.collection("Jobs");
   } catch (error) {
+    console.error("Error inserting new hendimans:", error);
     // MongoDB connection error
   }
 
@@ -755,6 +756,54 @@ function findAvailablePort(startPort) {
       });
     }
   });
+
+  // Get handymen with pagination
+  app.get("/handymen", async (req, res) => {
+    try {
+      if (!collection) {
+        return res.status(500).json({
+          success: false,
+          message: "Database not connected",
+        });
+      }
+
+      const page = parseInt(req.query.page) || 1;
+      const limit = 5;
+      const skip = (page - 1) * limit;
+
+      // Get total count
+      const totalCount = await collection.countDocuments({
+        isHandyman: true,
+      });
+
+      // Get handymen with pagination
+      const handymen = await collection
+        .find({ isHandyman: true })
+        .skip(skip)
+        .limit(limit)
+        .toArray();
+
+      return res.json({
+        success: true,
+        handymen,
+        pagination: {
+          page,
+          limit,
+          total: totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+          hasNext: page < Math.ceil(totalCount / limit),
+          hasPrev: page > 1,
+        },
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching handymen",
+        error: error.message,
+      });
+    }
+  });
+
   // Global error handler for unhandled errors
   app.use((err, req, res, next) => {
     if (!res.headersSent) {

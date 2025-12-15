@@ -9,6 +9,14 @@ export const useMainStore = defineStore("main", {
     user: null,
     stats: { clients: 142, handymen: 148, users: 142 + 148 },
     isLoading: false,
+    handymenPagination: {
+      page: 1,
+      limit: 5,
+      total: 0,
+      totalPages: 0,
+      hasNext: false,
+      hasPrev: false,
+    },
   }),
   getters: {
     filteredJobs: (state) => (status, maxKm, isHendiman) => {
@@ -86,6 +94,31 @@ export const useMainStore = defineStore("main", {
       this.stats.handymen = 148;
       this.stats.users = 142 + 148;
       // console.log(this.stats, stats);
+    },
+    async fetchHandymen(page = 1) {
+      try {
+        this.isLoading = true;
+        const { data } = await axios.get(`${URL}/handymen?page=${page}`);
+
+        if (data.success) {
+          this.handymen = data.handymen || [];
+          this.handymenPagination = {
+            page: data.pagination.page,
+            limit: data.pagination.limit,
+            total: data.pagination.total,
+            totalPages: data.pagination.totalPages,
+            hasNext: data.pagination.hasNext,
+            hasPrev: data.pagination.hasPrev,
+          };
+        }
+
+        return data;
+      } catch (error) {
+        console.error("Error fetching handymen:", error);
+        throw error;
+      } finally {
+        this.isLoading = false;
+      }
     },
   },
 });

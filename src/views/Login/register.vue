@@ -868,6 +868,15 @@ export default {
         const { data } = await axios.post(`${URL}/register-handyman`, formData);
         if (data === true || (data && data.success !== false)) {
           this.toast.showSuccess("הרשמה בוצעה בהצלחה!");
+          if (data?.user?._id) {
+            this.$router.push({
+              name: "Dashboard",
+              params: { id: data.user._id },
+            });
+          } else {
+            // If no user data, redirect to login
+            this.$router.push({ name: "logIn" });
+          }
         } else {
           this.toast.showError(data?.message || "שגיאה בהרשמה");
         }
