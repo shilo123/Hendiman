@@ -11,37 +11,52 @@
 
       <div class="form-container">
         <div class="field">
-          <label class="label">תת־קטגוריה</label>
-          <select class="select" v-model="call.subId" @change="onSubChange">
-            <option disabled value="">בחר תת־קטגוריה…</option>
-            <option v-for="s in subcategories" :key="s.id" :value="s.id">
-              {{ s.name }}
-            </option>
-          </select>
+          <SingleCategorySelector v-model="call.selectedSubcategory" />
+          <span v-if="errors.selectedSubcategory" class="error-message">
+            {{ errors.selectedSubcategory }}
+          </span>
         </div>
 
         <div class="preview" v-if="selectedSub">
-          <div class="preview__row">
-            <span>מחיר</span>
-            <b>{{ selectedSub.price }} שקלות</b>
+          <div class="preview__header">
+            <div class="preview__icon">✓</div>
+            <h3 class="preview__title">{{ call.selectedSubcategory.name }}</h3>
           </div>
-          <div class="preview__row">
-            <span>סוג עבודה</span>
-            <b>{{
-              selectedSub.billingType === "hourly" ? "לשעה" : "קבלנות"
-            }}</b>
+          <div class="preview__content">
+            <div class="preview__row">
+              <div class="preview__label">
+                <span class="preview__label-icon">💰</span>
+                <span>מחיר</span>
+              </div>
+              <b class="preview__value">{{ selectedSub.price }} שקלות</b>
+            </div>
+            <div class="preview__row">
+              <div class="preview__label">
+                <span class="preview__label-icon">{{
+                  selectedSub.billingType === "hourly" ? "⏱️" : "📋"
+                }}</span>
+                <span>סוג עבודה</span>
+              </div>
+              <b class="preview__value">{{
+                selectedSub.billingType === "hourly" ? "לשעה" : "קבלנות"
+              }}</b>
+            </div>
           </div>
-          <div class="apiNote">* מגיע מקובץ ה-API שלך</div>
         </div>
 
         <div class="field">
           <label class="label">תיאור</label>
           <textarea
             class="textarea"
+            :class="{ 'input-error': errors.desc }"
             v-model="call.desc"
+            @input="clearError('desc')"
             rows="4"
             placeholder="תאר בקצרה מה הבעיה…"
           ></textarea>
+          <span v-if="errors.desc" class="error-message">
+            {{ errors.desc }}
+          </span>
         </div>
 
         <div class="field">
@@ -58,15 +73,21 @@
             <label
               for="callImage"
               class="file-label"
-              :class="{ disabled: call.imageUrl || call.imagePreview }"
+              :class="{
+                disabled: call.imageUrl || call.imagePreview,
+                'file-label-error': errors.image,
+              }"
             >
               📷
               {{
                 call.imageUrl || call.imagePreview ? "תמונה נבחרה" : "בחר תמונה"
               }}
             </label>
-            <div v-if="call.imagePreview" class="image-preview-small">
-              <img :src="call.imagePreview" alt="Preview" />
+            <div
+              v-if="call.imageUrl || call.imagePreview"
+              class="image-preview-small"
+            >
+              <img :src="call.imageUrl || call.imagePreview" alt="Preview" />
               <button
                 type="button"
                 class="remove-image-btn"
@@ -76,26 +97,45 @@
               </button>
             </div>
           </div>
+          <span v-if="errors.image" class="error-message">
+            {{ errors.image }}
+          </span>
         </div>
 
         <div class="field">
           <label class="label">מיקום</label>
           <input
             class="input"
+            :class="{ 'input-error': errors.location }"
             v-model="call.location"
+            @input="clearError('location')"
             type="text"
             placeholder="עיר, רחוב, מספר…"
           />
+          <span v-if="errors.location" class="error-message">
+            {{ errors.location }}
+          </span>
         </div>
 
-        <div class="field">
-          <label class="label">זמן הגעה</label>
-          <select class="select" v-model="call.when">
-            <option value="asap">כמה שיותר מהר</option>
-            <option value="today">היום</option>
-            <option value="tomorrow">מחר</option>
-            <option value="pick">בחר זמן</option>
-          </select>
+        <div class="field-row">
+          <div class="field">
+            <label class="label">זמן הגעה</label>
+            <select class="select" v-model="call.when">
+              <option value="asap">כמה שיותר מהר</option>
+              <option value="today">היום</option>
+              <option value="tomorrow">מחר</option>
+              <option value="pick">בחר זמן</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label class="label">סוג עבודה</label>
+            <select class="select" v-model="call.workType">
+              <option value="קלה">קלה</option>
+              <option value="מורכבת">מורכבת</option>
+              <option value="קשה">קשה</option>
+            </select>
+          </div>
         </div>
 
         <div class="row">
@@ -105,7 +145,7 @@
             type="button"
             @click="onToggleUrgent"
           >
-            🚨 קריאה דחופה
+            🚨 {{ call.urgent ? "קריאה דחופה" : " לחץ לקריאה דחופה " }}
           </button>
 
           <div class="fine">
@@ -127,77 +167,251 @@
 </template>
 
 <script>
+import SingleCategorySelector from "@/components/SingleCategorySelector.vue";
+import { URL } from "@/Url/url";
+import axios from "axios";
+import { useToast } from "@/composables/useToast";
+
 export default {
   name: "CreateCall",
+  components: {
+    SingleCategorySelector,
+  },
   data() {
     return {
-      subcategories: [
-        { id: "sc1", name: "פתיחת סתימה", price: 250, billingType: "fixed" },
-        { id: "sc2", name: "החלפת ברז", price: 300, billingType: "fixed" },
-        { id: "sc3", name: "הרכבת ארון", price: 180, billingType: "hourly" },
-        { id: "sc4", name: "החלפת שקע", price: 220, billingType: "fixed" },
-      ],
-
+      toast: null,
       call: {
+        selectedSubcategory: null,
+        selectedSub: null,
         subId: "",
         desc: "",
-        location: "",
+        location: "המיקום שלי",
         when: "asap",
         urgent: false,
         image: null,
         imageUrl: "",
         imagePreview: null,
+        coordinates: {},
+        workType: "קלה",
       },
+      errors: {},
     };
   },
+  created() {
+    this.toast = useToast();
+  },
+
   computed: {
     selectedSub() {
-      return this.subcategories.find((x) => x.id === this.call.subId) || null;
+      // אם יש תת-קטגוריה נבחרת, החזר את הפרטים שלה
+      if (this.call.selectedSubcategory) {
+        return {
+          name: this.call.selectedSubcategory.name,
+          price: this.call.selectedSubcategory.price || 0,
+          billingType:
+            this.call.selectedSubcategory.typeWork === "לשעה"
+              ? "hourly"
+              : "fixed",
+        };
+      }
+      return null;
+    },
+  },
+  watch: {
+    selectedSub: {
+      handler(newValue) {
+        this.call.selectedSub = newValue;
+      },
+      immediate: true,
+    },
+    "call.selectedSubcategory": {
+      handler() {
+        this.clearError("selectedSubcategory");
+      },
     },
   },
   methods: {
     goBack() {
       this.$router.go(-1);
     },
-    onSubChange() {
-      console.log("subcategory changed", this.call.subId);
-    },
     onToggleUrgent() {
-      console.log("toggle urgent");
       this.call.urgent = !this.call.urgent;
     },
-    handleCallImageUpload(event) {
+    async handleCallImageUpload(event) {
       const file = event.target.files[0];
       if (file) {
+        // בדיקת גודל התמונה (מקסימום 5MB)
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        if (file.size > maxSize) {
+          this.errors.image = "גודל התמונה חייב להיות קטן מ-5MB";
+          const input = document.getElementById("callImage");
+          if (input) input.value = "";
+          return;
+        }
+
+        // בדיקת סוג הקובץ
+        if (!file.type.startsWith("image/")) {
+          this.errors.image = "יש להעלות קובץ תמונה בלבד";
+          const input = document.getElementById("callImage");
+          if (input) input.value = "";
+          return;
+        }
+
+        // ניקוי שגיאה אם הכל תקין
+        this.clearError("image");
         this.call.image = file;
+
+        // הצג תצוגה מקדימה מיד
         const reader = new FileReader();
         reader.onload = (e) => {
           this.call.imagePreview = e.target.result;
         };
         reader.readAsDataURL(file);
-        // TODO: Upload to server and set call.imageUrl
+
+        // העלה לשרת
+        try {
+          const formData = new FormData();
+          formData.append("image", file);
+
+          const response = await axios.post(`${URL}/pick-call123`, formData, {
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+          });
+
+          // שמור את ה-URL מהשרת
+          if (response.data && response.data.imageUrl) {
+            this.call.imageUrl = response.data.imageUrl;
+            // console.log("response.data.imageUrl", response.data.imageUrl);
+            // הסר את התצוגה המקדימה המקומית אחרי שהתמונה הועלתה
+            // this.call.imagePreview = null; // אפשר להשאיר גם את התצוגה המקדימה
+          }
+        } catch (error) {
+          console.error("Error uploading image:", error);
+          this.errors.image = "שגיאה בהעלאת התמונה. נסה שוב.";
+        }
       }
     },
     removeCallImage() {
       this.call.image = null;
       this.call.imageUrl = "";
       this.call.imagePreview = null;
+      this.clearError("image");
       const input = document.getElementById("callImage");
       if (input) input.value = "";
     },
-    onSubmitCall() {
-      console.log("submit call", this.call, "selectedSub", this.selectedSub);
-      // TODO: Submit to server and redirect
-      this.$router.push({
-        name: "Dashboard",
-        params: { id: this.$route.params.id },
-      });
+    clearError(field) {
+      if (this.errors[field]) {
+        delete this.errors[field];
+      }
     },
+    validateForm() {
+      this.errors = {};
+
+      // בדיקת תת-קטגוריה
+      if (
+        !this.call.selectedSubcategory ||
+        !this.call.selectedSubcategory.name
+      ) {
+        this.errors.selectedSubcategory = "יש לבחור תת-קטגוריה";
+      }
+
+      // בדיקת תיאור
+      if (!this.call.desc || this.call.desc.trim().length === 0) {
+        this.errors.desc = "יש למלא תיאור של הבעיה";
+      } else if (this.call.desc.trim().length < 10) {
+        this.errors.desc = "התיאור חייב להכיל לפחות 10 תווים";
+      }
+
+      // בדיקת תמונה
+      if (!this.call.imageUrl && !this.call.imagePreview && !this.call.image) {
+        this.errors.image = "יש להעלות תמונה";
+      }
+
+      // בדיקת מיקום
+      if (!this.call.location || this.call.location.trim().length === 0) {
+        this.errors.location = "יש למלא מיקום";
+      } else if (this.call.location.trim().length < 3) {
+        this.errors.location = "המיקום חייב להכיל לפחות 3 תווים";
+      }
+
+      return Object.keys(this.errors).length === 0;
+    },
+    async onSubmitCall() {
+      // ניקוי שגיאות קודמות
+      this.errors = {};
+
+      // בדיקת ולידציה
+      const isValid = this.validateForm();
+
+      if (!isValid) {
+        this.toast.showError("יש למלא את כל השדות הנדרשים");
+        // גלול לשדה הראשון עם שגיאה
+        const firstErrorField = document.querySelector(
+          ".input-error, .file-label-error"
+        );
+        if (firstErrorField) {
+          firstErrorField.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        }
+        return;
+      }
+
+      try {
+        // בדיקה שהנתונים תקינים לפני שליחה
+        if (!this.call.selectedSubcategory) {
+          this.toast.showError("יש לבחור תת-קטגוריה");
+          return;
+        }
+
+        // הוסף userId אם קיים ב-route params
+        const callData = {
+          ...this.call,
+          userId: this.$route.params.id || null,
+        };
+
+        // הסר שדות שלא צריך לשלוח
+        delete callData.image; // לא צריך לשלוח את ה-File object
+        delete callData.imagePreview; // לא צריך לשלוח את ה-preview
+
+        const response = await axios.post(`${URL}/create-call`, callData, {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (response.data.success) {
+          this.toast.showSuccess("הקריאה נשלחה בהצלחה!");
+          this.$router.push({
+            name: "Dashboard",
+            params: { id: this.$route.params.id },
+          });
+        } else {
+          this.toast.showError(response.data.message);
+        }
+      } catch (error) {
+        this.toast.showError("שגיאה בשליחת הקריאה. נסה שוב מאוחר יותר.");
+      }
+    },
+  },
+  async mounted() {
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const { latitude, longitude } = position.coords;
+      this.call.coordinates = {
+        lat: latitude,
+        lon: longitude,
+      };
+    });
   },
 };
 </script>
 
 <style lang="scss" scoped>
+$font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+  "Helvetica Neue", Arial, sans-serif;
+
 $bg: #0b0b0f;
 $bg2: #0f1016;
 $card: rgba(255, 255, 255, 0.06);
@@ -238,6 +452,7 @@ $r2: 26px;
     linear-gradient(180deg, $bg, $bg2);
   padding: 20px;
   direction: rtl;
+  font-family: $font-family;
 }
 
 .container {
@@ -298,6 +513,22 @@ $r2: 26px;
   margin-bottom: 20px;
 }
 
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .field {
+    margin-bottom: 0;
+  }
+}
+
 .label {
   font-size: 12px;
   font-weight: 1000;
@@ -305,7 +536,6 @@ $r2: 26px;
 }
 
 .input,
-.select,
 .textarea {
   width: 100%;
   box-sizing: border-box;
@@ -315,9 +545,8 @@ $r2: 26px;
   color: $text;
   padding: 12px 12px;
   font-weight: 900;
-  -webkit-appearance: none;
-  appearance: none;
   font-size: 16px;
+  transition: all 0.2s ease;
 
   &::placeholder {
     color: rgba(255, 255, 255, 0.45);
@@ -326,6 +555,62 @@ $r2: 26px;
   &:focus {
     @include focusRing;
     border-color: rgba($orange, 0.45);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  &:hover {
+    border-color: rgba($orange, 0.28);
+    background: rgba(255, 255, 255, 0.07);
+  }
+}
+
+.select {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 16px;
+  border: 1px solid rgba($orange, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: $text;
+  padding: 12px 40px 12px 12px;
+  font-weight: 900;
+  font-size: 16px;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ff6a00' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 12px center;
+  background-size: 12px;
+
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.45);
+  }
+
+  &:focus {
+    @include focusRing;
+    border-color: rgba($orange, 0.45);
+    background-color: rgba(255, 255, 255, 0.08);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ff8a2b' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  }
+
+  &:hover {
+    border-color: rgba($orange, 0.28);
+    background-color: rgba(255, 255, 255, 0.07);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ff8a2b' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  }
+
+  option {
+    background: $bg2;
+    color: $text;
+    padding: 10px;
+    font-weight: 900;
+  }
+
+  option:disabled {
+    color: rgba(255, 255, 255, 0.45);
+    font-style: italic;
   }
 }
 
@@ -337,28 +622,134 @@ $r2: 26px;
 .preview {
   margin-top: 10px;
   margin-bottom: 20px;
-  border-radius: 18px;
-  border: 1px solid rgba($orange, 0.18);
-  background: rgba($orange, 0.1);
-  padding: 10px;
+  border-radius: $r2;
+  border: 2px solid rgba($orange, 0.3);
+  background: linear-gradient(135deg, rgba($orange, 0.15), rgba($orange, 0.08));
+  padding: 16px;
+  box-shadow: 0 8px 24px rgba($orange, 0.12);
+  animation: slideIn 0.3s ease-out;
+  transition: all 0.3s ease;
+
+  &:hover {
+    border-color: rgba($orange, 0.4);
+    box-shadow: 0 12px 32px rgba($orange, 0.18);
+    transform: translateY(-2px);
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba($orange, 0.2);
+  }
+
+  &__icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, $orange, $orange2);
+    color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 1000;
+    font-size: 18px;
+    box-shadow: 0 4px 12px rgba($orange, 0.3);
+    flex-shrink: 0;
+  }
+
+  &__title {
+    font-size: 18px;
+    font-weight: 1000;
+    color: $text;
+    margin: 0;
+    flex: 1;
+  }
+
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
 
   &__row {
     display: flex;
     justify-content: space-between;
-    gap: 10px;
-    padding: 4px 0;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    transition: all 0.2s ease;
 
-    span {
-      color: rgba(255, 255, 255, 0.7);
-      font-weight: 900;
-      font-size: 12px;
+    &:hover {
+      background: rgba(255, 255, 255, 0.06);
+      transform: translateX(-3px);
     }
+  }
 
-    b {
-      font-weight: 1100;
-      color: $orange3;
-      font-size: 12.5px;
-    }
+  &__label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 900;
+    font-size: 14px;
+  }
+
+  &__label-icon {
+    font-size: 16px;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  }
+
+  &__value {
+    font-weight: 1100;
+    color: $orange3;
+    font-size: 16px;
+    text-shadow: 0 2px 8px rgba($orange, 0.3);
+  }
+}
+
+.error-message {
+  display: block;
+  margin-top: 6px;
+  color: $danger;
+  font-size: 12px;
+  font-weight: 800;
+  animation: slideIn 0.2s ease-out;
+}
+
+.input-error {
+  border-color: rgba($danger, 0.5) !important;
+  background: rgba($danger, 0.05) !important;
+
+  &:focus {
+    border-color: rgba($danger, 0.7) !important;
+    box-shadow: 0 0 0 3px rgba($danger, 0.2) !important;
+  }
+}
+
+.file-label-error {
+  border-color: rgba($danger, 0.5) !important;
+  background: rgba($danger, 0.1) !important;
+  color: rgba($danger, 0.9) !important;
+
+  &:hover {
+    border-color: rgba($danger, 0.6) !important;
+    background: rgba($danger, 0.15) !important;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -465,13 +856,30 @@ $r2: 26px;
   border: 1px solid rgba($orange, 0.18);
   background: rgba($orange, 0.1);
   color: $text;
-  padding: 10px 12px;
+  padding: 8px 10px;
   cursor: pointer;
   font-weight: 1000;
+  transition: all 0.2s ease;
+  font-size: 13px;
 
   &--on {
-    border-color: rgba($orange, 0.45);
-    box-shadow: 0 14px 22px rgba($orange, 0.16);
+    padding: 10px 12px;
+    font-size: 14px;
+    border-color: rgba($danger, 0.8);
+    background: linear-gradient(135deg, rgba($danger, 0.4), rgba($danger, 0.3));
+    color: #ffffff;
+    box-shadow: 0 14px 22px rgba($danger, 0.4);
+  }
+
+  &:hover {
+    background: rgba($orange, 0.15);
+    border-color: rgba($orange, 0.3);
+  }
+
+  &--on:hover {
+    background: linear-gradient(135deg, rgba($danger, 0.5), rgba($danger, 0.4));
+    border-color: rgba($danger, 0.9);
+    box-shadow: 0 16px 24px rgba($danger, 0.5);
   }
 
   &:focus {

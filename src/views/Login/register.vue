@@ -442,6 +442,7 @@
                   <label for="handymanAddress">כתובת</label>
                   <AddressAutocomplete
                     v-model="handymanForm.address"
+                    @update:englishName="handymanForm.addressEnglish = $event"
                     input-id="handymanAddress"
                     placeholder="הכנס שם ישוב"
                     :required="true"
@@ -564,6 +565,7 @@ export default {
         password: "",
         phone: "",
         address: "",
+        addressEnglish: "",
         howDidYouHear: "",
         specialties: [],
         image: null,
@@ -898,6 +900,41 @@ export default {
         let formData = null;
         if (this.activeTab === "handyman") {
           formData = { ...this.handymanForm };
+
+          // ודא ש-addressEnglish קיים לפני השליחה
+          // אם אין, נסה למצוא אותו מהכתובת ישירות מהמאגר
+          if (!formData.addressEnglish && formData.address) {
+            try {
+              const citiesData = await import("@/APIS/AdressFromIsrael.json");
+              const cities = Array.isArray(citiesData.default)
+                ? citiesData.default
+                : citiesData;
+
+              const searchValue = formData.address.trim();
+              const foundCity = cities.find((city) => {
+                const cityName = (city.name || city.שם_ישוב || "").trim();
+                if (!cityName) return false;
+
+                const normalizedCityName = cityName.replace(/\s+/g, " ");
+                const normalizedSearch = searchValue.replace(/\s+/g, " ");
+
+                return (
+                  normalizedCityName === normalizedSearch ||
+                  normalizedCityName.toLowerCase() ===
+                    normalizedSearch.toLowerCase() ||
+                  normalizedCityName.replace(/['"()]/g, "").trim() ===
+                    normalizedSearch.replace(/['"()]/g, "").trim()
+                );
+              });
+
+              if (foundCity && foundCity.english_name) {
+                formData.addressEnglish = foundCity.english_name;
+                this.handymanForm.addressEnglish = foundCity.english_name;
+              }
+            } catch (error) {
+              console.error("Error loading cities data:", error);
+            }
+          }
         } else {
           formData = { ...this.clientForm };
         }
@@ -1040,6 +1077,7 @@ export default {
             },
           }
         );
+        console.log("📥 Server response:", data);
         if (data === true || (data && data.success !== false)) {
           this.toast.showSuccess("הרשמה בוצעה בהצלחה!");
           if (data?.user?._id) {
@@ -1052,9 +1090,12 @@ export default {
             this.$router.push({ name: "logIn" });
           }
         } else {
+          console.error("❌ Registration failed:", data);
           this.toast.showError(data?.message || "שגיאה בהרשמה");
         }
       } catch (error) {
+        console.error("❌ Registration error:", error);
+        console.error("❌ Error response:", error.response);
         const errorMessage = error.response?.data?.message || "שגיאה בהרשמה";
         this.toast.showError(errorMessage);
       } finally {
@@ -1074,6 +1115,8 @@ export default {
 
 <style lang="scss" scoped>
 .register-page {
+  font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
   min-height: 100vh;
   background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
   padding: 20px;

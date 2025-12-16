@@ -3,11 +3,34 @@
     <div class="handymen-list">
       <div v-for="h in filteredHandymen" :key="h.id || h._id" class="hcard">
         <div class="hcard__left">
-          <img class="hcard__av" :src="h.imageUrl" alt="handyman" />
+          <div class="hcard__images">
+            <img
+              class="hcard__av"
+              :src="getHandymanImage(h)"
+              alt="handyman"
+              @error="onImageError"
+            />
+            <img
+              class="hcard__logo"
+              :src="getHandymanLogo(h)"
+              alt="logo"
+              @error="onLogoError"
+            />
+          </div>
           <div class="hcard__meta">
             <div class="hcard__name">{{ h.username }}</div>
             <div class="hcard__sub">
               ⭐ {{ h.rating || 0 }} · {{ h.jobsDone || 0 }} עבודות
+              <span
+                v-if="
+                  h.travelTimeMinutes !== null &&
+                  h.travelTimeMinutes !== undefined
+                "
+                class="hcard__travel-time"
+              >
+                · <span v-if="h.travelTimeMinutes === 0">📍 בעיר שלך</span>
+                <span v-else>🚗 {{ h.travelTimeMinutes }} דק'</span>
+              </span>
             </div>
           </div>
         </div>
@@ -18,6 +41,10 @@
             type="button"
             @click="$emit('view-details', h.id || h._id)"
           >
+            <font-awesome-icon
+              :icon="['fas', 'info-circle']"
+              class="mini__icon"
+            />
             ראה עוד
           </button>
           <button
@@ -25,6 +52,7 @@
             type="button"
             @click="$emit('open-chat', h.id || h._id)"
           >
+            <font-awesome-icon :icon="['fas', 'comment']" class="mini__icon" />
             צ׳אט
           </button>
           <button
@@ -32,6 +60,7 @@
             type="button"
             @click="$emit('personal-request', h.id || h._id)"
           >
+            <font-awesome-icon :icon="['fas', 'calendar']" class="mini__icon" />
             הזמן
           </button>
         </div>
@@ -84,10 +113,80 @@ export default {
     "next-page",
     "prev-page",
   ],
+  methods: {
+    getHandymanImage(handyman) {
+      const defaultImage = "/img/Hendima-logo.png";
+
+      if (!handyman || !handyman.imageUrl) {
+        return defaultImage;
+      }
+
+      const imageUrl = handyman.imageUrl;
+
+      // בדוק אם imageUrl ריק או לא תקין
+      if (
+        typeof imageUrl !== "string" ||
+        imageUrl.trim() === "" ||
+        imageUrl.includes("demo-02.png") ||
+        imageUrl.includes("/demo") ||
+        imageUrl.endsWith("demo-02.png") ||
+        (!imageUrl.startsWith("http") && !imageUrl.startsWith("/"))
+      ) {
+        return defaultImage;
+      }
+
+      return imageUrl;
+    },
+    onImageError(event) {
+      // אם התמונה נכשלה בטעינה, החלף לתמונת ברירת מחדל
+      const defaultImage = "/img/Hendima-logo.png";
+      if (
+        event.target.src !== defaultImage &&
+        !event.target.src.includes("Hendima-logo.png")
+      ) {
+        event.target.src = defaultImage;
+      }
+    },
+    getHandymanLogo(handyman) {
+      const defaultLogo = "/img/Hendima-logo.png";
+
+      if (!handyman || !handyman.logoUrl) {
+        return defaultLogo;
+      }
+
+      const logoUrl = handyman.logoUrl;
+
+      // בדוק אם logoUrl ריק או לא תקין
+      if (
+        typeof logoUrl !== "string" ||
+        logoUrl.trim() === "" ||
+        logoUrl.includes("demo") ||
+        (!logoUrl.startsWith("http") && !logoUrl.startsWith("/"))
+      ) {
+        return defaultLogo;
+      }
+
+      return logoUrl;
+    },
+    onLogoError(event) {
+      // אם הלוגו נכשל בטעינה, החלף ללוגו ברירת מחדל
+      const defaultLogo = "/img/Hendima-logo.png";
+      if (
+        event.target.src !== defaultLogo &&
+        !event.target.src.includes("Hendima-logo.png")
+      ) {
+        event.target.src = defaultLogo;
+      }
+    },
+  },
 };
 </script>
 
 <style lang="scss" scoped>
+$font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+  "Helvetica Neue", Arial, sans-serif;
+
+$bg: #0b0b0f;
 $orange: #ff6a00;
 $orange2: #ff8a2b;
 $orange3: #ffb36b;
@@ -100,6 +199,7 @@ $text: rgba(255, 255, 255, 0.92);
 }
 
 .handymen-list {
+  font-family: $font-family;
   display: grid;
   gap: 10px;
   margin-top: 12px;
@@ -137,6 +237,13 @@ $text: rgba(255, 255, 255, 0.92);
     align-items: center;
   }
 
+  &__images {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   &__av {
     width: 44px;
     height: 44px;
@@ -148,6 +255,26 @@ $text: rgba(255, 255, 255, 0.92);
       width: 32px;
       height: 32px;
       border-width: 1.5px;
+    }
+  }
+
+  &__logo {
+    position: absolute;
+    bottom: -2px;
+    left: -2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid $bg;
+    object-fit: cover;
+    background: $bg;
+
+    @media (max-width: 768px) {
+      width: 16px;
+      height: 16px;
+      border-width: 1.5px;
+      bottom: -1px;
+      left: -1px;
     }
   }
 
@@ -164,11 +291,21 @@ $text: rgba(255, 255, 255, 0.92);
     color: rgba(255, 255, 255, 0.62);
     font-weight: 900;
     font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
 
     @media (max-width: 768px) {
       font-size: 9px;
       margin-top: 1px;
+      gap: 2px;
     }
+  }
+
+  &__travel-time {
+    color: $orange2;
+    font-weight: 1000;
   }
 
   &__actions {
@@ -230,24 +367,104 @@ $text: rgba(255, 255, 255, 0.92);
   padding: 9px 10px;
   font-weight: 1000;
   font-size: 12px;
-  border: 1px solid rgba($orange, 0.18);
-  background: rgba($orange, 0.1);
+  border: 1px solid rgba($orange, 0.25);
+  background: rgba($orange, 0.12);
   color: $text;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+
+  @media (max-width: 768px) {
+    padding: 6px 8px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba($orange, 0.2);
+    transform: translate(-50%, -50%);
+    transition: width 0.4s ease, height 0.4s ease;
+  }
+
+  &:hover {
+    transform: translateY(-2px);
+    border-color: rgba($orange, 0.4);
+    background: rgba($orange, 0.18);
+    box-shadow: 0 6px 16px rgba($orange, 0.2);
+
+    &::before {
+      width: 200px;
+      height: 200px;
+    }
+  }
+
+  &:active {
+    transform: translateY(0) scale(0.98);
+  }
 
   &:focus {
     @include focusRing;
   }
 
+  &__icon {
+    font-size: 11px;
+    transition: transform 0.2s ease;
+
+    @media (max-width: 768px) {
+      font-size: 10px;
+    }
+  }
+
+  &:hover &__icon {
+    transform: scale(1.1);
+  }
+
   &--ghost {
-    background: rgba(0, 0, 0, 0.22);
-    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.18);
+    color: $text;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.28);
+      box-shadow: 0 6px 16px rgba(255, 255, 255, 0.1);
+
+      &::before {
+        background: rgba(255, 255, 255, 0.1);
+      }
+    }
   }
 
   &--primary {
     border: none;
     background: linear-gradient(135deg, $orange, $orange2);
     color: #111;
+    box-shadow: 0 4px 12px rgba($orange, 0.3);
+
+    &:hover {
+      background: linear-gradient(135deg, $orange2, $orange);
+      box-shadow: 0 6px 20px rgba($orange, 0.4);
+      transform: translateY(-2px);
+
+      &::before {
+        background: rgba(255, 255, 255, 0.15);
+      }
+    }
+
+    .mini__icon {
+      color: #111;
+    }
   }
 }
 

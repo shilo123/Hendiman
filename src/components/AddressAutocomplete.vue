@@ -57,7 +57,7 @@ export default {
       default: true,
     },
   },
-  emits: ["update:modelValue"],
+  emits: ["update:modelValue", "update:englishName"],
   data() {
     // סינון שורת הכותרת אם יש
     const filteredCities = Array.isArray(citiesData)
@@ -148,8 +148,10 @@ export default {
     },
     selectCity(city) {
       const cityName = city.name || city.שם_ישוב || "";
+      const englishName = city.english_name || city.שם_ישוב_לועזי || "";
       this.userInput = cityName;
       this.$emit("update:modelValue", cityName);
+      this.$emit("update:englishName", englishName);
       this.showSuggestions = false;
       this.showError = false;
       this.filteredCities = [];
@@ -201,6 +203,7 @@ export default {
       const normalizedSearch = searchValue.replace(/\s+/g, " ");
 
       // חיפוש בכל הישובים (לא רק ב-filteredCities)
+      let foundCity = null;
       const cityExists = this.cities.some((city) => {
         // תמיכה בשני פורמטים: name (חדש) או שם_ישוב (ישן)
         const cityName = (city.name || city.שם_ישוב || "").trim();
@@ -209,22 +212,29 @@ export default {
         // ניקוי רווחים כפולים
         const normalizedCityName = cityName.replace(/\s+/g, " ");
 
+        let matches = false;
+
         // השוואה מדויקת (רגיש לאותיות)
         if (normalizedCityName === normalizedSearch) {
-          return true;
+          matches = true;
         }
-
         // השוואה case-insensitive (אם יש הבדל באותיות)
-        if (
+        else if (
           normalizedCityName.toLowerCase() === normalizedSearch.toLowerCase()
         ) {
-          return true;
+          matches = true;
+        }
+        // השוואה עם הסרת תווים מיוחדים
+        else {
+          const cleanCity = normalizedCityName.replace(/['"()]/g, "").trim();
+          const cleanSearch = normalizedSearch.replace(/['"()]/g, "").trim();
+          if (cleanCity === cleanSearch) {
+            matches = true;
+          }
         }
 
-        // השוואה עם הסרת תווים מיוחדים
-        const cleanCity = normalizedCityName.replace(/['"()]/g, "").trim();
-        const cleanSearch = normalizedSearch.replace(/['"()]/g, "").trim();
-        if (cleanCity === cleanSearch) {
+        if (matches) {
+          foundCity = city;
           return true;
         }
 
@@ -236,6 +246,14 @@ export default {
         this.errorMessage = "ישוב זה לא נמצא במאגר";
       } else {
         this.showError = false;
+        // עדכן את englishName גם אם המשתמש לא בחר מהרשימה
+        if (foundCity) {
+          const englishName =
+            foundCity.english_name || foundCity.שם_ישוב_לועזי || "";
+          if (englishName) {
+            this.$emit("update:englishName", englishName);
+          }
+        }
       }
     },
   },

@@ -99,8 +99,8 @@ export default {
   flex-direction: column;
   background: #0f0f0f;
   color: #f9fafb;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
 }
 
 /* Header */

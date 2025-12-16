@@ -1,5 +1,5 @@
 <template>
-  <section class="jobs">
+  <section class="jobs" id="jobs">
     <div class="jobs__head">
       <div class="headActions">
         <button
@@ -16,7 +16,7 @@
         <p class="sub">
           {{
             isHendiman
-              ? "סינון לפי מצב ומרחק · קבל/דלג · צ׳אט לכל עבודה"
+              ? "עבודות לפי ההתמחויות שלך · סינון לפי מצב ומרחק · קבל/דלג · צ׳אט לכל עבודה"
               : "כל הקריאות שלך · צפייה וסטטוסים"
           }}
         </p>
@@ -77,31 +77,57 @@
     <div class="jobs__list">
       <article v-for="job in filteredJobs" :key="job.id" class="job-card">
         <div class="job-card__left">
-          <div class="job-card__tags">
-            <span v-if="job.isUrgent" class="tag tag--urgent">דחוף</span>
-            <span
-              class="tag tag--status"
-              :title="`סטטוס: ${getStatusLabel(job.status)}`"
-            >
-              {{ getStatusLabel(job.status) }}
-            </span>
-            <span
-              class="tag"
-              :class="
-                job.billingType === 'hourly' ? 'tag--hourly' : 'tag--fixed'
-              "
-            >
-              {{ job.billingType === "hourly" ? "לשעה" : "קבלנות" }}
-            </span>
-          </div>
-
           <div class="job-card__meta">
-            <div class="job-card__title">{{ job.subcategoryName }}</div>
+            <div class="job-card__title-row">
+              <div class="job-card__title">
+                {{
+                  job.subcategoryInfo?.name || job.subcategoryName || "ללא שם"
+                }}
+              </div>
+              <div class="job-card__tags">
+                <span v-if="job.isUrgent" class="tag tag--urgent">דחוף</span>
+                <span
+                  class="tag tag--status"
+                  :title="`סטטוס: ${getStatusLabel(job.status)}`"
+                >
+                  {{ getStatusLabel(job.status) }}
+                </span>
+                <span
+                  class="tag"
+                  :class="
+                    (job.subcategoryInfo?.typeWork || job.billingType) ===
+                    'לשעה'
+                      ? 'tag--hourly'
+                      : 'tag--fixed'
+                  "
+                >
+                  {{
+                    job.subcategoryInfo?.typeWork || job.billingType || "קבלנות"
+                  }}
+                </span>
+                <span
+                  v-if="job.subcategoryInfo?.workType || job.workType"
+                  class="tag tag--work-type"
+                  :class="{
+                    'tag--easy': job.workType === 'קלה',
+                    'tag--medium': job.workType === 'מורכבת',
+                    'tag--hard': job.workType === 'קשה',
+                  }"
+                >
+                  {{ job.subcategoryInfo?.workType || job.workType }}
+                </span>
+              </div>
+            </div>
             <div class="job-card__sub">
               👤 {{ job.clientName }} · 📍 {{ job.locationText }} ·
               {{ job.distanceKm }} ק״מ
+              <span
+                v-if="job.subcategoryInfo?.price || job.price"
+                class="job-card__price-inline"
+              >
+                {{ job.subcategoryInfo?.price }} שקלות
+              </span>
             </div>
-            <div class="job-card__price">{{ job.price }} שקלות</div>
           </div>
         </div>
 
@@ -189,6 +215,9 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+$font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+  "Helvetica Neue", Arial, sans-serif;
+
 $bg: #0b0b0f;
 $bg2: #0f1016;
 $card: rgba(255, 255, 255, 0.06);
@@ -220,6 +249,9 @@ $r2: 26px;
   background: linear-gradient(180deg, $card2, rgba(255, 255, 255, 0.04));
   box-shadow: $shadow;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 
   @media (max-width: 768px) {
     border-radius: 12px;
@@ -437,6 +469,9 @@ $r2: 26px;
   display: grid;
   grid-template-columns: 1fr;
   gap: 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
 
   @media (max-width: 768px) {
     padding: 6px 4px;
@@ -444,21 +479,42 @@ $r2: 26px;
     scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
   }
+
+  // Scrollbar styling
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba($orange, 0.3);
+    border-radius: 10px;
+
+    &:hover {
+      background: rgba($orange, 0.5);
+    }
+  }
 }
 
 .job-card {
   border-radius: 20px;
   border: 1px solid rgba($orange, 0.14);
   background: rgba(255, 255, 255, 0.06);
-  padding: 10px;
+  padding: 8px 10px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
   transition: transform 120ms ease, box-shadow 120ms ease;
+  min-height: auto;
+  height: 80px;
 
   @media (max-width: 768px) {
-    padding: 6px;
+    padding: 5px 6px;
     border-radius: 12px;
     gap: 6px;
   }
@@ -476,60 +532,81 @@ $r2: 26px;
     min-width: 0;
   }
 
-  &__tags {
+  &__meta {
     display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    flex-shrink: 0;
-
-    @media (max-width: 768px) {
-      gap: 4px;
-    }
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    justify-content: center;
+    flex-grow: 1;
   }
 
-  &__meta {
-    display: grid;
-    gap: 4px;
-    flex: 1;
-    min-width: 0;
+  &__title-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
   }
 
   &__title {
     font-weight: 1100;
-    font-size: 14px;
+    font-size: 16px;
     color: $text;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    line-height: 1.2;
+    min-width: 0;
 
     @media (max-width: 768px) {
-      font-size: 12px;
+      font-size: 13px;
+    }
+  }
+
+  &__tags {
+    display: flex;
+    gap: 3px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    align-items: center;
+
+    @media (max-width: 768px) {
+      gap: 2px;
     }
   }
 
   &__sub {
-    margin-top: 2px;
+    margin-top: 1px;
     color: rgba(255, 255, 255, 0.62);
     font-weight: 900;
-    font-size: 12px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    line-height: 1.2;
 
     @media (max-width: 768px) {
-      font-size: 9px;
-      margin-top: 1px;
+      font-size: 11px;
+      margin-top: 0;
+      gap: 2px;
+    }
+  }
+
+  &__price-inline {
+    font-weight: 1100;
+    color: $orange3;
+    font-size: 14px;
+    margin-right: 4px;
+    line-height: 1.2;
+
+    @media (max-width: 768px) {
+      font-size: 11px;
     }
   }
 
   &__price {
-    font-weight: 1100;
-    color: $orange3;
-    font-size: 13px;
-
-    @media (max-width: 768px) {
-      font-size: 10px;
-    }
+    display: none; // הסתר את המחיר הישן
   }
 
   &__actions {
@@ -546,17 +623,20 @@ $r2: 26px;
 
 .tag {
   border-radius: 999px;
-  padding: 6px 10px;
+  padding: 3px 8px;
   font-weight: 1000;
-  font-size: 11.5px;
+  font-size: 11px;
   border: 1px solid rgba($orange, 0.18);
   background: rgba($orange, 0.12);
   color: $text;
+  line-height: 1.2;
+  margin: 0 2px;
 
   @media (max-width: 768px) {
-    padding: 2px 4px;
-    font-size: 7px;
+    padding: 2px 5px;
+    font-size: 8px;
     border-radius: 6px;
+    margin: 0 1px;
   }
 
   &--urgent {
@@ -579,6 +659,29 @@ $r2: 26px;
   &--fixed {
     border-color: rgba($orange, 0.22);
     background: rgba($orange, 0.12);
+  }
+
+  &--work-type {
+    border-color: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  &--easy {
+    border-color: rgba(76, 175, 80, 0.4);
+    background: rgba(76, 175, 80, 0.15);
+    color: #81c784;
+  }
+
+  &--medium {
+    border-color: rgba(255, 193, 7, 0.4);
+    background: rgba(255, 193, 7, 0.15);
+    color: #ffd54f;
+  }
+
+  &--hard {
+    border-color: rgba(244, 67, 54, 0.4);
+    background: rgba(244, 67, 54, 0.15);
+    color: #ef5350;
   }
 }
 

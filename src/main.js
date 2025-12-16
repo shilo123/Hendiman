@@ -13,9 +13,19 @@ import {
   faUpload,
   faInfoCircle,
   faCheckCircle,
+  faComment,
+  faCalendar,
 } from "@fortawesome/free-solid-svg-icons";
 
-library.add(faEye, faEyeSlash, faUpload, faInfoCircle, faCheckCircle);
+library.add(
+  faEye,
+  faEyeSlash,
+  faUpload,
+  faInfoCircle,
+  faCheckCircle,
+  faComment,
+  faCalendar
+);
 
 const app = createApp(App);
 const pinia = createPinia();

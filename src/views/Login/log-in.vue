@@ -169,6 +169,7 @@ export default {
             this.username = user.username;
             this.password = user.email; // For Google users, password field contains email
             this.ifGoogleUser = true;
+            this.googleId = user.googleId; // Store googleId for login
             // Call handleLogin to get the password (googleId) from server
             await this.handleLogin();
           } catch (error) {
@@ -187,6 +188,7 @@ export default {
           username: this.username,
           password: this.password, // For Google users, password contains email initially, then replaced with googleId
           ifGoogleUser: this.ifGoogleUser,
+          googleId: this.googleId, // Send googleId for more reliable lookup
         });
 
         if (data.message === "Success") {
@@ -279,6 +281,8 @@ export default {
 }
 
 .login-page {
+  font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
   min-height: 100vh;
   background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
   padding: 20px;

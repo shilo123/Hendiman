@@ -42,7 +42,12 @@
         <!-- CLIENT: handymen in area + action buttons -->
         <section v-if="!isHendiman" class="panel">
           <div class="panel__head">
-            <h2 class="h2">הנדימנים באזורך</h2>
+            <h2 class="h2">
+              הנדימנים באזורך
+              <span v-if="handymenPagination.total" class="h2__count"
+                >({{ handymenPagination.total }})</span
+              >
+            </h2>
             <p class="sub">הנדימנים הזמינים באזור שלך · לחץ על כפתור לפעולה</p>
           </div>
 
@@ -76,6 +81,22 @@
           />
         </section>
       </aside>
+      <ViewHandymanDetails
+        v-if="handymanDetails"
+        :handymanDetails="handymanDetails"
+        @close="onCloseHandymanDetails"
+        @book="onBookHandyman"
+        @block="onBlockHandymanFromModal"
+      />
+      <ViewJob
+        v-if="jobDetails"
+        :jobDetails="jobDetails"
+        :isHendiman="isHendiman"
+        :getStatusLabel="getStatusLabel"
+        @close="onCloseJobDetails"
+        @accept="onAcceptJobFromModal"
+        @skip="onSkipJobFromModal"
+      />
     </main>
   </div>
 </template>
@@ -87,6 +108,12 @@ import JobsSection from "@/components/Dashboard/JobsSection.vue";
 import HandymenList from "@/components/Dashboard/HandymenList.vue";
 import ClientActions from "@/components/Dashboard/ClientActions.vue";
 import HandymanTools from "@/components/Dashboard/HandymanTools.vue";
+import ViewHandymanDetails from "@/components/Dashboard/ViewHandymanDetails.vue";
+import ViewJob from "@/components/Dashboard/ViewJob.vue";
+import axios from "axios";
+import { URL } from "@/Url/url";
+import { useToast } from "@/composables/useToast";
+
 export default {
   name: "DashboardView",
   components: {
@@ -95,6 +122,8 @@ export default {
     HandymenList,
     ClientActions,
     HandymanTools,
+    ViewHandymanDetails,
+    ViewJob,
   },
   data() {
     return {
@@ -102,20 +131,14 @@ export default {
       isHendiman: false,
 
       isAvailable: true,
+      toast: null,
+      userCoordinates: null, // שמור את הקואורדינטות כאן
 
       me: {
-        id: "u1",
-        name: "קלאמזי",
-        avatarUrl:
-          "https://images.unsplash.com/photo-1502685104226-ee32379fefbe?w=200&h=200&fit=crop",
-        specialties: [
-          "פתיחת סתימות",
-          "החלפת ברזים",
-          "התקנת מאוורר תקרה",
-          "החלפת מפסק",
-          "הרכבת רהיטי איקאה",
-          "הרכבת מיטות",
-        ],
+        _id: null,
+        name: "",
+        avatarUrl: "",
+        specialties: [],
       },
 
       statusTabs: [
@@ -128,9 +151,9 @@ export default {
         { label: "בוטלו", value: "cancelled" },
       ],
       activeStatus: "all",
-
+      jobDetails: null,
       handymanFilters: { maxKm: 10 },
-
+      handymanDetails: null,
       dirFilters: { q: "", minRating: 0, minJobs: 0 },
     };
   },
@@ -138,6 +161,9 @@ export default {
   setup() {
     const store = useMainStore();
     return { store };
+  },
+  created() {
+    this.toast = useToast();
   },
   computed: {
     jobs() {
@@ -159,7 +185,8 @@ export default {
       return this.store.filteredJobs(
         this.isHendiman ? this.activeStatus : null,
         this.isHendiman ? this.handymanFilters.maxKm : null,
-        this.isHendiman
+        this.isHendiman,
+        this.isHendiman && this.me?.specialties ? this.me.specialties : null
       );
     },
 
@@ -167,18 +194,20 @@ export default {
       return this.store.filteredHandymen(this.dirFilters);
     },
     statusTabsWithCounts() {
-      // חשב את הספירות לכל סטטוס
-      const allJobs = this.store.jobs;
-      const filteredByKm = this.isHendiman
-        ? allJobs.filter((j) => j.distanceKm <= this.handymanFilters.maxKm)
-        : allJobs;
+      // השתמש ב-filteredJobs שכבר מסנן לפי התמחויות ומרחק
+      const allFilteredJobs = this.store.filteredJobs(
+        null, // לא מסנן לפי סטטוס כאן
+        this.isHendiman ? this.handymanFilters.maxKm : null,
+        this.isHendiman,
+        this.isHendiman && this.me?.specialties ? this.me.specialties : null
+      );
 
       return this.statusTabs.map((tab) => {
         let count = 0;
         if (tab.value === "all") {
-          count = filteredByKm.length;
+          count = allFilteredJobs.length;
         } else {
-          count = filteredByKm.filter((j) => j.status === tab.value).length;
+          count = allFilteredJobs.filter((j) => j.status === tab.value).length;
         }
         return { ...tab, count };
       });
@@ -239,6 +268,7 @@ export default {
 
     onView(job) {
       console.log("view job", job.id);
+      this.jobDetails = job;
     },
 
     onCreateCallCta() {
@@ -267,21 +297,91 @@ export default {
       console.log("personal request handyman", id);
     },
 
-    onViewHandymanDetails(id) {
-      console.log("view handyman details", id);
-      // TODO: Open modal or navigate to handyman details page
+    async onViewHandymanDetails(id) {
+      try {
+        const { data } = await axios.get(`${URL}/Gethandyman/${id}`);
+        console.log("handyman details", data);
+        if (data.success) {
+          this.handymanDetails = data.Handyman;
+        } else {
+          this.toast.showError(data.message);
+        }
+      } catch (error) {
+        console.log("error", error);
+        this.toast.showError("שגיאה בטעינת פרטי ההנדימן");
+      }
+    },
+
+    onCloseHandymanDetails() {
+      this.handymanDetails = null;
+    },
+
+    onBookHandyman(handyman) {
+      console.log("book handyman", handyman);
+      this.onPersonalRequest(handyman._id || handyman.id);
+      this.onCloseHandymanDetails();
+    },
+
+    onBlockHandymanFromModal(handyman) {
+      console.log("block handyman from modal", handyman);
+      this.onBlockHandyman(handyman._id || handyman.id);
+      this.onCloseHandymanDetails();
+    },
+
+    onCloseJobDetails() {
+      this.jobDetails = null;
+    },
+
+    onAcceptJobFromModal(job) {
+      console.log("accept job from modal", job.id);
+      this.onAccept(job);
+      this.onCloseJobDetails();
+    },
+
+    onSkipJobFromModal(job) {
+      console.log("skip job from modal", job.id);
+      this.onSkip(job);
+      this.onCloseJobDetails();
     },
 
     async onNextPage() {
       if (this.handymenPagination.hasNext) {
-        await this.store.fetchHandymen(this.handymenPagination.page + 1);
+        // קבל את הקואורדינטות מהמשתמש (תחילה נסה מהמשתנה המקומי, אחרת מה-store)
+        const coordinates = this.userCoordinates || this.getUserCoordinates();
+        await this.store.fetchHandymen(
+          this.handymenPagination.page + 1,
+          coordinates
+        );
       }
     },
 
     async onPrevPage() {
       if (this.handymenPagination.hasPrev) {
-        await this.store.fetchHandymen(this.handymenPagination.page - 1);
+        // קבל את הקואורדינטות מהמשתמש (תחילה נסה מהמשתנה המקומי, אחרת מה-store)
+        const coordinates = this.userCoordinates || this.getUserCoordinates();
+        await this.store.fetchHandymen(
+          this.handymenPagination.page - 1,
+          coordinates
+        );
       }
+    },
+
+    getUserCoordinates() {
+      // נסה לקבל את הקואורדינטות מהמשתמש
+      if (this.store.user) {
+        if (this.store.user.location && this.store.user.location.coordinates) {
+          return {
+            lng: this.store.user.location.coordinates[0],
+            lat: this.store.user.location.coordinates[1],
+          };
+        } else if (this.store.user.Coordinates) {
+          return {
+            lng: this.store.user.Coordinates.lng,
+            lat: this.store.user.Coordinates.lat,
+          };
+        }
+      }
+      return null;
     },
 
     getStatusLabel(status) {
@@ -298,9 +398,56 @@ export default {
   },
   async mounted() {
     try {
-      const data = await this.store.fetchDashboardData(this.$route.params.id);
+      // קבל את הקואורדינטות הנוכחיות של המשתמש
+      let coordinates = null;
+
+      // נסה לקבל את הקואורדינטות מהמשתמש שנשמרו במסד הנתונים
+      // קודם נטען את המשתמש כדי לקבל את הקואורדינטות שלו
+      const tempData = await this.store.fetchDashboardData(
+        this.$route.params.id
+      );
+
+      // אם המשתמש לא נמצא, החזר ל-דף הבית
+      if (!tempData || !tempData.User) {
+        this.$router.push("/");
+        return;
+      }
+
+      if (tempData.User) {
+        // בדוק אם יש location בפורמט GeoJSON
+        if (tempData.User.location && tempData.User.location.coordinates) {
+          coordinates = {
+            lng: tempData.User.location.coordinates[0],
+            lat: tempData.User.location.coordinates[1],
+          };
+        }
+        // אם אין location, נסה Coordinates
+        else if (tempData.User.Coordinates) {
+          coordinates = {
+            lng: tempData.User.Coordinates.lng,
+            lat: tempData.User.Coordinates.lat,
+          };
+        }
+      }
+
+      // שמור את הקואורדינטות לשימוש מאוחר יותר (pagination)
+      this.userCoordinates = coordinates;
+
+      // אם יש קואורדינטות, שלוף שוב את הנתונים עם הקואורדינטות
+      const data = coordinates
+        ? await this.store.fetchDashboardData(
+            this.$route.params.id,
+            coordinates
+          )
+        : tempData;
 
       // עדכן את הנתונים המקומיים מהמשתמש
+      // אם המשתמש לא נמצא גם אחרי הבקשה השנייה, החזר ל-דף הבית
+      if (!data || !data.User) {
+        this.$router.push("/");
+        return;
+      }
+
       if (data.User) {
         this.me.name = data.User.username;
         this.me.specialties = data.User.specialties;
@@ -314,14 +461,13 @@ export default {
 
         // טען handymen עם pagination (רק אם זה לקוח)
         if (!this.isHendiman) {
-          await this.store.fetchHandymen(1);
+          // שלח את הקואורדינטות גם ל-fetchHandymen
+          await this.store.fetchHandymen(1, coordinates);
         }
-      } else {
-        this.toast.showError("משתמש לא נמצא");
-        this.$router.push({ name: "logIn" });
       }
     } catch (error) {
-      console.log("error", error);
+      // אם יש שגיאה או שהמשתמש לא נמצא, החזר ל-דף הבית
+      this.$router.push("/");
     }
   },
 };
@@ -329,6 +475,9 @@ export default {
 
 <style lang="scss" scoped>
 /* ====== THEME: BLACK + ORANGE (HENDIMAN) ====== */
+$font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+  "Helvetica Neue", Arial, sans-serif;
+
 $bg: #0b0b0f;
 $bg2: #0f1016;
 $card: rgba(255, 255, 255, 0.06);
@@ -386,7 +535,7 @@ $r2: 26px;
   display: grid;
   grid-template-columns: 1.6fr 1fr; /* ~60/40 */
   gap: 14px;
-  align-items: start;
+  align-items: stretch; // זה יגרום לשני הבלוקים להיות באותו גובה
 
   @media (max-width: 980px) {
     grid-template-columns: 1fr;
@@ -447,6 +596,17 @@ $r2: 26px;
 
   @media (max-width: 768px) {
     font-size: 14px;
+  }
+
+  &__count {
+    color: $orange3;
+    font-weight: 1100;
+    margin-right: 6px;
+
+    @media (max-width: 768px) {
+      margin-right: 4px;
+      font-size: 12px;
+    }
   }
 }
 
@@ -939,6 +1099,9 @@ $r2: 26px;
   padding: 14px;
   width: 100%;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 
   @media (max-width: 768px) {
     padding: 8px 6px;
@@ -983,9 +1146,32 @@ $r2: 26px;
   display: grid;
   gap: 10px;
   margin-top: 12px;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
 
   @media (max-width: 768px) {
     gap: 6px;
+  }
+
+  // Scrollbar styling
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba($orange, 0.3);
+    border-radius: 10px;
+
+    &:hover {
+      background: rgba($orange, 0.5);
+    }
   }
 }
 

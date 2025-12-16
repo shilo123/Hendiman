@@ -12,23 +12,27 @@
           <div class="me__status-indicator">
             <span
               class="dot"
-              :class="{ 'dot--on': isHendiman ? isAvailable : true }"
+              :class="{
+                'dot--on': isHendiman ? isAvailable : true,
+                'dot--green': !isHendiman,
+              }"
             ></span>
-            <span class="me__status-text">{{
-              isHendiman ? (isAvailable ? "זמין" : "לא זמין") : "מחובר"
-            }}</span>
           </div>
         </div>
         <div class="me__meta">
           <div class="me__name">{{ me.name }}</div>
           <div class="me__role">{{ isHendiman ? "הנדימן" : "לקוח" }}</div>
+          <!-- <span class="me__status-text">{{
+            isHendiman ? (isAvailable ? "זמין" : "לא זמין") : "מחובר"
+          }}</span> -->
         </div>
+
         <span class="me__chev">›</span>
       </div>
     </div>
 
     <div class="top__right">
-      <div class="top__chats">
+      <!-- <div class="top__chats">
         <button
           class="btn btn--ghost"
           type="button"
@@ -43,7 +47,7 @@
         >
           🗣️ צ׳אט כל המשתמשים
         </button>
-      </div>
+      </div> -->
 
       <div class="kpi">
         <div class="kpi__item">
@@ -89,6 +93,9 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+$font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+  "Helvetica Neue", Arial, sans-serif;
+
 $bg: #0b0b0f;
 $bg2: #0f1016;
 $card: rgba(255, 255, 255, 0.06);
@@ -282,18 +289,19 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 .me {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   background: linear-gradient(180deg, $card2, $card);
   border: 1px solid rgba($orange, 0.22);
   border-radius: 999px;
-  padding: 8px 10px;
+  padding: 10px 14px;
   box-shadow: $shadow;
   cursor: pointer;
   transition: transform 140ms ease, box-shadow 140ms ease;
+  min-width: 0;
 
   @media (max-width: 768px) {
-    padding: 4px 6px;
-    gap: 4px;
+    padding: 6px 8px;
+    gap: 6px;
     border-radius: 12px;
   }
 
@@ -306,14 +314,16 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   }
 
   &__avatar-wrapper {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 8px;
+    flex-shrink: 0;
   }
 
   &__avatar-container {
     position: relative;
     display: inline-block;
+    flex-shrink: 0;
   }
 
   &__avatar {
@@ -333,28 +343,33 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   }
 
   &__status-indicator {
-    display: inline-flex;
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid $bg;
+    background: rgba(0, 0, 0, 0.3);
+    display: flex;
     align-items: center;
-    gap: 6px;
-    border-radius: 999px;
-    border: 1px solid rgba($orange, 0.2);
-    background: rgba(0, 0, 0, 0.25);
-    padding: 6px 10px;
-    color: $text;
-    font-weight: 900;
-    font-size: 11px;
-    white-space: nowrap;
+    justify-content: center;
+    z-index: 5;
 
     @media (max-width: 768px) {
-      padding: 3px 5px;
-      font-size: 8px;
-      gap: 3px;
-      border-radius: 10px;
+      width: 12px;
+      height: 12px;
+      border-width: 1.5px;
+      bottom: -1px;
+      right: -1px;
     }
   }
 
   &__status-text {
     line-height: 1;
+    font-size: 10px;
+    font-weight: 900;
+    color: $muted;
   }
 
   &__edit-overlay {
@@ -399,8 +414,11 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   }
 
   &__meta {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 2px;
+    min-width: 0;
+    flex: 1;
 
     @media (max-width: 768px) {
       display: none;
@@ -409,13 +427,21 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 
   &__name {
     font-weight: 1000;
-    font-size: 13px;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
   }
 
   &__role {
     font-weight: 900;
-    font-size: 12px;
+    font-size: 11px;
     color: $muted;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
   }
 
   &__chev {
@@ -435,10 +461,29 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   height: 10px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.25);
+  transition: all 0.25s ease;
+
+  @media (max-width: 768px) {
+    width: 8px;
+    height: 8px;
+  }
 
   &--on {
     background: $orange;
-    box-shadow: 0 0 0 4px rgba($orange, 0.22);
+    box-shadow: 0 0 0 3px rgba($orange, 0.22);
+
+    @media (max-width: 768px) {
+      box-shadow: 0 0 0 2px rgba($orange, 0.22);
+    }
+  }
+
+  &--green {
+    background: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22);
+
+    @media (max-width: 768px) {
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.22);
+    }
   }
 }
 
