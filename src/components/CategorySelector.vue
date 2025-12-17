@@ -1,5 +1,8 @@
 <template>
-  <div class="category-selector">
+  <div
+    class="category-selector"
+    :class="{ 'category-selector--overlay': overlayMode }"
+  >
     <label for="specialtiesTextarea">תחומי התמחות</label>
     <div class="textarea-wrapper">
       <textarea
@@ -7,7 +10,6 @@
         v-model="textareaValue"
         readonly
         @mouseenter="showDropdown = true"
-        @mouseleave="handleTextareaLeave"
         class="specialties-textarea"
         placeholder="עבור עם העכבר לבחירת תחומי התמחות"
       ></textarea>
@@ -20,13 +22,18 @@
       @mouseenter="keepDropdownVisible"
       @mouseleave="hideDropdown"
     >
+      <div class="full-category-hint">
+        לחץ על קטגוריה כדי להוסיף אותה כקטגוריה שלימה
+      </div>
       <div class="categories-dropdown">
         <div
-          v-for="category in categories"
+          v-for="category in displayedCategories"
           :key="category.name"
           class="category-item"
           @mouseenter="showSubcategories(category)"
           @mouseleave="hideSubcategories"
+          @click.stop="selectFullCategory(category.name)"
+          title="לחץ כדי להוסיף קטגוריה שלימה"
         >
           <span class="category-name">{{ category.name }}</span>
           <span class="arrow">←</span>
@@ -103,6 +110,10 @@ export default {
       type: Array,
       default: () => [],
     },
+    overlayMode: {
+      type: Boolean,
+      default: false,
+    },
   },
   emits: ["update:modelValue"],
   data() {
@@ -113,6 +124,7 @@ export default {
       tooltipSubcategory: null,
       tooltipStyle: {},
       selectedItems: [],
+      selectedFullCategories: [], // קטגוריות שלימות שנבחרו
       keepSubcategories: false,
       keepDropdown: false,
       hideSubcategoriesTimeout: null,
@@ -121,8 +133,22 @@ export default {
     };
   },
   computed: {
+    displayedCategories() {
+      // הסר קטגוריות שכבר נבחרו
+      return (this.categories || []).filter((cat) => {
+        return !this.selectedFullCategories.some(
+          (selected) =>
+            selected &&
+            cat?.name &&
+            selected.toLowerCase() === cat.name.toLowerCase()
+        );
+      });
+    },
     textareaValue() {
-      return this.selectedItems
+      const fullCategoriesText = this.selectedFullCategories
+        .map((cat) => `[קטגוריה שלימה] ${cat}`)
+        .join("\n");
+      const subcategoriesText = this.selectedItems
         .map((item) => {
           const base = `${item.category}\\${item.subcategory}`;
           if (item.price && item.workType) {
@@ -133,6 +159,11 @@ export default {
           return base;
         })
         .join("\n");
+
+      if (fullCategoriesText && subcategoriesText) {
+        return `${fullCategoriesText}\n${subcategoriesText}`;
+      }
+      return fullCategoriesText || subcategoriesText;
     },
     filteredSubcategories() {
       if (!this.hoveredCategory || !this.hoveredCategory.subcategories) {
@@ -141,11 +172,23 @@ export default {
 
       const query = this.subcategorySearchQuery.trim().toLowerCase();
 
+      // הסר תתי-קטגוריות שכבר נבחרו
+      const alreadySelected = (name) =>
+        this.selectedItems.some(
+          (i) =>
+            i.subcategory &&
+            i.subcategory.toLowerCase() === String(name).toLowerCase()
+        );
+
+      const baseList = this.hoveredCategory.subcategories.filter(
+        (subcategory) => !alreadySelected(subcategory.name)
+      );
+
       if (!query) {
-        return this.hoveredCategory.subcategories;
+        return baseList;
       }
 
-      return this.hoveredCategory.subcategories.filter((subcategory) =>
+      return baseList.filter((subcategory) =>
         subcategory.name.toLowerCase().includes(query)
       );
     },
@@ -154,37 +197,63 @@ export default {
     modelValue: {
       handler(newValue) {
         if (Array.isArray(newValue) && newValue.length > 0) {
-          // תמיכה גם באובייקטים (name, price, typeWork) וגם ב-strings ישנים
-          this.selectedItems = newValue
+          // הפרד בין קטגוריות שלימות לתת-קטגוריות
+          const fullCategories = [];
+          const subcategories = [];
+
+          newValue
             .filter((item) => item !== null && item !== undefined)
-            .map((item) => {
-              // אם זה אובייקט עם name, price, typeWork
+            .forEach((item) => {
+              // אם זה קטגוריה שלימה
+              if (
+                typeof item === "object" &&
+                item.name &&
+                item.isFullCategory
+              ) {
+                fullCategories.push(String(item.name).trim());
+                return;
+              }
+
+              // אם זה אובייקט עם name, price, typeWork (תת-קטגוריה)
               if (typeof item === "object" && item.name) {
-                return {
+                subcategories.push({
                   category: "", // לא נחוץ יותר, אבל נשמור למקרה
                   subcategory: String(item.name).trim(),
                   price: item.price || null,
                   workType: item.typeWork || null,
-                };
+                });
+                return;
               }
 
               // אם זה string, נסה לפרסר אותו (תאימות לאחור)
               if (typeof item === "string") {
                 const itemStr = String(item).trim();
+
+                // בדוק אם זה קטגוריה שלימה (מתחיל ב-[קטגוריה שלימה])
+                if (itemStr.startsWith("[קטגוריה שלימה]")) {
+                  const categoryName = itemStr
+                    .replace("[קטגוריה שלימה]", "")
+                    .trim();
+                  if (categoryName) {
+                    fullCategories.push(categoryName);
+                  }
+                  return;
+                }
+
                 if (!itemStr || !itemStr.includes("\\")) {
-                  return null;
+                  return;
                 }
 
                 const parts = itemStr.split("\\");
                 if (parts.length < 2) {
-                  return null;
+                  return;
                 }
 
                 const category = parts[0].trim();
                 const rest = parts.slice(1).join("\\").trim();
 
                 if (!category || !rest) {
-                  return null;
+                  return;
                 }
 
                 // נסה לחלץ מחיר וסוג עבודה אם הם קיימים
@@ -212,19 +281,20 @@ export default {
                   }
                 }
 
-                return {
+                subcategories.push({
                   category: category,
                   subcategory: subcategory,
                   price: price,
                   workType: workType,
-                };
+                });
               }
+            });
 
-              return null;
-            })
-            .filter((item) => item !== null); // הסר null items
+          this.selectedFullCategories = fullCategories;
+          this.selectedItems = subcategories;
         } else {
           this.selectedItems = [];
+          this.selectedFullCategories = [];
         }
       },
       immediate: true,
@@ -232,12 +302,10 @@ export default {
   },
   methods: {
     handleTextareaLeave() {
-      setTimeout(() => {
-        if (!this.keepDropdown) {
-          this.showDropdown = false;
-          this.hoveredCategory = null;
-        }
-      }, 200);
+      // סגור כאשר העכבר יוצא מהאזור
+      this.keepDropdown = false;
+      this.showDropdown = false;
+      this.hoveredCategory = null;
     },
     keepDropdownVisible() {
       this.keepDropdown = true;
@@ -308,9 +376,8 @@ export default {
         this.updateModelValue();
       }
 
-      // אל תסגור את ה-dropdown - תן למשתמש לבחור עוד
-      this.hoveredCategory = null;
-      this.keepSubcategories = false;
+      // אל תסגור את ה-dropdown - השאר מצב בחירה פעיל
+      this.keepSubcategories = true;
     },
     showTooltip(event, subcategory) {
       // בטל את ה-timeout הקודם אם קיים
@@ -364,6 +431,27 @@ export default {
       // עדכן את ה-tooltip
       this.showTooltip(event, subcategory);
     },
+    selectFullCategory(categoryName) {
+      if (!categoryName) return;
+
+      const category = String(categoryName).trim();
+
+      // בדוק אם כבר קיים
+      const exists = this.selectedFullCategories.some(
+        (cat) => cat.toLowerCase() === category.toLowerCase()
+      );
+
+      if (!exists) {
+        if (!Array.isArray(this.selectedFullCategories)) {
+          this.selectedFullCategories = [];
+        }
+        this.selectedFullCategories.push(category);
+        this.updateModelValue();
+      }
+
+      // השאר את ה-dropdown פתוח
+      this.keepDropdown = true;
+    },
     updateModelValue() {
       // ודא ש-selectedItems הוא מערך
       if (!Array.isArray(this.selectedItems)) {
@@ -371,7 +459,7 @@ export default {
       }
 
       // המר למערך של אובייקטים עם name, price, typeWork
-      const value = this.selectedItems
+      const subcategoriesValue = this.selectedItems
         .filter((item) => item && item.subcategory)
         .map((item) => {
           return {
@@ -381,6 +469,21 @@ export default {
           };
         })
         .filter((obj) => obj.name.length > 0); // הסר אובייקטים עם name ריק
+
+      // הוסף קטגוריות שלימות עם סימון מיוחד
+      const fullCategoriesValue = this.selectedFullCategories
+        .filter((cat) => cat && cat.trim().length > 0)
+        .map((cat) => {
+          return {
+            name: String(cat).trim(),
+            price: null,
+            typeWork: null,
+            isFullCategory: true, // סימון שזה קטגוריה שלימה
+          };
+        });
+
+      // שילוב של שתי הרשימות
+      const value = [...fullCategoriesValue, ...subcategoriesValue];
 
       this.$emit("update:modelValue", value);
     },
@@ -398,6 +501,13 @@ export default {
   flex-direction: column;
   gap: 12px;
   position: relative;
+}
+
+.full-category-hint {
+  color: #9ca3af;
+  font-size: 0.82rem;
+  padding: 6px 12px 2px 12px;
+  text-align: right;
 }
 
 .category-selector label {
@@ -449,20 +559,23 @@ export default {
 
 .dropdown-container {
   position: absolute;
-  bottom: 100%;
+  top: calc(100% + 6px);
   right: 0;
-  margin-bottom: 5px;
   z-index: 1000;
-  display: flex;
-  gap: 0;
-  align-items: flex-start;
+  left: 0;
+  width: 100%;
+  display: block;
+  direction: rtl;
 }
 
 .categories-dropdown {
+  position: absolute;
+  top: 0;
+  right: 0;
   background: #1a1a1a;
   border: 2px solid #f97316;
   border-radius: 8px;
-  width: 200px;
+  width: 180px;
   max-height: 300px;
   overflow-y: auto;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
@@ -474,8 +587,8 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 15px;
-  margin: 4px 8px;
+  padding: 10px 12px;
+  margin: 3px 0;
   cursor: pointer;
   transition: all 0.2s ease;
   border-radius: 20px;
@@ -493,14 +606,14 @@ export default {
 
 .category-name {
   color: #ffffff;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 500;
 }
 
 .arrow {
   color: #f97316;
-  font-size: 1.2rem;
-  margin-left: 10px;
+  font-size: 1rem;
+  margin-left: 8px;
 }
 
 .category-item:hover .arrow {
@@ -509,9 +622,39 @@ export default {
 
 .subcategories-dropdown-wrapper {
   position: absolute;
-  right: calc(100% + 2px);
+  right: 184px; /* צמוד משמאל לרשימת הקטגוריות (180px + רווח קטן) */
   top: 0;
   z-index: 1001;
+  direction: rtl;
+}
+
+/* Overlay mode for usage inside modals (ProfileSheet) */
+:deep(.category-selector--overlay) {
+  position: relative;
+}
+:deep(.category-selector--overlay .dropdown-container) {
+  position: absolute;
+  top: auto;
+  bottom: calc(100% + 8px);
+  right: 0;
+  left: auto;
+  width: 360px;
+  max-height: 360px;
+  overflow: auto;
+  z-index: 30000;
+  display: block;
+}
+:deep(.category-selector--overlay .subcategories-dropdown-wrapper) {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 10px);
+  left: auto;
+  bottom: auto;
+  width: 360px;
+  max-height: 360px;
+  overflow: auto;
+  z-index: 30001;
+  display: block;
 }
 
 .subcategories-dropdown-scroll {

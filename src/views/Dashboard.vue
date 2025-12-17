@@ -97,7 +97,23 @@
         @accept="onAcceptJobFromModal"
         @skip="onSkipJobFromModal"
       />
+      <ProfileSheet
+        :visible="showProfileSheet"
+        :user="store.user"
+        :isHandyman="isHendiman"
+        @close="showProfileSheet = false"
+        @save="onSaveProfile"
+      />
     </main>
+
+    <div v-if="!isHendiman" class="mobile-cta">
+      <button class="cta-btn primary" type="button" @click="onCreateCallCta">
+        צור קריאה
+      </button>
+      <button class="cta-btn" type="button" @click="onOpenAllUsersChat">
+        צ׳אט
+      </button>
+    </div>
   </div>
 </template>
 
@@ -110,6 +126,7 @@ import ClientActions from "@/components/Dashboard/ClientActions.vue";
 import HandymanTools from "@/components/Dashboard/HandymanTools.vue";
 import ViewHandymanDetails from "@/components/Dashboard/ViewHandymanDetails.vue";
 import ViewJob from "@/components/Dashboard/ViewJob.vue";
+import ProfileSheet from "@/components/ProfileSheet.vue";
 import axios from "axios";
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
@@ -124,6 +141,7 @@ export default {
     HandymanTools,
     ViewHandymanDetails,
     ViewJob,
+    ProfileSheet,
   },
   data() {
     return {
@@ -152,6 +170,15 @@ export default {
       ],
       activeStatus: "all",
       jobDetails: null,
+      showProfileSheet: false,
+      profileForm: {
+        name: "",
+        phone: "",
+        email: "",
+        city: "",
+        address: "",
+        specialties: [],
+      },
       handymanFilters: { maxKm: 10 },
       handymanDetails: null,
       dirFilters: { q: "", minRating: 0, minJobs: 0 },
@@ -186,7 +213,10 @@ export default {
         this.isHendiman ? this.activeStatus : null,
         this.isHendiman ? this.handymanFilters.maxKm : null,
         this.isHendiman,
-        this.isHendiman && this.me?.specialties ? this.me.specialties : null
+        this.isHendiman && this.me?.specialties ? this.me.specialties : null,
+        this.isHendiman && this.me?.fullCategories
+          ? this.me.fullCategories
+          : null
       );
     },
 
@@ -199,7 +229,10 @@ export default {
         null, // לא מסנן לפי סטטוס כאן
         this.isHendiman ? this.handymanFilters.maxKm : null,
         this.isHendiman,
-        this.isHendiman && this.me?.specialties ? this.me.specialties : null
+        this.isHendiman && this.me?.specialties ? this.me.specialties : null,
+        this.isHendiman && this.me?.fullCategories
+          ? this.me.fullCategories
+          : null
       );
 
       return this.statusTabs.map((tab) => {
@@ -216,11 +249,34 @@ export default {
 
   methods: {
     onRefresh() {
-      console.log("refresh dashboard");
+      const coords = this.userCoordinates;
+      this.store.fetchDashboardData(this.$route.params.id, coords);
+    },
+
+    async fetchHandymanJobs() {
+      try {
+        await this.store.fetchFilteredJobsForHandyman({
+          status: this.activeStatus,
+          maxKm: this.handymanFilters.maxKm,
+          coordinates: this.userCoordinates,
+        });
+      } catch (error) {
+        console.error("Error fetching handyman jobs:", error);
+      }
     },
 
     onOpenProfile() {
-      console.log("open profile");
+      this.profileForm = {
+        name: this.store.user?.username || this.store.user?.name || "",
+        phone: this.store.user?.phone || "",
+        email: this.store.user?.email || "",
+        city: this.store.user?.city || "",
+        address: this.store.user?.address || "",
+        specialties: this.store.user?.specialties
+          ? [...this.store.user.specialties]
+          : [],
+      };
+      this.showProfileSheet = true;
     },
 
     onOpenHandymenChat() {
@@ -234,16 +290,25 @@ export default {
     onPickStatus(v) {
       console.log("pick status", v);
       this.activeStatus = v;
+      if (this.isHendiman) {
+        this.fetchHandymanJobs();
+      }
     },
 
     onChangeKm(value) {
       this.handymanFilters.maxKm = parseInt(value);
       console.log("change km", this.handymanFilters.maxKm);
+      if (this.isHendiman) {
+        this.fetchHandymanJobs();
+      }
     },
 
     onResetKm() {
       console.log("reset km");
       this.handymanFilters.maxKm = 10;
+      if (this.isHendiman) {
+        this.fetchHandymanJobs();
+      }
     },
 
     onOpenJobMenu(job) {
@@ -259,11 +324,31 @@ export default {
     },
 
     onSkip(job) {
-      console.log("skip job", job.id);
+      const handymanId = this.store.user?._id || this.me?.id;
+      if (!handymanId) return;
+      axios
+        .post(`${URL}/jobs/skip`, {
+          jobId: job._id || job.id,
+          handymanId,
+        })
+        .then(() => {
+          this.fetchHandymanJobs();
+        })
+        .catch(() => {});
     },
 
     onAccept(job) {
-      console.log("accept job", job.id);
+      const handymanId = this.store.user?._id || this.me?.id;
+      if (!handymanId) return;
+      axios
+        .post(`${URL}/jobs/accept`, {
+          jobId: job._id || job.id,
+          handymanId,
+        })
+        .then(() => {
+          this.fetchHandymanJobs();
+        })
+        .catch(() => {});
     },
 
     onView(job) {
@@ -286,7 +371,7 @@ export default {
     },
 
     onGoProfile() {
-      console.log("go profile edit");
+      this.onOpenProfile();
     },
 
     onBlockHandyman(id) {
@@ -295,6 +380,33 @@ export default {
 
     onPersonalRequest(id) {
       console.log("personal request handyman", id);
+    },
+
+    onSaveProfile(form) {
+      const userId = this.store.user?._id;
+      if (!userId) return;
+      axios
+        .post(`${URL}/user/update-profile`, {
+          userId,
+          username: form.name,
+          phone: form.phone,
+          email: form.email,
+          city: form.city,
+          address: form.address,
+          specialties: form.specialties,
+        })
+        .then((res) => {
+          if (res.data?.success) {
+            this.store.user = res.data.user;
+            this.me.name = res.data.user?.username || this.me.name;
+            this.me.specialties =
+              res.data.user?.specialties || this.me.specialties;
+          }
+          this.showProfileSheet = false;
+        })
+        .catch(() => {
+          this.showProfileSheet = false;
+        });
     },
 
     async onViewHandymanDetails(id) {
@@ -347,7 +459,31 @@ export default {
     async onNextPage() {
       if (this.handymenPagination.hasNext) {
         // קבל את הקואורדינטות מהמשתמש (תחילה נסה מהמשתנה המקומי, אחרת מה-store)
-        const coordinates = this.userCoordinates || this.getUserCoordinates();
+        let coordinates = this.userCoordinates;
+
+        // אם אין קואורדינטות, נסה לקבל מהמשתמש
+        if (!coordinates) {
+          coordinates = this.getUserCoordinates();
+        }
+
+        // אם עדיין אין, נסה לקבל מה-store
+        if (!coordinates && this.store.user) {
+          if (
+            this.store.user.location &&
+            this.store.user.location.coordinates
+          ) {
+            coordinates = {
+              lng: this.store.user.location.coordinates[0],
+              lat: this.store.user.location.coordinates[1],
+            };
+          } else if (this.store.user.Coordinates) {
+            coordinates = {
+              lng: this.store.user.Coordinates.lng,
+              lat: this.store.user.Coordinates.lat,
+            };
+          }
+        }
+
         await this.store.fetchHandymen(
           this.handymenPagination.page + 1,
           coordinates
@@ -358,7 +494,31 @@ export default {
     async onPrevPage() {
       if (this.handymenPagination.hasPrev) {
         // קבל את הקואורדינטות מהמשתמש (תחילה נסה מהמשתנה המקומי, אחרת מה-store)
-        const coordinates = this.userCoordinates || this.getUserCoordinates();
+        let coordinates = this.userCoordinates;
+
+        // אם אין קואורדינטות, נסה לקבל מהמשתמש
+        if (!coordinates) {
+          coordinates = this.getUserCoordinates();
+        }
+
+        // אם עדיין אין, נסה לקבל מה-store
+        if (!coordinates && this.store.user) {
+          if (
+            this.store.user.location &&
+            this.store.user.location.coordinates
+          ) {
+            coordinates = {
+              lng: this.store.user.location.coordinates[0],
+              lat: this.store.user.location.coordinates[1],
+            };
+          } else if (this.store.user.Coordinates) {
+            coordinates = {
+              lng: this.store.user.Coordinates.lng,
+              lat: this.store.user.Coordinates.lat,
+            };
+          }
+        }
+
         await this.store.fetchHandymen(
           this.handymenPagination.page - 1,
           coordinates
@@ -431,6 +591,7 @@ export default {
       }
 
       // שמור את הקואורדינטות לשימוש מאוחר יותר (pagination)
+      // ודא שהקואורדינטות נשמרות גם אם הן null (למקרה שיהיו מאוחר יותר)
       this.userCoordinates = coordinates;
 
       // אם יש קואורדינטות, שלוף שוב את הנתונים עם הקואורדינטות
@@ -459,10 +620,25 @@ export default {
         this.me.city = data.User.city;
         this.isHendiman = data.User.isHandyman;
 
+        // עדכן את הקואורדינטות גם מה-User שנטען (למקרה שהן השתנו)
+        if (data.User.location && data.User.location.coordinates) {
+          this.userCoordinates = {
+            lng: data.User.location.coordinates[0],
+            lat: data.User.location.coordinates[1],
+          };
+        } else if (data.User.Coordinates) {
+          this.userCoordinates = {
+            lng: data.User.Coordinates.lng,
+            lat: data.User.Coordinates.lat,
+          };
+        }
+
         // טען handymen עם pagination (רק אם זה לקוח)
         if (!this.isHendiman) {
           // שלח את הקואורדינטות גם ל-fetchHandymen
-          await this.store.fetchHandymen(1, coordinates);
+          await this.store.fetchHandymen(1, this.userCoordinates);
+        } else {
+          await this.fetchHandymanJobs();
         }
       }
     } catch (error) {
@@ -1960,6 +2136,40 @@ $r2: 26px;
   textarea:focus-visible {
     outline: 2px solid rgba($orange, 0.6);
     outline-offset: 2px;
+  }
+}
+
+/* Mobile CTA bar */
+.mobile-cta {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  left: 0;
+  display: none;
+  gap: 8px;
+  padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  z-index: 2000;
+}
+.cta-btn {
+  flex: 1;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-weight: 800;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+.cta-btn.primary {
+  background: linear-gradient(135deg, #ff6a00, #ff8a2b);
+  color: #0b0b0f;
+}
+
+@media (max-width: 768px) {
+  .mobile-cta {
+    display: flex;
   }
 }
 </style>

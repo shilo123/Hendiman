@@ -133,6 +133,9 @@
 
         <div class="job-card__actions">
           <template v-if="isHendiman">
+            <button class="mini" type="button" @click="$emit('view', job)">
+              צפייה
+            </button>
             <button
               class="mini mini--ghost"
               type="button"

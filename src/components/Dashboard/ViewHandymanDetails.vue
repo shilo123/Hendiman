@@ -28,18 +28,26 @@
             <h1 class="profile-name">{{ handymanDetails.username }}</h1>
             <div class="profile-stats">
               <div class="stat-item">
-                <span class="stat-icon">⭐</span>
-                <span class="stat-value">{{
-                  handymanDetails.rating || 0
-                }}</span>
-                <span class="stat-label">דירוג</span>
+                <div class="stat-icon-wrapper">
+                  <i class="fas fa-star"></i>
+                </div>
+                <div class="stat-content">
+                  <span class="stat-value">{{
+                    handymanDetails.rating || 0
+                  }}</span>
+                  <span class="stat-label">דירוג</span>
+                </div>
               </div>
               <div class="stat-item">
-                <span class="stat-icon">🔧</span>
-                <span class="stat-value">{{
-                  handymanDetails.jobsDone || 0
-                }}</span>
-                <span class="stat-label">עבודות</span>
+                <div class="stat-icon-wrapper">
+                  <i class="fas fa-briefcase"></i>
+                </div>
+                <div class="stat-content">
+                  <span class="stat-value">{{
+                    handymanDetails.jobsDone || 0
+                  }}</span>
+                  <span class="stat-label">עבודות</span>
+                </div>
               </div>
             </div>
           </div>
@@ -49,23 +57,43 @@
         <div class="details-section">
           <!-- Contact Info -->
           <div class="detail-card" v-if="handymanDetails.phone">
-            <div class="detail-label">📞 טלפון</div>
-            <div class="detail-value">{{ handymanDetails.phone }}</div>
+            <div class="detail-icon-wrapper">
+              <i class="fas fa-phone"></i>
+            </div>
+            <div class="detail-content-wrapper">
+              <div class="detail-label">טלפון</div>
+              <div class="detail-value">{{ handymanDetails.phone }}</div>
+            </div>
           </div>
 
           <div class="detail-card" v-if="handymanDetails.email">
-            <div class="detail-label">✉️ אימייל</div>
-            <div class="detail-value">{{ handymanDetails.email }}</div>
+            <div class="detail-icon-wrapper">
+              <i class="fas fa-envelope"></i>
+            </div>
+            <div class="detail-content-wrapper">
+              <div class="detail-label">אימייל</div>
+              <div class="detail-value">{{ handymanDetails.email }}</div>
+            </div>
           </div>
 
           <div class="detail-card" v-if="handymanDetails.address">
-            <div class="detail-label">📍 כתובת</div>
-            <div class="detail-value">{{ handymanDetails.address }}</div>
+            <div class="detail-icon-wrapper">
+              <i class="fas fa-map-marker-alt"></i>
+            </div>
+            <div class="detail-content-wrapper">
+              <div class="detail-label">כתובת</div>
+              <div class="detail-value">{{ handymanDetails.address }}</div>
+            </div>
           </div>
 
           <div class="detail-card" v-if="handymanDetails.city">
-            <div class="detail-label">🏙️ עיר</div>
-            <div class="detail-value">{{ handymanDetails.city }}</div>
+            <div class="detail-icon-wrapper">
+              <i class="fas fa-city"></i>
+            </div>
+            <div class="detail-content-wrapper">
+              <div class="detail-label">עיר</div>
+              <div class="detail-value">{{ handymanDetails.city }}</div>
+            </div>
           </div>
 
           <!-- Specialties -->
@@ -73,20 +101,28 @@
             class="detail-card specialties-card"
             v-if="specialtiesList.length"
           >
-            <div class="detail-label">🛠️ תחומי התמחות</div>
+            <div class="specialties-header">
+              <div class="detail-icon-wrapper">
+                <i class="fas fa-tools"></i>
+              </div>
+              <div class="detail-label">תחומי התמחות</div>
+            </div>
             <div class="specialties-list">
               <div
                 v-for="(spec, index) in specialtiesList"
                 :key="index"
                 class="specialty-item"
               >
-                <div class="specialty-name">{{ spec.name || spec }}</div>
+                <div class="specialty-main">
+                  <i class="fas fa-check-circle specialty-check"></i>
+                  <div class="specialty-name">{{ spec.name || spec }}</div>
+                </div>
                 <div
                   class="specialty-details"
                   v-if="spec.price || spec.typeWork"
                 >
                   <span v-if="spec.price" class="specialty-price"
-                    >{{ spec.price }}₪</span
+                    ><i class="fas fa-shekel-sign"></i> {{ spec.price }}</span
                   >
                   <span
                     v-if="spec.typeWork"
@@ -96,6 +132,13 @@
                       'specialty-type--fixed': spec.typeWork === 'קבלנות',
                     }"
                   >
+                    <i
+                      :class="
+                        spec.typeWork === 'לשעה'
+                          ? 'fas fa-clock'
+                          : 'fas fa-file-contract'
+                      "
+                    ></i>
                     {{ spec.typeWork }}
                   </span>
                 </div>
@@ -111,6 +154,7 @@
             type="button"
             @click="onBookHandyman"
           >
+            <i class="fas fa-calendar-check"></i>
             הזמן הנדימן
           </button>
           <button
@@ -118,6 +162,7 @@
             type="button"
             @click="onClose"
           >
+            <i class="fas fa-times"></i>
             סגירה
           </button>
           <button
@@ -125,6 +170,7 @@
             type="button"
             @click="onBlockHandyman"
           >
+            <i class="fas fa-ban"></i>
             חסום הנדימן
           </button>
         </div>
@@ -239,6 +285,9 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+$font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+  "Helvetica Neue", Arial, sans-serif;
+
 $bg: #0b0b0f;
 $bg2: #0f1016;
 $card: rgba(255, 255, 255, 0.06);
@@ -279,14 +328,15 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 .handyman-modal {
   background: linear-gradient(180deg, $card2, rgba(255, 255, 255, 0.04));
   border: 1px solid $stroke;
-  border-radius: 26px;
+  border-radius: 20px;
   box-shadow: $shadow, $shadowO;
   width: 100%;
-  max-width: 700px;
+  max-width: 800px;
   max-height: 90vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  font-family: $font-family;
 
   @media (max-width: 768px) {
     border-radius: 16px;
@@ -328,7 +378,7 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 }
 
 .modal-content {
-  padding: 24px;
+  padding: 20px;
   flex: 1;
   overflow-y: auto;
 
@@ -341,14 +391,16 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   display: flex;
   gap: 20px;
   align-items: center;
-  margin-bottom: 24px;
-  padding-bottom: 24px;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 
   @media (max-width: 768px) {
     flex-direction: column;
     text-align: center;
     gap: 16px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
   }
 }
 
@@ -402,121 +454,223 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 
 .profile-name {
   margin: 0 0 12px;
-  font-size: 28px;
-  font-weight: 1100;
-  color: $text;
+  font-size: 24px;
+  font-weight: 1000;
+  color: $orange3;
+  line-height: 1.3;
 
   @media (max-width: 768px) {
-    font-size: 22px;
+    font-size: 20px;
     margin-bottom: 10px;
   }
 }
 
 .profile-stats {
   display: flex;
-  gap: 20px;
+  gap: 12px;
 
   @media (max-width: 768px) {
     justify-content: center;
-    gap: 16px;
+    gap: 10px;
   }
 }
 
 .stat-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: rgba($orange, 0.1);
+  gap: 10px;
+  background: rgba($orange, 0.08);
   border: 1px solid rgba($orange, 0.18);
   border-radius: 12px;
-  padding: 8px 12px;
+  padding: 10px 14px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba($orange, 0.12);
+    border-color: rgba($orange, 0.25);
+    transform: translateY(-1px);
+  }
 
   @media (max-width: 768px) {
-    padding: 6px 10px;
+    padding: 8px 12px;
+    gap: 8px;
   }
 }
 
-.stat-icon {
-  font-size: 18px;
+.stat-icon-wrapper {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba($orange, 0.15);
+  border-radius: 10px;
+  color: $orange3;
+  font-size: 14px;
 
   @media (max-width: 768px) {
-    font-size: 16px;
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+    border-radius: 8px;
   }
+}
+
+.stat-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .stat-value {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 1100;
   color: $orange3;
-
-  @media (max-width: 768px) {
-    font-size: 16px;
-  }
-}
-
-.stat-label {
-  font-size: 14px;
-  font-weight: 900;
-  color: $muted;
-
-  @media (max-width: 768px) {
-    font-size: 12px;
-  }
-}
-
-.details-section {
-  display: grid;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.detail-card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  padding: 16px;
-
-  @media (max-width: 768px) {
-    padding: 12px;
-    border-radius: 12px;
-  }
-}
-
-.detail-label {
-  font-size: 12px;
-  font-weight: 900;
-  color: $muted;
-  margin-bottom: 8px;
-
-  @media (max-width: 768px) {
-    font-size: 11px;
-    margin-bottom: 6px;
-  }
-}
-
-.detail-value {
-  font-size: 16px;
-  font-weight: 1000;
-  color: $text;
+  line-height: 1.2;
 
   @media (max-width: 768px) {
     font-size: 14px;
   }
 }
 
+.stat-label {
+  font-size: 11px;
+  font-weight: 900;
+  color: $muted;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+
+  @media (max-width: 768px) {
+    font-size: 10px;
+  }
+}
+
+.details-section {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 20px;
+
+  @media (max-width: 768px) {
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+}
+
+.detail-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 12px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba($orange, 0.2);
+  }
+
+  @media (max-width: 768px) {
+    padding: 10px;
+    gap: 10px;
+    border-radius: 10px;
+  }
+}
+
+.detail-icon-wrapper {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba($orange, 0.1);
+  border: 1px solid rgba($orange, 0.2);
+  border-radius: 10px;
+  color: $orange3;
+  font-size: 16px;
+  flex-shrink: 0;
+
+  @media (max-width: 768px) {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+    border-radius: 8px;
+  }
+}
+
+.detail-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.detail-label {
+  font-size: 11px;
+  font-weight: 900;
+  color: $muted;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+
+  @media (max-width: 768px) {
+    font-size: 10px;
+  }
+}
+
+.detail-value {
+  font-size: 14px;
+  font-weight: 1000;
+  color: $text;
+  line-height: 1.4;
+  word-break: break-word;
+
+  @media (max-width: 768px) {
+    font-size: 13px;
+  }
+}
+
 .specialties-card {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+
+  @media (max-width: 768px) {
+    padding: 12px;
+    gap: 12px;
+  }
+}
+
+.specialties-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+
+  .detail-icon-wrapper {
+    margin: 0;
+  }
+
   .detail-label {
-    margin-bottom: 12px;
+    margin: 0;
+    font-size: 13px;
   }
 }
 
 .specialties-list {
   display: grid;
-  gap: 12px;
+  gap: 10px;
+  width: 100%;
+
+  @media (max-width: 768px) {
+    gap: 8px;
+  }
 }
 
 .specialty-item {
-  background: rgba($orange, 0.08);
+  background: rgba($orange, 0.06);
   border: 1px solid rgba($orange, 0.18);
   border-radius: 12px;
   padding: 12px;
@@ -524,6 +678,13 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba($orange, 0.1);
+    border-color: rgba($orange, 0.25);
+    transform: translateX(-2px);
+  }
 
   @media (max-width: 768px) {
     flex-direction: column;
@@ -533,14 +694,32 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   }
 }
 
-.specialty-name {
-  font-size: 15px;
-  font-weight: 1000;
-  color: $text;
+.specialty-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex: 1;
+  min-width: 0;
+}
+
+.specialty-check {
+  color: #4caf50;
+  font-size: 16px;
+  flex-shrink: 0;
 
   @media (max-width: 768px) {
     font-size: 14px;
+  }
+}
+
+.specialty-name {
+  font-size: 14px;
+  font-weight: 1000;
+  color: $text;
+  line-height: 1.3;
+
+  @media (max-width: 768px) {
+    font-size: 13px;
   }
 }
 
@@ -549,77 +728,101 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 
 .specialty-price {
-  background: rgba($orange, 0.15);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba($orange, 0.12);
   border: 1px solid rgba($orange, 0.25);
   border-radius: 8px;
-  padding: 4px 10px;
-  font-size: 13px;
+  padding: 5px 10px;
+  font-size: 12px;
   font-weight: 1100;
   color: $orange3;
 
+  i {
+    font-size: 10px;
+  }
+
   @media (max-width: 768px) {
     font-size: 11px;
-    padding: 3px 8px;
+    padding: 4px 8px;
   }
 }
 
 .specialty-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   border-radius: 8px;
-  padding: 4px 10px;
+  padding: 5px 10px;
   font-size: 12px;
   font-weight: 900;
   border: 1px solid;
 
+  i {
+    font-size: 11px;
+  }
+
   @media (max-width: 768px) {
     font-size: 10px;
-    padding: 3px 8px;
+    padding: 4px 8px;
   }
 
   &--hourly {
     color: $orange2;
-    background: rgba($orange2, 0.15);
+    background: rgba($orange2, 0.12);
     border-color: rgba($orange2, 0.25);
   }
 
   &--fixed {
     color: $orange;
-    background: rgba($orange, 0.15);
+    background: rgba($orange, 0.12);
     border-color: rgba($orange, 0.25);
   }
 }
 
 .modal-actions {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
-  gap: 12px;
-  padding-top: 20px;
+  gap: 10px;
+  padding-top: 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   flex-wrap: wrap;
 
   @media (max-width: 768px) {
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
+    padding-top: 12px;
   }
 }
 
 .btn-action {
-  border-radius: 14px;
-  padding: 14px 24px;
+  border-radius: 12px;
+  padding: 10px 18px;
   font-weight: 1000;
-  font-size: 15px;
+  font-size: 13px;
   cursor: pointer;
   transition: all 0.2s ease;
   border: none;
-  min-width: 140px;
+  min-width: 120px;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 
   @media (max-width: 768px) {
-    padding: 12px 20px;
-    font-size: 14px;
+    padding: 10px 16px;
+    font-size: 12px;
     width: 100%;
     min-width: auto;
   }

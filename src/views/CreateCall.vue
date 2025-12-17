@@ -372,6 +372,18 @@ export default {
           userId: this.$route.params.id || null,
         };
 
+        // ודא שקואורדינטות נשמרות כמספרים וללא עיגול
+        if (callData.coordinates) {
+          const lng = callData.coordinates.lng ?? callData.coordinates.lon;
+          const lat = callData.coordinates.lat;
+          if (lng !== undefined && lat !== undefined) {
+            callData.coordinates = {
+              lng: Number(lng),
+              lat: Number(lat),
+            };
+          }
+        }
+
         // הסר שדות שלא צריך לשלוח
         delete callData.image; // לא צריך לשלוח את ה-File object
         delete callData.imagePreview; // לא צריך לשלוח את ה-preview
@@ -397,13 +409,23 @@ export default {
     },
   },
   async mounted() {
-    navigator.geolocation.getCurrentPosition(async (position) => {
-      const { latitude, longitude } = position.coords;
-      this.call.coordinates = {
-        lat: latitude,
-        lon: longitude,
-      };
-    });
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        this.call.coordinates = {
+          lat: latitude,
+          lon: longitude, // נשמר גם בשם lon כדי לתמוך בצד השרת
+        };
+      },
+      (err) => {
+        console.warn("Geolocation error:", err?.message || err);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
   },
 };
 </script>

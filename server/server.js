@@ -8,9 +8,10 @@ const axios = require("axios");
 const bodyParser = require("body-parser");
 const net = require("net");
 const passport = require("passport");
+const israelAddresses = require("../src/APIS/AdressFromIsrael.json");
 const session = require("express-session");
 const app = express();
-const URL_CLIENT = process.env.CLIENT_URL || "http://localhost:8080";
+const URL_CLIENT = process.env.CLIENT_URL || "http://localhost:8081";
 
 // Import configurations and services
 const {
@@ -86,6 +87,116 @@ function findAvailablePort(startPort) {
   );
   app.use(bodyParser.json());
   app.use(bodyParser.urlencoded({ extended: true }));
+
+  // Helpers for location translation
+  const normalizeStr = (str) =>
+    str
+      ? str
+          .toString()
+          .trim()
+          .toLowerCase()
+          .replace(/['"`´’״”“]/g, "")
+          .replace(/[^a-z0-9]/g, "")
+      : "";
+
+  const isHebrew = (str) => /[\u0590-\u05FF]/.test(str || "");
+
+  // Build map of normalized english_name -> Hebrew name
+  const cityNameMap = (() => {
+    const map = new Map();
+    israelAddresses.forEach((city) => {
+      if (
+        typeof city.english_name !== "string" ||
+        typeof city.name !== "string"
+      )
+        return;
+      const norm = normalizeStr(city.english_name);
+      if (norm) map.set(norm, city.name);
+    });
+    return map;
+  })();
+
+  const manualMap = {
+    maabarot: "מעברות",
+    "ma'barot": "מעברות",
+    maabaroth: "מעברות",
+    "ma'agalim": "מעגלים",
+    maagalim: "מעגלים",
+    maaglim: "מעגלים",
+  };
+
+  // Levenshtein distance (capped) for fuzzy match
+  function levenshtein(a, b, maxDist = 2) {
+    if (Math.abs(a.length - b.length) > maxDist) return maxDist + 1;
+    const prev = new Array(b.length + 1);
+    for (let j = 0; j <= b.length; j++) prev[j] = j;
+    for (let i = 1; i <= a.length; i++) {
+      let prevDiag = prev[0];
+      prev[0] = i;
+      let rowMin = prev[0];
+      for (let j = 1; j <= b.length; j++) {
+        const temp = prev[j];
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, prevDiag + cost);
+        prevDiag = temp;
+        rowMin = Math.min(rowMin, prev[j]);
+      }
+      if (rowMin > maxDist) return maxDist + 1;
+    }
+    return prev[b.length];
+  }
+
+  function mapEnglishToHebrew(candidate) {
+    if (!candidate) return "";
+    if (isHebrew(candidate)) return candidate;
+
+    // candidates: full, before comma, before " israel"
+    const beforeComma = candidate.split(",")[0];
+    const beforeIsrael = candidate
+      .toLowerCase()
+      .split(" israel")[0]
+      .split(" ישראל")[0];
+    const words = candidate.split(/\s+/).filter(Boolean);
+    const firstWord = words[0] || "";
+    const firstTwo = words.slice(0, 2).join(" ");
+
+    const candidates = [
+      candidate,
+      beforeComma,
+      beforeIsrael,
+      firstTwo,
+      firstWord,
+    ].filter(Boolean);
+
+    for (const cand of candidates) {
+      const norm = normalizeStr(cand);
+      if (!norm) continue;
+      const direct = cityNameMap.get(norm);
+      if (direct) return direct;
+
+      // fuzzy match (Levenshtein) up to distance 2
+      let bestHeb = "";
+      let bestDist = 3;
+      for (const [key, val] of cityNameMap.entries()) {
+        const dist = levenshtein(norm, key, 2);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestHeb = val;
+          if (bestDist === 0) break;
+        }
+      }
+      if (bestDist <= 2) return bestHeb;
+
+      if (manualMap[norm]) return manualMap[norm];
+
+      for (const [key, val] of cityNameMap.entries()) {
+        if (key.includes(norm) || norm.includes(key)) {
+          return val;
+        }
+      }
+    }
+    return "";
+  }
 
   // Session configuration for Passport
   app.use(
@@ -461,11 +572,24 @@ function findAvailablePort(startPort) {
         // ודא ש-specialties הוא מערך של אובייקטים עם name, price, typeWork
         let specialtiesArray = [];
 
+        // הפרד בין קטגוריות שלימות לתת-קטגוריות
+        let fullCategoriesArray = [];
+
         if (Array.isArray(specialties)) {
           // אם זה כבר מערך, נמיר לאובייקטים
           specialtiesArray = specialties
             .filter((item) => item !== null && item !== undefined)
             .map((item) => {
+              // אם זה קטגוריה שלימה (isFullCategory: true)
+              if (
+                typeof item === "object" &&
+                item.name &&
+                item.isFullCategory
+              ) {
+                fullCategoriesArray.push(String(item.name).trim());
+                return null; // לא נכלול במיוחדים
+              }
+
               // אם זה אובייקט עם name, price, typeWork (הפורמט החדש)
               if (typeof item === "object" && item.name) {
                 return {
@@ -544,7 +668,12 @@ function findAvailablePort(startPort) {
 
         // ודא שזה מערך של אובייקטים לפני השמירה!
         userData.specialties = Array.isArray(specialtiesArray)
-          ? specialtiesArray
+          ? specialtiesArray.filter((item) => item !== null) // הסר null items
+          : [];
+
+        // שמור קטגוריות שלימות תחת פרופרטי חדש
+        userData.fullCategories = Array.isArray(fullCategoriesArray)
+          ? fullCategoriesArray.filter((cat) => cat && cat.trim().length > 0)
           : [];
 
         userData.logoUrl = logoUrl || "";
@@ -701,7 +830,39 @@ function findAvailablePort(startPort) {
           // בנה את ה-destinations parameter (1,2,3... לפי מספר היעדים)
           const destinations = batchToProcess.map((_, i) => i + 1).join(";");
 
-          // בנה את ה-URL
+          // ודא שיש לפחות יעד אחד
+          if (batchToProcess.length === 0) {
+            return;
+          }
+
+          // אם יש רק יעד אחד, השתמש ב-Directions API במקום Matrix API
+          // כי Matrix API דורש לפחות 2 matrix elements
+          if (batchToProcess.length === 1) {
+            const item = batchToProcess[0];
+            const directionsUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${userLng},${userLat};${item.lng},${item.lat}?access_token=${process.env.MAPBOX_TOKEN}&geometries=geojson`;
+
+            try {
+              const directionsResponse = await axios.get(directionsUrl);
+              if (
+                directionsResponse.data &&
+                directionsResponse.data.routes &&
+                directionsResponse.data.routes.length > 0 &&
+                directionsResponse.data.routes[0].duration
+              ) {
+                const durationSeconds =
+                  directionsResponse.data.routes[0].duration;
+                const travelTimeMinutes = Math.round(durationSeconds / 60);
+                results.set(item.originalIndex, travelTimeMinutes);
+              } else {
+                results.set(item.originalIndex, null);
+              }
+            } catch (directionsError) {
+              results.set(item.originalIndex, null);
+            }
+            return; // סיים כאן, לא צריך לנסות Matrix API
+          }
+
+          // בנה את ה-URL - Mapbox לא צריך URL encoding בקואורדינטות
           const url = `https://api.mapbox.com/directions-matrix/v1/mapbox/driving/${coordinates}?access_token=${process.env.MAPBOX_TOKEN}&sources=0&destinations=${destinations}&annotations=duration,distance`;
 
           // שלח בקשה ל-Mapbox
@@ -765,6 +926,11 @@ function findAvailablePort(startPort) {
           }
         } catch (batchError) {
           // אם יש שגיאה, נסה לטפל בה
+          console.error("❌ Mapbox batch error:", {
+            message: batchError.message,
+            response: batchError.response?.data,
+            status: batchError.response?.status,
+          });
           const errorData = batchError.response?.data || {};
           // נסה לשלוח כל הנדימן בנפרד במקביל
           const singlePromises = batchToProcess.map(async (item) => {
@@ -822,6 +988,124 @@ function findAvailablePort(startPort) {
       return handymen.map((h) => ({ ...h, travelTimeMinutes: null }));
     }
   }
+
+  // Helper: calculate distance between two coordinates in KM (Haversine)
+  function calculateDistanceKm(lng1, lat1, lng2, lat2) {
+    if (
+      [lng1, lat1, lng2, lat2].some(
+        (v) => v === undefined || v === null || isNaN(parseFloat(v))
+      )
+    ) {
+      return null;
+    }
+    const toRad = (deg) => (deg * Math.PI) / 180;
+    const R = 6371; // Earth radius in KM
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(R * c * 100) / 100; // two decimals
+  }
+
+  // Jobs filtering for handyman (status + distance)
+  app.get("/jobs/filter", async (req, res) => {
+    try {
+      if (!collectionJobs) {
+        return res.status(500).json({
+          success: false,
+          message: "שגיאה בחיבור למסד הנתונים",
+        });
+      }
+
+      const { status, maxKm, lng, lat } = req.query;
+      const query = {};
+      if (status && status !== "all") {
+        query.status = status;
+      }
+
+      const userLng = parseFloat(lng);
+      const userLat = parseFloat(lat);
+      const hasCoords = !isNaN(userLng) && !isNaN(userLat);
+      const maxDistanceMeters =
+        maxKm && !isNaN(parseFloat(maxKm)) ? parseFloat(maxKm) * 1000 : null;
+
+      let jobs = [];
+
+      if (hasCoords) {
+        try {
+          const pipeline = [
+            {
+              $geoNear: {
+                near: { type: "Point", coordinates: [userLng, userLat] },
+                distanceField: "distanceMeters",
+                spherical: true,
+                ...(maxDistanceMeters
+                  ? { maxDistance: maxDistanceMeters }
+                  : {}),
+                ...(Object.keys(query).length ? { query } : {}),
+              },
+            },
+          ];
+
+          jobs = await collectionJobs.aggregate(pipeline).toArray();
+
+          jobs = jobs.map((job) => ({
+            ...job,
+            distanceKm:
+              typeof job.distanceMeters === "number"
+                ? Math.round((job.distanceMeters / 1000) * 100) / 100
+                : calculateDistanceKm(
+                    userLng,
+                    userLat,
+                    job?.location?.coordinates?.[0] ||
+                      job?.coordinates?.lng ||
+                      null,
+                    job?.location?.coordinates?.[1] ||
+                      job?.coordinates?.lat ||
+                      null
+                  ),
+          }));
+        } catch (geoError) {
+          console.error("GeoNear error on /jobs/filter:", geoError.message);
+
+          jobs = await collectionJobs.find(query).toArray();
+
+          jobs = jobs
+            .map((job) => {
+              const distanceKm = calculateDistanceKm(
+                userLng,
+                userLat,
+                job?.location?.coordinates?.[0] ||
+                  job?.coordinates?.lng ||
+                  null,
+                job?.location?.coordinates?.[1] || job?.coordinates?.lat || null
+              );
+              return { ...job, distanceKm };
+            })
+            .filter((job) => {
+              if (!maxDistanceMeters || maxDistanceMeters <= 0) return true;
+              if (job.distanceKm === null) return true; // keep if no coords
+              return job.distanceKm * 1000 <= maxDistanceMeters;
+            });
+        }
+      } else {
+        jobs = await collectionJobs.find(query).toArray();
+      }
+
+      return res.json({ success: true, jobs });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה בסינון העבודות",
+        error: error.message,
+      });
+    }
+  });
   app.get("/GetDataDeshboard/:id", async (req, res) => {
     try {
       if (!collection) {
@@ -989,7 +1273,13 @@ function findAvailablePort(startPort) {
             handymen = allHandymen.slice(skip, skip + limit);
 
             // חשב זמן נסיעה לכל הנדימנים בעמוד הנוכחי
-            handymen = await calculateTravelTimes(userLng, userLat, handymen);
+            const parsedUserLng = parseFloat(userLng);
+            const parsedUserLat = parseFloat(userLat);
+            handymen = await calculateTravelTimes(
+              parsedUserLng,
+              parsedUserLat,
+              handymen
+            );
           } catch (geoError) {
             // אם יש שגיאה ב-geospatial query, נשתמש ב-fallback
             // Fallback: שלוף את כל ההנדימנים
@@ -1004,7 +1294,13 @@ function findAvailablePort(startPort) {
 
             // חשב זמן נסיעה גם ב-fallback אם יש קואורדינטות
             if (!isNaN(userLng) && !isNaN(userLat)) {
-              handymen = await calculateTravelTimes(userLng, userLat, handymen);
+              const parsedUserLng = parseFloat(userLng);
+              const parsedUserLat = parseFloat(userLat);
+              handymen = await calculateTravelTimes(
+                parsedUserLng,
+                parsedUserLat,
+                handymen
+              );
             }
           }
         } else {
@@ -1110,6 +1406,45 @@ function findAvailablePort(startPort) {
       });
     }
   });
+
+  // Update profile (basic fields + specialties)
+  app.post("/user/update-profile", async (req, res) => {
+    try {
+      const { userId, username, phone, email, city, address, specialties } =
+        req.body;
+      if (!userId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "userId required" });
+      }
+      const collection = getCollection();
+      const _id = new ObjectId(userId);
+      const update = {};
+      if (username !== undefined) update.username = username;
+      if (phone !== undefined) update.phone = phone;
+      if (email !== undefined) update.email = email;
+      if (city !== undefined) update.city = city;
+      if (address !== undefined) update.address = address;
+      if (Array.isArray(specialties)) {
+        update.specialties = specialties;
+      }
+      await collection.updateOne({ _id }, { $set: update });
+      const user = await collection.findOne({ _id });
+      return res.json({ success: true, user });
+    } catch (err) {
+      return res
+        .status(500)
+        .json({ success: false, message: "Update failed", error: err.message });
+    }
+  });
+
+  // Placeholder endpoints for accept/skip job
+  app.post("/jobs/accept", async (req, res) => {
+    return res.json({ success: true, received: req.body });
+  });
+  app.post("/jobs/skip", async (req, res) => {
+    return res.json({ success: true, received: req.body });
+  });
   app.post("/create-call", async (req, res) => {
     try {
       const call = req.body;
@@ -1147,6 +1482,11 @@ function findAvailablePort(startPort) {
         typeWork: call.selectedSubcategory?.typeWork || null, // לשעה או קבלנות
       };
 
+      const originalLocationText =
+        typeof call.location === "string"
+          ? call.location.trim()
+          : String(call.location || "");
+
       const jobData = {
         clientId: call.userId || null,
         clientName: clientName,
@@ -1158,10 +1498,8 @@ function findAvailablePort(startPort) {
           typeof call.desc === "string"
             ? call.desc.trim()
             : String(call.desc || ""),
-        locationText:
-          typeof call.location === "string"
-            ? call.location.trim()
-            : String(call.location || ""),
+        // נמנע משמירת "המיקום שלי" כברירת מחדל; נמלא אחרי גיאוקידינג
+        locationText: "",
         imageUrl: call.imageUrl || call.imagePreview || "",
         when: call.when || "asap",
         urgent: call.urgent || false,
@@ -1169,14 +1507,241 @@ function findAvailablePort(startPort) {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-
       // אם יש קואורדינטות, הוסף אותן
-      if (call.coordinates && call.coordinates.lng && call.coordinates.lat) {
-        jobData.location = {
-          type: "Point",
-          coordinates: [call.coordinates.lng, call.coordinates.lat],
-        };
-        jobData.coordinates = call.coordinates;
+      if (
+        call.coordinates &&
+        (call.coordinates.lng !== undefined ||
+          call.coordinates.lon !== undefined) &&
+        call.coordinates.lat !== undefined
+      ) {
+        const rawLng =
+          call.coordinates.lng !== undefined
+            ? call.coordinates.lng
+            : call.coordinates.lon;
+        const parsedLng = parseFloat(rawLng);
+        const parsedLat = parseFloat(call.coordinates.lat);
+        if (Number.isFinite(parsedLng) && Number.isFinite(parsedLat)) {
+          jobData.location = {
+            type: "Point",
+            coordinates: [parsedLng, parsedLat],
+          };
+          jobData.coordinates = {
+            lng: parsedLng,
+            lat: parsedLat,
+          };
+        }
+        try {
+          console.log("📍 create-call coords:", {
+            lng: parsedLng,
+            lat: parsedLat,
+            originalLocationText,
+          });
+          const response = await axios.get(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${parsedLng},${parsedLat}.json?access_token=${process.env.MAPBOX_TOKEN}&country=il&language=he&types=place&limit=1`
+          );
+          let features = response.data?.features || [];
+          let feature = features[0];
+          // אם אין תוצאה, נסה בלי types ועם limit גדול יותר
+          if (!feature) {
+            try {
+              const fallbackRes = await axios.get(
+                `https://api.mapbox.com/geocoding/v5/mapbox.places/${parsedLng},${parsedLat}.json?access_token=${process.env.MAPBOX_TOKEN}&country=il&language=he&limit=5`
+              );
+              features = fallbackRes.data?.features || [];
+              feature =
+                features.find(
+                  (f) =>
+                    (f.id || "").startsWith("place") ||
+                    (f.id || "").startsWith("locality") ||
+                    (f.id || "").startsWith("region")
+                ) || features[0];
+            } catch (fallbackErr) {
+              console.warn(
+                "⚠️ Mapbox fallback failed",
+                fallbackErr?.message || fallbackErr
+              );
+            }
+          }
+          if (!feature) {
+            console.warn("⚠️ Mapbox returned no features for coords", {
+              lng: parsedLng,
+              lat: parsedLat,
+            });
+          }
+          const mapboxNameHe =
+            feature?.text_he ||
+            feature?.place_name_he ||
+            feature?.context?.find((c) => c.text_he)?.text_he ||
+            "";
+          const mapboxName =
+            feature?.text ||
+            feature?.place_name ||
+            feature?.context?.find((c) => c.id?.startsWith("place"))?.text ||
+            feature?.context?.find((c) => c.id?.startsWith("locality"))?.text ||
+            feature?.context?.find((c) => c.id?.startsWith("region"))?.text ||
+            "";
+          const contextName =
+            feature?.context
+              ?.map((c) => c.text || c.place_name)
+              .find(Boolean) || "";
+
+          const originalClean =
+            originalLocationText && originalLocationText.trim() !== "המיקום שלי"
+              ? originalLocationText.trim()
+              : "";
+
+          let englishCandidate =
+            mapboxName ||
+            feature?.place_name ||
+            contextName ||
+            originalClean ||
+            "";
+
+          let nominatimHe = "";
+          let nominatimName = "";
+          if (
+            (!englishCandidate || !englishCandidate.trim().length) &&
+            (!mapboxNameHe || !mapboxNameHe.trim().length)
+          ) {
+            try {
+              const nomRes = await axios.get(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${parsedLat}&lon=${parsedLng}&accept-language=he&zoom=14`,
+                { headers: { "User-Agent": "hendiman-app" } }
+              );
+              nominatimHe = nomRes.data?.display_name || "";
+              nominatimName =
+                nomRes.data?.address?.city ||
+                nomRes.data?.address?.town ||
+                nomRes.data?.address?.village ||
+                nomRes.data?.address?.suburb ||
+                "";
+              console.log("🧭 Nominatim result:", {
+                nominatimHe,
+                nominatimName,
+              });
+              if (nominatimName) {
+                englishCandidate = nominatimName;
+              } else if (nominatimHe && !isHebrew(nominatimHe)) {
+                englishCandidate = nominatimHe;
+              }
+            } catch (nomErr) {
+              console.error("Error in Nominatim reverse:", nomErr?.message);
+            }
+          }
+
+          const finalMapboxHe =
+            (mapboxNameHe && mapboxNameHe.trim()) || nominatimHe || "";
+
+          const localHeb = mapEnglishToHebrew(englishCandidate);
+
+          console.log("🪪 create-call location candidate:", {
+            mapboxName,
+            mapboxNameHe: finalMapboxHe,
+            contextName,
+            originalClean,
+            englishCandidate,
+            localHeb,
+            nominatimHe,
+            nominatimName,
+            featureExists: Boolean(feature),
+          });
+
+          // אם יש שם בעברית ממאפבוקס או מהמיפוי המקומי, נעדיף אותו
+          const hebFromMapbox =
+            finalMapboxHe &&
+            finalMapboxHe.trim().length &&
+            isHebrew(finalMapboxHe)
+              ? finalMapboxHe
+              : "";
+          const hebFromLocal =
+            localHeb && localHeb.trim().length && isHebrew(localHeb)
+              ? localHeb
+              : "";
+
+          let translated =
+            hebFromMapbox ||
+            hebFromLocal ||
+            (localHeb && localHeb.trim().length && localHeb) ||
+            englishCandidate;
+          try {
+            if (translated === englishCandidate && englishCandidate) {
+              const translateRes = await axios.post(
+                "https://libretranslate.com/translate",
+                {
+                  q: englishCandidate,
+                  source: "en",
+                  target: "he",
+                  format: "text",
+                },
+                {
+                  headers: { "Content-Type": "application/json" },
+                }
+              );
+              translated =
+                translateRes.data?.translatedText ||
+                translateRes.data ||
+                translated;
+              console.log(
+                "Translated locationText:",
+                translated,
+                "from:",
+                englishCandidate
+              );
+            }
+          } catch (translateErr) {
+            console.error(
+              "Error translating locationText:",
+              translateErr?.message
+            );
+            // נפילה בתרגום — נעדיף עברית מהמיפוי המקומי אם יש, אחרת את האנגלית
+            translated = hebFromLocal || englishCandidate;
+          }
+
+          // סדר עדיפות: תרגום/עברית -> מקור באנגלית/מקורי -> קואורדינטות
+          jobData.locationText =
+            translated ||
+            hebFromLocal ||
+            englishCandidate ||
+            originalClean ||
+            "מיקום" ||
+            `${parsedLat}, ${parsedLng}`;
+
+          // שמור גם את האנגלית המקורית לשימוש עתידי
+          jobData.locationTextEn =
+            englishCandidate ||
+            mapboxName ||
+            feature?.place_name ||
+            contextName ||
+            nominatimName ||
+            originalClean ||
+            `${parsedLat}, ${parsedLng}`;
+        } catch (error) {
+          console.error("Error fetching name address:", error);
+        }
+
+        // החלפה כפויה בשם אמיתי; אם אין שם, השתמש בקואורדינטות כ-fallback
+      }
+
+      // fallback אם לא מולא (למשל ללא קואורדינטות): שמור את הטקסט המקורי אם הוא לא "המיקום שלי"
+      if (
+        !jobData.locationText ||
+        !jobData.locationText.trim().length ||
+        jobData.locationText.trim() === "המיקום שלי"
+      ) {
+        if (
+          originalLocationText &&
+          originalLocationText.trim().length &&
+          originalLocationText.trim() !== "המיקום שלי"
+        ) {
+          jobData.locationText = originalLocationText;
+        } else {
+          // fallback אחרון כדי לא להשאיר ריק: קואורדינטות אם קיימות
+          if (jobData.coordinates?.lat && jobData.coordinates?.lng) {
+            jobData.locationText = "מיקום";
+          } else {
+            jobData.locationText = jobData.locationText || "מיקום";
+          }
+        }
       }
 
       // שמור את העבודה במסד הנתונים

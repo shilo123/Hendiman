@@ -462,6 +462,12 @@
                 </div>
 
                 <div class="input-group">
+                  <div class="category-selector-info">
+                    <font-awesome-icon :icon="['fas', 'info-circle']" />
+                    <span
+                      >ניתן לבחור קטגוריה שלימה או תת-קטגוריות ספציפיות</span
+                    >
+                  </div>
                   <CategorySelector v-model="handymanForm.specialties" />
                 </div>
 
@@ -1775,6 +1781,30 @@ export default {
 
   .form-row {
     grid-template-columns: 1fr;
+  }
+}
+
+.category-selector-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(249, 115, 22, 0.1);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  direction: rtl;
+  font-size: 0.85rem;
+  color: #f97316;
+
+  svg,
+  font-awesome-icon {
+    color: #f97316;
+    font-size: 0.9rem;
+  }
+
+  span {
+    color: #f97316;
   }
 }
 </style>
