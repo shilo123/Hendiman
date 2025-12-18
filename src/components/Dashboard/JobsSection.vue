@@ -73,8 +73,18 @@
       </div>
     </div>
 
+    <!-- Job Chat for client (when job is assigned) -->
+    <JobChat
+      v-if="assignedJob && !isHendiman"
+      :job="assignedJob"
+      :isHandyman="false"
+      @close="$emit('close-assigned-job')"
+      @status-updated="$emit('status-updated')"
+      @rating-submitted="$emit('rating-submitted')"
+    />
+
     <!-- Jobs list -->
-    <div class="jobs__list">
+    <div v-else class="jobs__list">
       <article v-for="job in filteredJobs" :key="job.id" class="job-card">
         <div class="job-card__left">
           <div class="job-card__meta">
@@ -119,8 +129,10 @@
               </div>
             </div>
             <div class="job-card__sub">
-              👤 {{ job.clientName }} · 📍 {{ job.locationText }} ·
-              {{ job.distanceKm }} ק״מ
+              👤 {{ job.clientName }} · 📍 {{ job.locationText }}
+              <span v-if="distanceLabel(job)"
+                >· {{ distanceLabel(job) }} ק״מ</span
+              >
               <span
                 v-if="job.subcategoryInfo?.price || job.price"
                 class="job-card__price-inline"
@@ -132,44 +144,68 @@
         </div>
 
         <div class="job-card__actions">
-          <template v-if="isHendiman">
-            <button class="mini" type="button" @click="$emit('view', job)">
-              צפייה
-            </button>
-            <button
-              class="mini mini--ghost"
-              type="button"
-              @click="$emit('skip', job)"
-            >
-              דלג
-            </button>
-            <button
-              class="mini mini--primary"
-              type="button"
-              :disabled="job.status !== 'open'"
-              @click="$emit('accept', job)"
-            >
-              קבל
-            </button>
-          </template>
-          <template v-else>
-            <button
-              class="mini mini--primary"
-              type="button"
-              @click="$emit('view', job)"
-            >
-              צפייה
-            </button>
-          </template>
+          <button
+            class="mini mini--primary"
+            type="button"
+            @click="$emit('view', job)"
+          >
+            צפייה
+          </button>
         </div>
       </article>
+    </div>
+    <div
+      v-if="jobsPagination && jobsPagination.total > jobsPagination.pageSize"
+      class="jobs-pagination"
+    >
+      <button
+        class="page-btn primary"
+        type="button"
+        :disabled="
+          jobsPagination.page >=
+          Math.ceil(jobsPagination.total / jobsPagination.pageSize)
+        "
+        @click="$emit('next-jobs-page')"
+      >
+        → הבא
+      </button>
+      <div class="pager">
+        <div class="pager__dots">
+          <span
+            v-for="n in Math.max(
+              1,
+              Math.ceil(jobsPagination.total / jobsPagination.pageSize)
+            )"
+            :key="n"
+            class="dot"
+            :class="{ 'dot--active': n === jobsPagination.page }"
+          ></span>
+        </div>
+        <div class="pager__info">
+          עמוד {{ jobsPagination.page }} מתוך
+          {{ Math.ceil(jobsPagination.total / jobsPagination.pageSize) }}
+        </div>
+      </div>
+      <button
+        class="page-btn ghost"
+        type="button"
+        :disabled="jobsPagination.page <= 1"
+        @click="$emit('prev-jobs-page')"
+      >
+        הקודם ←
+      </button>
     </div>
   </section>
 </template>
 
 <script>
+import JobChat from "./JobChat.vue";
+
 export default {
   name: "JobsSection",
+  components: {
+    JobChat,
+  },
   props: {
     isHendiman: {
       type: Boolean,
@@ -191,17 +227,64 @@ export default {
       type: Object,
       default: () => ({ maxKm: 10 }),
     },
+    jobsPagination: {
+      type: Object,
+      default: () => ({ page: 1, total: 0, pageSize: 5 }),
+    },
+    handymanCoords: {
+      type: Object,
+      default: () => null,
+    },
+    assignedJob: {
+      type: Object,
+      default: null,
+    },
   },
   emits: [
     "refresh",
     "pick-status",
     "change-km",
     "reset-km",
-    "skip",
-    "accept",
     "view",
+    "next-jobs-page",
+    "prev-jobs-page",
+    "close-assigned-job",
+    "status-updated",
+    "rating-submitted",
   ],
   methods: {
+    haversineKm(lat1, lon1, lat2, lon2) {
+      const toRad = (v) => (v * Math.PI) / 180;
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) *
+          Math.cos(toRad(lat2)) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    },
+    distanceLabel(job) {
+      const d =
+        job?.distanceKm ??
+        (this.handymanCoords &&
+        this.handymanCoords.lat &&
+        this.handymanCoords.lng &&
+        job?.coordinates?.lat !== undefined &&
+        job?.coordinates?.lng !== undefined
+          ? this.haversineKm(
+              this.handymanCoords.lat,
+              this.handymanCoords.lng,
+              job.coordinates.lat,
+              job.coordinates.lng
+            )
+          : null);
+      if (d === null || d === undefined || Number.isNaN(d)) return null;
+      return d < 1 ? d.toFixed(2) : d.toFixed(1);
+    },
     getStatusLabel(status) {
       const labels = {
         open: "פתוחה",
@@ -503,6 +586,77 @@ $r2: 26px;
   }
 }
 
+.jobs-pagination {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.pager {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  justify-self: center;
+}
+.pager__dots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.dot--active {
+  background: #ff7a00;
+  transform: scale(1.1);
+  box-shadow: 0 0 0 4px rgba(255, 122, 0, 0.12);
+}
+.pager__info {
+  color: #cbd5e1;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.page-btn {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-weight: 900;
+  font-size: 13px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  transition: all 0.15s ease;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: rgba(255, 122, 0, 0.4);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+  }
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+.page-btn.primary {
+  background: linear-gradient(135deg, #ff7a00, #ff9a3c);
+  color: #0f1116;
+  border-color: rgba(255, 122, 0, 0.35);
+}
+.page-btn.ghost {
+  background: rgba(0, 0, 0, 0.22);
+}
 .job-card {
   border-radius: 20px;
   border: 1px solid rgba($orange, 0.14);

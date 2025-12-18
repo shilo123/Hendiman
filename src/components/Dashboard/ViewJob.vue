@@ -230,6 +230,14 @@
               <div class="detail-content">
                 <span class="detail-label">מיקום</span>
                 <span class="detail-value">{{ jobDetails.locationText }}</span>
+                <button
+                  v-if="isHendiman && jobCoordinates"
+                  class="btn-link"
+                  type="button"
+                  @click="openLocation"
+                >
+                  לחץ כאן למיקום
+                </button>
               </div>
             </div>
 
@@ -297,6 +305,9 @@
 
           <!-- Actions -->
           <div class="job-actions">
+            <button class="btn-action btn-action--ghost" @click="onClose">
+              סגירה
+            </button>
             <button
               v-if="isHendiman && jobDetails.status === 'open'"
               class="btn-action btn-action--primary"
@@ -305,15 +316,34 @@
               קבל עבודה
             </button>
             <button
-              v-if="isHendiman"
+              v-if="isHendiman && jobDetails.status === 'open'"
               class="btn-action btn-action--ghost"
               @click="onSkip"
             >
               דלג
             </button>
-            <button class="btn-action btn-action--ghost" @click="onClose">
-              סגירה
-            </button>
+            <div class="map-actions">
+              <button
+                v-if="isHendiman && jobCoordinates"
+                class="btn-action btn-action--map"
+                type="button"
+                dir="rtl"
+                @click="openGoogleMaps"
+              >
+                <i class="fas fa-map-marked-alt"></i>
+                <span>פתיחה בגוגל מפות</span>
+              </button>
+              <button
+                v-if="isHendiman && jobCoordinates"
+                class="btn-action btn-action--waze"
+                type="button"
+                dir="rtl"
+                @click="openWaze"
+              >
+                <i class="fas fa-location-arrow"></i>
+                <span>פתיחה בוויז</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -350,6 +380,20 @@ export default {
       this.$emit("skip", this.jobDetails);
       this.onClose();
     },
+    openGoogleMaps() {
+      const coords = this.jobCoordinates;
+      if (!coords) return;
+      const { lat, lng } = coords;
+      const url = `https://www.google.com/maps?q=${lat},${lng}`;
+      window.open(url, "_blank", "noopener");
+    },
+    openWaze() {
+      const coords = this.jobCoordinates;
+      if (!coords) return;
+      const { lat, lng } = coords;
+      const url = `https://waze.com/ul?ll=${lat}%2C${lng}&navigate=yes`;
+      window.open(url, "_blank", "noopener");
+    },
     onImageError(event) {
       // אם התמונה נכשלה בטעינה, החלף לתמונת ברירת מחדל
       const defaultImage = "/img/Hendima-logo.png";
@@ -374,6 +418,24 @@ export default {
       } catch (e) {
         return String(date);
       }
+    },
+  },
+  computed: {
+    jobCoordinates() {
+      const coords = this.jobDetails?.coordinates;
+      if (coords && coords.lat !== undefined && coords.lng !== undefined) {
+        return { lat: coords.lat, lng: coords.lng };
+      }
+      const locArray = this.jobDetails?.location?.coordinates;
+      if (
+        Array.isArray(locArray) &&
+        locArray.length >= 2 &&
+        typeof locArray[1] === "number" &&
+        typeof locArray[0] === "number"
+      ) {
+        return { lat: locArray[1], lng: locArray[0] };
+      }
+      return null;
     },
   },
 };
@@ -486,7 +548,8 @@ $r2: 26px;
 .close-button {
   position: absolute;
   top: 12px;
-  left: 12px;
+  right: 12px;
+  left: auto;
   background: none;
   border: none;
   font-size: 20px;
@@ -509,7 +572,8 @@ $r2: 26px;
   @media (max-width: 768px) {
     font-size: 18px;
     top: 10px;
-    left: 10px;
+    right: 10px;
+    left: auto;
     width: 28px;
     height: 28px;
   }
@@ -910,6 +974,27 @@ $r2: 26px;
   }
 }
 
+.btn-link {
+  background: none;
+  border: none;
+  color: $orange3;
+  font-weight: 900;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 4px;
+  align-self: flex-start;
+  text-decoration: underline;
+
+  &:hover {
+    color: lighten($orange3, 8%);
+  }
+
+  @media (max-width: 768px) {
+    font-size: 11px;
+  }
+}
+
 .job-description {
   padding: 12px 0;
   margin-bottom: 0;
@@ -961,6 +1046,13 @@ $r2: 26px;
   }
 }
 
+.map-actions {
+  display: flex;
+  gap: 10px;
+  margin-inline-start: auto; /* ב-RTL יידחף שמאלה */
+  flex-wrap: wrap;
+}
+
 .btn-action {
   border-radius: 12px;
   padding: 10px 18px;
@@ -971,6 +1063,7 @@ $r2: 26px;
   border: none;
   min-width: 120px;
   flex-shrink: 0;
+  margin-inline-end: 20px;
 
   @media (max-width: 768px) {
     padding: 10px 16px;
@@ -998,6 +1091,45 @@ $r2: 26px;
     &:hover {
       background: rgba(255, 255, 255, 0.08);
       border-color: rgba(255, 255, 255, 0.2);
+    }
+  }
+
+  &--map {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #1a1f2e, #23324b);
+    border: 1px solid rgba($orange, 0.18);
+    color: $orange3;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+
+    i {
+      font-size: 14px;
+    }
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4), 0 0 0 4px rgba($orange, 0.12);
+    }
+  }
+
+  &--waze {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #0c2c3a, #134a62);
+    border: 1px solid rgba(73, 196, 255, 0.25);
+    color: #c7ecff;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+
+    i {
+      font-size: 14px;
+    }
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4),
+        0 0 0 4px rgba(73, 196, 255, 0.14);
     }
   }
 }

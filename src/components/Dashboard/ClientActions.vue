@@ -4,29 +4,20 @@
       <span class="icon">⚡</span>
       <span>צור קריאה</span>
     </button>
-
-    <button
-      class="btn-create-call"
-      type="button"
-      @click="$emit('select-handyman')"
-    >
-      <span class="icon">👤</span>
-      <span>בחר הנדימן</span>
-    </button>
   </div>
 </template>
 
 <script>
 export default {
   name: "ClientActions",
-  emits: ["create-call", "select-handyman"],
+  emits: ["create-call"],
 };
 </script>
 
 <style lang="scss" scoped>
 .action-buttons {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 12px;
   margin-bottom: 20px;
 

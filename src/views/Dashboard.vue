@@ -21,89 +21,118 @@
 
     <!-- MAIN -->
     <main class="grid">
-      <!-- LEFT ~60% JOBS -->
-      <JobsSection
-        :isHendiman="isHendiman"
-        :filteredJobs="filteredJobs"
-        :statusTabsWithCounts="statusTabsWithCounts"
-        :activeStatus="activeStatus"
-        :handymanFilters="handymanFilters"
-        @refresh="onRefresh"
-        @pick-status="onPickStatus"
-        @change-km="onChangeKm"
-        @reset-km="onResetKm"
-        @skip="onSkip"
-        @accept="onAccept"
-        @view="onView"
-      />
-
-      <!-- RIGHT SIDE -->
-      <aside class="side">
-        <!-- CLIENT: handymen in area + action buttons -->
-        <section v-if="!isHendiman" class="panel">
-          <div class="panel__head">
-            <h2 class="h2">
-              הנדימנים באזורך
-              <span v-if="handymenPagination.total" class="h2__count"
-                >({{ handymenPagination.total }})</span
-              >
-            </h2>
-            <p class="sub">הנדימנים הזמינים באזור שלך · לחץ על כפתור לפעולה</p>
-          </div>
-
-          <ClientActions
-            @create-call="onCreateCallCta"
-            @select-handyman="onOpenPersonalRequest"
-          />
-
-          <HandymenList
-            :filteredHandymen="filteredHandymen"
-            :pagination="handymenPagination"
-            @view-details="onViewHandymanDetails"
-            @open-chat="onOpenUserChat"
-            @personal-request="onPersonalRequest"
-            @next-page="onNextPage"
-            @prev-page="onPrevPage"
-          />
-        </section>
-
-        <!-- HANDYMAN: quick profile & notes -->
-        <section v-else class="panel">
-          <div class="panel__head">
-            <h2 class="h2">כלים להנדימן</h2>
-            <p class="sub">עבודות מופיעות רק לפי ההתמחויות שבחרת בהרשמה</p>
-          </div>
-
-          <HandymanTools
-            :specialties="me.specialties"
-            @edit-profile="onGoProfile"
-            @open-chat="onOpenHandymenChat"
-          />
-        </section>
-      </aside>
-      <ViewHandymanDetails
-        v-if="handymanDetails"
-        :handymanDetails="handymanDetails"
-        @close="onCloseHandymanDetails"
-        @book="onBookHandyman"
-        @block="onBlockHandymanFromModal"
-      />
-      <ViewJob
-        v-if="jobDetails"
-        :jobDetails="jobDetails"
-        :isHendiman="isHendiman"
-        :getStatusLabel="getStatusLabel"
-        @close="onCloseJobDetails"
-        @accept="onAcceptJobFromModal"
-        @skip="onSkipJobFromModal"
-      />
-      <ProfileSheet
-        :visible="showProfileSheet"
-        :user="store.user"
+      <!-- Job Chat (when job is assigned) - Full screen for handyman only -->
+      <JobChat
+        v-if="currentAssignedJob && isHendiman"
+        :job="currentAssignedJob"
         :isHandyman="isHendiman"
-        @close="showProfileSheet = false"
-        @save="onSaveProfile"
+        @close="activeAssignedJob = null"
+        @status-updated="onJobStatusUpdated"
+        @rating-submitted="onRatingSubmitted"
       />
+
+      <!-- Regular Dashboard (when no assigned job for handyman, or always for client) -->
+      <template v-if="!currentAssignedJob || !isHendiman">
+        <!-- LEFT ~60% JOBS -->
+        <JobsSection
+          :isHendiman="isHendiman"
+          :filteredJobs="pagedJobs"
+          :jobsPagination="jobsPagination"
+          :handymanCoords="
+            isHendiman
+              ? userCoordinates ||
+                store.user?.coordinates ||
+                me?.coordinates ||
+                null
+              : null
+          "
+          :statusTabsWithCounts="statusTabsWithCounts"
+          :activeStatus="activeStatus"
+          :handymanFilters="handymanFilters"
+          :assignedJob="
+            currentAssignedJob && !isHendiman ? currentAssignedJob : null
+          "
+          @refresh="onRefresh"
+          @pick-status="onPickStatus"
+          @change-km="onChangeKm"
+          @reset-km="onResetKm"
+          @skip="onSkip"
+          @accept="onAccept"
+          @view="onView"
+          @next-jobs-page="onJobsNextPage"
+          @prev-jobs-page="onJobsPrevPage"
+          @close-assigned-job="activeAssignedJob = null"
+          @status-updated="onJobStatusUpdated"
+          @rating-submitted="onRatingSubmitted"
+        />
+
+        <!-- RIGHT SIDE -->
+        <aside class="side">
+          <!-- CLIENT: handymen in area + action buttons -->
+          <section v-if="!isHendiman" class="panel">
+            <div class="panel__head">
+              <h2 class="h2">
+                הנדימנים באזורך
+                <span v-if="handymenPagination.total" class="h2__count"
+                  >({{ handymenPagination.total }})</span
+                >
+              </h2>
+              <p class="sub">
+                הנדימנים הזמינים באזור שלך · לחץ על כפתור לפעולה
+              </p>
+            </div>
+
+            <ClientActions @create-call="onCreateCallCta" />
+
+            <HandymenList
+              :filteredHandymen="filteredHandymen"
+              :pagination="handymenPagination"
+              @view-details="onViewHandymanDetails"
+              @open-chat="onOpenUserChat"
+              @personal-request="onPersonalRequest"
+              @next-page="onNextPage"
+              @prev-page="onPrevPage"
+            />
+          </section>
+
+          <!-- HANDYMAN: quick profile & notes -->
+          <section v-else class="panel">
+            <div class="panel__head">
+              <h2 class="h2">כלים להנדימן</h2>
+              <p class="sub">עבודות מופיעות רק לפי ההתמחויות שבחרת בהרשמה</p>
+            </div>
+
+            <HandymanTools
+              :specialties="me.specialties"
+              @edit-profile="onGoProfile"
+              @open-chat="onOpenHandymenChat"
+            />
+          </section>
+        </aside>
+        <ViewHandymanDetails
+          v-if="handymanDetails"
+          :handymanDetails="handymanDetails"
+          @close="onCloseHandymanDetails"
+          @book="onBookHandyman"
+          @block="onBlockHandymanFromModal"
+        />
+        <ViewJob
+          v-if="jobDetails"
+          :jobDetails="jobDetails"
+          :isHendiman="isHendiman"
+          :getStatusLabel="getStatusLabel"
+          @close="onCloseJobDetails"
+          @accept="onAcceptJobFromModal"
+          @skip="onSkipJobFromModal"
+        />
+        <ProfileSheet
+          :visible="showProfileSheet"
+          :user="store.user"
+          :isHandyman="isHendiman"
+          @close="showProfileSheet = false"
+          @save="onSaveProfile"
+        />
+      </template>
     </main>
 
     <div v-if="!isHendiman" class="mobile-cta">
@@ -127,6 +156,7 @@ import HandymanTools from "@/components/Dashboard/HandymanTools.vue";
 import ViewHandymanDetails from "@/components/Dashboard/ViewHandymanDetails.vue";
 import ViewJob from "@/components/Dashboard/ViewJob.vue";
 import ProfileSheet from "@/components/ProfileSheet.vue";
+import JobChat from "@/components/Dashboard/JobChat.vue";
 import axios from "axios";
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
@@ -142,6 +172,7 @@ export default {
     ViewHandymanDetails,
     ViewJob,
     ProfileSheet,
+    JobChat,
   },
   data() {
     return {
@@ -158,6 +189,8 @@ export default {
         avatarUrl: "",
         specialties: [],
       },
+      jobsPage: 1,
+      jobsPageSize: 5,
 
       statusTabs: [
         { label: "הכל", value: "all" },
@@ -176,12 +209,12 @@ export default {
         phone: "",
         email: "",
         city: "",
-        address: "",
         specialties: [],
       },
       handymanFilters: { maxKm: 10 },
       handymanDetails: null,
       dirFilters: { q: "", minRating: 0, minJobs: 0 },
+      activeAssignedJob: null,
     };
   },
 
@@ -195,6 +228,19 @@ export default {
   computed: {
     jobs() {
       return this.store.jobs;
+    },
+    jobsPagination() {
+      const total = this.filteredJobs.length;
+      const pageCount = Math.max(1, Math.ceil(total / this.jobsPageSize));
+      const page = Math.min(this.jobsPage, pageCount);
+      return {
+        page,
+        total,
+        pageSize: this.jobsPageSize,
+        pageCount,
+        hasNext: page < pageCount,
+        hasPrev: page > 1,
+      };
     },
     handymen() {
       return this.store.handymen;
@@ -216,8 +262,19 @@ export default {
         this.isHendiman && this.me?.specialties ? this.me.specialties : null,
         this.isHendiman && this.me?.fullCategories
           ? this.me.fullCategories
+          : null,
+        this.isHendiman
+          ? this.userCoordinates ||
+              this.store.user?.coordinates ||
+              this.me?.coordinates ||
+              null
           : null
       );
+    },
+    pagedJobs() {
+      const start = (this.jobsPagination.page - 1) * this.jobsPageSize;
+      const end = start + this.jobsPageSize;
+      return this.filteredJobs.slice(start, end);
     },
 
     filteredHandymen() {
@@ -232,6 +289,12 @@ export default {
         this.isHendiman && this.me?.specialties ? this.me.specialties : null,
         this.isHendiman && this.me?.fullCategories
           ? this.me.fullCategories
+          : null,
+        this.isHendiman
+          ? this.userCoordinates ||
+              this.store.user?.coordinates ||
+              this.me?.coordinates ||
+              null
           : null
       );
 
@@ -245,12 +308,47 @@ export default {
         return { ...tab, count };
       });
     },
+    currentAssignedJob() {
+      if (this.activeAssignedJob) return this.activeAssignedJob;
+      const userId = this.store.user?._id || this.me?._id;
+      if (!userId) return null;
+
+      // חיפוש ישירות ב-store.jobs
+      const allJobs = this.store.jobs || [];
+      const assignedJob = allJobs.find((job) => {
+        if (this.isHendiman) {
+          // עבור הנדימן - בודק אם handymanId תואם
+          return (
+            job.handymanId &&
+            String(job.handymanId) === String(userId) &&
+            (job.status === "assigned" ||
+              job.status === "on_the_way" ||
+              job.status === "in_progress" ||
+              (job.status === "done" && !job.ratingSubmitted))
+          );
+        } else {
+          // עבור לקוח - בודק אם clientId תואם
+          return (
+            job.clientId &&
+            String(job.clientId) === String(userId) &&
+            job.handymanId && // רק עבודות ששובצו
+            (job.status === "assigned" ||
+              job.status === "on_the_way" ||
+              job.status === "in_progress" ||
+              (job.status === "done" && !job.ratingSubmitted))
+          );
+        }
+      });
+
+      return assignedJob || null;
+    },
   },
 
   methods: {
     onRefresh() {
       const coords = this.userCoordinates;
       this.store.fetchDashboardData(this.$route.params.id, coords);
+      this.jobsPage = 1;
     },
 
     async fetchHandymanJobs() {
@@ -259,6 +357,10 @@ export default {
           status: this.activeStatus,
           maxKm: this.handymanFilters.maxKm,
           coordinates: this.userCoordinates,
+        });
+        // אחרי טעינת העבודות, בדוק אם יש עבודה משובצת
+        this.$nextTick(() => {
+          this.checkForAssignedJob();
         });
       } catch (error) {
         console.error("Error fetching handyman jobs:", error);
@@ -271,7 +373,6 @@ export default {
         phone: this.store.user?.phone || "",
         email: this.store.user?.email || "",
         city: this.store.user?.city || "",
-        address: this.store.user?.address || "",
         specialties: this.store.user?.specialties
           ? [...this.store.user.specialties]
           : [],
@@ -288,8 +389,8 @@ export default {
     },
 
     onPickStatus(v) {
-      console.log("pick status", v);
       this.activeStatus = v;
+      this.jobsPage = 1;
       if (this.isHendiman) {
         this.fetchHandymanJobs();
       }
@@ -297,15 +398,15 @@ export default {
 
     onChangeKm(value) {
       this.handymanFilters.maxKm = parseInt(value);
-      console.log("change km", this.handymanFilters.maxKm);
+      this.jobsPage = 1;
       if (this.isHendiman) {
         this.fetchHandymanJobs();
       }
     },
 
     onResetKm() {
-      console.log("reset km");
       this.handymanFilters.maxKm = 10;
+      this.jobsPage = 1;
       if (this.isHendiman) {
         this.fetchHandymanJobs();
       }
@@ -347,6 +448,8 @@ export default {
         })
         .then(() => {
           this.fetchHandymanJobs();
+          // Open chat after accepting
+          this.activeAssignedJob = { ...job, status: "assigned", handymanId };
         })
         .catch(() => {});
     },
@@ -355,17 +458,151 @@ export default {
       console.log("view job", job.id);
       this.jobDetails = job;
     },
+    onJobsNextPage() {
+      if (this.jobsPagination.hasNext) {
+        this.jobsPage = this.jobsPagination.page + 1;
+      }
+    },
+    onJobsPrevPage() {
+      if (this.jobsPagination.hasPrev) {
+        this.jobsPage = this.jobsPagination.page - 1;
+      }
+    },
+    onJobStatusUpdated(newStatus) {
+      // Update the job in store immediately
+      const jobId = this.activeAssignedJob?._id || this.activeAssignedJob?.id;
+      if (jobId && this.store.jobs) {
+        const jobIndex = this.store.jobs.findIndex(
+          (j) => String(j._id || j.id) === String(jobId)
+        );
+        if (jobIndex !== -1) {
+          // Update job in store
+          this.store.jobs[jobIndex] = {
+            ...this.store.jobs[jobIndex],
+            status: newStatus,
+          };
+        }
+      }
+
+      // Also update currentAssignedJob if it's found in store
+      const userId = this.store.user?._id || this.me?._id;
+      if (userId && this.store.jobs) {
+        const assignedJob = this.store.jobs.find((job) => {
+          if (this.isHendiman) {
+            return (
+              job.handymanId &&
+              String(job.handymanId) === String(userId) &&
+              String(job._id || job.id) === String(jobId)
+            );
+          } else {
+            return (
+              job.clientId &&
+              String(job.clientId) === String(userId) &&
+              String(job._id || job.id) === String(jobId)
+            );
+          }
+        });
+        if (assignedJob) {
+          assignedJob.status = newStatus;
+        }
+      }
+
+      // Update active job status
+      if (this.activeAssignedJob) {
+        this.activeAssignedJob.status = newStatus;
+      }
+
+      // Refresh jobs after status update (async)
+      if (this.isHendiman) {
+        this.fetchHandymanJobs();
+      } else {
+        this.onRefresh();
+      }
+    },
+    onRatingSubmitted() {
+      // Refresh after rating
+      this.onRefresh();
+      // Close chat after rating
+      this.activeAssignedJob = null;
+    },
+    async checkForAssignedJob() {
+      // בדוק ישירות ב-store.jobs אם יש עבודה משובצת
+      const userId = this.store.user?._id || this.me?._id;
+      if (!userId) return;
+
+      // קודם נבדוק ב-store.jobs הקיים
+      let allJobs = this.store.jobs || [];
+      let assignedJob = allJobs.find((job) => {
+        if (this.isHendiman) {
+          // עבור הנדימן - בודק אם handymanId תואם
+          return (
+            job.handymanId &&
+            String(job.handymanId) === String(userId) &&
+            (job.status === "assigned" ||
+              job.status === "on_the_way" ||
+              job.status === "in_progress" ||
+              (job.status === "done" && !job.ratingSubmitted))
+          );
+        } else {
+          // עבור לקוח - בודק אם clientId תואם
+          return (
+            job.clientId &&
+            String(job.clientId) === String(userId) &&
+            job.handymanId && // רק עבודות ששובצו
+            (job.status === "assigned" ||
+              job.status === "on_the_way" ||
+              job.status === "in_progress" ||
+              (job.status === "done" && !job.ratingSubmitted))
+          );
+        }
+      });
+
+      // אם לא מצאנו, נטען שוב את כל העבודות מ-fetchDashboardData
+      // כי fetchFilteredJobsForHandyman עלול להחליף את store.jobs רק עם עבודות מסוננות
+      if (!assignedJob) {
+        try {
+          const dashboardData = await this.store.fetchDashboardData(
+            this.$route.params.id,
+            this.userCoordinates
+          );
+          if (dashboardData && dashboardData.Jobs) {
+            allJobs = dashboardData.Jobs || [];
+            assignedJob = allJobs.find((job) => {
+              if (this.isHendiman) {
+                return (
+                  job.handymanId &&
+                  String(job.handymanId) === String(userId) &&
+                  (job.status === "assigned" ||
+                    job.status === "on_the_way" ||
+                    job.status === "in_progress" ||
+                    (job.status === "done" && !job.ratingSubmitted))
+                );
+              } else {
+                return (
+                  job.clientId &&
+                  String(job.clientId) === String(userId) &&
+                  job.handymanId &&
+                  (job.status === "assigned" ||
+                    job.status === "on_the_way" ||
+                    job.status === "in_progress" ||
+                    (job.status === "done" && !job.ratingSubmitted))
+                );
+              }
+            });
+          }
+        } catch (error) {
+          console.error("Error checking for assigned job:", error);
+        }
+      }
+
+      if (assignedJob && !this.activeAssignedJob) {
+        this.activeAssignedJob = assignedJob;
+      }
+    },
 
     onCreateCallCta() {
       this.$router.push({
         name: "CreateCall",
-        params: { id: this.$route.params.id },
-      });
-    },
-
-    onOpenPersonalRequest() {
-      this.$router.push({
-        name: "SelectHandyman",
         params: { id: this.$route.params.id },
       });
     },
@@ -392,7 +629,6 @@ export default {
           phone: form.phone,
           email: form.email,
           city: form.city,
-          address: form.address,
           specialties: form.specialties,
         })
         .then((res) => {
@@ -616,7 +852,6 @@ export default {
         this.me.id = data.User._id;
         this.me.phone = data.User.phone;
         this.me.email = data.User.email;
-        this.me.address = data.User.address;
         this.me.city = data.User.city;
         this.isHendiman = data.User.isHandyman;
 
@@ -638,13 +873,37 @@ export default {
           // שלח את הקואורדינטות גם ל-fetchHandymen
           await this.store.fetchHandymen(1, this.userCoordinates);
         } else {
+          // עבור הנדימן - טען עבודות מסוננות
           await this.fetchHandymanJobs();
+
+          // בנוסף, בדוק ישירות בשרת אם יש עבודה משובצת (גם אם מעל 10 ק"מ)
+          // על ידי בדיקה ב-store.jobs מהנתונים הראשוניים של fetchDashboardData
+          // הנתונים הראשוניים כוללים את כל העבודות, לא רק המסוננות
         }
+
+        // בדוק אם יש עבודה משובצת ונפתח את הצ'אט אוטומטית
+        // עבור הנדימן ולקוח - בודק אם יש עבודה משובצת
+        this.$nextTick(() => {
+          this.checkForAssignedJob();
+        });
       }
     } catch (error) {
       // אם יש שגיאה או שהמשתמש לא נמצא, החזר ל-דף הבית
       this.$router.push("/");
     }
+  },
+  watch: {
+    // צפה בשינויים ב-jobs כדי לבדוק עבודה משובצת
+    "store.jobs": {
+      handler() {
+        if (this.store.jobs && this.store.jobs.length > 0) {
+          this.$nextTick(() => {
+            this.checkForAssignedJob();
+          });
+        }
+      },
+      immediate: false,
+    },
   },
 };
 </script>

@@ -104,14 +104,19 @@
 
         <div class="field">
           <label class="label">מיקום</label>
-          <input
-            class="input"
-            :class="{ 'input-error': errors.location }"
-            v-model="call.location"
-            @input="clearError('location')"
-            type="text"
-            placeholder="עיר, רחוב, מספר…"
-          />
+          <div class="location-row">
+            <input
+              class="input"
+              :class="{ 'input-error': errors.location }"
+              v-model="call.location"
+              @input="onLocationChange"
+              type="text"
+              placeholder="עיר, רחוב, מספר…"
+            />
+            <button class="loc-btn" type="button" @click="setMyLocation">
+              לפי מיקום
+            </button>
+          </div>
           <span v-if="errors.location" class="error-message">
             {{ errors.location }}
           </span>
@@ -171,11 +176,16 @@ import SingleCategorySelector from "@/components/SingleCategorySelector.vue";
 import { URL } from "@/Url/url";
 import axios from "axios";
 import { useToast } from "@/composables/useToast";
+import { useMainStore } from "@/store/index";
 
 export default {
   name: "CreateCall",
   components: {
     SingleCategorySelector,
+  },
+  setup() {
+    const store = useMainStore();
+    return { store };
   },
   data() {
     return {
@@ -194,11 +204,22 @@ export default {
         coordinates: {},
         workType: "קלה",
       },
+      geoCoordinates: null,
+      usingMyLocation: false,
       errors: {},
     };
   },
   created() {
     this.toast = useToast();
+    // ברירת מחדל: עיר/מיקום מהמשתמש אם קיים, אחרת "המיקום שלי"
+    const userCity = this.store?.user?.city;
+    if (userCity && userCity.trim()) {
+      this.call.location = userCity.trim();
+      this.usingMyLocation = false;
+    } else {
+      this.call.location = "המיקום שלי";
+      this.usingMyLocation = true;
+    }
   },
 
   computed: {
@@ -231,6 +252,22 @@ export default {
     },
   },
   methods: {
+    setMyLocation() {
+      this.call.location = "המיקום שלי";
+      this.clearError("location");
+      this.usingMyLocation = true;
+      if (this.geoCoordinates) {
+        this.call.coordinates = { ...this.geoCoordinates };
+      }
+    },
+    onLocationInput() {
+      this.usingMyLocation = false;
+      this.call.coordinates = {};
+    },
+    onLocationChange() {
+      this.clearError("location");
+      this.onLocationInput();
+    },
     goBack() {
       this.$router.go(-1);
     },
@@ -366,10 +403,16 @@ export default {
           return;
         }
 
+        // אם בחר "המיקום שלי" ואין עדיין קואורדינטות, נסה להציב מה-geoCoordinates
+        if (this.usingMyLocation && this.geoCoordinates) {
+          this.call.coordinates = { ...this.geoCoordinates };
+        }
+
         // הוסף userId אם קיים ב-route params
         const callData = {
           ...this.call,
           userId: this.$route.params.id || null,
+          usingMyLocation: this.usingMyLocation,
         };
 
         // ודא שקואורדינטות נשמרות כמספרים וללא עיגול
@@ -383,6 +426,7 @@ export default {
             };
           }
         }
+        // השאר קואורדינטות אם קיימות (גם אם לא "המיקום שלי") כדי לאפשר חישוב מרחק בשרת/קליינט
 
         // הסר שדות שלא צריך לשלוח
         delete callData.image; // לא צריך לשלוח את ה-File object
@@ -412,10 +456,13 @@ export default {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-        this.call.coordinates = {
+        this.geoCoordinates = {
           lat: latitude,
           lon: longitude, // נשמר גם בשם lon כדי לתמוך בצד השרת
         };
+        if (this.usingMyLocation) {
+          this.call.coordinates = { ...this.geoCoordinates };
+        }
       },
       (err) => {
         console.warn("Geolocation error:", err?.message || err);
@@ -786,6 +833,28 @@ $r2: 26px;
   position: relative;
   width: 100%;
   box-sizing: border-box;
+}
+
+.location-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.loc-btn {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(135deg, #1a1f2e, #23324b);
+  color: #ffb36b;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  }
 }
 
 .file-input {

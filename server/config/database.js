@@ -2,6 +2,9 @@ const { MongoClient } = require("mongodb");
 
 let collection;
 let collectionJobs;
+let collectionRatings;
+let collectionPayments;
+let collectionChats;
 let db;
 
 async function connectDatabase() {
@@ -12,7 +15,9 @@ async function connectDatabase() {
     db = connection.db("Hendiman");
     collection = db.collection("Users-Hendiman");
     collectionJobs = db.collection("Jobs");
-
+    collectionRatings = db.collection("rating");
+    collectionPayments = db.collection("payment");
+    collectionChats = db.collection("chats");
     // צור index על location עבור geospatial queries
     try {
       await collection.createIndex({ location: "2dsphere" });
@@ -39,13 +44,23 @@ function getCollectionJobs() {
   return collectionJobs;
 }
 
-function getDb() {
-  return db;
+function getCollectionRatings() {
+  return collectionRatings;
+}
+
+function getCollectionPayments() {
+  return collectionPayments;
+}
+
+function getCollectionChats() {
+  return collectionChats;
 }
 
 module.exports = {
   connectDatabase,
   getCollection,
   getCollectionJobs,
-  getDb,
+  getCollectionRatings,
+  getCollectionPayments,
+  getCollectionChats,
 };

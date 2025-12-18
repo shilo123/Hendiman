@@ -26,6 +26,8 @@
     "passport-google-oauth20": "^2.0.0",
     "pinia": "^3.0.4",
     "register-service-worker": "^1.7.2",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
     "vue": "^3.2.13",
     "vue-router": "^4.0.3",
     "vuex": "^4.0.0"

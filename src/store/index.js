@@ -1,6 +1,40 @@
 import { defineStore } from "pinia";
 import axios from "axios";
+import categoriesData from "@/APIS/Categorhs.json";
 import { URL } from "@/Url/url";
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const toRad = (v) => (v * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// מפה מתת־קטגוריה לקטגוריה (להשלמה כששדה category חסר בעבודה)
+const subcategoryToCategory = (() => {
+  const map = new Map();
+  if (categoriesData && Array.isArray(categoriesData.categories)) {
+    categoriesData.categories.forEach((cat) => {
+      if (!cat?.name || !Array.isArray(cat.subcategories)) return;
+      const catName = String(cat.name).trim().toLowerCase();
+      cat.subcategories.forEach((sub) => {
+        if (sub?.name) {
+          const subName = String(sub.name).trim().toLowerCase();
+          map.set(subName, catName);
+        }
+      });
+    });
+  }
+  return map;
+})();
 
 export const useMainStore = defineStore("main", {
   state: () => ({
@@ -20,129 +54,126 @@ export const useMainStore = defineStore("main", {
   }),
   getters: {
     filteredJobs:
-      (state) => (status, maxKm, isHendiman, specialties, fullCategories) => {
+      (state) =>
+      (
+        status,
+        maxKm,
+        isHendiman,
+        specialties,
+        fullCategories,
+        handymanCoords = null
+      ) => {
         let list = [...state.jobs];
 
         if (isHendiman) {
-          // סינון לפי קטגוריות שלימות - אם הנדימן בחר קטגוריה שלימה, כל העבודות מאותה קטגוריה יופיעו
-          if (
-            fullCategories &&
-            Array.isArray(fullCategories) &&
-            fullCategories.length > 0
-          ) {
-            const fullCategoryNames = fullCategories
-              .map((cat) => {
-                if (typeof cat === "object" && cat.name) {
-                  return cat.name.trim();
-                }
-                if (typeof cat === "string") {
-                  return cat.trim();
-                }
-                return null;
-              })
-              .filter((name) => name && name.length > 0);
+          // הפקה של קטגוריות שלימות ותתי-קטגוריות מתוך specialties עם type
+          const fullCategoriesFromSpecs = Array.isArray(specialties)
+            ? specialties.filter(
+                (s) =>
+                  (s && s.type === "category") ||
+                  (s && s.isFullCategory === true)
+              )
+            : [];
 
-            if (fullCategoryNames.length > 0) {
-              // נבדוק את הקטגוריה של העבודה
-              list = list.filter((job) => {
-                const jobCategory =
-                  job.subcategoryInfo?.category || job.category || null;
-                if (!jobCategory) {
-                  // אם אין קטגוריה בעבודה, נבדוק לפי תת-קטגוריה
-                  return false;
-                }
+          const subCategoriesFromSpecs = Array.isArray(specialties)
+            ? specialties.filter(
+                (s) =>
+                  !s ||
+                  s.type === "subCategory" ||
+                  (!s.type && !s.isFullCategory)
+              )
+            : [];
 
-                const jobCategoryLower = jobCategory.trim().toLowerCase();
-                return fullCategoryNames.some((fullCatName) => {
-                  const fullCatNameLower = fullCatName.trim().toLowerCase();
-                  return jobCategoryLower === fullCatNameLower;
-                });
-              });
-            }
-          }
+          const mergedFullCategories = [
+            ...(Array.isArray(fullCategories) ? fullCategories : []),
+            ...fullCategoriesFromSpecs,
+          ];
 
-          // סינון לפי התמחויות של ההנדימן (תת-קטגוריות)
-          if (
-            specialties &&
-            Array.isArray(specialties) &&
-            specialties.length > 0
-          ) {
-            const specialtyNames = specialties
-              .map((spec) => {
-                if (typeof spec === "object" && spec.name) {
-                  return spec.name.trim();
-                }
-                if (typeof spec === "string") {
-                  return spec.trim();
-                }
-                return null;
-              })
-              .filter((name) => name && name.length > 0);
+          const mergedSpecialties =
+            subCategoriesFromSpecs.length > 0
+              ? subCategoriesFromSpecs
+              : specialties;
 
-            if (specialtyNames.length > 0) {
-              // אם יש גם קטגוריות שלימות וגם תת-קטגוריות, נאחד את התוצאות (OR logic)
-              // כלומר, עבודה תופיע אם היא מתאימה לקטגוריה שלימה או לתת-קטגוריה
-              const jobsFromFullCategories =
-                list.length < state.jobs.length ? list : [];
-              const jobsFromSubcategories = [...state.jobs].filter((job) => {
-                const jobSubcategoryName =
-                  job.subcategoryInfo?.name || job.subcategoryName || null;
-                if (!jobSubcategoryName) return false;
-                const jobSubcategory = jobSubcategoryName.trim().toLowerCase();
+          const fullCategoryNames = (mergedFullCategories || [])
+            .map((cat) => {
+              if (typeof cat === "object" && cat.name) return cat.name.trim();
+              if (typeof cat === "string") return cat.trim();
+              return null;
+            })
+            .filter((name) => name && name.length > 0)
+            .map((n) => n.toLowerCase());
 
-                return specialtyNames.some((specName) => {
-                  const specNameLower = specName.trim().toLowerCase();
-                  // התאמה מדויקת
-                  if (jobSubcategory === specNameLower) return true;
-                  // התאמה חלקית - אם שם העבודה מכיל את שם ההתמחות או להיפך
-                  if (
-                    jobSubcategory.includes(specNameLower) ||
-                    specNameLower.includes(jobSubcategory)
-                  ) {
-                    return true;
-                  }
-                  // בדיקה נוספת - אם יש מילים משותפות
-                  const jobWords = jobSubcategory.split(/\s+/);
-                  const specWords = specNameLower.split(/\s+/);
-                  const hasCommonWords = jobWords.some((word) =>
-                    specWords.includes(word)
-                  );
-                  if (
-                    hasCommonWords &&
-                    jobWords.length > 0 &&
-                    specWords.length > 0
-                  ) {
-                    return true;
-                  }
-                  return false;
-                });
-              });
+          const specialtyNames = (mergedSpecialties || [])
+            .map((spec) => {
+              if (typeof spec === "object" && spec.name)
+                return spec.name.trim();
+              if (typeof spec === "string") return spec.trim();
+              return null;
+            })
+            .filter((name) => name && name.length > 0)
+            .map((n) => n.toLowerCase());
 
-              // אם יש גם קטגוריות שלימות וגם תת-קטגוריות, נאחד את התוצאות
+          list = state.jobs
+            .map((job) => {
               if (
-                fullCategories &&
-                Array.isArray(fullCategories) &&
-                fullCategories.length > 0 &&
-                jobsFromFullCategories.length > 0
+                handymanCoords &&
+                handymanCoords.lat &&
+                handymanCoords.lng &&
+                job?.coordinates?.lat !== undefined &&
+                job?.coordinates?.lng !== undefined &&
+                (job.distanceKm === undefined || job.distanceKm === null)
               ) {
-                // נאחד את שתי הרשימות (ללא כפילויות)
-                const combinedJobs = [...jobsFromFullCategories];
-                jobsFromSubcategories.forEach((job) => {
-                  if (
-                    !combinedJobs.find(
-                      (j) => j._id === job._id || j.id === job.id
-                    )
-                  ) {
-                    combinedJobs.push(job);
-                  }
-                });
-                list = combinedJobs;
-              } else {
-                // אם אין קטגוריות שלימות, נשתמש רק בתת-קטגוריות
-                list = jobsFromSubcategories;
+                const d = haversineKm(
+                  handymanCoords.lat,
+                  handymanCoords.lng,
+                  job.coordinates.lat,
+                  job.coordinates.lng
+                );
+                return { ...job, distanceKm: d };
               }
-            }
-          }
+              return job;
+            })
+            .filter((job) => {
+              const jobCategory =
+                job.subcategoryInfo?.category || job.category || "";
+              const jobCategoryLower = jobCategory.trim().toLowerCase();
+              const jobSubcategoryName =
+                job.subcategoryInfo?.name || job.subcategoryName || "";
+              const jobSubLower = jobSubcategoryName.trim().toLowerCase();
+              const jobCategoryFromSub =
+                jobSubLower && subcategoryToCategory.get(jobSubLower);
+              const resolvedJobCategory =
+                jobCategoryLower || jobCategoryFromSub || "";
+
+              const matchesFullCat =
+                fullCategoryNames.length === 0
+                  ? false
+                  : fullCategoryNames.includes(resolvedJobCategory);
+
+              const matchesSubCat =
+                specialtyNames.length === 0
+                  ? false
+                  : specialtyNames.some((spec) => {
+                      if (jobSubLower === spec) return true;
+                      if (
+                        jobSubLower.includes(spec) ||
+                        spec.includes(jobSubLower)
+                      )
+                        return true;
+                      const jobWords = jobSubLower.split(/\s+/);
+                      const specWords = spec.split(/\s+/);
+                      return jobWords.some((w) => specWords.includes(w));
+                    });
+
+              // OR logic: קטגוריה שלימה או תת-קטגוריה
+              if (
+                fullCategoryNames.length === 0 &&
+                specialtyNames.length === 0
+              ) {
+                return true; // אין סינון
+              }
+              return matchesFullCat || matchesSubCat;
+            });
 
           // סינון לפי סטטוס
           if (status && status !== "all") {
@@ -166,7 +197,16 @@ export const useMainStore = defineStore("main", {
           }
         }
 
-        return list;
+        // מיון לפי מרחק (אם קיים), אחרת שימור סדר
+        const sorted = [...list].sort((a, b) => {
+          const da = a.distanceKm;
+          const db = b.distanceKm;
+          if (da === undefined || da === null) return 1;
+          if (db === undefined || db === null) return -1;
+          return da - db;
+        });
+
+        return sorted;
       },
     filteredHandymen: (state) => (filters) => {
       let list = [...state.handymen];

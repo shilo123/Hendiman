@@ -219,11 +219,11 @@
                 </div>
 
                 <div class="input-group">
-                  <label for="clientAddress">כתובת</label>
+                  <label for="clientAddress">עיר</label>
                   <AddressAutocomplete
-                    v-model="clientForm.address"
+                    v-model="clientForm.city"
                     input-id="clientAddress"
-                    placeholder="הכנס שם ישוב"
+                    placeholder="בחר עיר"
                     :required="true"
                   />
                 </div>
@@ -439,12 +439,12 @@
                 </div>
 
                 <div class="input-group">
-                  <label for="handymanAddress">כתובת</label>
+                  <label for="handymanAddress">עיר</label>
                   <AddressAutocomplete
-                    v-model="handymanForm.address"
+                    v-model="handymanForm.city"
                     @update:englishName="handymanForm.addressEnglish = $event"
                     input-id="handymanAddress"
-                    placeholder="הכנס שם ישוב"
+                    placeholder="בחר עיר"
                     :required="true"
                   />
                 </div>
@@ -557,7 +557,7 @@ export default {
         email: "",
         password: "",
         phone: "",
-        address: "",
+        city: "",
         howDidYouHear: "",
         image: null,
         imagePreview: null,
@@ -570,7 +570,7 @@ export default {
         email: "",
         password: "",
         phone: "",
-        address: "",
+        city: "",
         addressEnglish: "",
         howDidYouHear: "",
         specialties: [],
@@ -908,15 +908,15 @@ export default {
           formData = { ...this.handymanForm };
 
           // ודא ש-addressEnglish קיים לפני השליחה
-          // אם אין, נסה למצוא אותו מהכתובת ישירות מהמאגר
-          if (!formData.addressEnglish && formData.address) {
+          // אם אין, נסה למצוא אותו מהעיר ישירות מהמאגר
+          if (!formData.addressEnglish && formData.city) {
             try {
               const citiesData = await import("@/APIS/AdressFromIsrael.json");
               const cities = Array.isArray(citiesData.default)
                 ? citiesData.default
                 : citiesData;
 
-              const searchValue = formData.address.trim();
+              const searchValue = formData.city.trim();
               const foundCity = cities.find((city) => {
                 const cityName = (city.name || city.שם_ישוב || "").trim();
                 if (!cityName) return false;
@@ -1041,12 +1041,17 @@ export default {
             formData.specialties = formData.specialties
               .filter((item) => item && (item.name || item.subcategory))
               .map((item) => {
+                const isFull =
+                  item.isFullCategory === true || item.type === "category";
+                const resolvedType = isFull ? "category" : "subCategory";
                 // אם זה אובייקט עם name, price, typeWork (הפורמט החדש)
                 if (item.name) {
                   return {
                     name: String(item.name).trim(),
                     price: item.price || null,
                     typeWork: item.typeWork || null,
+                    isFullCategory: isFull,
+                    type: item.type || resolvedType,
                   };
                 }
                 // אם זה אובייקט ישן עם subcategory, workType
@@ -1055,6 +1060,8 @@ export default {
                     name: String(item.subcategory).trim(),
                     price: item.price || null,
                     typeWork: item.workType || item.typeWork || null,
+                    isFullCategory: false,
+                    type: "subCategory",
                   };
                 }
                 // אם זה string (תאימות לאחור)
@@ -1063,6 +1070,8 @@ export default {
                     name: String(item).trim(),
                     price: null,
                     typeWork: null,
+                    isFullCategory: false,
+                    type: "subCategory",
                   };
                 }
                 return null;

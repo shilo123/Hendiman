@@ -1,7 +1,7 @@
 <template>
   <div class="sheet" v-if="visible">
     <div class="sheet__backdrop" @click="$emit('close')" />
-    <div class="sheet__panel">
+    <div class="sheet__panel" :class="{ 'sheet__panel--handyman': isHandyman }">
       <header class="sheet__header">
         <h2 class="sheet__title">פרופיל משתמש</h2>
         <button class="icon-btn" type="button" @click="$emit('close')">
@@ -64,17 +64,10 @@
             </div>
             <span v-if="cityError" class="error">{{ cityError }}</span>
           </label>
-          <label class="field wide">
-            <span>כתובת</span>
-            <div class="edit-row">
-              <input v-model="form.address" type="text" />
-              <button class="icon-btn" type="button">✎</button>
-            </div>
-          </label>
         </div>
       </section>
 
-      <section class="sheet__section" v-if="isHandyman">
+      <section class="sheet__section specialties-section" v-if="isHandyman">
         <h3 class="section__title">תחומי התמחות</h3>
         <div class="chips">
           <span
@@ -98,7 +91,7 @@
           >
         </div>
         <div class="selector-wrapper">
-          <CategorySelector v-model="form.specialties" :overlayMode="true" />
+          <ProfileSpecialtiesSelector v-model="form.specialties" />
         </div>
       </section>
 
@@ -114,11 +107,11 @@
 
 <script>
 import cities from "@/APIS/AdressFromIsrael.json";
-import CategorySelector from "@/components/CategorySelector.vue";
+import ProfileSpecialtiesSelector from "@/components/ProfileSpecialtiesSelector.vue";
 
 export default {
   name: "ProfileSheet",
-  components: { CategorySelector },
+  components: { ProfileSpecialtiesSelector },
   props: {
     visible: { type: Boolean, default: false },
     user: { type: Object, default: () => ({}) },
@@ -128,7 +121,7 @@ export default {
   data() {
     return {
       form: this.buildForm(this.user),
-      cityInput: this.user?.city || "",
+      cityInput: this.user?.address || "",
       cityError: "",
       cityDropdown: false,
     };
@@ -157,7 +150,6 @@ export default {
         phone: user?.phone || "",
         email: user?.email || "",
         city: user?.city || "",
-        address: user?.address || "",
         specialties: user?.specialties ? [...user.specialties] : [],
       };
     },
@@ -228,45 +220,48 @@ export default {
 .sheet__panel {
   position: relative;
   width: min(920px, 95vw);
-  max-height: 90vh;
+  max-height: calc(100vh - 28px);
   background: #0f1016;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 18px;
-  padding: 20px;
+  padding: 16px;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
   overflow: visible; /* allow dropdowns to overflow */
   color: #f7f7f7;
+}
+.sheet__panel--handyman {
+  width: min(1100px, 95vw);
 }
 .sheet__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 .sheet__title {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
 }
 .sheet__section {
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 .section__title {
   margin: 0 0 10px 0;
-  font-size: 16px;
+  font-size: 14px;
   color: rgba(255, 255, 255, 0.9);
 }
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 .field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 }
 .field span {
-  font-size: 13px;
+  font-size: 12px;
   color: rgba(255, 255, 255, 0.75);
 }
 .edit-row {
@@ -287,14 +282,14 @@ export default {
   background: transparent;
   border: none;
   color: #fff;
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
 }
 .icon-btn {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
-  padding: 6px 8px;
+  padding: 5px 7px;
   color: #fff;
   cursor: pointer;
 }
@@ -329,18 +324,18 @@ export default {
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 .chip {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  padding: 6px 10px;
+  border-radius: 12px;
+  padding: 5px 9px;
   display: inline-flex;
-  gap: 6px;
+  gap: 5px;
   align-items: center;
-  font-size: 13px;
+  font-size: 12px;
 }
 .chip__remove {
   background: transparent;
@@ -350,6 +345,9 @@ export default {
 }
 .selector-wrapper {
   position: relative;
+}
+.specialties-section .selector-wrapper {
+  width: 100%;
 }
 :deep(.selector-wrapper .category-selector) {
   position: relative;

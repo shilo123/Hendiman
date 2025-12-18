@@ -1,7 +1,8 @@
 <template>
   <div
     class="category-selector"
-    :class="{ 'category-selector--overlay': overlayMode }"
+    :class="{ 'category-selector-overlay': overlayMode }"
+    ref="overlayAnchor"
   >
     <label for="specialtiesTextarea">תחומי התמחות</label>
     <div class="textarea-wrapper">
@@ -9,7 +10,7 @@
         id="specialtiesTextarea"
         v-model="textareaValue"
         readonly
-        @mouseenter="showDropdown = true"
+        @mouseenter="openDropdown"
         class="specialties-textarea"
         placeholder="עבור עם העכבר לבחירת תחומי התמחות"
       ></textarea>
@@ -19,6 +20,7 @@
     <div
       v-if="showDropdown"
       class="dropdown-container"
+      :style="overlayMode ? overlayStyle : null"
       @mouseenter="keepDropdownVisible"
       @mouseleave="hideDropdown"
     >
@@ -44,6 +46,7 @@
       <div
         v-if="hoveredCategory"
         class="subcategories-dropdown-wrapper"
+        :style="overlayMode ? subOverlayStyle : null"
         @mouseenter="keepSubcategoriesVisible"
         @mouseleave="hideSubcategories"
       >
@@ -130,6 +133,8 @@ export default {
       hideSubcategoriesTimeout: null,
       hideTooltipTimeout: null,
       subcategorySearchQuery: "",
+      overlayStyle: null,
+      subOverlayStyle: null,
     };
   },
   computed: {
@@ -307,6 +312,12 @@ export default {
       this.showDropdown = false;
       this.hoveredCategory = null;
     },
+    openDropdown() {
+      this.showDropdown = true;
+      if (this.overlayMode) {
+        this.$nextTick(() => this.updateOverlayPositions());
+      }
+    },
     keepDropdownVisible() {
       this.keepDropdown = true;
     },
@@ -422,6 +433,32 @@ export default {
         this.hideTooltipTimeout = null;
       }, 150);
     },
+    updateOverlayPositions() {
+      if (!this.overlayMode) return;
+      const anchor = this.$refs.overlayAnchor;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      this.overlayStyle = {
+        position: "fixed",
+        top: `${rect.bottom + 8}px`,
+        left: `${rect.left}px`,
+        width: `${rect.width}px`,
+        maxWidth: "90vw",
+        maxHeight: "60vh",
+        overflow: "auto",
+        zIndex: 999999,
+      };
+      this.subOverlayStyle = {
+        position: "fixed",
+        top: `${rect.bottom + 8}px`,
+        left: `${rect.right + 12}px`,
+        width: `${rect.width}px`,
+        maxWidth: "90vw",
+        maxHeight: "60vh",
+        overflow: "auto",
+        zIndex: 1000000,
+      };
+    },
     keepTooltipVisible(subcategory, event) {
       // בטל את ה-timeout אם קיים
       if (this.hideTooltipTimeout) {
@@ -491,6 +528,16 @@ export default {
       // הפונקציה הזו קיימת רק כדי למנוע בועות אירועים
       // החיפוש עצמו מתבצע דרך computed property
     },
+  },
+  mounted() {
+    if (this.overlayMode) {
+      window.addEventListener("resize", this.updateOverlayPositions);
+    }
+  },
+  beforeUnmount() {
+    if (this.overlayMode) {
+      window.removeEventListener("resize", this.updateOverlayPositions);
+    }
   },
 };
 </script>
@@ -629,32 +676,29 @@ export default {
 }
 
 /* Overlay mode for usage inside modals (ProfileSheet) */
-:deep(.category-selector--overlay) {
+:deep(.category-selector-overlay) {
   position: relative;
 }
-:deep(.category-selector--overlay .dropdown-container) {
+:deep(.category-selector-overlay .dropdown-container) {
   position: absolute;
-  top: auto;
-  bottom: calc(100% + 8px);
-  right: 0;
-  left: auto;
-  width: 360px;
+  top: calc(100% + 8px); /* מתחת לשדה */
+  bottom: auto;
+  right: auto;
+  left: 0;
+  width: 100%;
+  max-width: none;
   max-height: 360px;
   overflow: auto;
-  z-index: 30000;
+  z-index: 999999;
   display: block;
 }
-:deep(.category-selector--overlay .subcategories-dropdown-wrapper) {
+:deep(.category-selector-overlay .subcategories-dropdown-wrapper) {
   position: absolute;
   top: 0;
-  right: calc(100% + 10px);
-  left: auto;
-  bottom: auto;
-  width: 360px;
-  max-height: 360px;
-  overflow: auto;
-  z-index: 30001;
-  display: block;
+  left: calc(100% + 10px);
+  width: 100%;
+  max-width: none;
+  z-index: 1000000;
 }
 
 .subcategories-dropdown-scroll {
