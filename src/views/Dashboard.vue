@@ -21,18 +21,20 @@
 
     <!-- MAIN -->
     <main class="grid">
-      <!-- Job Chat (when job is assigned) - Full screen for handyman only -->
+      <!-- Job Chat (when job is assigned) -->
       <JobChat
-        v-if="currentAssignedJob && isHendiman"
+        v-if="currentAssignedJob"
         :job="currentAssignedJob"
         :isHandyman="isHendiman"
         @close="activeAssignedJob = null"
         @status-updated="onJobStatusUpdated"
         @rating-submitted="onRatingSubmitted"
+        @open-profile="onOpenProfile"
+        @cancel-job="onCancelJob"
       />
 
-      <!-- Regular Dashboard (when no assigned job for handyman, or always for client) -->
-      <template v-if="!currentAssignedJob || !isHendiman">
+      <!-- Regular Dashboard (when no assigned job) -->
+      <template v-else>
         <!-- LEFT ~60% JOBS -->
         <JobsSection
           :isHendiman="isHendiman"
@@ -40,18 +42,17 @@
           :jobsPagination="jobsPagination"
           :handymanCoords="
             isHendiman
-              ? userCoordinates ||
-                store.user?.coordinates ||
-                me?.coordinates ||
-                null
+              ? store.user?.location?.coordinates
+                ? {
+                    lng: store.user.location.coordinates[0],
+                    lat: store.user.location.coordinates[1],
+                  }
+                : store.user?.coordinates || null
               : null
           "
           :statusTabsWithCounts="statusTabsWithCounts"
           :activeStatus="activeStatus"
           :handymanFilters="handymanFilters"
-          :assignedJob="
-            currentAssignedJob && !isHendiman ? currentAssignedJob : null
-          "
           @refresh="onRefresh"
           @pick-status="onPickStatus"
           @change-km="onChangeKm"
@@ -61,9 +62,6 @@
           @view="onView"
           @next-jobs-page="onJobsNextPage"
           @prev-jobs-page="onJobsPrevPage"
-          @close-assigned-job="activeAssignedJob = null"
-          @status-updated="onJobStatusUpdated"
-          @rating-submitted="onRatingSubmitted"
         />
 
         <!-- RIGHT SIDE -->
@@ -160,6 +158,7 @@ import JobChat from "@/components/Dashboard/JobChat.vue";
 import axios from "axios";
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
+import { io } from "socket.io-client";
 
 export default {
   name: "DashboardView",
@@ -211,7 +210,8 @@ export default {
         city: "",
         specialties: [],
       },
-      handymanFilters: { maxKm: 10 },
+      socket: null,
+      handymanFilters: { maxKm: 25 },
       handymanDetails: null,
       dirFilters: { q: "", minRating: 0, minJobs: 0 },
       activeAssignedJob: null,
@@ -264,10 +264,12 @@ export default {
           ? this.me.fullCategories
           : null,
         this.isHendiman
-          ? this.userCoordinates ||
-              this.store.user?.coordinates ||
-              this.me?.coordinates ||
-              null
+          ? this.store.user?.location?.coordinates
+            ? {
+                lng: this.store.user.location.coordinates[0],
+                lat: this.store.user.location.coordinates[1],
+              }
+            : this.store.user?.coordinates || null
           : null
       );
     },
@@ -291,10 +293,12 @@ export default {
           ? this.me.fullCategories
           : null,
         this.isHendiman
-          ? this.userCoordinates ||
-              this.store.user?.coordinates ||
-              this.me?.coordinates ||
-              null
+          ? this.store.user?.location?.coordinates
+            ? {
+                lng: this.store.user.location.coordinates[0],
+                lat: this.store.user.location.coordinates[1],
+              }
+            : this.store.user?.coordinates || null
           : null
       );
 
@@ -345,18 +349,69 @@ export default {
   },
 
   methods: {
-    onRefresh() {
+    async onRefresh() {
       const coords = this.userCoordinates;
-      this.store.fetchDashboardData(this.$route.params.id, coords);
+      await this.store.fetchDashboardData(this.$route.params.id, coords);
       this.jobsPage = 1;
     },
 
-    async fetchHandymanJobs() {
+    async fetchHandymanJobs(userData = null) {
       try {
+        // השתמש בקואורדינטות מה-user במסד הנתונים, לא מ-geolocation
+        // אם userData לא נשלח, נסה מ-store.user
+        const user = userData || this.store.user || this.me;
+        let coordinates = null;
+        if (user) {
+          if (user.location && user.location.coordinates) {
+            coordinates = {
+              lng: user.location.coordinates[0],
+              lat: user.location.coordinates[1],
+            };
+            console.log(
+              "📍 [HANDYMAN] Using coordinates from user.location:",
+              coordinates
+            );
+          } else if (user.coordinates) {
+            coordinates = {
+              lng: user.coordinates.lng,
+              lat: user.coordinates.lat,
+            };
+            console.log(
+              "📍 [HANDYMAN] Using coordinates from user.coordinates:",
+              coordinates
+            );
+          } else if (user.Coordinates) {
+            // Fallback למקרה של Coordinates עם C גדולה
+            coordinates = {
+              lng: user.Coordinates.lng,
+              lat: user.Coordinates.lat,
+            };
+            console.log(
+              "📍 [HANDYMAN] Using coordinates from user.Coordinates:",
+              coordinates
+            );
+          } else {
+            console.warn("⚠️ [HANDYMAN] No coordinates found in user object:", {
+              hasLocation: !!user.location,
+              hasCoordinates: !!user.coordinates,
+              hasCoordinatesCapital: !!user.Coordinates,
+            });
+          }
+        } else {
+          console.warn("⚠️ [HANDYMAN] No user data available!");
+        }
+
+        console.log("🔍 [HANDYMAN] Fetching jobs with:", {
+          status: this.activeStatus,
+          maxKm: this.handymanFilters.maxKm,
+          coordinates,
+        });
+
+        // אם אין קואורדינטות, עדיין נטען עבודות (בלי סינון מרחק)
         await this.store.fetchFilteredJobsForHandyman({
           status: this.activeStatus,
           maxKm: this.handymanFilters.maxKm,
-          coordinates: this.userCoordinates,
+          coordinates: coordinates,
         });
         // אחרי טעינת העבודות, בדוק אם יש עבודה משובצת
         this.$nextTick(() => {
@@ -364,6 +419,16 @@ export default {
         });
       } catch (error) {
         console.error("Error fetching handyman jobs:", error);
+        // גם אם יש שגיאה, נסה לטעון עבודות בלי סינון
+        try {
+          await this.store.fetchFilteredJobsForHandyman({
+            status: this.activeStatus,
+            maxKm: null,
+            coordinates: null,
+          });
+        } catch (fallbackError) {
+          console.error("Error in fallback fetch:", fallbackError);
+        }
       }
     },
 
@@ -405,7 +470,7 @@ export default {
     },
 
     onResetKm() {
-      this.handymanFilters.maxKm = 10;
+      this.handymanFilters.maxKm = 25;
       this.jobsPage = 1;
       if (this.isHendiman) {
         this.fetchHandymanJobs();
@@ -438,20 +503,44 @@ export default {
         .catch(() => {});
     },
 
-    onAccept(job) {
+    async onAccept(job) {
       const handymanId = this.store.user?._id || this.me?.id;
       if (!handymanId) return;
-      axios
-        .post(`${URL}/jobs/accept`, {
+      try {
+        const { data } = await axios.post(`${URL}/jobs/accept`, {
           jobId: job._id || job.id,
           handymanId,
-        })
-        .then(() => {
-          this.fetchHandymanJobs();
-          // Open chat after accepting
-          this.activeAssignedJob = { ...job, status: "assigned", handymanId };
-        })
-        .catch(() => {});
+        });
+
+        // Refresh dashboard data to get all jobs including the accepted one
+        await this.store.fetchDashboardData(
+          this.$route.params.id,
+          this.userCoordinates
+        );
+
+        // Wait for store to update
+        await this.$nextTick();
+
+        // Find the accepted job in store
+        const jobId = job._id || job.id;
+        const acceptedJob = this.store.jobs?.find(
+          (j) => String(j._id || j.id) === String(jobId)
+        );
+
+        if (acceptedJob) {
+          // Open chat with the updated job
+          this.activeAssignedJob = acceptedJob;
+        } else {
+          // Fallback: use the job with updated status from response or original job
+          this.activeAssignedJob = data?.job || {
+            ...job,
+            status: "assigned",
+            handymanId: handymanId.toString(),
+          };
+        }
+      } catch (error) {
+        console.error("Error accepting job:", error);
+      }
     },
 
     onView(job) {
@@ -468,7 +557,7 @@ export default {
         this.jobsPage = this.jobsPagination.page - 1;
       }
     },
-    onJobStatusUpdated(newStatus) {
+    async onJobStatusUpdated(newStatus) {
       // Update the job in store immediately
       const jobId = this.activeAssignedJob?._id || this.activeAssignedJob?.id;
       if (jobId && this.store.jobs) {
@@ -514,14 +603,32 @@ export default {
 
       // Refresh jobs after status update (async)
       if (this.isHendiman) {
-        this.fetchHandymanJobs();
+        await this.fetchHandymanJobs();
+        // If handyman marked job as "done", close the chat and return to normal view
+        if (newStatus === "done") {
+          // Close the chat
+          this.activeAssignedJob = null;
+        }
       } else {
-        this.onRefresh();
+        await this.onRefresh();
       }
     },
-    onRatingSubmitted() {
-      // Refresh after rating
-      this.onRefresh();
+    async onRatingSubmitted() {
+      // Save jobId before closing
+      const jobId = this.activeAssignedJob?._id || this.activeAssignedJob?.id;
+
+      // Update store jobs to mark rating as submitted
+      if (this.store.jobs && jobId) {
+        const jobIndex = this.store.jobs.findIndex(
+          (j) => String(j._id || j.id) === String(jobId)
+        );
+        if (jobIndex !== -1 && this.store.jobs[jobIndex]) {
+          this.store.jobs[jobIndex].ratingSubmitted = true;
+        }
+      }
+
+      // Refresh after rating to update job data
+      await this.onRefresh();
       // Close chat after rating
       this.activeAssignedJob = null;
     },
@@ -557,46 +664,101 @@ export default {
         }
       });
 
-      // אם לא מצאנו, נטען שוב את כל העבודות מ-fetchDashboardData
-      // כי fetchFilteredJobsForHandyman עלול להחליף את store.jobs רק עם עבודות מסוננות
+      // אם לא מצאנו עבודה משובצת
       if (!assignedJob) {
-        try {
-          const dashboardData = await this.store.fetchDashboardData(
-            this.$route.params.id,
-            this.userCoordinates
-          );
-          if (dashboardData && dashboardData.Jobs) {
-            allJobs = dashboardData.Jobs || [];
-            assignedJob = allJobs.find((job) => {
-              if (this.isHendiman) {
-                return (
-                  job.handymanId &&
-                  String(job.handymanId) === String(userId) &&
-                  (job.status === "assigned" ||
-                    job.status === "on_the_way" ||
-                    job.status === "in_progress" ||
-                    (job.status === "done" && !job.ratingSubmitted))
-                );
-              } else {
-                return (
-                  job.clientId &&
-                  String(job.clientId) === String(userId) &&
-                  job.handymanId &&
-                  (job.status === "assigned" ||
-                    job.status === "on_the_way" ||
-                    job.status === "in_progress" ||
-                    (job.status === "done" && !job.ratingSubmitted))
-                );
+        // רק אם store.jobs ריק, נטען מחדש
+        // אם יש עבודות ב-store אבל הן לא משובצות (כי הן ב-Done עם ratingSubmitted), לא נטען שוב
+        if (!allJobs.length) {
+          try {
+            // רק עבור הנדימן - נטען שוב כי fetchFilteredJobsForHandyman עלול להחליף את store.jobs
+            // עבור לקוח - לא נטען שוב כדי לא לגרום ל-loading מיותר
+            if (this.isHendiman) {
+              const dashboardData = await this.store.fetchDashboardData(
+                this.$route.params.id,
+                this.userCoordinates
+              );
+              if (dashboardData && dashboardData.Jobs) {
+                allJobs = dashboardData.Jobs || [];
+                assignedJob = allJobs.find((job) => {
+                  return (
+                    job.handymanId &&
+                    String(job.handymanId) === String(userId) &&
+                    (job.status === "assigned" ||
+                      job.status === "on_the_way" ||
+                      job.status === "in_progress" ||
+                      (job.status === "done" && !job.ratingSubmitted))
+                  );
+                });
               }
-            });
+            }
+          } catch (error) {
+            console.error("Error checking for assigned job:", error);
           }
-        } catch (error) {
-          console.error("Error checking for assigned job:", error);
         }
       }
 
       if (assignedJob && !this.activeAssignedJob) {
         this.activeAssignedJob = assignedJob;
+      } else if (!assignedJob && this.activeAssignedJob) {
+        // אם אין עבודה משובצת אבל יש activeAssignedJob, נסיר אותו
+        this.activeAssignedJob = null;
+      }
+    },
+
+    initWebSocket() {
+      // Connect to WebSocket server
+      this.socket = io(URL, {
+        transports: ["websocket", "polling"],
+      });
+
+      this.socket.on("connect", () => {
+        // Join all jobs that belong to this user
+        const userId = this.store.user?._id || this.me?.id;
+        if (userId && this.store.jobs) {
+          this.store.jobs.forEach((job) => {
+            const jobId = job._id || job.id;
+            if (jobId) {
+              this.socket.emit("join-job", String(jobId));
+            }
+          });
+        }
+      });
+
+      // Listen for job accepted event (for clients)
+      this.socket.on("job-accepted", async (data) => {
+        const jobId = String(data.jobId || "");
+        if (!this.isHendiman) {
+          // For client: check if this is their job
+          const userId = this.store.user?._id || this.me?.id;
+          if (userId) {
+            // Refresh to get updated job data
+            await this.onRefresh();
+            // Find the accepted job
+            const acceptedJob = this.store.jobs?.find(
+              (j) => String(j._id || j.id) === jobId
+            );
+            if (acceptedJob && !this.activeAssignedJob) {
+              this.activeAssignedJob = acceptedJob;
+            }
+          }
+        }
+      });
+    },
+
+    disconnectWebSocket() {
+      if (this.socket) {
+        // Leave all job rooms
+        const userId = this.store.user?._id || this.me?.id;
+        if (userId && this.store.jobs) {
+          this.store.jobs.forEach((job) => {
+            const jobId = job._id || job.id;
+            if (jobId) {
+              this.socket.emit("leave-job", String(jobId));
+            }
+          });
+        }
+        this.socket.disconnect();
+        this.socket = null;
       }
     },
 
@@ -619,30 +781,46 @@ export default {
       console.log("personal request handyman", id);
     },
 
-    onSaveProfile(form) {
+    async onSaveProfile(form) {
       const userId = this.store.user?._id;
-      if (!userId) return;
-      axios
-        .post(`${URL}/user/update-profile`, {
+      if (!userId) {
+        this.toast?.showError("שגיאה: לא נמצא מזהה משתמש");
+        return;
+      }
+      try {
+        const res = await axios.post(`${URL}/user/update-profile`, {
           userId,
           username: form.name,
           phone: form.phone,
           email: form.email,
           city: form.city,
           specialties: form.specialties,
-        })
-        .then((res) => {
-          if (res.data?.success) {
-            this.store.user = res.data.user;
-            this.me.name = res.data.user?.username || this.me.name;
-            this.me.specialties =
-              res.data.user?.specialties || this.me.specialties;
-          }
-          this.showProfileSheet = false;
-        })
-        .catch(() => {
-          this.showProfileSheet = false;
         });
+        if (res.data?.success) {
+          // עדכן את המשתמש ב-store
+          this.store.user = res.data.user;
+          this.me.name = res.data.user?.username || this.me.name;
+          this.me.specialties =
+            res.data.user?.specialties || this.me.specialties;
+          // עדכן גם את שאר השדות
+          if (res.data.user?.phone) {
+            this.me.phone = res.data.user.phone;
+          }
+          if (res.data.user?.email) {
+            this.me.email = res.data.user.email;
+          }
+          if (res.data.user?.city) {
+            this.me.city = res.data.user.city;
+          }
+          this.toast?.showSuccess("הפרופיל עודכן בהצלחה");
+          this.showProfileSheet = false;
+        } else {
+          this.toast?.showError("שגיאה בעדכון הפרופיל");
+        }
+      } catch (error) {
+        console.error("Error updating profile:", error);
+        this.toast?.showError("שגיאה בעדכון הפרופיל");
+      }
     },
 
     async onViewHandymanDetails(id) {
@@ -695,15 +873,9 @@ export default {
     async onNextPage() {
       if (this.handymenPagination.hasNext) {
         // קבל את הקואורדינטות מהמשתמש (תחילה נסה מהמשתנה המקומי, אחרת מה-store)
-        let coordinates = this.userCoordinates;
-
-        // אם אין קואורדינטות, נסה לקבל מהמשתמש
-        if (!coordinates) {
-          coordinates = this.getUserCoordinates();
-        }
-
-        // אם עדיין אין, נסה לקבל מה-store
-        if (!coordinates && this.store.user) {
+        // השתמש בקואורדינטות מה-user במסד הנתונים, לא מ-geolocation
+        let coordinates = null;
+        if (this.store.user) {
           if (
             this.store.user.location &&
             this.store.user.location.coordinates
@@ -712,10 +884,10 @@ export default {
               lng: this.store.user.location.coordinates[0],
               lat: this.store.user.location.coordinates[1],
             };
-          } else if (this.store.user.Coordinates) {
+          } else if (this.store.user.coordinates) {
             coordinates = {
-              lng: this.store.user.Coordinates.lng,
-              lat: this.store.user.Coordinates.lat,
+              lng: this.store.user.coordinates.lng,
+              lat: this.store.user.coordinates.lat,
             };
           }
         }
@@ -729,16 +901,9 @@ export default {
 
     async onPrevPage() {
       if (this.handymenPagination.hasPrev) {
-        // קבל את הקואורדינטות מהמשתמש (תחילה נסה מהמשתנה המקומי, אחרת מה-store)
-        let coordinates = this.userCoordinates;
-
-        // אם אין קואורדינטות, נסה לקבל מהמשתמש
-        if (!coordinates) {
-          coordinates = this.getUserCoordinates();
-        }
-
-        // אם עדיין אין, נסה לקבל מה-store
-        if (!coordinates && this.store.user) {
+        // השתמש בקואורדינטות מה-user במסד הנתונים, לא מ-geolocation
+        let coordinates = null;
+        if (this.store.user) {
           if (
             this.store.user.location &&
             this.store.user.location.coordinates
@@ -747,10 +912,10 @@ export default {
               lng: this.store.user.location.coordinates[0],
               lat: this.store.user.location.coordinates[1],
             };
-          } else if (this.store.user.Coordinates) {
+          } else if (this.store.user.coordinates) {
             coordinates = {
-              lng: this.store.user.Coordinates.lng,
-              lat: this.store.user.Coordinates.lat,
+              lng: this.store.user.coordinates.lng,
+              lat: this.store.user.coordinates.lat,
             };
           }
         }
@@ -874,7 +1039,7 @@ export default {
           await this.store.fetchHandymen(1, this.userCoordinates);
         } else {
           // עבור הנדימן - טען עבודות מסוננות
-          await this.fetchHandymanJobs();
+          await this.fetchHandymanJobs(data.User);
 
           // בנוסף, בדוק ישירות בשרת אם יש עבודה משובצת (גם אם מעל 10 ק"מ)
           // על ידי בדיקה ב-store.jobs מהנתונים הראשוניים של fetchDashboardData
@@ -887,22 +1052,35 @@ export default {
           this.checkForAssignedJob();
         });
       }
+
+      // Initialize WebSocket for real-time updates
+      this.initWebSocket();
     } catch (error) {
       // אם יש שגיאה או שהמשתמש לא נמצא, החזר ל-דף הבית
       this.$router.push("/");
     }
   },
+  beforeUnmount() {
+    this.disconnectWebSocket();
+  },
   watch: {
     // צפה בשינויים ב-jobs כדי לבדוק עבודה משובצת
     "store.jobs": {
-      handler() {
-        if (this.store.jobs && this.store.jobs.length > 0) {
+      handler(newJobs, oldJobs) {
+        // רק אם יש שינוי אמיתי ב-jobs, נבדוק עבודה משובצת
+        // נמנע מקריאות מיותרות אם ה-jobs לא השתנו
+        if (
+          newJobs &&
+          newJobs.length > 0 &&
+          (!oldJobs || newJobs.length !== oldJobs.length)
+        ) {
           this.$nextTick(() => {
             this.checkForAssignedJob();
           });
         }
       },
       immediate: false,
+      deep: false, // לא צריך deep watch, רק לבדוק אם המערך השתנה
     },
   },
 };

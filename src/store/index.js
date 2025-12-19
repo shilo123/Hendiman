@@ -314,11 +314,33 @@ export const useMainStore = defineStore("main", {
         const queryString = params.length ? `?${params.join("&")}` : "";
         const url = `${URL}/jobs/filter${queryString}`;
 
+        console.log("🔍 [CLIENT] Fetching jobs with params:", {
+          status,
+          maxKm,
+          coordinates,
+          url,
+        });
+
         const { data } = await axios.get(url);
         if (data.success) {
           this.jobs = data.jobs || [];
+          console.log(`✅ [CLIENT] Received ${this.jobs.length} jobs`);
+          if (this.jobs.length > 0) {
+            this.jobs.forEach((job) => {
+              console.log(
+                `  - Job ${job._id || job.id}: ${
+                  job.distanceKm !== null ? `${job.distanceKm}km` : "N/A"
+                } away, status: ${job.status}`
+              );
+            });
+          } else {
+            console.warn("⚠️ [CLIENT] No jobs received!");
+          }
         } else {
-          console.error("Failed to fetch filtered jobs:", data.message);
+          console.error(
+            "❌ [CLIENT] Failed to fetch filtered jobs:",
+            data.message
+          );
         }
         return data;
       } catch (error) {

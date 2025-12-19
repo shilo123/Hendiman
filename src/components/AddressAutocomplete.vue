@@ -57,7 +57,7 @@ export default {
       default: true,
     },
   },
-  emits: ["update:modelValue", "update:englishName"],
+  emits: ["update:modelValue", "update:englishName", "update:selectedCity"],
   data() {
     // סינון שורת הכותרת אם יש
     const filteredCities = Array.isArray(citiesData)
@@ -87,7 +87,8 @@ export default {
       this.$emit("update:modelValue", value);
       this.showError = false;
 
-      if (value.length >= 1) {
+      // אם המשתמש מחק את "המיקום שלי" או התחיל להקליד משהו אחר
+      if (value && value !== "המיקום שלי" && value.length >= 1) {
         this.filterCities(value);
         this.showSuggestions = true;
       } else {
@@ -152,6 +153,7 @@ export default {
       this.userInput = cityName;
       this.$emit("update:modelValue", cityName);
       this.$emit("update:englishName", englishName);
+      this.$emit("update:selectedCity", city); // שלח את כל האובייקט של הישוב
       this.showSuggestions = false;
       this.showError = false;
       this.filteredCities = [];
@@ -200,6 +202,13 @@ export default {
       }
 
       const searchValue = this.modelValue.trim();
+
+      // "המיקום שלי" תמיד תקין - לא צריך לבדוק אותו
+      if (searchValue === "המיקום שלי") {
+        this.showError = false;
+        return;
+      }
+
       const normalizedSearch = searchValue.replace(/\s+/g, " ");
 
       // חיפוש בכל הישובים (לא רק ב-filteredCities)
@@ -246,13 +255,15 @@ export default {
         this.errorMessage = "ישוב זה לא נמצא במאגר";
       } else {
         this.showError = false;
-        // עדכן את englishName גם אם המשתמש לא בחר מהרשימה
+        // עדכן את englishName וגם את selectedCity גם אם המשתמש לא בחר מהרשימה
         if (foundCity) {
           const englishName =
             foundCity.english_name || foundCity.שם_ישוב_לועזי || "";
           if (englishName) {
             this.$emit("update:englishName", englishName);
           }
+          // שלח את הישוב שנמצא
+          this.$emit("update:selectedCity", foundCity);
         }
       }
     },

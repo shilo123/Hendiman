@@ -1063,6 +1063,16 @@ function findAvailablePort(startPort) {
       const maxDistanceMeters =
         maxKm && !isNaN(parseFloat(maxKm)) ? parseFloat(maxKm) * 1000 : null;
 
+      console.log("🔍 [JOBS/FILTER] Request received:", {
+        status,
+        maxKm,
+        userCoords: { lng: userLng, lat: userLat },
+        hasCoords,
+        maxDistanceMeters: maxDistanceMeters
+          ? `${maxDistanceMeters / 1000}km`
+          : "none",
+      });
+
       let jobs = [];
 
       if (hasCoords) {
@@ -1083,22 +1093,35 @@ function findAvailablePort(startPort) {
 
           jobs = await collectionJobs.aggregate(pipeline).toArray();
 
-          jobs = jobs.map((job) => ({
-            ...job,
-            distanceKm:
+          jobs = jobs.map((job) => {
+            const jobLng =
+              job?.location?.coordinates?.[0] || job?.coordinates?.lng || null;
+            const jobLat =
+              job?.location?.coordinates?.[1] || job?.coordinates?.lat || null;
+            const distanceKm =
               typeof job.distanceMeters === "number"
                 ? Math.round((job.distanceMeters / 1000) * 100) / 100
-                : calculateDistanceKm(
-                    userLng,
-                    userLat,
-                    job?.location?.coordinates?.[0] ||
-                      job?.coordinates?.lng ||
-                      null,
-                    job?.location?.coordinates?.[1] ||
-                      job?.coordinates?.lat ||
-                      null
-                  ),
-          }));
+                : calculateDistanceKm(userLng, userLat, jobLng, jobLat);
+
+            const isWithinRange = maxDistanceMeters
+              ? distanceKm !== null && distanceKm * 1000 <= maxDistanceMeters
+              : true;
+
+            console.log(`📍 [JOB] ${job._id || job.id}:`, {
+              jobLocation: { lng: jobLng, lat: jobLat },
+              distanceKm: distanceKm !== null ? `${distanceKm}km` : "N/A",
+              maxKm: maxKm ? `${maxKm}km` : "none",
+              isWithinRange: isWithinRange ? "✅ YES" : "❌ NO",
+              status: job.status,
+            });
+
+            return {
+              ...job,
+              distanceKm,
+            };
+          });
+
+          console.log(`📊 [JOBS/FILTER] Total jobs found: ${jobs.length}`);
         } catch (geoError) {
           console.error("GeoNear error on /jobs/filter:", geoError.message);
 
@@ -1106,26 +1129,59 @@ function findAvailablePort(startPort) {
 
           jobs = jobs
             .map((job) => {
+              const jobLng =
+                job?.location?.coordinates?.[0] ||
+                job?.coordinates?.lng ||
+                null;
+              const jobLat =
+                job?.location?.coordinates?.[1] ||
+                job?.coordinates?.lat ||
+                null;
               const distanceKm = calculateDistanceKm(
                 userLng,
                 userLat,
-                job?.location?.coordinates?.[0] ||
-                  job?.coordinates?.lng ||
-                  null,
-                job?.location?.coordinates?.[1] || job?.coordinates?.lat || null
+                jobLng,
+                jobLat
               );
+
+              const isWithinRange = maxDistanceMeters
+                ? distanceKm !== null && distanceKm * 1000 <= maxDistanceMeters
+                : true;
+
+              console.log(`📍 [JOB] ${job._id || job.id}:`, {
+                jobLocation: { lng: jobLng, lat: jobLat },
+                distanceKm: distanceKm !== null ? `${distanceKm}km` : "N/A",
+                maxKm: maxKm ? `${maxKm}km` : "none",
+                isWithinRange: isWithinRange ? "✅ YES" : "❌ NO",
+                status: job.status,
+              });
+
               return { ...job, distanceKm };
             })
             .filter((job) => {
               if (!maxDistanceMeters || maxDistanceMeters <= 0) return true;
               if (job.distanceKm === null) return true; // keep if no coords
-              return job.distanceKm * 1000 <= maxDistanceMeters;
+              const passed = job.distanceKm * 1000 <= maxDistanceMeters;
+              if (!passed) {
+                console.log(
+                  `🚫 [FILTERED OUT] Job ${job._id || job.id}: ${
+                    job.distanceKm
+                  }km > ${maxKm}km`
+                );
+              }
+              return passed;
             });
+
+          console.log(`📊 [JOBS/FILTER] After filtering: ${jobs.length} jobs`);
         }
       } else {
         jobs = await collectionJobs.find(query).toArray();
+        console.log(
+          `📊 [JOBS/FILTER] No coordinates provided, returning all jobs: ${jobs.length}`
+        );
       }
 
+      console.log(`✅ [JOBS/FILTER] Returning ${jobs.length} jobs`);
       return res.json({ success: true, jobs });
     } catch (error) {
       return res.status(500).json({
@@ -1455,7 +1511,15 @@ function findAvailablePort(startPort) {
   // Update profile (basic fields + specialties)
   app.post("/user/update-profile", async (req, res) => {
     try {
-      const { userId, username, phone, email, city, specialties } = req.body;
+      const {
+        userId,
+        username,
+        phone,
+        email,
+        city,
+        cityEnglishName,
+        specialties,
+      } = req.body;
       if (!userId) {
         return res
           .status(400)
@@ -1471,6 +1535,128 @@ function findAvailablePort(startPort) {
       if (Array.isArray(specialties)) {
         update.specialties = specialties;
       }
+
+      // אם העיר השתנתה, עדכן גם את הקואורדינטות
+      if (city && city.trim() && city.trim() !== "המיקום שלי") {
+        let coordinatesFound = false;
+
+        // נסה קודם עם השם בעברית
+        try {
+          const encoded = encodeURIComponent(city.trim());
+          const fwdUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encoded}.json?access_token=${process.env.MAPBOX_TOKEN}&country=il&language=he&types=place&limit=5`;
+          const fwdRes = await axios.get(fwdUrl);
+          const features = fwdRes.data?.features || [];
+
+          // מצא את התוצאה שתואמת לישוב שנבחר
+          let matchingFeature = null;
+          if (cityEnglishName && cityEnglishName.trim()) {
+            const cityEngName = cityEnglishName.trim().toLowerCase();
+
+            matchingFeature = features.find((feature) => {
+              const featureEngName = (feature.text || feature.place_name || "")
+                .trim()
+                .toLowerCase();
+              // עדיפות להתאמה מדויקת
+              if (featureEngName === cityEngName) {
+                return true;
+              }
+              // אחר כך בדוק התאמה חלקית (אבל רק אם השם לא קצר מדי)
+              if (cityEngName.length >= 3) {
+                return (
+                  featureEngName.includes(cityEngName) ||
+                  cityEngName.includes(featureEngName)
+                );
+              }
+              return false;
+            });
+          }
+
+          // אם יש cityEnglishName אבל לא מצאנו התאמה, לא נשתמש בתוצאה
+          // אם אין cityEnglishName, נשתמש בתוצאה הראשונה
+          const feature = cityEnglishName ? matchingFeature : features[0];
+
+          if (feature) {
+            const [lng, lat] =
+              (feature.center &&
+                feature.center.length >= 2 &&
+                feature.center) ||
+              (feature.geometry?.coordinates &&
+                feature.geometry.coordinates.length >= 2 &&
+                feature.geometry.coordinates) ||
+              [];
+            if (Number.isFinite(lng) && Number.isFinite(lat)) {
+              update.location = {
+                type: "Point",
+                coordinates: [lng, lat],
+              };
+              update.coordinates = { lng, lat };
+              coordinatesFound = true;
+            }
+          }
+        } catch (fwdErr) {
+          console.error("Forward geocoding (Hebrew) failed:", fwdErr?.message);
+        }
+
+        // אם לא מצאנו קואורדינטות בעברית, נסה עם השם באנגלית
+        if (!coordinatesFound && cityEnglishName && cityEnglishName.trim()) {
+          try {
+            const encodedEn = encodeURIComponent(cityEnglishName.trim());
+            const fwdUrlEn = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedEn}.json?access_token=${process.env.MAPBOX_TOKEN}&country=il&types=place&limit=5`;
+            const fwdResEn = await axios.get(fwdUrlEn);
+            const featuresEn = fwdResEn.data?.features || [];
+
+            // מצא את התוצאה שתואמת לישוב שנבחר
+            let matchingFeatureEn = null;
+            const cityEngName = cityEnglishName.trim().toLowerCase();
+
+            matchingFeatureEn = featuresEn.find((feature) => {
+              const featureEngName = (feature.text || feature.place_name || "")
+                .trim()
+                .toLowerCase();
+              // עדיפות להתאמה מדויקת
+              if (featureEngName === cityEngName) {
+                return true;
+              }
+              // אחר כך בדוק התאמה חלקית (אבל רק אם השם לא קצר מדי)
+              if (cityEngName.length >= 3) {
+                return (
+                  featureEngName.includes(cityEngName) ||
+                  cityEngName.includes(featureEngName)
+                );
+              }
+              return false;
+            });
+
+            // אם יש cityEnglishName אבל לא מצאנו התאמה, לא נשתמש בתוצאה
+            const featureEn = matchingFeatureEn || featuresEn[0];
+
+            if (featureEn) {
+              const [lng, lat] =
+                (featureEn.center &&
+                  featureEn.center.length >= 2 &&
+                  featureEn.center) ||
+                (featureEn.geometry?.coordinates &&
+                  featureEn.geometry.coordinates.length >= 2 &&
+                  featureEn.geometry.coordinates) ||
+                [];
+              if (Number.isFinite(lng) && Number.isFinite(lat)) {
+                update.location = {
+                  type: "Point",
+                  coordinates: [lng, lat],
+                };
+                update.coordinates = { lng, lat };
+                coordinatesFound = true;
+              }
+            }
+          } catch (fwdErrEn) {
+            console.error(
+              "Forward geocoding (English) failed:",
+              fwdErrEn?.message
+            );
+          }
+        }
+      }
+
       await collection.updateOne({ _id }, { $set: update });
       const user = await collection.findOne({ _id });
       return res.json({ success: true, user });
@@ -1506,6 +1692,15 @@ function findAvailablePort(startPort) {
           },
         }
       );
+
+      // Emit WebSocket event to notify client that job was accepted
+      io.to(`job-${jobId}`).emit("job-accepted", {
+        jobId: jobId,
+        handymanId: handymanId,
+        handymanName: handymanName,
+        status: "assigned",
+      });
+
       return res.json({ success: true });
     } catch (error) {
       return res.status(500).json({
@@ -1716,12 +1911,19 @@ function findAvailablePort(startPort) {
   app.post("/jobs/:jobId/messages", async (req, res) => {
     try {
       const { jobId } = req.params;
-      const { text, senderId, isHandyman } = req.body;
+      const { text, imageUrl, senderId, isHandyman } = req.body;
 
-      if (!jobId || !text || !senderId) {
+      if (!jobId || !senderId) {
         return res.status(400).json({
           success: false,
-          message: "jobId, text, and senderId required",
+          message: "jobId and senderId required",
+        });
+      }
+
+      if (!text && !imageUrl) {
+        return res.status(400).json({
+          success: false,
+          message: "Either text or imageUrl is required",
         });
       }
 
@@ -1746,9 +1948,11 @@ function findAvailablePort(startPort) {
       };
 
       if (isHandyman) {
-        messageObj.handyman = text;
+        if (text) messageObj.handyman = text;
+        if (imageUrl) messageObj.handymanImage = imageUrl;
       } else {
-        messageObj.customer = text;
+        if (text) messageObj.customer = text;
+        if (imageUrl) messageObj.customerImage = imageUrl;
       }
 
       // Find or create chat document
@@ -1807,56 +2011,236 @@ function findAvailablePort(startPort) {
     }
   });
 
-  // app.post("/jobs/rate", async (req, res) => {
-  //   try {
-  //     const { jobId, handymanId, rating, review } = req.body;
-  //     if (!jobId || !handymanId || !rating) {
-  //       return res.status(400).json({
-  //         success: false,
-  //         message: "jobId, handymanId, and rating required",
-  //       });
-  //     }
-  //     const jobsCol = getCollectionJobs();
-  //     const usersCol = getCollection();
+  app.post("/jobs/rate", async (req, res) => {
+    try {
+      const { jobId, handymanId, customerId, rating, review } = req.body;
+      if (!jobId || !handymanId || !rating) {
+        return res.status(400).json({
+          success: false,
+          message: "jobId, handymanId, and rating required",
+        });
+      }
 
-  //     // Update job with rating
-  //     await jobsCol.updateOne(
-  //       { _id: new ObjectId(jobId) },
-  //       {
-  //         $set: {
-  //           rating: parseInt(rating),
-  //           review: review || "",
-  //           ratingSubmitted: true,
-  //         },
-  //       }
-  //     );
+      const jobsCol = getCollectionJobs();
+      const usersCol = getCollection();
+      const ratingsCol = getCollectionRatings();
 
-  //     // Update handyman's average rating
-  //     const handyman = await usersCol.findOne({
-  //       _id: new ObjectId(handymanId),
-  //     });
-  //     if (handyman) {
-  //       const currentRating = handyman.rating || 0;
-  //       const jobCount = handyman.jobDone || 0;
-  //       const newRating =
-  //         jobCount > 0
-  //           ? (currentRating * jobCount + parseInt(rating)) / (jobCount + 1)
-  //           : parseInt(rating);
-  //       await usersCol.updateOne(
-  //         { _id: new ObjectId(handymanId) },
-  //         { $set: { rating: Math.round(newRating * 10) / 10 } }
-  //       );
-  //     }
+      // Get job to verify it exists and get customerId if not provided
+      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
 
-  //     return res.json({ success: true });
-  //   } catch (error) {
-  //     return res.status(500).json({
-  //       success: false,
-  //       message: "Error submitting rating",
-  //       error: error.message,
-  //     });
-  //   }
-  // });
+      const finalCustomerId =
+        customerId || job.clientId?.toString() || job.clientId;
+      const finalHandymanId = handymanId?.toString() || handymanId;
+
+      // Save rating to collectionRatings
+      await ratingsCol.insertOne({
+        handymanId: finalHandymanId,
+        customerId: finalCustomerId,
+        jobId: new ObjectId(jobId),
+        rating: parseInt(rating),
+        review: review || "",
+        createdAt: new Date(),
+      });
+
+      // Update job with ratingSubmitted flag
+      await jobsCol.updateOne(
+        { _id: new ObjectId(jobId) },
+        {
+          $set: {
+            ratingSubmitted: true,
+          },
+        }
+      );
+
+      // Emit WebSocket event to handyman that rating was submitted
+      io.to(`job-${jobId}`).emit("rating-submitted", {
+        jobId: jobId,
+        rating: parseInt(rating),
+      });
+
+      // Calculate average rating for handyman from all ratings
+      const allRatings = await ratingsCol
+        .find({ handymanId: finalHandymanId })
+        .toArray();
+
+      if (allRatings.length > 0) {
+        const totalRating = allRatings.reduce(
+          (sum, r) => sum + (r.rating || 0),
+          0
+        );
+        const averageRating = totalRating / allRatings.length;
+        const roundedRating = Math.round(averageRating * 10) / 10;
+
+        await usersCol.updateOne(
+          { _id: new ObjectId(finalHandymanId) },
+          { $set: { rating: roundedRating } }
+        );
+      } else {
+        // If no ratings yet, set the first rating
+        await usersCol.updateOne(
+          { _id: new ObjectId(finalHandymanId) },
+          { $set: { rating: parseInt(rating) } }
+        );
+      }
+
+      return res.json({ success: true });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error submitting rating",
+        error: error.message,
+      });
+    }
+  });
+
+  // Get ratings for a handyman
+  app.get("/ratings/:handymanId", async (req, res) => {
+    try {
+      const { handymanId } = req.params;
+      if (!handymanId) {
+        return res.status(400).json({
+          success: false,
+          message: "handymanId required",
+        });
+      }
+
+      const ratingsCol = getCollectionRatings();
+
+      // Try multiple search strategies
+      let ratings = [];
+
+      // Strategy 1: Direct string match (as stored in DB)
+      ratings = await ratingsCol
+        .find({ handymanId: handymanId })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      // Strategy 2: Try with ObjectId conversion
+      if (ratings.length === 0) {
+        try {
+          const objectIdHandymanId = new ObjectId(handymanId);
+          const objectIdString = objectIdHandymanId.toString();
+          ratings = await ratingsCol
+            .find({ handymanId: objectIdString })
+            .sort({ createdAt: -1 })
+            .toArray();
+        } catch (objectIdError) {
+          // ObjectId conversion failed, continue
+        }
+      }
+
+      // Strategy 3: Try with $or to match both string and ObjectId
+      if (ratings.length === 0) {
+        try {
+          const objectIdHandymanId = new ObjectId(handymanId);
+          ratings = await ratingsCol
+            .find({
+              $or: [
+                { handymanId: handymanId },
+                { handymanId: objectIdHandymanId.toString() },
+                { handymanId: objectIdHandymanId },
+              ],
+            })
+            .sort({ createdAt: -1 })
+            .toArray();
+        } catch (orError) {
+          // $or search failed, continue
+        }
+      }
+
+      // Populate customer and job information for each rating
+      const usersCol = getCollection();
+      const jobsCol = getCollectionJobs();
+      const ratingsWithCustomers = await Promise.all(
+        ratings.map(async (rating) => {
+          try {
+            const customerId = rating.customerId;
+            let customerName = "לקוח";
+            let customerImage = null;
+            let jobType = null;
+
+            // Get customer information
+            if (customerId) {
+              // Try to find customer by string ID
+              let customer = await usersCol.findOne({
+                _id: new ObjectId(customerId),
+              });
+
+              // If not found, try with string match
+              if (!customer) {
+                customer = await usersCol.findOne({
+                  _id: customerId,
+                });
+              }
+
+              if (customer) {
+                customerName = customer.username || "לקוח";
+                customerImage = customer.imageUrl || null;
+              }
+            }
+
+            // Get job information
+            if (rating.jobId) {
+              try {
+                const jobId = rating.jobId;
+                let job = null;
+
+                // Try with ObjectId
+                if (jobId._id || jobId.$oid) {
+                  const id = jobId._id || jobId.$oid;
+                  job = await jobsCol.findOne({ _id: new ObjectId(id) });
+                } else if (typeof jobId === "string") {
+                  job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+                } else if (jobId instanceof ObjectId) {
+                  job = await jobsCol.findOne({ _id: jobId });
+                }
+
+                if (job) {
+                  // Get job type from subcategoryInfo or workType
+                  if (job.subcategoryInfo && job.subcategoryInfo.name) {
+                    jobType = job.subcategoryInfo.name;
+                  } else if (job.workType) {
+                    jobType = job.workType;
+                  }
+                }
+              } catch (jobErr) {
+                // Job not found or error, continue
+              }
+            }
+
+            return {
+              ...rating,
+              customerName,
+              customerImage,
+              jobType,
+            };
+          } catch (err) {
+            return {
+              ...rating,
+              customerName: "לקוח",
+              customerImage: null,
+              jobType: null,
+            };
+          }
+        })
+      );
+
+      return res.json({ success: true, ratings: ratingsWithCustomers });
+    } catch (error) {
+      console.error("Error fetching ratings:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching ratings",
+        error: error.message,
+      });
+    }
+  });
 
   app.post("/create-call", async (req, res) => {
     try {
@@ -1922,8 +2306,10 @@ function findAvailablePort(startPort) {
       };
       const usingMyLocation =
         call?.usingMyLocation === true || call?.callLocationMode === "my";
-      // אם יש קואורדינטות, הוסף אותן
+      // אם יש קואורדינטות ו-usingMyLocation הוא true, הוסף אותן
+      // אם usingMyLocation הוא false, אל תשתמש בקואורדינטות שנשלחו (יכול להיות שזה קואורדינטות של המשתמש)
       if (
+        usingMyLocation &&
         call.coordinates &&
         (call.coordinates.lng !== undefined ||
           call.coordinates.lon !== undefined) &&
@@ -1944,170 +2330,188 @@ function findAvailablePort(startPort) {
             lng: parsedLng,
             lat: parsedLat,
           };
-        }
-        // Reverse geocode רק כאשר זו בחירה של "המיקום שלי"
-        if (usingMyLocation) {
-          try {
-            const response = await axios.get(
-              `https://api.mapbox.com/geocoding/v5/mapbox.places/${parsedLng},${parsedLat}.json?access_token=${process.env.MAPBOX_TOKEN}&country=il&language=he&types=place&limit=1`
-            );
-            let features = response.data?.features || [];
-            let feature = features[0];
-            if (!feature) {
-              try {
-                const fallbackRes = await axios.get(
-                  `https://api.mapbox.com/geocoding/v5/mapbox.places/${parsedLng},${parsedLat}.json?access_token=${process.env.MAPBOX_TOKEN}&country=il&language=he&limit=5`
-                );
-                features = fallbackRes.data?.features || [];
-                feature =
-                  features.find(
-                    (f) =>
-                      (f.id || "").startsWith("place") ||
-                      (f.id || "").startsWith("locality") ||
-                      (f.id || "").startsWith("region")
-                  ) || features[0];
-              } catch (fallbackErr) {
-                console.warn(
-                  "⚠️ Mapbox fallback failed",
-                  fallbackErr?.message || fallbackErr
-                );
-              }
+          console.log(
+            "📍 [CREATE-CALL] Coordinates from request (My Location):",
+            {
+              lng: parsedLng,
+              lat: parsedLat,
+              usingMyLocation: usingMyLocation,
             }
-            if (!feature) {
-              console.warn("⚠️ Mapbox returned no features for coords", {
-                lng: parsedLng,
-                lat: parsedLat,
-              });
-            }
-            const mapboxNameHe =
-              feature?.text_he ||
-              feature?.place_name_he ||
-              feature?.context?.find((c) => c.text_he)?.text_he ||
-              "";
-            const mapboxName =
-              feature?.text ||
-              feature?.place_name ||
-              feature?.context?.find((c) => c.id?.startsWith("place"))?.text ||
-              feature?.context?.find((c) => c.id?.startsWith("locality"))
-                ?.text ||
-              feature?.context?.find((c) => c.id?.startsWith("region"))?.text ||
-              "";
-            const contextName =
-              feature?.context
-                ?.map((c) => c.text || c.place_name)
-                .find(Boolean) || "";
+          );
 
-            const originalClean =
-              originalLocationText &&
-              originalLocationText.trim() !== "המיקום שלי"
-                ? originalLocationText.trim()
-                : "";
-
-            let englishCandidate =
-              mapboxName ||
-              feature?.place_name ||
-              contextName ||
-              originalClean ||
-              "";
-
-            let nominatimHe = "";
-            let nominatimName = "";
-            if (
-              (!englishCandidate || !englishCandidate.trim().length) &&
-              (!mapboxNameHe || !mapboxNameHe.trim().length)
-            ) {
-              try {
-                const nomRes = await axios.get(
-                  `https://nominatim.openstreetmap.org/reverse?format=json&lat=${parsedLat}&lon=${parsedLng}&accept-language=he&zoom=14`,
-                  { headers: { "User-Agent": "hendiman-app" } }
-                );
-                nominatimHe = nomRes.data?.display_name || "";
-                nominatimName =
-                  nomRes.data?.address?.city ||
-                  nomRes.data?.address?.town ||
-                  nomRes.data?.address?.village ||
-                  nomRes.data?.address?.suburb ||
-                  "";
-                if (nominatimName) {
-                  englishCandidate = nominatimName;
-                } else if (nominatimHe && !isHebrew(nominatimHe)) {
-                  englishCandidate = nominatimHe;
-                }
-              } catch (nomErr) {
-                console.error("Error in Nominatim reverse:", nomErr?.message);
-              }
-            }
-
-            const finalMapboxHe =
-              (mapboxNameHe && mapboxNameHe.trim()) || nominatimHe || "";
-
-            const localHeb = mapEnglishToHebrew(englishCandidate);
-
-            const hebFromMapbox =
-              finalMapboxHe &&
-              finalMapboxHe.trim().length &&
-              isHebrew(finalMapboxHe)
-                ? finalMapboxHe
-                : "";
-            const hebFromLocal =
-              localHeb && localHeb.trim().length && isHebrew(localHeb)
-                ? localHeb
-                : "";
-
-            let translated =
-              hebFromMapbox ||
-              hebFromLocal ||
-              (localHeb && localHeb.trim().length && localHeb) ||
-              englishCandidate;
+          // Reverse geocode רק כאשר זו בחירה של "המיקום שלי"
+          if (usingMyLocation) {
             try {
-              if (translated === englishCandidate && englishCandidate) {
-                const translateRes = await axios.post(
-                  "https://libretranslate.com/translate",
-                  {
-                    q: englishCandidate,
-                    source: "en",
-                    target: "he",
-                    format: "text",
-                  },
-                  {
-                    headers: { "Content-Type": "application/json" },
-                  }
-                );
-                translated =
-                  translateRes.data?.translatedText ||
-                  translateRes.data ||
-                  translated;
-              }
-            } catch (translateErr) {
-              console.error(
-                "Error translating locationText:",
-                translateErr?.message
+              const response = await axios.get(
+                `https://api.mapbox.com/geocoding/v5/mapbox.places/${parsedLng},${parsedLat}.json?access_token=${process.env.MAPBOX_TOKEN}&country=il&language=he&types=place&limit=1`
               );
-              translated = hebFromLocal || englishCandidate;
+              let features = response.data?.features || [];
+              let feature = features[0];
+              if (!feature) {
+                try {
+                  const fallbackRes = await axios.get(
+                    `https://api.mapbox.com/geocoding/v5/mapbox.places/${parsedLng},${parsedLat}.json?access_token=${process.env.MAPBOX_TOKEN}&country=il&language=he&limit=5`
+                  );
+                  features = fallbackRes.data?.features || [];
+                  feature =
+                    features.find(
+                      (f) =>
+                        (f.id || "").startsWith("place") ||
+                        (f.id || "").startsWith("locality") ||
+                        (f.id || "").startsWith("region")
+                    ) || features[0];
+                } catch (fallbackErr) {
+                  console.warn(
+                    "⚠️ Mapbox fallback failed",
+                    fallbackErr?.message || fallbackErr
+                  );
+                }
+              }
+              if (!feature) {
+                console.warn("⚠️ Mapbox returned no features for coords", {
+                  lng: parsedLng,
+                  lat: parsedLat,
+                });
+              }
+              const mapboxNameHe =
+                feature?.text_he ||
+                feature?.place_name_he ||
+                feature?.context?.find((c) => c.text_he)?.text_he ||
+                "";
+              const mapboxName =
+                feature?.text ||
+                feature?.place_name ||
+                feature?.context?.find((c) => c.id?.startsWith("place"))
+                  ?.text ||
+                feature?.context?.find((c) => c.id?.startsWith("locality"))
+                  ?.text ||
+                feature?.context?.find((c) => c.id?.startsWith("region"))
+                  ?.text ||
+                "";
+              const contextName =
+                feature?.context
+                  ?.map((c) => c.text || c.place_name)
+                  .find(Boolean) || "";
+
+              const originalClean =
+                originalLocationText &&
+                originalLocationText.trim() !== "המיקום שלי"
+                  ? originalLocationText.trim()
+                  : "";
+
+              let englishCandidate =
+                mapboxName ||
+                feature?.place_name ||
+                contextName ||
+                originalClean ||
+                "";
+
+              let nominatimHe = "";
+              let nominatimName = "";
+              if (
+                (!englishCandidate || !englishCandidate.trim().length) &&
+                (!mapboxNameHe || !mapboxNameHe.trim().length)
+              ) {
+                try {
+                  const nomRes = await axios.get(
+                    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${parsedLat}&lon=${parsedLng}&accept-language=he&zoom=14`,
+                    { headers: { "User-Agent": "hendiman-app" } }
+                  );
+                  nominatimHe = nomRes.data?.display_name || "";
+                  nominatimName =
+                    nomRes.data?.address?.city ||
+                    nomRes.data?.address?.town ||
+                    nomRes.data?.address?.village ||
+                    nomRes.data?.address?.suburb ||
+                    "";
+                  if (nominatimName) {
+                    englishCandidate = nominatimName;
+                  } else if (nominatimHe && !isHebrew(nominatimHe)) {
+                    englishCandidate = nominatimHe;
+                  }
+                } catch (nomErr) {
+                  console.error("Error in Nominatim reverse:", nomErr?.message);
+                }
+              }
+
+              const finalMapboxHe =
+                (mapboxNameHe && mapboxNameHe.trim()) || nominatimHe || "";
+
+              const localHeb = mapEnglishToHebrew(englishCandidate);
+
+              const hebFromMapbox =
+                finalMapboxHe &&
+                finalMapboxHe.trim().length &&
+                isHebrew(finalMapboxHe)
+                  ? finalMapboxHe
+                  : "";
+              const hebFromLocal =
+                localHeb && localHeb.trim().length && isHebrew(localHeb)
+                  ? localHeb
+                  : "";
+
+              let translated =
+                hebFromMapbox ||
+                hebFromLocal ||
+                (localHeb && localHeb.trim().length && localHeb) ||
+                englishCandidate;
+              try {
+                if (translated === englishCandidate && englishCandidate) {
+                  const translateRes = await axios.post(
+                    "https://libretranslate.com/translate",
+                    {
+                      q: englishCandidate,
+                      source: "en",
+                      target: "he",
+                      format: "text",
+                    },
+                    {
+                      headers: { "Content-Type": "application/json" },
+                    }
+                  );
+                  translated =
+                    translateRes.data?.translatedText ||
+                    translateRes.data ||
+                    translated;
+                }
+              } catch (translateErr) {
+                console.error(
+                  "Error translating locationText:",
+                  translateErr?.message
+                );
+                translated = hebFromLocal || englishCandidate;
+              }
+
+              jobData.locationText =
+                translated ||
+                hebFromLocal ||
+                englishCandidate ||
+                originalClean ||
+                "מיקום" ||
+                `${parsedLat}, ${parsedLng}`;
+
+              jobData.locationTextEn =
+                englishCandidate ||
+                mapboxName ||
+                feature?.place_name ||
+                contextName ||
+                nominatimName ||
+                originalClean ||
+                `${parsedLat}, ${parsedLng}`;
+            } catch (error) {
+              console.error("Error fetching name address:", error);
             }
-
-            jobData.locationText =
-              translated ||
-              hebFromLocal ||
-              englishCandidate ||
-              originalClean ||
-              "מיקום" ||
-              `${parsedLat}, ${parsedLng}`;
-
-            jobData.locationTextEn =
-              englishCandidate ||
-              mapboxName ||
-              feature?.place_name ||
-              contextName ||
-              nominatimName ||
-              originalClean ||
-              `${parsedLat}, ${parsedLng}`;
-          } catch (error) {
-            console.error("Error fetching name address:", error);
           }
         }
-
-        // החלפה כפויה בשם אמיתי; אם אין שם, השתמש בקואורדינטות כ-fallback
+      } else if (
+        !usingMyLocation &&
+        call.coordinates &&
+        Object.keys(call.coordinates).length > 0
+      ) {
+        console.log(
+          "⚠️ [CREATE-CALL] Ignoring coordinates (not using My Location):",
+          call.coordinates
+        );
       }
 
       // אם locationText עדיין נראה כמו קואורדינטות, החלף לטקסט המקורי או "מיקום"
@@ -2161,17 +2565,88 @@ function findAvailablePort(startPort) {
       }
 
       // אם אין קואורדינטות אבל יש מיקום טקסטואלי שהוזן (לא "המיקום שלי"), נסה לחפש במאפבוקס (forward geocoding)
+      // או אם יש קואורדינטות אבל הן לא מ-"המיקום שלי", נמחק אותן ונמצא אותן מחדש
+
       if (
-        (!jobData.location || !jobData.coordinates) &&
+        (!jobData.location ||
+          !jobData.coordinates ||
+          (!usingMyLocation &&
+            call.coordinates &&
+            Object.keys(call.coordinates).length > 0)) &&
         originalLocationText &&
         originalLocationText.trim().length &&
         originalLocationText.trim() !== "המיקום שלי"
       ) {
+        // אם יש קואורדינטות אבל זה לא "המיקום שלי", נמחק אותן כדי למצוא אותן מחדש
+        if (!usingMyLocation && jobData.coordinates) {
+          console.log(
+            "🧹 [CREATE-CALL] Clearing coordinates (not using My Location):",
+            jobData.coordinates
+          );
+          jobData.location = null;
+          jobData.coordinates = null;
+        }
+        let coordinatesFound = false;
+        const selectedCity = call.selectedCity; // הישוב שנבחר מה-JSON
+
+        // נסה קודם עם השם בעברית
         try {
           const encoded = encodeURIComponent(originalLocationText.trim());
-          const fwdUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encoded}.json?access_token=${process.env.MAPBOX_TOKEN}&country=il&language=he&types=place&limit=1`;
+          const fwdUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encoded}.json?access_token=${process.env.MAPBOX_TOKEN}&country=il&language=he&types=place&limit=5`;
           const fwdRes = await axios.get(fwdUrl);
-          const feature = fwdRes.data?.features?.[0];
+          const features = fwdRes.data?.features || [];
+
+          // מצא את התוצאה שתואמת לישוב שנבחר
+          let matchingFeature = null;
+          if (selectedCity) {
+            const cityName = (selectedCity.name || selectedCity.שם_ישוב || "")
+              .trim()
+              .toLowerCase();
+            const cityEngName = (
+              selectedCity.english_name ||
+              selectedCity.שם_ישוב_לועזי ||
+              ""
+            )
+              .trim()
+              .toLowerCase();
+
+            // חפש תוצאה שתואמת לשם הישוב
+            matchingFeature = features.find((feature) => {
+              const featureName = (
+                feature.text_he ||
+                feature.place_name_he ||
+                feature.text ||
+                feature.place_name ||
+                ""
+              )
+                .trim()
+                .toLowerCase();
+              const featureEngName = (feature.text || feature.place_name || "")
+                .trim()
+                .toLowerCase();
+
+              // בדוק התאמה מדויקת או חלקית
+              // עדיפות להתאמה מדויקת
+              if (featureName === cityName || featureEngName === cityEngName) {
+                return true;
+              }
+              // אחר כך בדוק התאמה חלקית (אבל רק אם השם לא קצר מדי)
+              if (cityName.length >= 3 && cityEngName.length >= 3) {
+                return (
+                  featureName.includes(cityName) ||
+                  cityName.includes(featureName) ||
+                  featureEngName.includes(cityEngName) ||
+                  cityEngName.includes(featureEngName)
+                );
+              }
+              return false;
+            });
+          }
+
+          // אם יש selectedCity אבל לא מצאנו התאמה, לא נשתמש בתוצאה
+          // אם אין selectedCity, נשתמש בתוצאה הראשונה
+          const feature = selectedCity ? matchingFeature : features[0];
+
           if (feature) {
             const [lng, lat] =
               (feature.center &&
@@ -2187,28 +2662,277 @@ function findAvailablePort(startPort) {
                 coordinates: [lng, lat],
               };
               jobData.coordinates = { lng, lat };
-            }
+              coordinatesFound = true;
+              console.log(
+                "✅ [CREATE-CALL] Coordinates found via forward geocoding (Hebrew):",
+                {
+                  location: originalLocationText,
+                  coordinates: { lng, lat },
+                  matchedFeature: !!matchingFeature,
+                }
+              );
 
-            const hebName =
-              feature.place_name_he ||
-              feature.text_he ||
-              feature.place_name ||
-              feature.text;
-            const engName =
-              feature.place_name || feature.text || originalLocationText;
-            if (
-              !jobData.locationText ||
-              jobData.locationText === "המיקום שלי"
-            ) {
-              jobData.locationText = hebName || originalLocationText;
-            }
-            if (!jobData.locationTextEn) {
-              jobData.locationTextEn = engName;
+              // השתמש בשם מה-JSON אם יש, אחרת מהתוצאה
+              const hebName = selectedCity
+                ? selectedCity.name ||
+                  selectedCity.שם_ישוב ||
+                  originalLocationText
+                : feature.place_name_he ||
+                  feature.text_he ||
+                  feature.place_name ||
+                  feature.text ||
+                  originalLocationText;
+              const engName = selectedCity
+                ? selectedCity.english_name ||
+                  selectedCity.שם_ישוב_לועזי ||
+                  call.locationEnglishName
+                : feature.place_name ||
+                  feature.text ||
+                  call.locationEnglishName ||
+                  originalLocationText;
+
+              if (
+                !jobData.locationText ||
+                jobData.locationText === "המיקום שלי"
+              ) {
+                jobData.locationText = hebName;
+              }
+              if (!jobData.locationTextEn) {
+                jobData.locationTextEn = engName;
+              }
             }
           }
         } catch (fwdErr) {
-          console.error("Forward geocoding failed:", fwdErr?.message);
+          console.error("Forward geocoding (Hebrew) failed:", fwdErr?.message);
         }
+
+        // אם לא מצאנו קואורדינטות בעברית, נסה עם השם באנגלית
+        if (
+          !coordinatesFound &&
+          call.locationEnglishName &&
+          call.locationEnglishName.trim()
+        ) {
+          try {
+            const encodedEn = encodeURIComponent(
+              call.locationEnglishName.trim()
+            );
+            const fwdUrlEn = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedEn}.json?access_token=${process.env.MAPBOX_TOKEN}&country=il&types=place&limit=5`;
+            const fwdResEn = await axios.get(fwdUrlEn);
+            const featuresEn = fwdResEn.data?.features || [];
+
+            // מצא את התוצאה שתואמת לישוב שנבחר
+            let matchingFeatureEn = null;
+            if (selectedCity) {
+              const cityEngName = (
+                selectedCity.english_name ||
+                selectedCity.שם_ישוב_לועזי ||
+                ""
+              )
+                .trim()
+                .toLowerCase();
+
+              matchingFeatureEn = featuresEn.find((feature) => {
+                const featureEngName = (
+                  feature.text ||
+                  feature.place_name ||
+                  ""
+                )
+                  .trim()
+                  .toLowerCase();
+                const featurePlaceName = (feature.place_name || "")
+                  .trim()
+                  .toLowerCase();
+
+                // עדיפות להתאמה מדויקת
+                if (featureEngName === cityEngName) {
+                  return true;
+                }
+                // בדוק אם השם המלא (place_name) מכיל את השם המלא של העיר
+                // לדוגמה: "Tirat Karmel" צריך להתאים ל-"Tirat Karmel, Haifa District, Israel"
+                if (
+                  cityEngName.includes(" ") &&
+                  featurePlaceName.includes(cityEngName)
+                ) {
+                  return true;
+                }
+                // בדוק התאמה חלקית (אבל רק אם השם לא קצר מדי)
+                if (cityEngName.length >= 3) {
+                  // אם השם המלא של העיר מכיל מילים מרובות, בדוק שהכל מופיע
+                  const cityWords = cityEngName.split(/\s+/);
+                  if (cityWords.length > 1) {
+                    // אם יש יותר ממילה אחת, בדוק שכל המילים מופיעות
+                    const allWordsMatch = cityWords.every(
+                      (word) =>
+                        featurePlaceName.includes(word) ||
+                        featureEngName.includes(word)
+                    );
+                    if (allWordsMatch) {
+                      return true;
+                    }
+                  }
+                  // בדוק התאמה חלקית רגילה - אבל רק אם השם המלא של התוצאה מכיל את השם המלא של העיר
+                  // זה מונע התאמה של "Tira" ל-"Tirat Karmel"
+                  if (featurePlaceName.includes(cityEngName)) {
+                    return true;
+                  }
+                  // בדוק התאמה חלקית רק אם השם המלא של העיר מכיל את השם המלא של התוצאה
+                  // אבל רק אם התוצאה ארוכה מספיק (למנוע התאמה של "Tira" ל-"Tirat Karmel")
+                  if (
+                    cityEngName.includes(featureEngName) &&
+                    featureEngName.length >= cityEngName.length * 0.8
+                  ) {
+                    return true;
+                  }
+                  return false;
+                }
+                return false;
+              });
+            }
+
+            // אם יש selectedCity אבל לא מצאנו התאמה, נסה להשתמש ב-Nominatim
+            // אם אין selectedCity, נשתמש בתוצאה הראשונה
+            let featureEn = selectedCity ? matchingFeatureEn : featuresEn[0];
+
+            // אם לא מצאנו התאמה טובה ב-Mapbox, נסה Nominatim
+            if (!featureEn && selectedCity && call.locationEnglishName) {
+              try {
+                const nomQuery = encodeURIComponent(
+                  call.locationEnglishName.trim() + ", Israel"
+                );
+                const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${nomQuery}&countrycodes=il&limit=5`;
+                const nomRes = await axios.get(nomUrl, {
+                  headers: { "User-Agent": "hendiman-app" },
+                });
+                const nomResults = nomRes.data || [];
+
+                if (nomResults.length > 0) {
+                  // מצא את התוצאה הטובה ביותר
+                  const cityEngName = (
+                    selectedCity.english_name ||
+                    selectedCity.שם_ישוב_לועזי ||
+                    ""
+                  )
+                    .trim()
+                    .toLowerCase();
+
+                  const bestMatch =
+                    nomResults.find((result) => {
+                      const displayName = (
+                        result.display_name || ""
+                      ).toLowerCase();
+                      return displayName.includes(cityEngName);
+                    }) || nomResults[0];
+
+                  if (bestMatch && bestMatch.lat && bestMatch.lon) {
+                    const lng = parseFloat(bestMatch.lon);
+                    const lat = parseFloat(bestMatch.lat);
+                    if (Number.isFinite(lng) && Number.isFinite(lat)) {
+                      // צור feature דמה מ-Nominatim
+                      featureEn = {
+                        center: [lng, lat],
+                        geometry: { coordinates: [lng, lat] },
+                        text: bestMatch.display_name.split(",")[0],
+                        place_name: bestMatch.display_name,
+                        source: "nominatim",
+                      };
+                    }
+                  }
+                }
+              } catch (nomErr) {
+                console.error("Nominatim geocoding failed:", nomErr?.message);
+              }
+            }
+
+            if (featureEn) {
+              const [lng, lat] =
+                (featureEn.center &&
+                  featureEn.center.length >= 2 &&
+                  featureEn.center) ||
+                (featureEn.geometry?.coordinates &&
+                  featureEn.geometry.coordinates.length >= 2 &&
+                  featureEn.geometry.coordinates) ||
+                [];
+              if (Number.isFinite(lng) && Number.isFinite(lat)) {
+                jobData.location = {
+                  type: "Point",
+                  coordinates: [lng, lat],
+                };
+                jobData.coordinates = { lng, lat };
+                coordinatesFound = true;
+                console.log(
+                  "✅ [CREATE-CALL] Coordinates found via forward geocoding (English):",
+                  {
+                    location: call.locationEnglishName,
+                    coordinates: { lng, lat },
+                    matchedFeature: !!matchingFeatureEn,
+                  }
+                );
+
+                // השתמש בשם מה-JSON אם יש, אחרת מהתוצאה
+                const hebName = selectedCity
+                  ? selectedCity.name ||
+                    selectedCity.שם_ישוב ||
+                    originalLocationText
+                  : featureEn.place_name_he ||
+                    featureEn.text_he ||
+                    featureEn.place_name ||
+                    featureEn.text ||
+                    originalLocationText;
+                const engName = selectedCity
+                  ? selectedCity.english_name ||
+                    selectedCity.שם_ישוב_לועזי ||
+                    call.locationEnglishName
+                  : featureEn.place_name ||
+                    featureEn.text ||
+                    call.locationEnglishName ||
+                    originalLocationText;
+
+                if (
+                  !jobData.locationText ||
+                  jobData.locationText === "המיקום שלי"
+                ) {
+                  jobData.locationText = hebName;
+                }
+                if (!jobData.locationTextEn) {
+                  jobData.locationTextEn = engName;
+                }
+              }
+            }
+          } catch (fwdErrEn) {
+            console.error(
+              "Forward geocoding (English) failed:",
+              fwdErrEn?.message
+            );
+          }
+        }
+
+        // אם עדיין אין קואורדינטות, לא נשמור את העבודה
+        if (!coordinatesFound) {
+          console.error(
+            "❌ [CREATE-CALL] No coordinates found for location:",
+            originalLocationText
+          );
+          return res.status(400).json({
+            success: false,
+            message: "לא ניתן למצוא את המיקום. אנא נסה שוב או בחר 'לפי מיקום'",
+          });
+        }
+      }
+
+      // בדיקה סופית: אם אין קואורדינטות בכלל, לא נשמור את העבודה
+      if (!jobData.location || !jobData.coordinates) {
+        console.error(
+          "❌ [CREATE-CALL] No coordinates in jobData before saving:",
+          {
+            hasLocation: !!jobData.location,
+            hasCoordinates: !!jobData.coordinates,
+            locationText: jobData.locationText,
+          }
+        );
+        return res.status(400).json({
+          success: false,
+          message: "לא ניתן למצוא את המיקום. אנא נסה שוב או בחר 'לפי מיקום'",
+        });
       }
 
       // שמור את העבודה במסד הנתונים
@@ -2273,6 +2997,33 @@ function findAvailablePort(startPort) {
       });
     }
   });
+
+  // Delete user endpoint
+  app.delete("/users/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (!id) {
+        return res
+          .status(400)
+          .json({ success: false, message: "User ID required" });
+      }
+      const usersCol = getCollection();
+      const result = await usersCol.deleteOne({ _id: new ObjectId(id) });
+      if (result.deletedCount === 0) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+      return res.json({ success: true });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error deleting user",
+        error: error.message,
+      });
+    }
+  });
+
   // Global error handler for unhandled errors
   app.use((err, req, res, next) => {
     if (!res.headersSent) {

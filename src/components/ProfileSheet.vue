@@ -96,10 +96,37 @@
       </section>
 
       <footer class="sheet__footer">
-        <button class="btn ghost" type="button" @click="$emit('close')">
-          בטל
+        <button
+          v-if="!showDeleteConfirm"
+          class="btn danger"
+          type="button"
+          @click="showDeleteConfirm = true"
+        >
+          מחק משתמש
         </button>
-        <button class="btn primary" type="button" @click="onSave">שמור</button>
+        <div v-else class="deleteConfirm">
+          <span class="deleteConfirm__text">בטוח שברצונך למחוק את המשתמש?</span>
+          <div class="deleteConfirm__actions">
+            <button class="btn danger" type="button" @click="handleDeleteUser">
+              כן, מחק
+            </button>
+            <button
+              class="btn ghost"
+              type="button"
+              @click="showDeleteConfirm = false"
+            >
+              בטל
+            </button>
+          </div>
+        </div>
+        <div class="sheet__footer__right">
+          <button class="btn ghost" type="button" @click="$emit('close')">
+            בטל
+          </button>
+          <button class="btn primary" type="button" @click="onSave">
+            שמור
+          </button>
+        </div>
       </footer>
     </div>
   </div>
@@ -108,6 +135,8 @@
 <script>
 import cities from "@/APIS/AdressFromIsrael.json";
 import ProfileSpecialtiesSelector from "@/components/ProfileSpecialtiesSelector.vue";
+import axios from "axios";
+import { URL } from "@/Url/url";
 
 export default {
   name: "ProfileSheet",
@@ -124,6 +153,7 @@ export default {
       cityInput: this.user?.address || "",
       cityError: "",
       cityDropdown: false,
+      cityEnglishName: null, // שמור את השם באנגלית של הישוב
     };
   },
   computed: {
@@ -138,7 +168,15 @@ export default {
     user: {
       handler(val) {
         this.form = this.buildForm(val);
-        this.cityInput = val?.city || "";
+        this.cityInput = val?.address || "";
+        // מצא את השם באנגלית של הישוב הקיים
+        if (val?.address) {
+          const foundCity = cities.find((c) => c.name === val.city);
+          if (foundCity) {
+            this.cityEnglishName =
+              foundCity.english_name || foundCity.שם_ישוב_לועזי || null;
+          }
+        }
       },
       deep: true,
     },
@@ -149,19 +187,27 @@ export default {
         name: user?.username || user?.name || "",
         phone: user?.phone || "",
         email: user?.email || "",
-        city: user?.city || "",
+        address: user?.address || "",
         specialties: user?.specialties ? [...user.specialties] : [],
       };
     },
     selectCity(name) {
-      this.form.city = name;
+      this.form.address = name;
       this.cityInput = name;
       this.cityError = "";
       this.cityDropdown = false;
       this.cityDropdownStyle = {};
+      // מצא את השם באנגלית של הישוב
+      const foundCity = cities.find((c) => c.name === name);
+      if (foundCity) {
+        this.cityEnglishName =
+          foundCity.english_name || foundCity.שם_ישוב_לועזי || null;
+      } else {
+        this.cityEnglishName = null;
+      }
     },
     onCityInput() {
-      this.form.city = this.cityInput;
+      this.form.address = this.cityInput;
       this.cityError = "";
       this.cityDropdown = true;
     },
@@ -179,11 +225,14 @@ export default {
         this.cityError = "בחר עיר";
         return false;
       }
-      const found = cities.some((c) => c.name === name);
-      if (!found) {
+      const foundCity = cities.find((c) => c.name === name);
+      if (!foundCity) {
         this.cityError = "יש לבחור עיר מתוך הרשימה";
         return false;
       }
+      // עדכן את השם באנגלית
+      this.cityEnglishName =
+        foundCity.english_name || foundCity.שם_ישוב_לועזי || null;
       this.cityError = "";
       return true;
     },
@@ -194,8 +243,39 @@ export default {
     },
     onSave() {
       if (!this.validateCity()) return;
-      this.form.city = this.cityInput.trim();
-      this.$emit("save", { ...this.form });
+      this.form.address = this.cityInput.trim();
+      // מצא את השם באנגלית אם עדיין לא נמצא
+      if (!this.cityEnglishName) {
+        const foundCity = cities.find((c) => c.name === this.form.city);
+        if (foundCity) {
+          this.cityEnglishName =
+            foundCity.english_name || foundCity.שם_ישוב_לועזי || null;
+        }
+      }
+      // שלח גם את השם באנגלית
+      this.$emit("save", {
+        ...this.form,
+        cityEnglishName: this.cityEnglishName,
+      });
+      // סגור את המסך אחרי שמירה
+      this.$emit("close");
+    },
+    async handleDeleteUser() {
+      try {
+        const userId = this.user?._id || this.user?.id;
+        if (!userId) return;
+
+        const response = await axios.delete(`${URL}/users/${userId}`);
+        if (response.data.success) {
+          this.$emit("delete-user");
+          this.$emit("close");
+          // Redirect to home or login
+          this.$router.push("/");
+        }
+      } catch (error) {
+        console.error("Error deleting user:", error);
+        alert("שגיאה במחיקת המשתמש");
+      }
     },
   },
 };
@@ -395,23 +475,52 @@ export default {
   border-radius: 12px;
   cursor: pointer;
   font-weight: 700;
+  transition: all 0.2s ease;
 }
 .btn.primary {
   background: linear-gradient(135deg, #ff6a00, #ff8a2b);
   color: #0b0b0f;
-  padding: 10px 16px;
+  padding: 10px 20px;
+  margin-right: 5px;
+}
+.btn.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 106, 0, 0.3);
 }
 .btn.ghost {
   background: rgba(255, 255, 255, 0.04);
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 10px 16px;
+  padding: 10px 20px;
+  margin-right: 5px;
+}
+.btn.ghost:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.btn.danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 10px 20px;
+  margin-right: 5px;
+}
+.btn.danger:hover {
+  background: rgba(239, 68, 68, 0.2);
 }
 .sheet__footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: 10px;
-  margin-top: 10px;
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sheet__footer__right {
+  display: flex;
+  gap: 10px;
+  margin-right: auto; /* דחוף את הכפתורים לצד ימין */
 }
 .muted {
   color: rgba(255, 255, 255, 0.6);

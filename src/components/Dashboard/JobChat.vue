@@ -21,6 +21,48 @@
           {{ statusLabel }}
         </span>
 
+        <!-- Navigation buttons for handyman -->
+        <div v-if="isHandyman" class="luxTop__nav">
+          <button
+            class="navBtn"
+            type="button"
+            @click="$emit('open-profile')"
+            aria-label="פרופיל"
+            title="פרופיל"
+          >
+            👤
+          </button>
+        </div>
+
+        <!-- Cancel job button with confirmation -->
+        <button
+          v-if="!showCancelConfirm"
+          class="iconBtn"
+          type="button"
+          @click="showCancelConfirm = true"
+          aria-label="ביטול עבודה"
+          title="בטל עבודה"
+        >
+          🗑️
+        </button>
+        <div v-else class="cancelConfirm">
+          <span class="cancelConfirm__text">בטוח?</span>
+          <button
+            class="cancelConfirm__btn cancelConfirm__btn--yes"
+            type="button"
+            @click="handleCancelJob"
+          >
+            כן
+          </button>
+          <button
+            class="cancelConfirm__btn cancelConfirm__btn--no"
+            type="button"
+            @click="showCancelConfirm = false"
+          >
+            לא
+          </button>
+        </div>
+
         <button
           class="iconBtn"
           type="button"
@@ -138,17 +180,69 @@
           class="rateCard"
         >
           <div class="rateCard__title">דרג את ההנדימן</div>
-          <div class="rateCard__stars">
-            <button
-              v-for="s in 5"
-              :key="s"
-              type="button"
-              class="rStar"
-              :class="{ 'is-on': rating >= s }"
-              @click="rating = s"
-            >
-              ★
-            </button>
+          <div class="rating">
+            <template v-for="s in 5" :key="s">
+              <input
+                :value="s"
+                :id="`star${s}`"
+                name="rating"
+                type="radio"
+                :checked="rating === s"
+                @change="rating = s"
+              />
+              <label
+                :title="`${s} כוכבים`"
+                :for="`star${s}`"
+                @mouseenter="hoverRating = s"
+                @mouseleave="hoverRating = 0"
+              >
+                <svg
+                  stroke-linejoin="round"
+                  stroke-linecap="round"
+                  stroke-width="2"
+                  stroke="currentColor"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  height="35"
+                  width="35"
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="svgOne"
+                >
+                  <polygon
+                    points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                  ></polygon>
+                </svg>
+                <svg
+                  stroke-linejoin="round"
+                  stroke-linecap="round"
+                  stroke-width="2"
+                  stroke="rgba(255, 106, 0, 0)"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                  height="35"
+                  width="35"
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="svgTwo"
+                  :class="{
+                    'is-filled':
+                      (hoverRating > 0 && s <= hoverRating) ||
+                      (hoverRating === 0 && rating >= s),
+                  }"
+                >
+                  <polygon
+                    points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                  ></polygon>
+                </svg>
+                <div
+                  class="ombre"
+                  :class="{
+                    'is-visible':
+                      (hoverRating > 0 && s >= hoverRating) ||
+                      (hoverRating === 0 && rating >= s),
+                  }"
+                ></div>
+              </label>
+            </template>
           </div>
           <textarea
             v-model="reviewText"
@@ -171,7 +265,10 @@
             v-for="(m, i) in messages"
             :key="i"
             class="msgRow"
-            :class="{ 'is-me': m.sender === 'me' }"
+            :class="{
+              'is-me': m.sender === 'me',
+              'is-other': m.sender === 'other',
+            }"
           >
             <div class="bubble" :class="{ 'bubble--img': !!m.image }">
               <div v-if="m.text" class="bubble__text">{{ m.text }}</div>
@@ -272,7 +369,13 @@ export default {
     job: { type: Object, required: true },
     isHandyman: { type: Boolean, default: false },
   },
-  emits: ["close", "status-updated", "rating-submitted"],
+  emits: [
+    "close",
+    "status-updated",
+    "rating-submitted",
+    "open-profile",
+    "cancel-job",
+  ],
   setup() {
     const store = useMainStore();
     return { store };
@@ -283,12 +386,14 @@ export default {
       newMessage: "",
       messages: [],
       rating: 0,
+      hoverRating: 0, // Track which star is being hovered
       reviewText: "",
       ratingSubmitted: false,
       imageModal: null,
       showTools: false,
       socket: null,
       localJobStatus: null, // Local copy of job status for real-time updates
+      showCancelConfirm: false,
     };
   },
   computed: {
@@ -403,6 +508,18 @@ export default {
         }
       });
 
+      // Listen for rating submitted
+      this.socket.on("rating-submitted", (data) => {
+        const receivedJobId = String(data.jobId || "");
+        const currentJobId = String(jobId || "");
+        if (receivedJobId === currentJobId) {
+          // If handyman, close the chat
+          if (this.isHandyman) {
+            this.$emit("close");
+          }
+        }
+      });
+
       this.socket.on("error", (error) => {
         console.error("WebSocket error:", error);
       });
@@ -428,7 +545,7 @@ export default {
         if (data.success && data.messages) {
           // Convert DB messages to UI format
           this.messages = data.messages.map((msg) => {
-            const isFromHandyman = !!msg.handyman;
+            const isFromHandyman = !!msg.handyman || !!msg.handymanImage;
             const sender = this.isHandyman
               ? isFromHandyman
                 ? "me"
@@ -437,12 +554,14 @@ export default {
               ? "other"
               : "me";
             const text = msg.handyman || msg.customer || "";
+            const image = msg.handymanImage || msg.customerImage || null;
             const createdAt = msg.createdAt
               ? new Date(msg.createdAt)
               : new Date();
             return {
               sender,
               text,
+              image,
               time: createdAt.toLocaleTimeString("he-IL", {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -459,7 +578,8 @@ export default {
 
     addMessageToUI(messageObj) {
       // Determine sender: if handyman sent, for handyman it's "me", for customer it's "other"
-      const isFromHandyman = !!messageObj.handyman;
+      const isFromHandyman =
+        !!messageObj.handyman || !!messageObj.handymanImage;
       const sender = this.isHandyman
         ? isFromHandyman
           ? "me"
@@ -469,6 +589,8 @@ export default {
         : "me";
 
       const text = messageObj.handyman || messageObj.customer || "";
+      const image =
+        messageObj.handymanImage || messageObj.customerImage || null;
       const createdAt = messageObj.createdAt
         ? new Date(messageObj.createdAt)
         : new Date();
@@ -476,7 +598,7 @@ export default {
       // Check if message already exists (avoid duplicates)
       const exists = this.messages.some(
         (m) =>
-          m.text === text &&
+          ((m.text === text && text) || (m.image === image && image)) &&
           m.sender === sender &&
           Math.abs(
             new Date(m.createdAt || m.time).getTime() - createdAt.getTime()
@@ -487,6 +609,7 @@ export default {
         this.messages.push({
           sender,
           text,
+          image,
           time: createdAt.toLocaleTimeString("he-IL", {
             hour: "2-digit",
             minute: "2-digit",
@@ -594,24 +717,109 @@ export default {
       }
     },
 
-    handleFileSelect(e) {
+    async handleFileSelect(e) {
       const file = e.target.files?.[0];
       if (!file) return;
 
+      // Validate file type
+      if (!file.type.startsWith("image/")) {
+        this.toast?.showError("יש לבחור קובץ תמונה בלבד");
+        e.target.value = "";
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        this.toast?.showError("הקובץ גדול מדי. מקסימום 5MB");
+        e.target.value = "";
+        return;
+      }
+
+      // Show preview while uploading
       const reader = new FileReader();
       reader.onload = (ev) => {
-        this.messages.push({
+        const tempMessage = {
           sender: "me",
-          image: ev.target.result,
+          image: ev.target.result, // Preview
           time: new Date().toLocaleTimeString("he-IL", {
             hour: "2-digit",
             minute: "2-digit",
           }),
-        });
+          createdAt: new Date(),
+          uploading: true, // Mark as uploading
+        };
+        this.messages.push(tempMessage);
         this.scrollToBottom();
       };
       reader.readAsDataURL(file);
+
+      try {
+        // Upload to server
+        const formData = new FormData();
+        formData.append("image", file);
+
+        const { data } = await axios.post(`${URL}/upload-image`, formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+
+        if (data.imageUrl) {
+          // Find the temp message and update it with the real URL
+          const tempIndex = this.messages.findIndex(
+            (m) => m.uploading && m.sender === "me"
+          );
+          if (tempIndex !== -1) {
+            const tempMessage = this.messages[tempIndex];
+            // Send the image message to server
+            await this.sendImageMessage(data.imageUrl);
+            // Update the message with the real URL and remove uploading flag
+            this.messages[tempIndex] = {
+              ...tempMessage,
+              image: data.imageUrl,
+              uploading: false,
+            };
+          }
+        }
+      } catch (error) {
+        console.error("Error uploading image:", error);
+        // Remove the temp message on error
+        const tempIndex = this.messages.findIndex(
+          (m) => m.uploading && m.sender === "me"
+        );
+        if (tempIndex !== -1) {
+          this.messages.splice(tempIndex, 1);
+        }
+        this.toast?.showError("שגיאה בהעלאת התמונה");
+      }
+
       e.target.value = "";
+    },
+
+    async sendImageMessage(imageUrl) {
+      const jobId = this.job?.id || this.job?._id;
+      if (!jobId) return;
+
+      // Get current user ID from store
+      const userId = this.store?.user?._id;
+      if (!userId) {
+        this.toast?.showError("לא ניתן לזהות את המשתמש");
+        return;
+      }
+
+      try {
+        // Send to server
+        await axios.post(`${URL}/jobs/${jobId}/messages`, {
+          imageUrl: imageUrl,
+          senderId: userId,
+          isHandyman: this.isHandyman,
+        });
+
+        // Message will be added via WebSocket, but we already added it optimistically
+      } catch (error) {
+        console.error("Error sending image message:", error);
+        this.toast?.showError("שגיאה בשליחת התמונה");
+      }
     },
 
     openImage(src) {
@@ -639,9 +847,17 @@ export default {
         return;
       }
       try {
+        // Get current user ID (customer)
+        const customerId = this.store?.user?._id || this.job?.clientId;
+        if (!customerId) {
+          this.toast.showError("לא ניתן לזהות את הלקוח");
+          return;
+        }
+
         await axios.post(`${URL}/jobs/rate`, {
           jobId: this.job._id || this.job.id,
           handymanId: this.job.handymanId,
+          customerId: customerId,
           rating: this.rating,
           review: this.reviewText,
         });
@@ -659,6 +875,26 @@ export default {
         const el = this.$refs.messagesContainer;
         if (el) el.scrollTop = el.scrollHeight;
       });
+    },
+
+    async handleCancelJob() {
+      try {
+        const jobId = this.job._id || this.job.id;
+        if (!jobId) return;
+
+        await axios.post(`${URL}/jobs/cancel`, {
+          jobId,
+        });
+
+        this.toast.showSuccess("העבודה בוטלה");
+        this.showCancelConfirm = false;
+        this.$emit("cancel-job");
+        this.$emit("close");
+      } catch (error) {
+        console.error("Error cancelling job:", error);
+        this.toast.showError("שגיאה בביטול העבודה");
+        this.showCancelConfirm = false;
+      }
     },
   },
 };
@@ -1048,27 +1284,122 @@ $orange2: #ff8a2b;
   font-weight: 1100;
   font-size: 14px;
 }
-.rateCard__stars {
+.rating {
   display: flex;
-  gap: 8px;
+  flex-direction: row-reverse;
+  gap: 0.3rem;
   justify-content: center;
   margin: 10px 0;
+  transform-style: preserve-3d;
+  perspective: 1000px;
 }
-.rStar {
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
-  border: 1px solid rgba($orange, 0.18);
-  background: rgba(0, 0, 0, 0.16);
-  color: rgba(255, 255, 255, 0.22);
-  font-size: 26px;
-  cursor: pointer;
+
+.rating input {
+  display: none;
 }
-.rStar.is-on {
+
+.rating label .svgOne {
+  stroke: rgba(255, 255, 255, 0.3);
+  fill: rgba(255, 106, 0, 0);
+  transition: stroke 0.5s ease, fill 0.5s ease;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.rating label .svgTwo {
+  position: absolute;
+  top: -1px;
+  fill: $orange;
+  stroke: rgba(255, 106, 0, 0);
+  opacity: 0;
+  transition: stroke 0.5s ease, fill 0.5s ease, opacity 0.5s ease;
   color: $orange;
-  background: rgba($orange, 0.1);
-  border-color: rgba($orange, 0.5);
-  box-shadow: 0 10px 20px rgba($orange, 0.16);
+}
+
+.rating label {
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.5s ease;
+}
+
+/* כוכבים שנבחרו או שעליהם עוברים */
+.rating label:hover .svgOne {
+  stroke: $orange;
+  color: $orange;
+}
+
+/* כשנבחר כוכב, כל הכוכבים עד הכוכב שנבחר (כולל) נצבעים */
+.rating input:checked ~ label .svgOne {
+  stroke: rgba(255, 106, 0, 0);
+  color: rgba(255, 106, 0, 0);
+}
+
+.rating label .svgTwo.is-filled {
+  transform: rotateX(0deg) rotateY(0deg) translateY(0px);
+  opacity: 1;
+  animation: displayStar 0.5s cubic-bezier(0.75, 0.41, 0.82, 1.2);
+}
+
+.rating label .ombre.is-visible {
+  opacity: 1;
+}
+
+@keyframes displayStar {
+  0% {
+    transform: rotateX(100deg) rotateY(100deg) translateY(10px);
+  }
+  100% {
+    transform: rotateX(0deg) rotateY(0deg) translateY(0px);
+  }
+}
+
+.ombre {
+  background: radial-gradient(
+    ellipse closest-side,
+    rgba($orange, 0.4),
+    rgba(255, 106, 0, 0)
+  );
+  width: 30px;
+  height: 8px;
+  opacity: 0;
+  transition: opacity 0.6s ease 0.2s;
+}
+
+/* כוכבים שנבחרו או שעליהם עוברים */
+.rating label:hover .ombre,
+.rating label:hover ~ label .ombre {
+  opacity: 0.3;
+}
+
+.rating input:checked ~ label .ombre {
+  opacity: 1;
+}
+
+/* אנימציה של רעד רק ב-hover */
+.rating label:hover .svgTwo:hover {
+  animation: chackStar 0.6s ease-out, displayStar none 1s;
+}
+
+@keyframes chackStar {
+  0% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(-20deg);
+  }
+  50% {
+    transform: rotate(20deg);
+  }
+  80% {
+    transform: rotate(-20deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
 }
 .rateCard__txt {
   width: 100%;
@@ -1084,13 +1415,50 @@ $orange2: #ff8a2b;
 .cta {
   margin-top: 10px;
   width: 100%;
-  height: 44px;
-  border-radius: 999px;
-  border: 1px solid rgba($orange, 0.55);
-  background: linear-gradient(135deg, $orange, $orange2);
-  color: #0b0c10;
+  position: relative;
+  height: 3.5em;
+  border: 3px ridge $orange;
+  outline: none;
+  background-color: transparent;
+  color: $text;
+  transition: 1s;
+  border-radius: 0.3em;
+  font-size: 16px;
   font-weight: 1100;
   cursor: pointer;
+}
+
+.cta::after {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 3%;
+  width: 95%;
+  height: 40%;
+  background-color: $bg;
+  transition: 0.5s;
+  transform-origin: center;
+}
+
+.cta::before {
+  content: "";
+  transform-origin: center;
+  position: absolute;
+  top: 80%;
+  left: 3%;
+  width: 95%;
+  height: 40%;
+  background-color: $bg;
+  transition: 0.5s;
+}
+
+.cta:hover::before,
+.cta:hover::after {
+  transform: scale(0);
+}
+
+.cta:hover {
+  box-shadow: inset 0px 0px 25px $orange;
 }
 
 .msgs {
@@ -1110,9 +1478,7 @@ $orange2: #ff8a2b;
 
 .msgRow {
   display: flex;
-}
-.msgRow.is-me {
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .bubble {
@@ -1131,6 +1497,11 @@ $orange2: #ff8a2b;
   );
   border-color: rgba($orange, 0.55);
   color: #0b0c10;
+}
+.msgRow.is-other .bubble {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: $text;
 }
 .bubble__text {
   font-size: 14px;

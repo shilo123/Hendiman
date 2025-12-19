@@ -5,7 +5,11 @@
         <label>קטגוריה</label>
         <select v-model="selectedCategoryName">
           <option disabled value="">בחר קטגוריה</option>
-          <option v-for="cat in categories" :key="cat.name" :value="cat.name">
+          <option
+            v-for="cat in availableCategories"
+            :key="cat.name"
+            :value="cat.name"
+          >
             {{ cat.name }}
           </option>
         </select>
@@ -97,6 +101,15 @@ export default {
     currentCategory() {
       return this.categories.find((c) => c.name === this.selectedCategoryName);
     },
+    availableCategories() {
+      // סנן קטגוריות שכבר נבחרו כקטגוריות שלימות
+      return this.categories.filter((cat) => {
+        const isFullCategorySelected = this.internalValue.some(
+          (item) => item.isFullCategory && item.name === cat.name
+        );
+        return !isFullCategorySelected;
+      });
+    },
     filteredSubcategories() {
       if (!this.currentCategory || !this.currentCategory.subcategories) {
         return [];
@@ -105,8 +118,21 @@ export default {
       const list = this.currentCategory.subcategories.map((sub) =>
         this.normalizeSub(sub)
       );
-      if (!q) return list;
-      return list.filter((sub) => sub.name.toLowerCase().includes(q));
+
+      // סנן את התת-קטגוריות שכבר נבחרו
+      const filtered = list.filter((sub) => {
+        // בדוק אם התת-קטגוריה כבר נבחרה
+        const alreadySelected = this.internalValue.some(
+          (item) =>
+            !item.isFullCategory &&
+            item.name === sub.name &&
+            item.category === this.selectedCategoryName
+        );
+        return !alreadySelected;
+      });
+
+      if (!q) return filtered;
+      return filtered.filter((sub) => sub.name.toLowerCase().includes(q));
     },
   },
   watch: {

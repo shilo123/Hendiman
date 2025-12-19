@@ -44,89 +44,134 @@
                 </div>
                 <div class="stat-content">
                   <span class="stat-value">{{
-                    handymanDetails.jobsDone || 0
+                    handymanDetails.jobDone || 0
                   }}</span>
-                  <span class="stat-label">עבודות</span>
+                  <span class="stat-label">עבודות שסיים</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Details Section -->
-        <div class="details-section">
+        <!-- Details Section (Compact) -->
+        <div class="details-section details-section--compact">
           <!-- Contact Info -->
-          <div class="detail-card" v-if="handymanDetails.phone">
-            <div class="detail-icon-wrapper">
+          <div
+            class="detail-card detail-card--compact"
+            v-if="handymanDetails.phone"
+          >
+            <div class="detail-icon-wrapper detail-icon-wrapper--compact">
               <i class="fas fa-phone"></i>
             </div>
             <div class="detail-content-wrapper">
-              <div class="detail-label">טלפון</div>
-              <div class="detail-value">{{ handymanDetails.phone }}</div>
+              <div class="detail-label detail-label--compact">טלפון</div>
+              <div class="detail-value detail-value--compact">
+                {{ handymanDetails.phone }}
+              </div>
             </div>
           </div>
 
-          <div class="detail-card" v-if="handymanDetails.email">
-            <div class="detail-icon-wrapper">
+          <div
+            class="detail-card detail-card--compact"
+            v-if="handymanDetails.email"
+          >
+            <div class="detail-icon-wrapper detail-icon-wrapper--compact">
               <i class="fas fa-envelope"></i>
             </div>
             <div class="detail-content-wrapper">
-              <div class="detail-label">אימייל</div>
-              <div class="detail-value">{{ handymanDetails.email }}</div>
+              <div class="detail-label detail-label--compact">אימייל</div>
+              <div class="detail-value detail-value--compact">
+                {{ handymanDetails.email }}
+              </div>
             </div>
           </div>
 
-          <div class="detail-card" v-if="handymanDetails.address">
-            <div class="detail-icon-wrapper">
+          <div
+            class="detail-card detail-card--compact"
+            v-if="handymanDetails.address"
+          >
+            <div class="detail-icon-wrapper detail-icon-wrapper--compact">
               <i class="fas fa-map-marker-alt"></i>
             </div>
             <div class="detail-content-wrapper">
-              <div class="detail-label">כתובת</div>
-              <div class="detail-value">{{ handymanDetails.address }}</div>
+              <div class="detail-label detail-label--compact">כתובת</div>
+              <div class="detail-value detail-value--compact">
+                {{ handymanDetails.address }}
+              </div>
             </div>
           </div>
 
-          <div class="detail-card" v-if="handymanDetails.city">
-            <div class="detail-icon-wrapper">
+          <div
+            class="detail-card detail-card--compact"
+            v-if="handymanDetails.city"
+          >
+            <div class="detail-icon-wrapper detail-icon-wrapper--compact">
               <i class="fas fa-city"></i>
             </div>
             <div class="detail-content-wrapper">
-              <div class="detail-label">עיר</div>
-              <div class="detail-value">{{ handymanDetails.city }}</div>
+              <div class="detail-label detail-label--compact">עיר</div>
+              <div class="detail-value detail-value--compact">
+                {{ handymanDetails.city }}
+              </div>
             </div>
           </div>
+        </div>
 
-          <!-- Specialties -->
+        <!-- Specialties (Full Width) -->
+        <div
+          class="detail-card specialties-card specialties-card--compact"
+          v-if="specialtiesList.length"
+          :class="{ 'specialties-card--expanded': showSpecialties }"
+        >
           <div
-            class="detail-card specialties-card"
-            v-if="specialtiesList.length"
+            class="specialties-header specialties-header--clickable"
+            @click="toggleSpecialties"
           >
-            <div class="specialties-header">
-              <div class="detail-icon-wrapper">
+            <div class="specialties-header-left">
+              <div class="detail-icon-wrapper detail-icon-wrapper--compact">
                 <i class="fas fa-tools"></i>
               </div>
-              <div class="detail-label">תחומי התמחות</div>
+              <div class="detail-label detail-label--compact">תחומי התמחות</div>
+              <span class="specialties-count"
+                >({{ specialtiesList.length }})</span
+              >
             </div>
-            <div class="specialties-list">
+            <i
+              class="fas specialties-toggle-icon"
+              :class="showSpecialties ? 'fa-chevron-up' : 'fa-chevron-down'"
+            ></i>
+          </div>
+          <transition name="specialties-slide">
+            <div class="specialties-list" v-show="showSpecialties">
               <div
                 v-for="(spec, index) in specialtiesList"
                 :key="index"
-                class="specialty-item"
+                class="specialty-item specialty-item--compact"
               >
                 <div class="specialty-main">
                   <i class="fas fa-check-circle specialty-check"></i>
-                  <div class="specialty-name">{{ spec.name || spec }}</div>
+                  <div class="specialty-name specialty-name--compact">
+                    {{ spec.name || spec }}
+                    <span
+                      v-if="spec.type === 'Category'"
+                      class="specialty-full-category"
+                    >
+                      (תחום שלם)
+                    </span>
+                  </div>
                 </div>
                 <div
                   class="specialty-details"
                   v-if="spec.price || spec.typeWork"
                 >
-                  <span v-if="spec.price" class="specialty-price"
+                  <span
+                    v-if="spec.price"
+                    class="specialty-price specialty-price--compact"
                     ><i class="fas fa-shekel-sign"></i> {{ spec.price }}</span
                   >
                   <span
                     v-if="spec.typeWork"
-                    class="specialty-type"
+                    class="specialty-type specialty-type--compact"
                     :class="{
                       'specialty-type--hourly': spec.typeWork === 'לשעה',
                       'specialty-type--fixed': spec.typeWork === 'קבלנות',
@@ -142,6 +187,83 @@
                     {{ spec.typeWork }}
                   </span>
                 </div>
+              </div>
+            </div>
+          </transition>
+        </div>
+
+        <!-- Divider -->
+        <div class="section-divider"></div>
+
+        <!-- Reviews Section -->
+        <div class="reviews-section">
+          <h2 class="reviews-title">ביקורות</h2>
+          <div v-if="loadingRatings" class="reviews-loading">
+            טוען ביקורות...
+          </div>
+          <div v-else-if="ratings.length === 0" class="reviews-empty">
+            אין ביקורות עדיין
+          </div>
+          <div v-else class="reviews-list">
+            <div
+              v-for="(rating, index) in ratings"
+              :key="index"
+              class="review-card"
+            >
+              <div class="review-card__gradient"></div>
+              <div class="review-card__content">
+                <div class="review-customer">
+                  <img
+                    :src="getCustomerImage(rating)"
+                    :alt="rating.customerName || 'לקוח'"
+                    class="review-customer__image"
+                    @error="onCustomerImageError"
+                  />
+                  <div class="review-customer__info">
+                    <div class="review-customer__name">
+                      {{ rating.customerName || "לקוח" }}
+                    </div>
+                    <div class="review-date">
+                      {{ formatDate(rating.createdAt) }}
+                    </div>
+                  </div>
+                  <div v-if="rating.jobType" class="review-job-type">
+                    <i class="fas fa-tools"></i>
+                    <span>{{ rating.jobType }}</span>
+                  </div>
+                </div>
+                <div class="review-header">
+                  <div class="review-rating">
+                    <div class="review-stars">
+                      <svg
+                        v-for="s in 5"
+                        :key="s"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="review-star"
+                        :class="{
+                          'review-star--filled': s <= (rating.rating || 0),
+                        }"
+                      >
+                        <path
+                          d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
+                        ></path>
+                      </svg>
+                    </div>
+                    <span class="review-rating-value"
+                      >{{ rating.rating || 0 }}/5</span
+                    >
+                  </div>
+                </div>
+                <p
+                  v-if="rating.review && rating.review.trim()"
+                  class="review-text"
+                >
+                  {{ rating.review }}
+                </p>
+                <p v-else class="review-text review-text--empty">
+                  אין ביקורת טקסטואלית
+                </p>
               </div>
             </div>
           </div>
@@ -180,12 +302,32 @@
 </template>
 
 <script>
+import axios from "axios";
+import { URL } from "@/Url/url";
+
 export default {
   name: "ViewHandymanDetails",
   props: {
     handymanDetails: {
       type: Object,
       default: null,
+    },
+  },
+  data() {
+    return {
+      ratings: [],
+      loadingRatings: false,
+      showSpecialties: false,
+    };
+  },
+  watch: {
+    handymanDetails: {
+      immediate: true,
+      handler(newVal) {
+        if (newVal && newVal._id) {
+          this.loadRatings();
+        }
+      },
     },
   },
   computed: {
@@ -250,6 +392,80 @@ export default {
     },
   },
   methods: {
+    toggleSpecialties() {
+      this.showSpecialties = !this.showSpecialties;
+    },
+    async loadRatings() {
+      if (!this.handymanDetails || !this.handymanDetails._id) {
+        return;
+      }
+      this.loadingRatings = true;
+      try {
+        const handymanId = String(this.handymanDetails._id);
+        const response = await axios.get(`${URL}/ratings/${handymanId}`);
+        if (response.data.success && response.data.ratings) {
+          // Ensure ratings are properly formatted
+          this.ratings = response.data.ratings.map((rating) => ({
+            ...rating,
+            rating: Number(rating.rating) || 0,
+            review: rating.review || "",
+            createdAt: rating.createdAt || new Date(),
+          }));
+        } else {
+          this.ratings = [];
+        }
+      } catch (error) {
+        console.error("Error loading ratings:", error);
+        this.ratings = [];
+      } finally {
+        this.loadingRatings = false;
+      }
+    },
+    getCustomerImage(rating) {
+      const defaultImage = "/img/Hendima-logo.png";
+      if (!rating || !rating.customerImage) {
+        return defaultImage;
+      }
+      const imageUrl = rating.customerImage;
+      if (
+        !imageUrl ||
+        typeof imageUrl !== "string" ||
+        imageUrl.trim() === "" ||
+        imageUrl.includes("demo") ||
+        (!imageUrl.startsWith("http") && !imageUrl.startsWith("/"))
+      ) {
+        return defaultImage;
+      }
+      return imageUrl;
+    },
+    onCustomerImageError(event) {
+      const defaultImage = "/img/Hendima-logo.png";
+      if (
+        event.target.src !== defaultImage &&
+        !event.target.src.includes("Hendima-logo.png")
+      ) {
+        event.target.src = defaultImage;
+      }
+    },
+    formatDate(date) {
+      if (!date) return "";
+
+      // Handle MongoDB $date format: { $date: "2025-12-19T07:54:12.104Z" }
+      let dateValue = date;
+      if (date && typeof date === "object" && date.$date) {
+        dateValue = date.$date;
+      }
+
+      const d = new Date(dateValue);
+      if (isNaN(d.getTime())) {
+        return "";
+      }
+
+      const day = d.getDate();
+      const month = d.getMonth() + 1;
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
+    },
     onClose() {
       this.$emit("close");
     },
@@ -391,16 +607,16 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   display: flex;
   gap: 20px;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 20px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 
   @media (max-width: 768px) {
     flex-direction: column;
     text-align: center;
-    gap: 16px;
-    margin-bottom: 16px;
-    padding-bottom: 16px;
+    gap: 12px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
   }
 }
 
@@ -413,38 +629,38 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 }
 
 .profile-image {
-  width: 120px;
-  height: 120px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
-  border: 3px solid rgba($orange, 0.35);
+  border: 2px solid rgba($orange, 0.35);
   object-fit: cover;
   box-shadow: $shadowO;
 
   @media (max-width: 768px) {
-    width: 100px;
-    height: 100px;
+    width: 70px;
+    height: 70px;
   }
 }
 
 .profile-logo {
   position: absolute;
-  bottom: 4px;
-  left: 4px;
-  width: 36px;
-  height: 36px;
+  bottom: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  border: 3px solid $bg;
+  border: 2px solid $bg;
   object-fit: cover;
   background: $bg;
   z-index: 1;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 
   @media (max-width: 768px) {
-    width: 28px;
-    height: 28px;
+    width: 20px;
+    height: 20px;
     border-width: 2px;
-    bottom: 2px;
-    left: 2px;
+    bottom: 1px;
+    left: 1px;
   }
 }
 
@@ -453,15 +669,15 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 }
 
 .profile-name {
-  margin: 0 0 12px;
-  font-size: 24px;
+  margin: 0 0 8px;
+  font-size: 18px;
   font-weight: 1000;
   color: $orange3;
   line-height: 1.3;
 
   @media (max-width: 768px) {
-    font-size: 20px;
-    margin-bottom: 10px;
+    font-size: 16px;
+    margin-bottom: 6px;
   }
 }
 
@@ -547,12 +763,30 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 
 .details-section {
   display: grid;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 8px;
+  margin-bottom: 16px;
 
   @media (max-width: 768px) {
-    gap: 10px;
-    margin-bottom: 16px;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  &--compact {
+    gap: 6px;
+    margin-bottom: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+
+    @media (min-width: 500px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    @media (min-width: 800px) {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    @media (max-width: 499px) {
+      grid-template-columns: 1fr;
+    }
   }
 }
 
@@ -576,6 +810,18 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     gap: 10px;
     border-radius: 10px;
   }
+
+  &--compact {
+    padding: 6px 10px;
+    gap: 8px;
+    border-radius: 8px;
+
+    @media (max-width: 768px) {
+      padding: 5px 8px;
+      gap: 6px;
+      border-radius: 6px;
+    }
+  }
 }
 
 .detail-icon-wrapper {
@@ -597,6 +843,20 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     font-size: 14px;
     border-radius: 8px;
   }
+
+  &--compact {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+    border-radius: 6px;
+
+    @media (max-width: 768px) {
+      width: 20px;
+      height: 20px;
+      font-size: 10px;
+      border-radius: 5px;
+    }
+  }
 }
 
 .detail-content-wrapper {
@@ -617,6 +877,15 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   @media (max-width: 768px) {
     font-size: 10px;
   }
+
+  &--compact {
+    font-size: 9px;
+    letter-spacing: 0.3px;
+
+    @media (max-width: 768px) {
+      font-size: 8px;
+    }
+  }
 }
 
 .detail-value {
@@ -629,6 +898,15 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   @media (max-width: 768px) {
     font-size: 13px;
   }
+
+  &--compact {
+    font-size: 11px;
+    line-height: 1.3;
+
+    @media (max-width: 768px) {
+      font-size: 10px;
+    }
+  }
 }
 
 .specialties-card {
@@ -636,10 +914,21 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   align-items: flex-start;
   gap: 16px;
   padding: 16px;
+  grid-column: 1 / -1; // Full width in grid
 
   @media (max-width: 768px) {
     padding: 12px;
     gap: 12px;
+  }
+
+  &--compact {
+    gap: 10px;
+    padding: 10px;
+
+    @media (max-width: 768px) {
+      padding: 8px;
+      gap: 8px;
+    }
   }
 }
 
@@ -657,16 +946,77 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     margin: 0;
     font-size: 13px;
   }
+
+  &--clickable {
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+
+    &:hover {
+      opacity: 0.8;
+    }
+  }
+}
+
+.specialties-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.specialties-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: $muted;
+  margin-right: 4px;
+}
+
+.specialties-toggle-icon {
+  font-size: 12px;
+  color: $orange3;
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+}
+
+.specialties-card--expanded .specialties-toggle-icon {
+  transform: rotate(0deg);
 }
 
 .specialties-list {
   display: grid;
   gap: 10px;
   width: 100%;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 
   @media (max-width: 768px) {
     gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
   }
+}
+
+// Transition for specialties dropdown
+.specialties-slide-enter-active,
+.specialties-slide-leave-active {
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.specialties-slide-enter-from,
+.specialties-slide-leave-to {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.specialties-slide-enter-to,
+.specialties-slide-leave-from {
+  max-height: 1000px;
+  opacity: 1;
 }
 
 .specialty-item {
@@ -691,6 +1041,17 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     align-items: flex-start;
     padding: 10px;
     gap: 8px;
+  }
+
+  &--compact {
+    padding: 6px 10px;
+    gap: 8px;
+    border-radius: 8px;
+
+    @media (max-width: 768px) {
+      padding: 5px 8px;
+      gap: 6px;
+    }
   }
 }
 
@@ -721,6 +1082,23 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   @media (max-width: 768px) {
     font-size: 13px;
   }
+
+  &--compact {
+    font-size: 11px;
+    line-height: 1.2;
+
+    @media (max-width: 768px) {
+      font-size: 10px;
+    }
+  }
+}
+
+.specialty-full-category {
+  font-size: 0.85em;
+  font-weight: 700;
+  color: $muted;
+  margin-right: 4px;
+  font-style: italic;
 }
 
 .specialty-details {
@@ -755,6 +1133,20 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     font-size: 11px;
     padding: 4px 8px;
   }
+
+  &--compact {
+    padding: 3px 6px;
+    font-size: 10px;
+
+    i {
+      font-size: 8px;
+    }
+
+    @media (max-width: 768px) {
+      font-size: 9px;
+      padding: 2px 5px;
+    }
+  }
 }
 
 .specialty-type {
@@ -774,6 +1166,20 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   @media (max-width: 768px) {
     font-size: 10px;
     padding: 4px 8px;
+  }
+
+  &--compact {
+    padding: 3px 6px;
+    font-size: 10px;
+
+    i {
+      font-size: 8px;
+    }
+
+    @media (max-width: 768px) {
+      font-size: 9px;
+      padding: 2px 5px;
+    }
   }
 
   &--hourly {
@@ -858,6 +1264,292 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
       background: rgba($danger, 0.25);
       border-color: rgba($danger, 0.5);
     }
+  }
+}
+
+// Section Divider
+.section-divider {
+  height: 1px;
+  background: linear-gradient(
+    to left,
+    transparent,
+    rgba(255, 255, 255, 0.15),
+    transparent
+  );
+  margin: 20px 0;
+  width: 100%;
+
+  @media (max-width: 768px) {
+    margin: 16px 0;
+  }
+}
+
+// Reviews Section
+.reviews-section {
+  margin-top: 24px;
+
+  @media (max-width: 768px) {
+    margin-top: 20px;
+  }
+}
+
+.reviews-title {
+  font-size: 20px;
+  font-weight: 1000;
+  color: $orange3;
+  margin: 0 0 16px;
+  text-align: right;
+
+  @media (max-width: 768px) {
+    font-size: 18px;
+    margin-bottom: 12px;
+  }
+}
+
+.reviews-loading,
+.reviews-empty {
+  text-align: center;
+  color: $muted;
+  padding: 20px;
+  font-size: 14px;
+}
+
+.reviews-list {
+  display: grid;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 6px;
+
+  // Custom scrollbar styling
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba($orange, 0.4);
+    border-radius: 10px;
+
+    &:hover {
+      background: rgba($orange, 0.6);
+    }
+  }
+
+  @media (max-width: 768px) {
+    gap: 5px;
+    max-height: 180px;
+  }
+}
+
+.review-card {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  transform: translateY(0);
+  transition: all 0.3s ease;
+  cursor: pointer;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 20px rgba($orange, 0.1);
+    border-color: rgba($orange, 0.3);
+  }
+
+  @media (max-width: 768px) {
+    border-radius: 6px;
+  }
+}
+
+.review-card__gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba($orange, 0.05), rgba($orange, 0.02));
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+  filter: blur(20px);
+}
+
+.review-card:hover .review-card__gradient {
+  opacity: 0.3;
+}
+
+.review-card__content {
+  position: relative;
+  z-index: 10;
+  padding: 8px;
+
+  @media (max-width: 768px) {
+    padding: 6px;
+  }
+}
+
+.review-customer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+  @media (max-width: 768px) {
+    gap: 6px;
+    margin-bottom: 6px;
+    padding-bottom: 6px;
+  }
+}
+
+.review-customer__image {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba($orange, 0.3);
+  flex-shrink: 0;
+
+  @media (max-width: 768px) {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+.review-customer__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.review-customer__name {
+  font-size: 11px;
+  font-weight: 1000;
+  color: $text;
+  line-height: 1.2;
+
+  @media (max-width: 768px) {
+    font-size: 10px;
+  }
+}
+
+.review-job-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba($orange, 0.12);
+  border: 1px solid rgba($orange, 0.25);
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-size: 9px;
+  font-weight: 900;
+  color: $orange3;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  i {
+    font-size: 8px;
+  }
+
+  @media (max-width: 768px) {
+    padding: 2px 5px;
+    font-size: 8px;
+    gap: 3px;
+
+    i {
+      font-size: 7px;
+    }
+  }
+}
+
+.review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  gap: 6px;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+}
+
+.review-rating {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.review-stars {
+  display: flex;
+  gap: 1px;
+  flex-direction: row-reverse;
+}
+
+.review-star {
+  width: 10px;
+  height: 10px;
+  fill: rgba(255, 255, 255, 0.2);
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-width: 0.5;
+  transition: all 0.3s ease;
+
+  @media (max-width: 768px) {
+    width: 9px;
+    height: 9px;
+  }
+
+  &--filled {
+    fill: $orange;
+    stroke: $orange;
+  }
+}
+
+.review-rating-value {
+  font-size: 9px;
+  font-weight: 1000;
+  color: $orange3;
+
+  @media (max-width: 768px) {
+    font-size: 8px;
+  }
+}
+
+.review-date {
+  font-size: 8px;
+  font-weight: 700;
+  color: $muted;
+
+  @media (max-width: 768px) {
+    font-size: 7px;
+  }
+}
+
+.review-text {
+  font-size: 10px;
+  font-weight: 500;
+  color: $text;
+  line-height: 1.4;
+  margin: 0;
+
+  @media (max-width: 768px) {
+    font-size: 9px;
+    line-height: 1.3;
+  }
+
+  &--empty {
+    color: $muted;
+    font-style: italic;
   }
 }
 </style>

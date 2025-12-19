@@ -73,18 +73,8 @@
       </div>
     </div>
 
-    <!-- Job Chat for client (when job is assigned) -->
-    <JobChat
-      v-if="assignedJob && !isHendiman"
-      :job="assignedJob"
-      :isHandyman="false"
-      @close="$emit('close-assigned-job')"
-      @status-updated="$emit('status-updated')"
-      @rating-submitted="$emit('rating-submitted')"
-    />
-
     <!-- Jobs list -->
-    <div v-else class="jobs__list">
+    <div class="jobs__list">
       <article v-for="job in filteredJobs" :key="job.id" class="job-card">
         <div class="job-card__left">
           <div class="job-card__meta">
@@ -98,6 +88,7 @@
                 <span v-if="job.isUrgent" class="tag tag--urgent">דחוף</span>
                 <span
                   class="tag tag--status"
+                  :class="{ 'tag--done': job.status === 'done' }"
                   :title="`סטטוס: ${getStatusLabel(job.status)}`"
                 >
                   {{ getStatusLabel(job.status) }}
@@ -199,13 +190,8 @@
 </template>
 
 <script>
-import JobChat from "./JobChat.vue";
-
 export default {
   name: "JobsSection",
-  components: {
-    JobChat,
-  },
   props: {
     isHendiman: {
       type: Boolean,
@@ -225,7 +211,7 @@ export default {
     },
     handymanFilters: {
       type: Object,
-      default: () => ({ maxKm: 10 }),
+      default: () => ({ maxKm: 25 }),
     },
     jobsPagination: {
       type: Object,
@@ -234,10 +220,6 @@ export default {
     handymanCoords: {
       type: Object,
       default: () => null,
-    },
-    assignedJob: {
-      type: Object,
-      default: null,
     },
   },
   emits: [
@@ -248,9 +230,6 @@ export default {
     "view",
     "next-jobs-page",
     "prev-jobs-page",
-    "close-assigned-job",
-    "status-updated",
-    "rating-submitted",
   ],
   methods: {
     haversineKm(lat1, lon1, lat2, lon2) {
@@ -806,6 +785,12 @@ $r2: 26px;
     border-color: rgba(255, 255, 255, 0.14);
     background: rgba(255, 255, 255, 0.06);
     color: rgba(255, 255, 255, 0.84);
+  }
+
+  &--done {
+    border-color: rgba(16, 185, 129, 0.4);
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
   }
 
   &--hourly {

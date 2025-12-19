@@ -20,7 +20,8 @@
           <div class="hcard__meta">
             <div class="hcard__name">{{ h.username }}</div>
             <div class="hcard__sub">
-              ⭐ {{ h.rating || 0 }} · {{ h.jobsDone || 0 }} עבודות
+              <span v-for="a in h.rating" :key="a">⭐ </span> ·
+              {{ h.jobDone || 0 }} עבודות
               <span
                 v-if="
                   h.travelTimeMinutes !== null &&

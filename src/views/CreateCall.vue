@@ -105,14 +105,17 @@
         <div class="field">
           <label class="label">מיקום</label>
           <div class="location-row">
-            <input
-              class="input"
-              :class="{ 'input-error': errors.location }"
-              v-model="call.location"
-              @input="onLocationChange"
-              type="text"
-              placeholder="עיר, רחוב, מספר…"
-            />
+            <div class="location-input-wrapper">
+              <AddressAutocomplete
+                v-model="call.location"
+                input-id="call-location"
+                :placeholder="usingMyLocation ? 'המיקום שלי' : 'הכנס שם ישוב'"
+                :required="!usingMyLocation"
+                @update:modelValue="onLocationChange"
+                @update:englishName="onEnglishNameUpdate"
+                @update:selectedCity="onCitySelected"
+              />
+            </div>
             <button class="loc-btn" type="button" @click="setMyLocation">
               לפי מיקום
             </button>
@@ -173,15 +176,18 @@
 
 <script>
 import SingleCategorySelector from "@/components/SingleCategorySelector.vue";
+import AddressAutocomplete from "@/components/AddressAutocomplete.vue";
 import { URL } from "@/Url/url";
 import axios from "axios";
 import { useToast } from "@/composables/useToast";
 import { useMainStore } from "@/store/index";
+import citiesData from "@/APIS/AdressFromIsrael.json";
 
 export default {
   name: "CreateCall",
   components: {
     SingleCategorySelector,
+    AddressAutocomplete,
   },
   setup() {
     const store = useMainStore();
@@ -207,15 +213,36 @@ export default {
       geoCoordinates: null,
       usingMyLocation: false,
       errors: {},
+      cities: [],
+      locationEnglishName: null,
+      selectedCity: null, // שמור את הישוב שנבחר מה-JSON
     };
   },
   created() {
     this.toast = useToast();
+    // טען את רשימת הישובים
+    this.cities = Array.isArray(citiesData)
+      ? citiesData.filter((city) => {
+          // דלג על שורות כותרת
+          if (city.name === "שם_ישוב" || city.שם_ישוב === "שם_ישוב") {
+            return false;
+          }
+          return true;
+        })
+      : [];
+
     // ברירת מחדל: עיר/מיקום מהמשתמש אם קיים, אחרת "המיקום שלי"
     const userCity = this.store?.user?.city;
     if (userCity && userCity.trim()) {
-      this.call.location = userCity.trim();
-      this.usingMyLocation = false;
+      // בדוק אם העיר של המשתמש קיימת ברשימת הישובים
+      const cityExists = this.isValidCity(userCity.trim());
+      if (cityExists) {
+        this.call.location = userCity.trim();
+        this.usingMyLocation = false;
+      } else {
+        this.call.location = "המיקום שלי";
+        this.usingMyLocation = true;
+      }
     } else {
       this.call.location = "המיקום שלי";
       this.usingMyLocation = true;
@@ -256,17 +283,77 @@ export default {
       this.call.location = "המיקום שלי";
       this.clearError("location");
       this.usingMyLocation = true;
+      this.locationEnglishName = null;
       if (this.geoCoordinates) {
         this.call.coordinates = { ...this.geoCoordinates };
       }
     },
-    onLocationInput() {
-      this.usingMyLocation = false;
-      this.call.coordinates = {};
-    },
-    onLocationChange() {
+    onLocationChange(value) {
       this.clearError("location");
-      this.onLocationInput();
+
+      // אם המשתמש מחק את "המיקום שלי" או התחיל להקליד משהו אחר
+      if (!value || value.trim() === "" || value !== "המיקום שלי") {
+        this.usingMyLocation = false;
+        this.call.coordinates = {};
+
+        // ולידציה שהמיקום הוא ישוב תקין (רק אם יש ערך)
+        if (value && value.trim() !== "") {
+          if (!this.isValidCity(value)) {
+            this.errors.location =
+              "ישוב זה לא נמצא במאגר. בחר ישוב מהרשימה או לחץ על 'לפי מיקום'";
+          }
+        }
+      } else {
+        // אם הערך הוא "המיקום שלי", שמור את המצב
+        this.usingMyLocation = true;
+        if (this.geoCoordinates) {
+          this.call.coordinates = { ...this.geoCoordinates };
+        }
+      }
+    },
+    onEnglishNameUpdate(englishName) {
+      this.locationEnglishName = englishName;
+    },
+    onCitySelected(city) {
+      this.selectedCity = city;
+      if (city) {
+        this.locationEnglishName =
+          city.english_name || city.שם_ישוב_לועזי || null;
+      }
+    },
+    isValidCity(cityName) {
+      if (!cityName || cityName.trim() === "" || cityName === "המיקום שלי") {
+        return true; // "המיקום שלי" תמיד תקין
+      }
+
+      const searchValue = cityName.trim();
+      const normalizedSearch = searchValue.replace(/\s+/g, " ");
+
+      return this.cities.some((city) => {
+        const cityNameField = (city.name || city.שם_ישוב || "").trim();
+        if (!cityNameField) return false;
+
+        const normalizedCityName = cityNameField.replace(/\s+/g, " ");
+
+        // השוואה מדויקת
+        if (normalizedCityName === normalizedSearch) {
+          return true;
+        }
+        // השוואה case-insensitive
+        if (
+          normalizedCityName.toLowerCase() === normalizedSearch.toLowerCase()
+        ) {
+          return true;
+        }
+        // השוואה עם הסרת תווים מיוחדים
+        const cleanCity = normalizedCityName.replace(/['"()]/g, "").trim();
+        const cleanSearch = normalizedSearch.replace(/['"()]/g, "").trim();
+        if (cleanCity === cleanSearch) {
+          return true;
+        }
+
+        return false;
+      });
     },
     goBack() {
       this.$router.go(-1);
@@ -368,8 +455,12 @@ export default {
       // בדיקת מיקום
       if (!this.call.location || this.call.location.trim().length === 0) {
         this.errors.location = "יש למלא מיקום";
-      } else if (this.call.location.trim().length < 3) {
-        this.errors.location = "המיקום חייב להכיל לפחות 3 תווים";
+      } else if (this.call.location === "המיקום שלי") {
+        // "המיקום שלי" תמיד תקין
+        // אין צורך לבדוק
+      } else if (!this.isValidCity(this.call.location)) {
+        this.errors.location =
+          "ישוב זה לא נמצא במאגר. בחר ישוב מהרשימה או לחץ על 'לפי מיקום'";
       }
 
       return Object.keys(this.errors).length === 0;
@@ -413,20 +504,27 @@ export default {
           ...this.call,
           userId: this.$route.params.id || null,
           usingMyLocation: this.usingMyLocation,
+          locationEnglishName: this.locationEnglishName || null,
+          selectedCity: this.selectedCity || null, // שלח את הישוב המלא מה-JSON
         };
 
-        // ודא שקואורדינטות נשמרות כמספרים וללא עיגול
-        if (callData.coordinates) {
-          const lng = callData.coordinates.lng ?? callData.coordinates.lon;
-          const lat = callData.coordinates.lat;
-          if (lng !== undefined && lat !== undefined) {
-            callData.coordinates = {
-              lng: Number(lng),
-              lat: Number(lat),
-            };
+        // אם לא "המיקום שלי", אל תשלח קואורדינטות (השרת ימצא אותן דרך forward geocoding)
+        if (!this.usingMyLocation) {
+          // מחק את הקואורדינטות לחלוטין כדי שהשרת ימצא אותן דרך forward geocoding
+          delete callData.coordinates;
+        } else {
+          // ודא שקואורדינטות נשמרות כמספרים וללא עיגול
+          if (callData.coordinates) {
+            const lng = callData.coordinates.lng ?? callData.coordinates.lon;
+            const lat = callData.coordinates.lat;
+            if (lng !== undefined && lat !== undefined) {
+              callData.coordinates = {
+                lng: Number(lng),
+                lat: Number(lat),
+              };
+            }
           }
         }
-        // השאר קואורדינטות אם קיימות (גם אם לא "המיקום שלי") כדי לאפשר חישוב מרחק בשרת/קליינט
 
         // הסר שדות שלא צריך לשלוח
         delete callData.image; // לא צריך לשלוח את ה-File object
@@ -841,6 +939,12 @@ $r2: 26px;
   gap: 8px;
   align-items: center;
 }
+
+.location-input-wrapper {
+  flex: 1;
+  min-width: 0;
+}
+
 .loc-btn {
   padding: 8px 12px;
   border-radius: 10px;
