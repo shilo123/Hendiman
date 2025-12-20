@@ -1,7 +1,12 @@
 <template>
   <div class="action-buttons">
-    <button class="btn-create-call" type="button" @click="$emit('create-call')">
-      <span class="icon">⚡</span>
+    <button
+      class="btn-create-call"
+      type="button"
+      @click="$emit('create-call')"
+      aria-label="צור קריאה חדשה"
+    >
+      <span class="icon" aria-hidden="true">⚡</span>
       <span>צור קריאה</span>
     </button>
   </div>
@@ -32,6 +37,7 @@ export default {
   --orange-2: #ff9a3c;
   --black: #0b0b0f;
   --black-2: #14141a;
+  --text-on-orange: #0b0b0f; // High contrast for WCAG AA
 
   width: 100%;
   display: flex;
@@ -41,18 +47,13 @@ export default {
   padding: 0.95rem 1.25rem;
   min-height: 48px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 122, 0, 0.55);
-  color: #fff;
-  background: linear-gradient(
-    135deg,
-    var(--black) 0%,
-    var(--black-2) 55%,
-    rgba(255, 122, 0, 0.1) 100%
-  );
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45), 0 0 0 0 rgba(255, 122, 0, 0);
+  border: 2px solid var(--orange);
+  color: var(--text-on-orange);
+  background: linear-gradient(135deg, var(--orange) 0%, var(--orange-2) 100%);
+  box-shadow: 0 4px 12px rgba(255, 122, 0, 0.3);
   cursor: pointer;
   user-select: none;
-  -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color: rgba(255, 122, 0, 0.2);
   font-weight: 800;
   letter-spacing: 0.2px;
   text-transform: none;
@@ -60,8 +61,8 @@ export default {
     border-color 0.18s ease, background 0.18s ease, filter 0.18s ease;
   position: relative;
   overflow: hidden;
-  font-size: 14px;
-  border: none;
+  font-size: clamp(14px, 2.5vw, 16px);
+  touch-action: manipulation;
 
   .icon {
     width: 18px;
@@ -135,16 +136,22 @@ export default {
   }
 
   @media (max-width: 768px) {
-    padding: 0.75rem 1rem;
-    min-height: 42px;
-    font-size: 13px;
-    border-radius: 12px;
-    gap: 0.5rem;
+    padding: 0.875rem 1.125rem;
+    min-height: 52px; // Increased for better touch target (48-56px range)
+    font-size: clamp(15px, 4vw, 16px);
+    border-radius: 16px;
+    gap: 0.6rem;
+    border-width: 2px;
 
     .icon {
-      width: 16px;
-      height: 16px;
+      width: 20px;
+      height: 20px;
     }
+  }
+
+  @media (max-width: 480px) {
+    min-height: 56px; // Maximum recommended height
+    padding: 1rem 1.25rem;
   }
 }
 </style>

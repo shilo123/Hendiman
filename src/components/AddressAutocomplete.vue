@@ -8,10 +8,14 @@
       @focus="handleFocus"
       @keydown="handleKeydown"
       type="text"
+      inputmode="text"
       :placeholder="placeholder"
       :required="required"
       :class="{ invalid: showError }"
-      autocomplete="off"
+      autocomplete="address-line1"
+      aria-label="הכנס שם ישוב"
+      aria-invalid="false"
+      aria-describedby="location-error"
     />
     <div
       v-if="showSuggestions && filteredCities.length > 0"
@@ -293,15 +297,16 @@ export default {
 }
 
 .address-autocomplete input::placeholder {
-  color: #666;
-  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: clamp(15px, 3.5vw, 16px);
 }
 
 .address-autocomplete input:focus {
-  outline: none;
-  border-color: #f97316;
-  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.1);
-  background: #2a2a2a;
+  outline: 2px solid rgba(255, 122, 0, 0.4);
+  outline-offset: 2px;
+  border-color: rgba(255, 122, 0, 0.6);
+  box-shadow: 0 0 0 3px rgba(255, 122, 0, 0.2);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .address-autocomplete input:hover {
@@ -309,12 +314,14 @@ export default {
 }
 
 .address-autocomplete input.invalid {
-  border-color: #dc3545;
+  border-color: rgba(220, 53, 69, 0.6);
+  background: rgba(220, 53, 69, 0.1);
 }
 
 .address-autocomplete input.invalid:focus {
-  border-color: #dc3545;
-  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.1);
+  border-color: rgba(220, 53, 69, 0.8);
+  outline-color: rgba(220, 53, 69, 0.4);
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.2);
 }
 
 .suggestions-dropdown {

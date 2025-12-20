@@ -133,14 +133,27 @@
       </template>
     </main>
 
-    <div v-if="!isHendiman" class="mobile-cta">
-      <button class="cta-btn primary" type="button" @click="onCreateCallCta">
-        צור קריאה
+    <!-- Mobile Bottom Navigation & CTA -->
+    <nav v-if="!isHendiman" class="mobile-nav" aria-label="ניווט ראשי">
+      <button
+        class="nav-btn nav-btn--primary"
+        type="button"
+        @click="onCreateCallCta"
+        aria-label="צור קריאה חדשה"
+      >
+        <span class="nav-btn__icon" aria-hidden="true">⚡</span>
+        <span class="nav-btn__label">צור קריאה</span>
       </button>
-      <button class="cta-btn" type="button" @click="onOpenAllUsersChat">
-        צ׳אט
+      <button
+        class="nav-btn"
+        type="button"
+        @click="onOpenAllUsersChat"
+        aria-label="פתח צ'אט"
+      >
+        <span class="nav-btn__icon" aria-hidden="true">💬</span>
+        <span class="nav-btn__label">צ׳אט</span>
       </button>
-    </div>
+    </nav>
   </div>
 </template>
 
@@ -1155,9 +1168,13 @@ $r2: 26px;
   }
 
   @media (max-width: 768px) {
-    gap: 10px;
+    gap: clamp(16px, 4vw, 24px);
     display: flex;
-    flex-direction: column-reverse; // Jobs section at bottom on mobile
+    flex-direction: column;
+    padding: clamp(12px, 3vw, 16px);
+    padding-bottom: calc(
+      80px + env(safe-area-inset-bottom)
+    ); // Space for bottom nav
   }
 }
 
@@ -2576,37 +2593,97 @@ $r2: 26px;
   }
 }
 
-/* Mobile CTA bar */
-.mobile-cta {
+/* Mobile Bottom Navigation & CTA */
+.mobile-nav {
   position: fixed;
   bottom: 0;
   right: 0;
   left: 0;
   display: none;
-  gap: 8px;
-  padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
-  background: rgba(0, 0, 0, 0.82);
-  backdrop-filter: blur(12px);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 12px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: rgba(11, 11, 15, 0.95);
+  backdrop-filter: blur(20px) saturate(180%);
+  border-top: 1px solid rgba(255, 122, 0, 0.2);
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
   z-index: 2000;
+  align-items: center;
 }
-.cta-btn {
+
+.nav-btn {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 56px; // WCAG AA minimum touch target
+  padding: 8px 12px;
   border: none;
-  border-radius: 14px;
-  padding: 12px 14px;
-  font-weight: 800;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
-}
-.cta-btn.primary {
-  background: linear-gradient(135deg, #ff6a00, #ff8a2b);
-  color: #0b0b0f;
+  border-radius: 16px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.06);
+  transition: all 0.2s ease;
+  touch-action: manipulation;
+  cursor: pointer;
+  -webkit-tap-highlight-color: rgba(255, 122, 0, 0.2);
+
+  &:focus-visible {
+    outline: 2px solid rgba(255, 122, 0, 0.6);
+    outline-offset: 2px;
+  }
+
+  &:active {
+    transform: scale(0.98);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  &__icon {
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  &__label {
+    font-size: clamp(11px, 2.5vw, 12px);
+    line-height: 1.2;
+  }
+
+  &--primary {
+    background: linear-gradient(135deg, #ff6a00, #ff8a2b);
+    color: #0b0b0f;
+    font-weight: 800;
+    box-shadow: 0 4px 12px rgba(255, 106, 0, 0.3);
+    min-height: 56px; // Primary CTA: 48-56px range
+
+    &:hover {
+      box-shadow: 0 6px 16px rgba(255, 106, 0, 0.4);
+      transform: translateY(-1px);
+    }
+
+    &:active {
+      transform: translateY(0) scale(0.98);
+    }
+
+    .nav-btn__icon {
+      font-size: 24px;
+    }
+
+    .nav-btn__label {
+      font-size: clamp(13px, 3vw, 14px);
+      font-weight: 900;
+    }
+  }
 }
 
 @media (max-width: 768px) {
-  .mobile-cta {
+  .mobile-nav {
     display: flex;
+  }
+
+  // Add padding to main content to prevent overlap with bottom nav
+  .grid {
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
   }
 }
 </style>

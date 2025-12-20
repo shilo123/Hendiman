@@ -617,9 +617,13 @@ $r2: 26px;
       transparent 55%
     ),
     linear-gradient(180deg, $bg, $bg2);
-  padding: 20px;
+  padding: clamp(12px, 3vw, 20px);
   direction: rtl;
   font-family: $font-family;
+
+  @media (max-width: 768px) {
+    padding: clamp(16px, 4vw, 20px);
+  }
 }
 
 .container {
@@ -653,31 +657,38 @@ $r2: 26px;
 }
 
 .title {
-  font-size: 28px;
+  font-size: clamp(24px, 6vw, 32px);
   font-weight: 1000;
   color: $text;
-  margin: 0 0 8px 0;
+  margin: 0 0 clamp(8px, 2vw, 12px) 0;
+  line-height: 1.2;
 }
 
 .subtitle {
   color: $muted;
   font-weight: 800;
-  font-size: 14px;
+  font-size: clamp(13px, 3.5vw, 15px);
   margin: 0;
+  line-height: 1.5;
 }
 
 .form-container {
   background: linear-gradient(180deg, $card2, rgba(255, 255, 255, 0.04));
   border: 1px solid $stroke;
   border-radius: $r2;
-  padding: 24px;
+  padding: clamp(16px, 4vw, 24px);
   box-shadow: $shadow;
+
+  @media (max-width: 768px) {
+    padding: clamp(20px, 5vw, 24px);
+    border-radius: clamp(20px, 5vw, 26px);
+  }
 }
 
 .field {
   display: grid;
-  gap: 8px;
-  margin-bottom: 20px;
+  gap: clamp(8px, 2vw, 12px);
+  margin-bottom: clamp(16px, 4vw, 24px);
 }
 
 .field-row {
@@ -697,9 +708,11 @@ $r2: 26px;
 }
 
 .label {
-  font-size: 12px;
+  font-size: clamp(13px, 3vw, 14px);
   font-weight: 1000;
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 4px;
+  line-height: 1.4;
 }
 
 .input,
@@ -707,27 +720,37 @@ $r2: 26px;
   width: 100%;
   box-sizing: border-box;
   border-radius: 16px;
-  border: 1px solid rgba($orange, 0.18);
+  border: 2px solid rgba($orange, 0.18);
   background: rgba(255, 255, 255, 0.06);
   color: $text;
-  padding: 12px 12px;
+  padding: clamp(14px, 3.5vw, 16px);
   font-weight: 900;
-  font-size: 16px;
+  font-size: clamp(16px, 4vw, 18px); // Prevent iOS zoom (min 16px)
+  min-height: 48px; // WCAG AA touch target
   transition: all 0.2s ease;
+  touch-action: manipulation;
 
   &::placeholder {
     color: rgba(255, 255, 255, 0.45);
+    font-size: clamp(15px, 3.5vw, 16px);
   }
 
   &:focus {
     @include focusRing;
-    border-color: rgba($orange, 0.45);
-    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba($orange, 0.6);
+    background: rgba(255, 255, 255, 0.1);
+    outline: 2px solid rgba($orange, 0.4);
+    outline-offset: 2px;
   }
 
   &:hover {
-    border-color: rgba($orange, 0.28);
-    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba($orange, 0.35);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  @media (max-width: 768px) {
+    min-height: 52px; // Larger on mobile
+    padding: clamp(16px, 4vw, 18px);
   }
 }
 
@@ -735,21 +758,28 @@ $r2: 26px;
   width: 100%;
   box-sizing: border-box;
   border-radius: 16px;
-  border: 1px solid rgba($orange, 0.18);
+  border: 2px solid rgba($orange, 0.18);
   background: rgba(255, 255, 255, 0.06);
   color: $text;
-  padding: 12px 40px 12px 12px;
+  padding: clamp(14px, 3.5vw, 16px) 40px clamp(14px, 3.5vw, 16px) 12px;
   font-weight: 900;
-  font-size: 16px;
+  font-size: clamp(16px, 4vw, 18px); // Prevent iOS zoom
+  min-height: 48px; // WCAG AA touch target
   -webkit-appearance: none;
   appearance: none;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
+  touch-action: manipulation;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ff6a00' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: left 12px center;
   background-size: 12px;
+
+  @media (max-width: 768px) {
+    min-height: 52px; // Larger on mobile
+    padding: clamp(16px, 4vw, 18px) 40px clamp(16px, 4vw, 18px) 12px;
+  }
 
   &::placeholder {
     color: rgba(255, 255, 255, 0.45);
@@ -757,8 +787,10 @@ $r2: 26px;
 
   &:focus {
     @include focusRing;
-    border-color: rgba($orange, 0.45);
-    background-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba($orange, 0.6);
+    background-color: rgba(255, 255, 255, 0.1);
+    outline: 2px solid rgba($orange, 0.4);
+    outline-offset: 2px;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ff8a2b' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
   }
 
@@ -783,7 +815,12 @@ $r2: 26px;
 
 .textarea {
   resize: vertical;
-  min-height: 92px;
+  min-height: clamp(100px, 25vw, 120px);
+  line-height: 1.5;
+
+  @media (max-width: 768px) {
+    min-height: clamp(120px, 30vw, 140px);
+  }
 }
 
 .preview {
@@ -881,11 +918,17 @@ $r2: 26px;
 
 .error-message {
   display: block;
-  margin-top: 6px;
-  color: $danger;
-  font-size: 12px;
+  margin-top: clamp(6px, 1.5vw, 8px);
+  color: rgba(220, 53, 69, 0.95);
+  font-size: clamp(12px, 3vw, 13px);
   font-weight: 800;
+  line-height: 1.4;
+  padding: 4px 0;
   animation: slideIn 0.2s ease-out;
+
+  @media (max-width: 768px) {
+    font-size: clamp(13px, 3.5vw, 14px);
+  }
 }
 
 .input-error {
@@ -1111,14 +1154,20 @@ $r2: 26px;
 
 .btn {
   border-radius: 16px;
-  padding: 14px 20px;
-  border: 1px solid rgba($orange, 0.18);
+  padding: clamp(14px, 3.5vw, 18px) clamp(20px, 5vw, 24px);
+  border: 2px solid rgba($orange, 0.18);
   background: rgba(255, 255, 255, 0.06);
   color: $text;
   cursor: pointer;
   font-weight: 1000;
   transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
-  font-size: 15px;
+  font-size: clamp(15px, 4vw, 16px);
+  min-height: 48px; // WCAG AA touch target
+  touch-action: manipulation;
+
+  @media (max-width: 768px) {
+    min-height: 52px; // Larger on mobile
+  }
 
   &:hover {
     transform: translateY(-1px);
