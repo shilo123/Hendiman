@@ -428,7 +428,7 @@ export default {
             error.response?.data?.error ||
             error.message ||
             "שגיאה בהעלאת התמונה. נסה שוב.";
-          
+
           // אם השגיאה היא בגלל AWS credentials, נשתמש ב-base64 במקום
           if (
             errorMessage.includes("credentials") ||
@@ -439,9 +439,7 @@ export default {
             console.log("AWS credentials issue - using base64 image instead");
             // נשתמש ב-imagePreview (base64) במקום imageUrl
             // זה יאפשר למשתמש להמשיך גם בלי AWS credentials
-            this.toast.showWarning(
-              "התמונה תישמר באופן מקומי (לא הועלתה לענן)"
-            );
+            this.toast.showWarning("התמונה תישמר באופן מקומי (לא הועלתה לענן)");
             // לא נציג שגיאה - נמשיך עם base64
             this.clearError("image");
           } else {

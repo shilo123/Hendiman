@@ -2,7 +2,9 @@
   <Transition name="toast">
     <div v-if="isVisible" :class="['toast', type]">
       <div class="toast-content">
-        <span class="toast-icon">{{ type === "success" ? "✓" : "✕" }}</span>
+        <span class="toast-icon">{{
+          type === "success" ? "✓" : type === "error" ? "✕" : "⚠"
+        }}</span>
         <span class="toast-message">{{ content }}</span>
       </div>
     </div>
@@ -20,7 +22,7 @@ export default {
     type: {
       type: String,
       default: "success",
-      validator: (value) => ["success", "error"].includes(value),
+      validator: (value) => ["success", "error", "warning"].includes(value),
     },
     duration: {
       type: Number,
@@ -74,6 +76,12 @@ export default {
   background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
   border: 2px solid #f97316;
   box-shadow: 0 8px 24px rgba(249, 115, 22, 0.3);
+}
+
+.toast.warning {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  border: 2px solid #f59e0b;
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4);
 }
 
 .toast-content {
