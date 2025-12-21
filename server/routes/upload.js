@@ -20,12 +20,25 @@ function setupUploadRoutes(app) {
 
       if (!result.success) {
         const statusCode = result.isAccessDenied ? 403 : 500;
+        let errorMessage = result.error;
+
+        // Provide more user-friendly error messages
+        if (result.code === "CredentialsNotConfigured") {
+          errorMessage = "AWS credentials not configured on server";
+        } else if (
+          result.error?.includes("credentials") ||
+          result.error?.includes("Credential")
+        ) {
+          errorMessage = "AWS credentials are invalid or expired";
+        } else if (result.isAccessDenied) {
+          errorMessage =
+            "No permission to upload to S3. Please check AWS IAM permissions.";
+        }
+
         if (!res.headersSent) {
           return res.status(statusCode).json({
             error: result.isAccessDenied ? "Access Denied" : "S3 Upload Failed",
-            message: result.isAccessDenied
-              ? "No permission to upload to S3. Please check AWS IAM permissions."
-              : result.error,
+            message: errorMessage,
             details: result.error,
             code: result.code,
           });
@@ -57,12 +70,25 @@ function setupUploadRoutes(app) {
 
       if (!result.success) {
         const statusCode = result.isAccessDenied ? 403 : 500;
+        let errorMessage = result.error;
+
+        // Provide more user-friendly error messages
+        if (result.code === "CredentialsNotConfigured") {
+          errorMessage = "AWS credentials not configured on server";
+        } else if (
+          result.error?.includes("credentials") ||
+          result.error?.includes("Credential")
+        ) {
+          errorMessage = "AWS credentials are invalid or expired";
+        } else if (result.isAccessDenied) {
+          errorMessage =
+            "No permission to upload to S3. Please check AWS IAM permissions.";
+        }
+
         if (!res.headersSent) {
           return res.status(statusCode).json({
             error: result.isAccessDenied ? "Access Denied" : "S3 Upload Failed",
-            message: result.isAccessDenied
-              ? "No permission to upload to S3. Please check AWS IAM permissions."
-              : result.error,
+            message: errorMessage,
             details: result.error,
             code: result.code,
           });
@@ -95,12 +121,25 @@ function setupUploadRoutes(app) {
 
       if (!result.success) {
         const statusCode = result.isAccessDenied ? 403 : 500;
+        let errorMessage = result.error;
+
+        // Provide more user-friendly error messages
+        if (result.code === "CredentialsNotConfigured") {
+          errorMessage = "AWS credentials not configured on server";
+        } else if (
+          result.error?.includes("credentials") ||
+          result.error?.includes("Credential")
+        ) {
+          errorMessage = "AWS credentials are invalid or expired";
+        } else if (result.isAccessDenied) {
+          errorMessage =
+            "No permission to upload to S3. Please check AWS IAM permissions.";
+        }
+
         if (!res.headersSent) {
           return res.status(statusCode).json({
             error: result.isAccessDenied ? "Access Denied" : "S3 Upload Failed",
-            message: result.isAccessDenied
-              ? "No permission to upload to S3. Please check AWS IAM permissions."
-              : result.error,
+            message: errorMessage,
             details: result.error,
             code: result.code,
           });

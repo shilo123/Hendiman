@@ -1,11 +1,23 @@
 const { S3Client } = require("@aws-sdk/client-s3");
 
-const s3 = new S3Client({
+// Check if AWS credentials are configured
+const hasCredentials =
+  process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY;
+
+const s3Config = {
   region: process.env.AWS_REGION || "us-east-1",
-  credentials: {
+};
+
+// Only add credentials if they exist
+if (hasCredentials) {
+  s3Config.credentials = {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
-});
+  };
+} else {
+  console.warn("⚠️  AWS credentials not configured. S3 uploads will fail.");
+}
+
+const s3 = new S3Client(s3Config);
 
 module.exports = s3;
