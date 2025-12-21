@@ -1434,11 +1434,21 @@ $orange2: #ff8a2b;
   padding: 18px 18px;
   border-bottom: 1px solid rgba($orange, 0.14);
   background: linear-gradient(180deg, $panel2, $panel);
+
+  @media (max-width: 768px) {
+    padding: 12px 10px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
 }
 .luxTop__title {
   font-size: 20px;
   font-weight: 1100;
   color: $text;
+
+  @media (max-width: 768px) {
+    font-size: 16px;
+  }
 }
 .luxTop__meta {
   margin-top: 6px;
@@ -1447,6 +1457,21 @@ $orange2: #ff8a2b;
   color: $muted;
   display: flex;
   gap: 8px;
+
+  @media (max-width: 768px) {
+    font-size: 10px;
+    margin-top: 4px;
+    gap: 4px;
+  }
+}
+.luxTop__left {
+  flex: 1;
+  min-width: 0;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    order: 1;
+  }
 }
 .luxTop__name {
   color: rgba(255, 255, 255, 0.82);
@@ -1458,12 +1483,28 @@ $orange2: #ff8a2b;
   display: flex;
   align-items: center;
   gap: 10px;
+
+  @media (max-width: 768px) {
+    gap: 6px;
+    flex-wrap: wrap;
+    order: 2;
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 
 .luxTop__nav {
   display: flex;
   align-items: center;
   gap: 8px;
+
+  @media (max-width: 768px) {
+    gap: 4px;
+    order: 3;
+    width: 100%;
+    justify-content: flex-end;
+    margin-top: 4px;
+  }
 }
 
 .navBtn {
@@ -1484,16 +1525,32 @@ $orange2: #ff8a2b;
   text-decoration: none;
   transition: all 0.2s ease;
   white-space: nowrap;
+
+  @media (max-width: 768px) {
+    min-width: auto;
+    height: 32px;
+    padding: 0 8px;
+    font-size: 11px;
+    gap: 4px;
+  }
 }
 
 .navBtn__icon {
   font-size: 16px;
   flex-shrink: 0;
+
+  @media (max-width: 768px) {
+    font-size: 12px;
+  }
 }
 
 .navBtn__text {
   font-size: 12px;
   font-weight: 900;
+
+  @media (max-width: 768px) {
+    font-size: 9px;
+  }
 }
 
 .navBtn:hover {
@@ -1540,6 +1597,13 @@ $orange2: #ff8a2b;
   background: rgba(0, 0, 0, 0.24);
   color: $text;
   cursor: pointer;
+
+  @media (max-width: 768px) {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    font-size: 14px;
+  }
 }
 .iconBtn:hover {
   border-color: rgba($orange, 0.35);
@@ -1561,6 +1625,12 @@ $orange2: #ff8a2b;
   font-weight: 900;
   transition: all 0.2s ease;
   white-space: nowrap;
+
+  @media (max-width: 768px) {
+    padding: 6px 10px;
+    font-size: 10px;
+    border-radius: 10px;
+  }
 }
 
 .cancelJobBtn:hover {
@@ -1667,6 +1737,12 @@ $orange2: #ff8a2b;
   color: $text;
   font-size: 12px;
   font-weight: 1000;
+
+  @media (max-width: 768px) {
+    padding: 6px 8px;
+    font-size: 10px;
+    gap: 6px;
+  }
 }
 .statusPill__dot {
   width: 8px;
@@ -1875,6 +1951,13 @@ $orange2: #ff8a2b;
   outline: none;
   position: relative;
   overflow: hidden;
+
+  @media (max-width: 768px) {
+    padding: 12px 16px;
+    font-size: 0.9rem;
+    border-radius: 20px;
+    border-width: 1.5px;
+  }
 }
 
 .seg__btn::after {
@@ -1934,6 +2017,11 @@ $orange2: #ff8a2b;
   font-size: 11px;
   font-weight: 800;
   color: rgba(255, 255, 255, 0.55);
+
+  @media (max-width: 768px) {
+    font-size: 9px;
+    margin-top: 6px;
+  }
 }
 
 /* Chat Panel */
@@ -1955,11 +2043,21 @@ $orange2: #ff8a2b;
     ),
     rgba(255, 255, 255, 0.06);
   border: 1px solid rgba($orange, 0.16);
+
+  @media (max-width: 768px) {
+    margin: 10px 10px 0 10px;
+    padding: 12px;
+    border-radius: 14px;
+  }
 }
 .rateCard__title {
   color: $orange;
   font-weight: 1100;
   font-size: 14px;
+
+  @media (max-width: 768px) {
+    font-size: 12px;
+  }
 }
 .rating {
   display: flex;
@@ -2146,6 +2244,11 @@ $orange2: #ff8a2b;
   display: flex;
   flex-direction: column;
   gap: 12px;
+
+  @media (max-width: 768px) {
+    padding: 12px 10px 8px 10px;
+    gap: 10px;
+  }
 }
 .empty {
   margin: auto;
@@ -2165,6 +2268,12 @@ $orange2: #ff8a2b;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.06);
   color: $text;
+
+  @media (max-width: 768px) {
+    max-width: 85%;
+    padding: 10px 10px 8px 10px;
+    border-radius: 16px;
+  }
 }
 .msgRow.is-me .bubble {
   background: linear-gradient(
@@ -2184,6 +2293,11 @@ $orange2: #ff8a2b;
   font-size: 14px;
   font-weight: 750;
   line-height: 1.55;
+
+  @media (max-width: 768px) {
+    font-size: 13px;
+    line-height: 1.5;
+  }
 }
 .bubble__meta {
   margin-top: 8px;
@@ -2218,6 +2332,11 @@ $orange2: #ff8a2b;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   display: block;
+
+  @media (max-width: 768px) {
+    max-width: 100%;
+    border-radius: 12px;
+  }
 }
 
 .bubble__location {
@@ -2225,11 +2344,20 @@ $orange2: #ff8a2b;
   width: 100%;
   max-width: 100% !important;
   min-width: 350px;
+
+  @media (max-width: 768px) {
+    min-width: 100%;
+    max-width: 100% !important;
+  }
 }
 
 .bubble--location {
   max-width: 85% !important;
   padding-bottom: 0;
+
+  @media (max-width: 768px) {
+    max-width: 95% !important;
+  }
 }
 
 .bubble__locationPreview {
@@ -2255,6 +2383,11 @@ $orange2: #ff8a2b;
   display: block;
   border-radius: 12px;
   border: 1px solid rgba($orange, 0.2);
+
+  @media (max-width: 768px) {
+    height: 150px;
+    border-radius: 10px;
+  }
 }
 
 .bubble__locationOverlay {
@@ -2457,6 +2590,12 @@ $orange2: #ff8a2b;
   display: flex;
   gap: 10px;
   align-items: center;
+
+  @media (max-width: 768px) {
+    padding: 10px 8px;
+    gap: 6px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
 }
 .pillBtn {
   width: 46px;
@@ -2466,6 +2605,12 @@ $orange2: #ff8a2b;
   background: rgba(255, 255, 255, 0.06);
   color: $text;
   cursor: pointer;
+
+  @media (max-width: 768px) {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
 }
 .pillBtn:hover {
   border-color: rgba($orange, 0.42);
@@ -2474,6 +2619,10 @@ $orange2: #ff8a2b;
 .pillBtn__plus {
   font-size: 22px;
   font-weight: 1100;
+
+  @media (max-width: 768px) {
+    font-size: 18px;
+  }
 }
 
 .tools {
@@ -2487,6 +2636,14 @@ $orange2: #ff8a2b;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(15, 16, 20, 0.92);
   box-shadow: 0 18px 46px rgba(0, 0, 0, 0.55);
+
+  @media (max-width: 768px) {
+    bottom: 60px;
+    right: 8px;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 14px;
+  }
 }
 .tool {
   width: 96px;
@@ -2501,6 +2658,13 @@ $orange2: #ff8a2b;
   align-items: center;
   gap: 6px;
   font-weight: 1000;
+
+  @media (max-width: 768px) {
+    width: 70px;
+    padding: 8px 6px;
+    border-radius: 12px;
+    gap: 4px;
+  }
 }
 .tool:hover {
   border-color: rgba($orange, 0.45);
@@ -2508,10 +2672,18 @@ $orange2: #ff8a2b;
 }
 .tool__ic {
   font-size: 18px;
+
+  @media (max-width: 768px) {
+    font-size: 16px;
+  }
 }
 .tool__t {
   font-size: 11px;
   opacity: 0.9;
+
+  @media (max-width: 768px) {
+    font-size: 9px;
+  }
 }
 
 .composer__input {
@@ -2524,6 +2696,13 @@ $orange2: #ff8a2b;
   padding: 0 16px;
   font-weight: 900;
   outline: none;
+  font-size: 15px;
+
+  @media (max-width: 768px) {
+    height: 40px;
+    padding: 0 12px;
+    font-size: 16px; // Prevent iOS zoom
+  }
 }
 .composer__input:focus {
   border-color: rgba($orange, 0.45);
@@ -2539,6 +2718,13 @@ $orange2: #ff8a2b;
   color: #0b0c10;
   font-weight: 1100;
   cursor: pointer;
+  font-size: 14px;
+
+  @media (max-width: 768px) {
+    height: 40px;
+    padding: 0 14px;
+    font-size: 12px;
+  }
 }
 .sendCta:disabled {
   opacity: 0.55;

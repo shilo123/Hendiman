@@ -32,10 +32,10 @@
     </div>
 
     <div class="top__right">
-      <!-- Return to job button (when job is active but chat is minimized) -->
+      <!-- Return to job button (when job is active but chat is minimized) - hidden on mobile -->
       <button
         v-if="hasActiveJob && isChatMinimized"
-        class="top__returnJobBtn"
+        class="top__returnJobBtn top__returnJobBtn--desktop"
         :class="{ 'top__returnJobBtn--handyman': isHendiman }"
         type="button"
         @click="$emit('return-to-job')"
@@ -652,6 +652,11 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   box-shadow: 0 4px 12px rgba($orange, 0.1);
   position: relative;
   overflow: hidden;
+
+  // Hide on mobile (will be shown above jobs section)
+  @media (max-width: 768px) {
+    display: none;
+  }
 
   @media (max-width: 768px) {
     padding: 6px 10px;

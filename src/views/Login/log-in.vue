@@ -82,6 +82,14 @@
             <button type="submit" class="login-button">התחבר</button>
           </form>
 
+          <button
+            type="button"
+            class="forgot-password-button"
+            @click="handleForgotPassword"
+          >
+            שכחתי סיסמה
+          </button>
+
           <div class="divider">
             <span>או</span>
           </div>
@@ -235,6 +243,18 @@ export default {
     },
     goToRegister() {
       this.$router.push({ name: "Register" });
+    },
+    async handleForgotPassword() {
+      // קריאה לשרת ללא פעולה
+      try {
+        await axios.post(`${URL}/forgot-password`, {
+          username: this.username,
+        });
+        // לא עושים כלום עם התשובה
+      } catch (error) {
+        // לא עושים כלום עם השגיאה
+        console.log("Forgot password request sent");
+      }
     },
   },
 };
@@ -538,6 +558,27 @@ export default {
   .password-input-wrapper input {
     padding-left: 45px;
   }
+}
+
+.forgot-password-button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 8px;
+  background: transparent;
+  border: 1px solid rgba(255, 106, 0, 0.3);
+  border-radius: 8px;
+  color: rgba(255, 106, 0, 0.8);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+}
+
+.forgot-password-button:hover {
+  background: rgba(255, 106, 0, 0.1);
+  border-color: rgba(255, 106, 0, 0.5);
+  color: rgba(255, 106, 0, 1);
 }
 
 .login-button {

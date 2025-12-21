@@ -26,7 +26,8 @@
     <!-- MAIN -->
     <main class="grid">
       <!-- Job Chat (when job is assigned) -->
-      <JobChat
+      <component
+        :is="isMobile ? 'JobChatMobile' : 'JobChat'"
         v-if="currentAssignedJob && !isChatMinimized"
         :job="currentAssignedJob"
         :isHandyman="isHendiman"
@@ -44,6 +45,19 @@
           @create-call="onCreateCallCta"
           class="client-actions-top"
         />
+
+        <!-- Return to job button (mobile only - above jobs) -->
+        <button
+          v-if="isMobile && currentAssignedJob && isChatMinimized"
+          class="return-job-mobile"
+          :class="{ 'return-job-mobile--handyman': isHendiman }"
+          type="button"
+          @click="onReturnToJob"
+        >
+          <span class="return-job-mobile__icon">🔧</span>
+          <span class="return-job-mobile__text">חזור לעבודה שלך</span>
+        </button>
+
         <!-- LEFT ~60% JOBS -->
         <JobsSection
           :isHendiman="isHendiman"
@@ -76,11 +90,12 @@
         <!-- RIGHT SIDE -->
         <aside class="side">
           <!-- CLIENT: Create Call Button (desktop only) -->
-          <ClientActions
-            v-if="!isHendiman"
-            @create-call="onCreateCallCta"
-            class="client-actions-desktop"
-          />
+          <section v-if="!isHendiman" class="panel client-actions-panel">
+            <ClientActions
+              @create-call="onCreateCallCta"
+              class="client-actions-desktop"
+            />
+          </section>
           <!-- CLIENT: handymen in area + action buttons -->
           <section v-if="!isHendiman" class="panel">
             <div class="panel__head">
@@ -188,6 +203,7 @@ import ViewHandymanDetails from "@/components/Dashboard/ViewHandymanDetails.vue"
 import ViewJob from "@/components/Dashboard/ViewJob.vue";
 import ProfileSheet from "@/components/ProfileSheet.vue";
 import JobChat from "@/components/Dashboard/JobChat.vue";
+import JobChatMobile from "@/components/Dashboard/JobChatMobile.vue";
 import axios from "axios";
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
@@ -205,6 +221,7 @@ export default {
     ViewJob,
     ProfileSheet,
     JobChat,
+    JobChatMobile,
   },
   data() {
     return {
@@ -251,6 +268,7 @@ export default {
       isChatMinimized: false,
       showJobCancelledModal: false,
       cancelledBy: "handyman", // Track who cancelled: "handyman" or "client"
+      isMobile: window.innerWidth <= 768,
     };
   },
 
@@ -385,6 +403,9 @@ export default {
   },
 
   methods: {
+    handleResize() {
+      this.isMobile = window.innerWidth <= 768;
+    },
     async onRefresh() {
       const coords = this.userCoordinates;
       await this.store.fetchDashboardData(this.$route.params.id, coords);
@@ -663,6 +684,42 @@ export default {
       await this.onRefresh();
       // Close chat after rating
       this.activeAssignedJob = null;
+    },
+    // בדוק עבודה משובצת ישירות מנתונים שנטענו (לשימוש ב-mounted)
+    checkForAssignedJobFromData(data) {
+      const userId = this.store.user?._id || this.me?._id;
+      if (!userId || !data) return;
+
+      // בדוק ישירות בנתונים הראשוניים (data.Jobs) שמכילים את כל העבודות
+      const allJobs = data.Jobs || [];
+      const assignedJob = allJobs.find((job) => {
+        if (this.isHendiman) {
+          // עבור הנדימן - בודק אם handymanId תואם
+          // עבור הנדימן: עבודה ב-"done" לא נחשבת כעבודה פעילה (צריך להמתין לדירוג)
+          return (
+            job.handymanId &&
+            String(job.handymanId) === String(userId) &&
+            (job.status === "assigned" ||
+              job.status === "on_the_way" ||
+              job.status === "in_progress")
+          );
+        } else {
+          // עבור לקוח - בודק אם clientId תואם
+          return (
+            job.clientId &&
+            String(job.clientId) === String(userId) &&
+            job.handymanId && // רק עבודות ששובצו
+            (job.status === "assigned" ||
+              job.status === "on_the_way" ||
+              job.status === "in_progress" ||
+              (job.status === "done" && !job.ratingSubmitted))
+          );
+        }
+      });
+
+      if (assignedJob && !this.activeAssignedJob) {
+        this.activeAssignedJob = assignedJob;
+      }
     },
     async checkForAssignedJob() {
       // בדוק ישירות ב-store.jobs אם יש עבודה משובצת
@@ -1029,6 +1086,8 @@ export default {
     },
   },
   async mounted() {
+    // Listen for window resize to update mobile state
+    window.addEventListener("resize", this.handleResize);
     try {
       // קבל את הקואורדינטות הנוכחיות של המשתמש
       let coordinates = null;
@@ -1111,16 +1170,14 @@ export default {
         } else {
           // עבור הנדימן - טען עבודות מסוננות
           await this.fetchHandymanJobs(data.User);
-
-          // בנוסף, בדוק ישירות בשרת אם יש עבודה משובצת (גם אם מעל 10 ק"מ)
-          // על ידי בדיקה ב-store.jobs מהנתונים הראשוניים של fetchDashboardData
-          // הנתונים הראשוניים כוללים את כל העבודות, לא רק המסוננות
         }
 
         // בדוק אם יש עבודה משובצת ונפתח את הצ'אט אוטומטית
         // עבור הנדימן ולקוח - בודק אם יש עבודה משובצת
+        // חשוב: נבדוק ישירות בנתונים הראשוניים (data.Jobs) שמכילים את כל העבודות
+        // ולא רק ב-store.jobs שיכול להכיל רק עבודות מסוננות
         this.$nextTick(() => {
-          this.checkForAssignedJob();
+          this.checkForAssignedJobFromData(data);
         });
       }
 
@@ -1132,6 +1189,7 @@ export default {
     }
   },
   beforeUnmount() {
+    window.removeEventListener("resize", this.handleResize);
     this.disconnectWebSocket();
   },
   watch: {
@@ -2668,10 +2726,104 @@ $r2: 26px;
   }
 }
 
+.return-job-mobile {
+  display: none; // Hidden on desktop
+
+  @media (max-width: 768px) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 106, 0, 0.3);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 106, 0, 0.15),
+      rgba(255, 138, 43, 0.1)
+    );
+    color: rgba(255, 138, 43, 1);
+    cursor: pointer;
+    font-weight: 1000;
+    font-size: 13px;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(255, 106, 0, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 106, 0, 0.15),
+      rgba(255, 138, 43, 0.1)
+    );
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  &--handyman {
+    border: 2px solid rgba(239, 68, 68, 0.5);
+    background: linear-gradient(
+      135deg,
+      rgba(239, 68, 68, 0.2),
+      rgba(220, 38, 38, 0.15)
+    );
+    color: #ef4444;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+
+    &:hover {
+      border-color: rgba(239, 68, 68, 0.7);
+      background: linear-gradient(
+        135deg,
+        rgba(239, 68, 68, 0.3),
+        rgba(220, 38, 38, 0.25)
+      );
+      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.35);
+    }
+  }
+
+  &:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 106, 0, 0.5);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 106, 0, 0.25),
+      rgba(255, 138, 43, 0.2)
+    );
+    box-shadow: 0 6px 20px rgba(255, 106, 0, 0.25);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.return-job-mobile__icon {
+  font-size: 16px;
+  transition: transform 0.25s ease;
+
+  .return-job-mobile:hover & {
+    transform: rotate(15deg) scale(1.1);
+  }
+}
+
+.return-job-mobile__text {
+  font-weight: 1000;
+  white-space: nowrap;
+}
+
+.client-actions-panel {
+  padding: 16px !important;
+  display: block; // Visible on desktop
+
+  @media (max-width: 768px) {
+    display: none; // Hidden on mobile
+  }
+}
+
 .client-actions-desktop {
   display: block; // Visible on desktop
   width: 100%;
-  // No margin-bottom - let .side gap handle spacing
 
   @media (max-width: 768px) {
     display: none; // Hidden on mobile
