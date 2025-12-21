@@ -23,53 +23,52 @@
 
         <!-- Navigation buttons for handyman -->
         <div v-if="isHandyman" class="luxTop__nav">
-          <button
-            class="navBtn"
-            type="button"
-            @click="$emit('open-profile')"
-            aria-label="פרופיל"
-            title="פרופיל"
-          >
-            👤
-          </button>
+          <!-- Navigation to job location -->
+          <template v-if="jobLocation">
+            <a
+              :href="getWazeUrl(jobLocation)"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="navBtn navBtn--waze"
+              title="נווט בווייז"
+              aria-label="נווט בווייז"
+            >
+              <span class="navBtn__text">לניווט בוויז</span>
+              <span class="navBtn__icon">📍</span>
+            </a>
+            <a
+              :href="getGoogleMapsUrl(jobLocation)"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="navBtn navBtn--google"
+              title="נווט בגוגל מפות"
+              aria-label="נווט בגוגל מפות"
+            >
+              <span class="navBtn__text">לניווט בגוגל</span>
+              <span class="navBtn__icon">🗺️</span>
+            </a>
+          </template>
         </div>
 
-        <!-- Cancel job button with confirmation -->
+        <!-- Cancel job button (for both handyman and client) -->
         <button
-          v-if="!showCancelConfirm"
-          class="iconBtn"
+          class="cancelJobBtn"
           type="button"
-          @click="showCancelConfirm = true"
+          @click="showCancelConfirmModal = true"
           aria-label="ביטול עבודה"
           title="בטל עבודה"
         >
-          🗑️
+          בטל עבודה
         </button>
-        <div v-else class="cancelConfirm">
-          <span class="cancelConfirm__text">בטוח?</span>
-          <button
-            class="cancelConfirm__btn cancelConfirm__btn--yes"
-            type="button"
-            @click="handleCancelJob"
-          >
-            כן
-          </button>
-          <button
-            class="cancelConfirm__btn cancelConfirm__btn--no"
-            type="button"
-            @click="showCancelConfirm = false"
-          >
-            לא
-          </button>
-        </div>
 
         <button
-          class="iconBtn"
+          class="iconBtn iconBtn--minimize"
           type="button"
-          @click="$emit('close')"
-          aria-label="סגירה"
+          @click="$emit('minimize')"
+          aria-label="מזער"
+          title="מזער"
         >
-          ✕
+          ➖
         </button>
       </div>
     </header>
@@ -169,6 +168,18 @@
             </button>
           </div>
           <div class="segTip">עדכון סטטוס שולח התראה ללקוח</div>
+        </div>
+
+        <!-- Client location button -->
+        <div v-if="!isHandyman && showStatusButtons" class="segWrap">
+          <button
+            class="seg__btn seg__btn--full"
+            type="button"
+            @click="sendLocation"
+          >
+            📍 שלח מיקום
+          </button>
+          <div class="segTip">שליחת המיקום שלך להנדימן</div>
         </div>
       </aside>
 
@@ -270,9 +281,13 @@
               'is-other': m.sender === 'other',
             }"
           >
-            <div class="bubble" :class="{ 'bubble--img': !!m.image }">
-              <div v-if="m.text" class="bubble__text">{{ m.text }}</div>
-
+            <div
+              class="bubble"
+              :class="{
+                'bubble--img': !!m.image,
+                'bubble--location': !!m.location,
+              }"
+            >
               <button
                 v-if="m.image"
                 type="button"
@@ -281,6 +296,27 @@
               >
                 <img :src="m.image" class="bubble__img" alt="תמונה" />
               </button>
+
+              <div v-if="m.location" class="bubble__location">
+                <button
+                  type="button"
+                  class="bubble__locationPreview"
+                  @click.stop="openLocationModal(m.location)"
+                >
+                  <img
+                    :src="getLocationMapImage(m.location)"
+                    alt="מיקום"
+                    class="bubble__locationMap"
+                    @error="onMapImageError"
+                  />
+                  <div class="bubble__locationOverlay">
+                    <span class="bubble__locationIcon">📍</span>
+                    <span class="bubble__locationText">מיקום שלי</span>
+                  </div>
+                </button>
+              </div>
+
+              <div v-if="m.text" class="bubble__text">{{ m.text }}</div>
 
               <div class="bubble__meta">
                 <span class="bubble__time">{{ m.time }}</span>
@@ -306,17 +342,44 @@
               <span class="tool__ic">📷</span>
               <span class="tool__t">תמונה</span>
             </button>
+            <button class="tool" type="button" @click="sendLocation">
+              <span class="tool__ic">📍</span>
+              <span class="tool__t">מיקום</span>
+            </button>
             <button class="tool" type="button" @click="sendQuick('אני בדרך')">
               <span class="tool__ic">🚗</span>
               <span class="tool__t">אני בדרך</span>
             </button>
             <button class="tool" type="button" @click="sendQuick('הגעתי')">
-              <span class="tool__ic">📍</span>
+              <span class="tool__ic">✅</span>
               <span class="tool__t">הגעתי</span>
             </button>
           </div>
 
+          <!-- Image preview with text input (WhatsApp style) -->
+          <div v-if="imagePreview" class="imagePreview">
+            <div class="imagePreview__preview">
+              <img :src="imagePreview" alt="תמונה" class="imagePreview__img" />
+              <button
+                class="imagePreview__close"
+                type="button"
+                @click="cancelImagePreview"
+                aria-label="ביטול"
+              >
+                ✕
+              </button>
+            </div>
+            <input
+              v-model="imagePreviewText"
+              class="composer__input imagePreview__input"
+              type="text"
+              placeholder="הוסף כיתוב לתמונה…"
+              @keyup.enter="sendImageWithText"
+            />
+          </div>
+
           <input
+            v-else
             v-model="newMessage"
             class="composer__input"
             type="text"
@@ -325,6 +388,15 @@
           />
 
           <button
+            v-if="imagePreview"
+            class="sendCta"
+            type="button"
+            @click="sendImageWithText"
+          >
+            שלח
+          </button>
+          <button
+            v-else
             class="sendCta"
             type="button"
             @click="sendMessage"
@@ -353,6 +425,90 @@
         <img :src="imageModal" class="imgModal__img" alt="preview" />
       </div>
     </div>
+
+    <!-- Cancel Job Confirmation Modal -->
+    <div
+      v-if="showCancelConfirmModal"
+      class="cancelConfirmModal"
+      dir="rtl"
+      @click.self="showCancelConfirmModal = false"
+    >
+      <div class="cancelConfirmModal__content">
+        <h2 class="cancelConfirmModal__title">ביטול עבודה</h2>
+        <p class="cancelConfirmModal__message">
+          האם אתה בטוח שברצונך לבטל את העבודה?
+        </p>
+        <div class="cancelConfirmModal__actions">
+          <button
+            class="cancelConfirmModal__btn cancelConfirmModal__btn--no"
+            type="button"
+            @click="showCancelConfirmModal = false"
+          >
+            לא
+          </button>
+          <button
+            class="cancelConfirmModal__btn cancelConfirmModal__btn--yes"
+            type="button"
+            @click="handleCancelJob"
+          >
+            כן, בטל
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Location modal (WhatsApp style) -->
+    <div
+      v-if="locationModal"
+      class="locationModal"
+      @click.self="locationModal = null"
+    >
+      <div class="locationModal__card">
+        <button
+          class="locationModal__x"
+          type="button"
+          @click="locationModal = null"
+        >
+          ✕
+        </button>
+        <div class="locationModal__map">
+          <img
+            :src="getLocationMapImage(locationModal)"
+            alt="מיקום"
+            class="locationModal__mapImg"
+          />
+        </div>
+        <div class="locationModal__content">
+          <div class="locationModal__header">
+            <span class="locationModal__icon">📍</span>
+            <span class="locationModal__title">מיקום שלי</span>
+          </div>
+          <div class="locationModal__coords">
+            {{ formatLocation(locationModal) }}
+          </div>
+          <div class="locationModal__actions">
+            <a
+              :href="getWazeUrl(locationModal)"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="locationModal__btn locationModal__btn--waze"
+            >
+              <span class="locationModal__btnIcon">📍</span>
+              <span>ווייז</span>
+            </a>
+            <a
+              :href="getGoogleMapsUrl(locationModal)"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="locationModal__btn locationModal__btn--google"
+            >
+              <span class="locationModal__btnIcon">🗺️</span>
+              <span>גוגל מפות</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -371,9 +527,9 @@ export default {
   },
   emits: [
     "close",
+    "minimize",
     "status-updated",
     "rating-submitted",
-    "open-profile",
     "cancel-job",
   ],
   setup() {
@@ -393,7 +549,11 @@ export default {
       showTools: false,
       socket: null,
       localJobStatus: null, // Local copy of job status for real-time updates
-      showCancelConfirm: false,
+      showCancelConfirmModal: false,
+      imagePreview: null, // Preview of image before sending
+      imagePreviewText: "", // Text to send with image
+      imagePreviewFile: null, // The file to upload
+      locationModal: null, // Location to show in modal
     };
   },
   computed: {
@@ -412,6 +572,34 @@ export default {
     },
     jobInfo() {
       return this.job;
+    },
+    jobLocation() {
+      // Get job location from coordinates or location field
+      if (this.job?.coordinates && Array.isArray(this.job.coordinates)) {
+        return {
+          lng: this.job.coordinates[0],
+          lat: this.job.coordinates[1],
+        };
+      }
+      if (
+        this.job?.location?.coordinates &&
+        Array.isArray(this.job.location.coordinates)
+      ) {
+        return {
+          lng: this.job.location.coordinates[0],
+          lat: this.job.location.coordinates[1],
+        };
+      }
+      if (
+        this.jobInfo?.coordinates &&
+        Array.isArray(this.jobInfo.coordinates)
+      ) {
+        return {
+          lng: this.jobInfo.coordinates[0],
+          lat: this.jobInfo.coordinates[1],
+        };
+      }
+      return null;
     },
     jobSteps() {
       return [
@@ -471,6 +659,13 @@ export default {
     initWebSocket() {
       if (!this.job?.id && !this.job?._id) return;
 
+      // Disconnect existing socket if any (prevent duplicate connections)
+      if (this.socket) {
+        this.socket.removeAllListeners(); // Remove all listeners
+        this.socket.disconnect();
+        this.socket = null;
+      }
+
       const jobId = this.job.id || this.job._id;
 
       // Connect to WebSocket server
@@ -499,7 +694,7 @@ export default {
         }
       });
 
-      // Listen for new messages
+      // Listen for new messages - only once, prevent duplicates
       this.socket.on("new-message", (data) => {
         const receivedJobId = String(data.jobId || "");
         const currentJobId = String(jobId || "");
@@ -513,15 +708,16 @@ export default {
         const receivedJobId = String(data.jobId || "");
         const currentJobId = String(jobId || "");
         if (receivedJobId === currentJobId) {
-          // If handyman, close the chat
-          if (this.isHandyman) {
-            this.$emit("close");
-          }
+          // Navigate to job summary page
+          const userId = this.store?.user?._id || this.$route.params.id;
+          this.$router.push(
+            `/Dashboard/${userId}/job-summary/${receivedJobId}`
+          );
         }
       });
 
-      this.socket.on("error", (error) => {
-        console.error("WebSocket error:", error);
+      this.socket.on("error", () => {
+        // WebSocket error - silent fail
       });
     },
 
@@ -531,6 +727,8 @@ export default {
         if (jobId) {
           this.socket.emit("leave-job", jobId);
         }
+        // Remove all listeners before disconnecting to prevent memory leaks
+        this.socket.removeAllListeners();
         this.socket.disconnect();
         this.socket = null;
       }
@@ -545,7 +743,8 @@ export default {
         if (data.success && data.messages) {
           // Convert DB messages to UI format
           this.messages = data.messages.map((msg) => {
-            const isFromHandyman = !!msg.handyman || !!msg.handymanImage;
+            const isFromHandyman =
+              !!msg.handyman || !!msg.handymanImage || !!msg.handymanLocation;
             const sender = this.isHandyman
               ? isFromHandyman
                 ? "me"
@@ -555,6 +754,8 @@ export default {
               : "me";
             const text = msg.handyman || msg.customer || "";
             const image = msg.handymanImage || msg.customerImage || null;
+            const location =
+              msg.handymanLocation || msg.customerLocation || null;
             const createdAt = msg.createdAt
               ? new Date(msg.createdAt)
               : new Date();
@@ -562,6 +763,7 @@ export default {
               sender,
               text,
               image,
+              location,
               time: createdAt.toLocaleTimeString("he-IL", {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -571,7 +773,6 @@ export default {
           });
         }
       } catch (error) {
-        console.error("Error loading messages:", error);
         this.toast?.showError("שגיאה בטעינת הודעות");
       }
     },
@@ -579,7 +780,9 @@ export default {
     addMessageToUI(messageObj) {
       // Determine sender: if handyman sent, for handyman it's "me", for customer it's "other"
       const isFromHandyman =
-        !!messageObj.handyman || !!messageObj.handymanImage;
+        !!messageObj.handyman ||
+        !!messageObj.handymanImage ||
+        !!messageObj.handymanLocation;
       const sender = this.isHandyman
         ? isFromHandyman
           ? "me"
@@ -591,25 +794,105 @@ export default {
       const text = messageObj.handyman || messageObj.customer || "";
       const image =
         messageObj.handymanImage || messageObj.customerImage || null;
+      const location =
+        messageObj.handymanLocation || messageObj.customerLocation || null;
       const createdAt = messageObj.createdAt
         ? new Date(messageObj.createdAt)
         : new Date();
 
       // Check if message already exists (avoid duplicates)
-      const exists = this.messages.some(
-        (m) =>
-          ((m.text === text && text) || (m.image === image && image)) &&
-          m.sender === sender &&
-          Math.abs(
-            new Date(m.createdAt || m.time).getTime() - createdAt.getTime()
-          ) < 2000
-      );
+      // First priority: Check for optimistic messages (uploading) that should be updated
+      if (image || location) {
+        const optimisticIndex = this.messages.findIndex((m) => {
+          if (m.sender !== sender || !m.uploading) return false;
+
+          // For optimistic messages with location, match by location coordinates
+          if (location && m.location) {
+            // Compare coordinates with tolerance for floating point precision
+            const latMatch =
+              Math.abs((m.location.lat || 0) - (location.lat || 0)) < 0.0001;
+            const lngMatch =
+              Math.abs((m.location.lng || 0) - (location.lng || 0)) < 0.0001;
+            return latMatch && lngMatch;
+          }
+
+          // For optimistic messages with image, match by text
+          if (image && m.image) {
+            const textMatches =
+              (!m.text && !text) ||
+              (m.text && text && m.text.trim() === text.trim());
+            return textMatches;
+          }
+
+          return false;
+        });
+
+        if (optimisticIndex !== -1) {
+          // Update existing optimistic message with real data from server
+          this.messages[optimisticIndex] = {
+            sender,
+            text,
+            image,
+            location,
+            time: createdAt.toLocaleTimeString("he-IL", {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            createdAt,
+          };
+          this.scrollToBottom();
+          return; // Don't add duplicate
+        }
+      }
+
+      // Second: Check for exact duplicate by content
+      const exists = this.messages.some((m) => {
+        // Skip optimistic messages (they're handled above)
+        if (m.uploading) return false;
+        if (m.sender !== sender) return false;
+
+        // Exact match on image URL
+        if (image && m.image) {
+          if (m.image !== image) return false;
+          // If both have text, must match exactly
+          if (text && m.text) {
+            return text.trim() === m.text.trim();
+          }
+          // If neither has text, match on image only
+          return !text && !m.text;
+        }
+
+        // Exact match on location
+        if (location && m.location) {
+          // Compare coordinates with tolerance for floating point precision
+          const latMatch =
+            Math.abs((m.location.lat || 0) - (location.lat || 0)) < 0.0001;
+          const lngMatch =
+            Math.abs((m.location.lng || 0) - (location.lng || 0)) < 0.0001;
+          if (!latMatch || !lngMatch) {
+            return false;
+          }
+          // If both have text, must match exactly
+          if (text && m.text) {
+            return text.trim() === m.text.trim();
+          }
+          return !text && !m.text;
+        }
+
+        // Text-only messages
+        if (text && m.text && !image && !m.image && !location && !m.location) {
+          return text.trim() === m.text.trim();
+        }
+
+        return false;
+      });
 
       if (!exists) {
         this.messages.push({
           sender,
           text,
           image,
+          location,
           time: createdAt.toLocaleTimeString("he-IL", {
             hour: "2-digit",
             minute: "2-digit",
@@ -661,6 +944,168 @@ export default {
       this.showTools = false;
       this.newMessage = text;
       this.sendMessage();
+    },
+
+    async sendLocation() {
+      this.showTools = false;
+
+      if (!navigator.geolocation) {
+        this.toast?.showError("הדפדפן שלך לא תומך במיקום");
+        return;
+      }
+
+      // Show loading
+      this.toast?.showSuccess("מאתר את המיקום שלך...");
+
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const location = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          };
+
+          await this.sendLocationMessage(location);
+        },
+        (error) => {
+          let errorMessage = "שגיאה בקבלת המיקום";
+          if (error.code === 1) {
+            errorMessage = "הגישה למיקום נדחתה";
+          } else if (error.code === 2) {
+            errorMessage = "המיקום לא זמין";
+          } else if (error.code === 3) {
+            errorMessage = "פג הזמן לקבלת המיקום";
+          }
+          this.toast?.showError(errorMessage);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        }
+      );
+    },
+
+    async sendLocationMessage(location) {
+      const jobId = this.job?.id || this.job?._id;
+      if (!jobId) return;
+
+      const userId = this.store?.user?._id;
+      if (!userId) {
+        this.toast?.showError("לא ניתן לזהות את המשתמש");
+        return;
+      }
+
+      // Create unique message ID
+      const messageId = Date.now() + Math.random();
+
+      // Show optimistic message
+      const tempMessage = {
+        sender: "me",
+        location: location,
+        time: new Date().toLocaleTimeString("he-IL", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        createdAt: new Date(),
+        uploading: true,
+        _tempId: messageId,
+      };
+      this.messages.push(tempMessage);
+      this.scrollToBottom();
+
+      try {
+        // Send to server
+        await axios.post(`${URL}/jobs/${jobId}/messages`, {
+          location: location,
+          senderId: userId,
+          isHandyman: this.isHandyman,
+        });
+
+        // Update optimistic message - mark as no longer uploading
+        // The WebSocket will handle the actual update with server data
+        const tempIndex = this.messages.findIndex(
+          (m) => m._tempId === messageId && m.uploading && m.sender === "me"
+        );
+        if (tempIndex !== -1) {
+          // Keep the message but mark it for WebSocket update
+          // The _tempId will help match it when WebSocket message arrives
+          this.messages[tempIndex] = {
+            ...this.messages[tempIndex],
+            uploading: false,
+            _tempId: messageId,
+          };
+        }
+      } catch (error) {
+        // Remove optimistic message on error
+        const tempIndex = this.messages.findIndex(
+          (m) => m._tempId === messageId && m.uploading && m.sender === "me"
+        );
+        if (tempIndex !== -1) {
+          this.messages.splice(tempIndex, 1);
+        }
+        this.toast?.showError("שגיאה בשליחת המיקום");
+      }
+    },
+
+    openLocationModal(location) {
+      if (!location) return;
+      this.locationModal = location;
+    },
+
+    getLocationMapImage(location) {
+      if (typeof location === "object" && location.lat && location.lng) {
+        // Use server endpoint that uses Mapbox Static Images API
+        const zoom = 15;
+        const width = 400;
+        const height = 300;
+        return `${URL}/location-map-image?lat=${location.lat}&lng=${location.lng}&zoom=${zoom}&width=${width}&height=${height}`;
+      }
+      return "";
+    },
+
+    onMapImageError(event) {
+      // Fallback to OpenStreetMap if Mapbox fails
+      if (this.locationModal || event.target.dataset.location) {
+        const location =
+          this.locationModal ||
+          JSON.parse(event.target.dataset.location || "{}");
+        if (location.lat && location.lng) {
+          event.target.src = `https://www.openstreetmap.org/export/embed.html?bbox=${
+            location.lng - 0.01
+          },${location.lat - 0.01},${location.lng + 0.01},${
+            location.lat + 0.01
+          }&layer=mapnik&marker=${location.lat},${location.lng}`;
+        }
+      }
+    },
+
+    getLocationUrl(location) {
+      if (typeof location === "object" && location.lat && location.lng) {
+        return `https://www.google.com/maps?q=${location.lat},${location.lng}`;
+      }
+      return "#";
+    },
+
+    getWazeUrl(location) {
+      if (typeof location === "object" && location.lat && location.lng) {
+        return `https://www.waze.com/ul?ll=${location.lat},${location.lng}&navigate=yes`;
+      }
+      return "#";
+    },
+
+    getGoogleMapsUrl(location) {
+      if (typeof location === "object" && location.lat && location.lng) {
+        return `https://www.google.com/maps/dir/?api=1&destination=${location.lat},${location.lng}&travelmode=driving`;
+      }
+      return "#";
+    },
+
+    formatLocation(location) {
+      if (typeof location === "object" && location.lat && location.lng) {
+        return `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`;
+      }
+      return "";
     },
 
     async sendMessage() {
@@ -717,7 +1162,7 @@ export default {
       }
     },
 
-    async handleFileSelect(e) {
+    handleFileSelect(e) {
       const file = e.target.files?.[0];
       if (!file) return;
 
@@ -735,23 +1180,51 @@ export default {
         return;
       }
 
-      // Show preview while uploading
+      // Show preview (WhatsApp style) - user can add text before sending
       const reader = new FileReader();
       reader.onload = (ev) => {
-        const tempMessage = {
-          sender: "me",
-          image: ev.target.result, // Preview
-          time: new Date().toLocaleTimeString("he-IL", {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          createdAt: new Date(),
-          uploading: true, // Mark as uploading
-        };
-        this.messages.push(tempMessage);
-        this.scrollToBottom();
+        this.imagePreview = ev.target.result;
+        this.imagePreviewFile = file;
+        this.imagePreviewText = ""; // Clear any previous text
       };
       reader.readAsDataURL(file);
+
+      e.target.value = "";
+    },
+
+    cancelImagePreview() {
+      this.imagePreview = null;
+      this.imagePreviewFile = null;
+      this.imagePreviewText = "";
+    },
+
+    async sendImageWithText() {
+      if (!this.imagePreviewFile) return;
+
+      const file = this.imagePreviewFile;
+      const imageText = this.imagePreviewText.trim();
+
+      // Create unique message ID to prevent duplicates
+      const messageId = Date.now() + Math.random();
+
+      // Show optimistic message immediately
+      const tempMessage = {
+        sender: "me",
+        image: this.imagePreview, // Preview URL
+        text: imageText || null,
+        time: new Date().toLocaleTimeString("he-IL", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        createdAt: new Date(),
+        uploading: true,
+        _tempId: messageId, // Unique ID to prevent socket duplicates
+      };
+      this.messages.push(tempMessage);
+      this.scrollToBottom();
+
+      // Clear preview
+      this.cancelImagePreview();
 
       try {
         // Upload to server
@@ -767,36 +1240,33 @@ export default {
         if (data.imageUrl) {
           // Find the temp message and update it with the real URL
           const tempIndex = this.messages.findIndex(
-            (m) => m.uploading && m.sender === "me"
+            (m) => m._tempId === messageId && m.uploading && m.sender === "me"
           );
           if (tempIndex !== -1) {
-            const tempMessage = this.messages[tempIndex];
-            // Send the image message to server
-            await this.sendImageMessage(data.imageUrl);
+            // Send the image message to server with text
+            await this.sendImageMessage(data.imageUrl, imageText);
             // Update the message with the real URL and remove uploading flag
             this.messages[tempIndex] = {
-              ...tempMessage,
+              ...this.messages[tempIndex],
               image: data.imageUrl,
               uploading: false,
+              _tempId: messageId, // Keep ID to prevent socket duplicate
             };
           }
         }
       } catch (error) {
-        console.error("Error uploading image:", error);
         // Remove the temp message on error
         const tempIndex = this.messages.findIndex(
-          (m) => m.uploading && m.sender === "me"
+          (m) => m._tempId === messageId && m.uploading && m.sender === "me"
         );
         if (tempIndex !== -1) {
           this.messages.splice(tempIndex, 1);
         }
         this.toast?.showError("שגיאה בהעלאת התמונה");
       }
-
-      e.target.value = "";
     },
 
-    async sendImageMessage(imageUrl) {
+    async sendImageMessage(imageUrl, text = null) {
       const jobId = this.job?.id || this.job?._id;
       if (!jobId) return;
 
@@ -808,16 +1278,17 @@ export default {
       }
 
       try {
-        // Send to server
+        // Send to server with text if provided
         await axios.post(`${URL}/jobs/${jobId}/messages`, {
           imageUrl: imageUrl,
+          text: text || undefined, // Send text only if it exists
           senderId: userId,
           isHandyman: this.isHandyman,
         });
 
         // Message will be added via WebSocket, but we already added it optimistically
+        // The duplicate check in addMessageToUI will prevent showing it twice
       } catch (error) {
-        console.error("Error sending image message:", error);
         this.toast?.showError("שגיאה בשליחת התמונה");
       }
     },
@@ -864,6 +1335,11 @@ export default {
         this.toast.showSuccess("הדירוג נשלח");
         this.ratingSubmitted = true;
         this.$emit("rating-submitted");
+        // Navigate to job summary page
+        const userId = this.store?.user?._id || this.$route.params.id;
+        this.$router.push(
+          `/Dashboard/${userId}/job-summary/${this.job._id || this.job.id}`
+        );
       } catch (err) {
         this.toast.showError("שגיאה בשליחת הדירוג");
         console.error(err);
@@ -882,18 +1358,24 @@ export default {
         const jobId = this.job._id || this.job.id;
         if (!jobId) return;
 
+        const userId = this.store.user?._id || this.store.user?.id;
+        if (!userId) {
+          this.toast.showError("שגיאה: לא נמצא מזהה משתמש");
+          return;
+        }
+
         await axios.post(`${URL}/jobs/cancel`, {
           jobId,
+          userId,
         });
 
-        this.toast.showSuccess("העבודה בוטלה");
-        this.showCancelConfirm = false;
+        this.toast.showSuccess("העבודה בוטלה והשביוץ בוטל");
+        this.showCancelConfirmModal = false;
         this.$emit("cancel-job");
-        this.$emit("close");
       } catch (error) {
         console.error("Error cancelling job:", error);
         this.toast.showError("שגיאה בביטול העבודה");
-        this.showCancelConfirm = false;
+        this.showCancelConfirmModal = false;
       }
     },
   },
@@ -978,6 +1460,78 @@ $orange2: #ff8a2b;
   gap: 10px;
 }
 
+.luxTop__nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.navBtn {
+  min-width: 38px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.24);
+  color: $text;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 900;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.navBtn__icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.navBtn__text {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.navBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.navBtn--waze {
+  border-color: rgba(118, 186, 153, 0.4);
+  background: rgba(118, 186, 153, 0.15);
+  color: #76ba99;
+}
+
+.navBtn--waze:hover {
+  background: rgba(118, 186, 153, 0.25);
+  border-color: rgba(118, 186, 153, 0.6);
+}
+
+.navBtn--waze .navBtn__text {
+  color: #76ba99;
+}
+
+.navBtn--google {
+  border-color: rgba(66, 133, 244, 0.4);
+  background: rgba(66, 133, 244, 0.15);
+  color: #4285f4;
+}
+
+.navBtn--google:hover {
+  background: rgba(66, 133, 244, 0.25);
+  border-color: rgba(66, 133, 244, 0.6);
+}
+
+.navBtn--google .navBtn__text {
+  color: #4285f4;
+}
+
 .iconBtn {
   width: 42px;
   height: 42px;
@@ -990,6 +1544,116 @@ $orange2: #ff8a2b;
 .iconBtn:hover {
   border-color: rgba($orange, 0.35);
   box-shadow: 0 10px 24px rgba($orange, 0.12);
+}
+
+// .iconBtn--minimize {
+//   margin-right: 50px;
+// }
+
+.cancelJobBtn {
+  padding: 8px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.cancelJobBtn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.6);
+  transform: translateY(-1px);
+}
+
+.cancelConfirmModal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Heebo", sans-serif;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.cancelConfirmModal__content {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.95),
+    rgba(15, 16, 22, 0.98)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 32px;
+  max-width: 400px;
+  width: calc(100% - 40px);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+
+.cancelConfirmModal__title {
+  font-size: 22px;
+  font-weight: 900;
+  color: #fff;
+  margin: 0 0 16px 0;
+}
+
+.cancelConfirmModal__message {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0 0 24px 0;
+  line-height: 1.5;
+}
+
+.cancelConfirmModal__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.cancelConfirmModal__btn {
+  padding: 12px 24px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 900;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: "Heebo", sans-serif;
+  min-width: 100px;
+}
+
+.cancelConfirmModal__btn--no {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.cancelConfirmModal__btn--no:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.cancelConfirmModal__btn--yes {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.cancelConfirmModal__btn--yes:hover {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.6);
+  transform: translateY(-1px);
+}
+
+.cancelConfirmModal__btn:active {
+  transform: translateY(0);
 }
 
 .statusPill {
@@ -1252,6 +1916,19 @@ $orange2: #ff8a2b;
     rgba($orange, 0) 70%
   );
 }
+
+.seg__btn--full {
+  width: 100%;
+  flex: none;
+}
+
+.seg__btn--nav {
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .segTip {
   margin-top: 10px;
   font-size: 11px;
@@ -1529,9 +2206,11 @@ $orange2: #ff8a2b;
 .bubble__imgBtn {
   border: 0;
   background: transparent;
-  padding: 10px 0 0 0;
+  padding: 0;
+  margin-bottom: 8px;
   cursor: pointer;
   width: 100%;
+  display: block;
 }
 .bubble__img {
   width: 100%;
@@ -1539,6 +2218,233 @@ $orange2: #ff8a2b;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   display: block;
+}
+
+.bubble__location {
+  margin-bottom: 8px;
+  width: 100%;
+  max-width: 100% !important;
+  min-width: 350px;
+}
+
+.bubble--location {
+  max-width: 85% !important;
+  padding-bottom: 0;
+}
+
+.bubble__locationPreview {
+  position: relative;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: transform 0.2s ease;
+}
+
+.bubble__locationPreview:hover {
+  transform: scale(1.02);
+}
+
+.bubble__locationMap {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  display: block;
+  border-radius: 12px;
+  border: 1px solid rgba($orange, 0.2);
+}
+
+.bubble__locationOverlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.7) 0%,
+    rgba(0, 0, 0, 0.4) 50%,
+    transparent 100%
+  );
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: white;
+  pointer-events: none; /* Allow clicks to pass through */
+}
+
+.bubble__locationIcon {
+  font-size: 18px;
+}
+
+.bubble__locationText {
+  font-size: 14px;
+  font-weight: 900;
+  color: white;
+}
+
+/* Location Modal (WhatsApp style) */
+.locationModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 16px;
+  animation: fadeIn 0.2s ease;
+}
+
+.locationModal__card {
+  background: $bg;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 400px;
+  overflow: hidden;
+  position: relative;
+  animation: slideUp 0.3s ease;
+}
+
+.locationModal__x {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 900;
+  z-index: 10;
+  transition: background 0.2s ease;
+}
+
+.locationModal__x:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.locationModal__map {
+  width: 100%;
+  height: 250px;
+  position: relative;
+}
+
+.locationModal__mapImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.locationModal__content {
+  padding: 16px;
+}
+
+.locationModal__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.locationModal__icon {
+  font-size: 22px;
+}
+
+.locationModal__title {
+  font-size: 16px;
+  font-weight: 1000;
+  color: $orange2;
+}
+
+.locationModal__coords {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.7;
+  font-family: monospace;
+  margin-bottom: 16px;
+  word-break: break-all;
+}
+
+.locationModal__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.locationModal__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 900;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  border: 1px solid;
+}
+
+.locationModal__btn--waze {
+  background: rgba(118, 186, 153, 0.15);
+  border-color: rgba(118, 186, 153, 0.4);
+  color: #76ba99;
+}
+
+.locationModal__btn--waze:hover {
+  background: rgba(118, 186, 153, 0.25);
+  border-color: rgba(118, 186, 153, 0.6);
+  transform: translateY(-1px);
+}
+
+.locationModal__btn--google {
+  background: rgba(66, 133, 244, 0.15);
+  border-color: rgba(66, 133, 244, 0.4);
+  color: #4285f4;
+}
+
+.locationModal__btn--google:hover {
+  background: rgba(66, 133, 244, 0.25);
+  border-color: rgba(66, 133, 244, 0.6);
+  transform: translateY(-1px);
+}
+
+.locationModal__btnIcon {
+  font-size: 18px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 /* Composer */
@@ -1637,6 +2543,58 @@ $orange2: #ff8a2b;
 .sendCta:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* Image Preview (WhatsApp style) */
+.imagePreview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.imagePreview__preview {
+  position: relative;
+  width: 100%;
+  max-width: 200px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba($orange, 0.2);
+}
+
+.imagePreview__img {
+  width: 100%;
+  height: auto;
+  display: block;
+  max-height: 200px;
+  object-fit: cover;
+}
+
+.imagePreview__close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 900;
+  transition: background 0.2s ease;
+}
+
+.imagePreview__close:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.imagePreview__input {
+  margin-top: 0;
 }
 
 /* Modal */

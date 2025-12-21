@@ -55,41 +55,60 @@ function findAvailablePort(startPort) {
 (async () => {
   const PORT = process.env.PORT || (await findAvailablePort(3003));
   const URL_SERVER = `http://localhost:${PORT}`;
-  fs.writeFileSync(
-    path.join(__dirname, "..", "src", "Url", "port.json"),
-    JSON.stringify({ port: PORT })
-  );
+  
+  // Only write port.json in development
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      fs.writeFileSync(
+        path.join(__dirname, "..", "src", "Url", "port.json"),
+        JSON.stringify({ port: PORT })
+      );
+    } catch (e) {
+      // Ignore if file can't be written
+    }
+  }
 
   // Middleware - CORS configuration
-  // Allow multiple localhost origins for development
-  const allowedOrigins = [
-    URL_CLIENT,
-    "http://localhost:8080",
-    "http://localhost:8081",
-    "http://localhost:5173", // Vite default port
-    "http://localhost:3000",
-  ];
+  let allowedOrigins;
+  if (process.env.NODE_ENV === "production") {
+    // In production, allow requests from the same origin (server serves client)
+    app.use(
+      cors({
+        origin: true, // Allow same origin
+        credentials: true,
+      })
+    );
+  } else {
+    // In development, allow multiple localhost origins
+    allowedOrigins = [
+      URL_CLIENT,
+      "http://localhost:8080",
+      "http://localhost:8081",
+      "http://localhost:5173", // Vite default port
+      "http://localhost:3000",
+    ];
 
-  app.use(
-    cors({
-      origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
+    app.use(
+      cors({
+        origin: function (origin, callback) {
+          // Allow requests with no origin (like mobile apps or curl requests)
+          if (!origin) return callback(null, true);
 
-        if (allowedOrigins.indexOf(origin) !== -1) {
-          callback(null, true);
-        } else {
-          // In development, allow any localhost origin
-          if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
+          if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
           } else {
-            callback(new Error("Not allowed by CORS"));
+            // In development, allow any localhost origin
+            if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
+              callback(null, true);
+            } else {
+              callback(new Error("Not allowed by CORS"));
+            }
           }
-        }
-      },
-      credentials: true, // Allow cookies to be sent
-    })
-  );
+        },
+        credentials: true, // Allow cookies to be sent
+      })
+    );
+  }
   app.use(bodyParser.json());
   app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -381,7 +400,7 @@ function findAvailablePort(startPort) {
 
       // בדוק אם יש MAPBOX_TOKEN
       if (!process.env.MAPBOX_TOKEN) {
-        console.error("⚠️ MAPBOX_TOKEN is not defined in .env file");
+        // MAPBOX_TOKEN is not defined in .env file
         return res.status(500).json({
           success: false,
           message:
@@ -450,13 +469,7 @@ function findAvailablePort(startPort) {
         !Coordinates.features ||
         Coordinates.features.length === 0
       ) {
-        console.error(
-          "⚠️ Address not found in Mapbox, continuing without coordinates:",
-          {
-            addressEnglish: finalAddressEnglish,
-            address: address,
-          }
-        );
+        // Address not found in Mapbox, continuing without coordinates
         // נמשיך בלי קואורדינטות - לא נחזיר שגיאה
       }
 
@@ -493,7 +506,6 @@ function findAvailablePort(startPort) {
         }
       } catch (coordError) {
         console.error("Error extracting coordinates:", coordError.message);
-        // נמשיך גם בלי קואורדינטות
       }
 
       // בדיקה אם השם כבר קיים במערכת
@@ -506,12 +518,6 @@ function findAvailablePort(startPort) {
       });
 
       if (existingUserByName) {
-        console.error("❌ Username already exists:", fullName);
-        console.error("   Existing user:", {
-          _id: existingUserByName._id,
-          username: existingUserByName.username,
-          email: existingUserByName.email,
-        });
         return res.status(400).json({
           success: false,
           message: "השם כבר קיים במערכת",
@@ -524,7 +530,6 @@ function findAvailablePort(startPort) {
       });
 
       if (existingUserByEmail) {
-        console.error("❌ Email already exists:", email);
         return res.status(400).json({
           success: false,
           message: "המייל כבר קיים במערכת",
@@ -749,7 +754,6 @@ function findAvailablePort(startPort) {
           });
         }
       } else {
-        console.error("❌ Failed to save user - no insertedId returned");
         return res
           .status(500)
           .json({ message: "Failed to register", success: false });
@@ -955,11 +959,7 @@ function findAvailablePort(startPort) {
           }
         } catch (batchError) {
           // אם יש שגיאה, נסה לטפל בה
-          console.error("❌ Mapbox batch error:", {
-            message: batchError.message,
-            response: batchError.response?.data,
-            status: batchError.response?.status,
-          });
+          // Mapbox batch error occurred, trying individual requests
           const errorData = batchError.response?.data || {};
           // נסה לשלוח כל הנדימן בנפרד במקביל
           const singlePromises = batchToProcess.map(async (item) => {
@@ -1063,15 +1063,7 @@ function findAvailablePort(startPort) {
       const maxDistanceMeters =
         maxKm && !isNaN(parseFloat(maxKm)) ? parseFloat(maxKm) * 1000 : null;
 
-      console.log("🔍 [JOBS/FILTER] Request received:", {
-        status,
-        maxKm,
-        userCoords: { lng: userLng, lat: userLat },
-        hasCoords,
-        maxDistanceMeters: maxDistanceMeters
-          ? `${maxDistanceMeters / 1000}km`
-          : "none",
-      });
+      // Jobs filter request received
 
       let jobs = [];
 
@@ -1107,23 +1099,13 @@ function findAvailablePort(startPort) {
               ? distanceKm !== null && distanceKm * 1000 <= maxDistanceMeters
               : true;
 
-            console.log(`📍 [JOB] ${job._id || job.id}:`, {
-              jobLocation: { lng: jobLng, lat: jobLat },
-              distanceKm: distanceKm !== null ? `${distanceKm}km` : "N/A",
-              maxKm: maxKm ? `${maxKm}km` : "none",
-              isWithinRange: isWithinRange ? "✅ YES" : "❌ NO",
-              status: job.status,
-            });
-
             return {
               ...job,
               distanceKm,
             };
           });
-
-          console.log(`📊 [JOBS/FILTER] Total jobs found: ${jobs.length}`);
         } catch (geoError) {
-          console.error("GeoNear error on /jobs/filter:", geoError.message);
+          // GeoNear error on /jobs/filter
 
           jobs = await collectionJobs.find(query).toArray();
 
@@ -1148,40 +1130,18 @@ function findAvailablePort(startPort) {
                 ? distanceKm !== null && distanceKm * 1000 <= maxDistanceMeters
                 : true;
 
-              console.log(`📍 [JOB] ${job._id || job.id}:`, {
-                jobLocation: { lng: jobLng, lat: jobLat },
-                distanceKm: distanceKm !== null ? `${distanceKm}km` : "N/A",
-                maxKm: maxKm ? `${maxKm}km` : "none",
-                isWithinRange: isWithinRange ? "✅ YES" : "❌ NO",
-                status: job.status,
-              });
-
               return { ...job, distanceKm };
             })
             .filter((job) => {
               if (!maxDistanceMeters || maxDistanceMeters <= 0) return true;
               if (job.distanceKm === null) return true; // keep if no coords
               const passed = job.distanceKm * 1000 <= maxDistanceMeters;
-              if (!passed) {
-                console.log(
-                  `🚫 [FILTERED OUT] Job ${job._id || job.id}: ${
-                    job.distanceKm
-                  }km > ${maxKm}km`
-                );
-              }
               return passed;
             });
-
-          console.log(`📊 [JOBS/FILTER] After filtering: ${jobs.length} jobs`);
         }
       } else {
         jobs = await collectionJobs.find(query).toArray();
-        console.log(
-          `📊 [JOBS/FILTER] No coordinates provided, returning all jobs: ${jobs.length}`
-        );
       }
-
-      console.log(`✅ [JOBS/FILTER] Returning ${jobs.length} jobs`);
       return res.json({ success: true, jobs });
     } catch (error) {
       return res.status(500).json({
@@ -1434,6 +1394,7 @@ function findAvailablePort(startPort) {
         },
       });
     } catch (error) {
+      console.error("Error fetching handymen:", error);
       return res.status(500).json({
         success: false,
         message: "Error fetching handymen",
@@ -1463,6 +1424,7 @@ function findAvailablePort(startPort) {
         return res.json({ success: true, Handyman });
       }
     } catch (error) {
+      console.error("Error fetching handyman:", error);
       return res.status(500).json({
         success: false,
         message: "Error fetching handyman",
@@ -1484,10 +1446,44 @@ function findAvailablePort(startPort) {
           : null,
       });
     } catch (error) {
+      console.error("Error fetching address:", error);
       return res.status(500).json({
         success: false,
         message: "Error fetching address",
         error: error.message,
+      });
+    }
+  });
+
+  // Get static map image for location (uses Mapbox Static Images API)
+  app.get("/location-map-image", async (req, res) => {
+    try {
+      const { lat, lng, zoom = 15, width = 400, height = 300 } = req.query;
+
+      if (!lat || !lng) {
+        return res.status(400).json({
+          success: false,
+          message: "lat and lng are required",
+        });
+      }
+
+      if (!process.env.MAPBOX_TOKEN) {
+        return res.status(500).json({
+          success: false,
+          message: "Mapbox token not configured",
+        });
+      }
+
+      // Use Mapbox Static Images API
+      const mapboxUrl = `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff6a00(${lng},${lat})/${lng},${lat},${zoom},0/${width}x${height}@2x?access_token=${process.env.MAPBOX_TOKEN}`;
+
+      // Redirect to Mapbox image URL
+      return res.redirect(mapboxUrl);
+    } catch (error) {
+      console.error("Error getting map image:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error generating map image",
       });
     }
   });
@@ -1594,7 +1590,7 @@ function findAvailablePort(startPort) {
             }
           }
         } catch (fwdErr) {
-          console.error("Forward geocoding (Hebrew) failed:", fwdErr?.message);
+          // Forward geocoding (Hebrew) failed
         }
 
         // אם לא מצאנו קואורדינטות בעברית, נסה עם השם באנגלית
@@ -1703,6 +1699,7 @@ function findAvailablePort(startPort) {
 
       return res.json({ success: true });
     } catch (error) {
+      console.error("Error accepting job:", error);
       return res.status(500).json({
         success: false,
         message: "Error accepting job",
@@ -1732,6 +1729,73 @@ function findAvailablePort(startPort) {
       return res.status(500).json({
         success: false,
         message: "Error skipping job",
+        error: error.message,
+      });
+    }
+  });
+
+  app.post("/jobs/cancel", async (req, res) => {
+    try {
+      const { jobId, userId } = req.body;
+      if (!jobId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "jobId is required" });
+      }
+      const jobsCol = getCollectionJobs();
+
+      // Get the job to determine who cancelled
+      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+      if (!job) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Job not found" });
+      }
+
+      // Determine who cancelled: if userId matches handymanId, it's the handyman, otherwise it's the client
+      let cancelledBy = "client";
+      if (job.handymanId && String(job.handymanId) === String(userId)) {
+        cancelledBy = "handyman";
+      } else if (job.clientId && String(job.clientId) === String(userId)) {
+        cancelledBy = "client";
+      }
+
+      await jobsCol.updateOne(
+        { _id: new ObjectId(jobId) },
+        {
+          $unset: { handymanId: "", handymanName: "" },
+          $set: { status: "open" },
+        }
+      );
+
+      // Delete chat from database
+      const chatsCol = getCollectionChats();
+      let deleteResult = await chatsCol.deleteOne({
+        jobId: new ObjectId(jobId),
+      });
+      if (deleteResult.deletedCount === 0) {
+        // Try alternative: jobId might be stored as string in some cases
+        deleteResult = await chatsCol.deleteOne({ jobId: jobId });
+      }
+      if (deleteResult.deletedCount === 0) {
+        // Try with jobId as string
+        deleteResult = await chatsCol.deleteOne({
+          jobId: String(jobId),
+        });
+      }
+
+      // Emit WebSocket event to notify that job was cancelled
+      io.to(`job-${jobId}`).emit("job-cancelled", {
+        jobId: jobId,
+        status: "open",
+        cancelledBy: cancelledBy,
+      });
+
+      return res.json({ success: true });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error cancelling job",
         error: error.message,
       });
     }
@@ -1876,6 +1940,42 @@ function findAvailablePort(startPort) {
     }
   });
 
+  // Get job by ID
+  app.get("/jobs/:jobId", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      if (!jobId) {
+        return res.status(400).json({
+          success: false,
+          message: "jobId required",
+        });
+      }
+
+      const jobsCol = getCollectionJobs();
+
+      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
+
+      return res.json({
+        success: true,
+        job: job,
+      });
+    } catch (error) {
+      console.error("Error fetching job:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching job",
+        error: error.message,
+      });
+    }
+  });
+
   // Get messages for a job
   app.get("/jobs/:jobId/messages", async (req, res) => {
     try {
@@ -1911,7 +2011,7 @@ function findAvailablePort(startPort) {
   app.post("/jobs/:jobId/messages", async (req, res) => {
     try {
       const { jobId } = req.params;
-      const { text, imageUrl, senderId, isHandyman } = req.body;
+      const { text, imageUrl, location, senderId, isHandyman } = req.body;
 
       if (!jobId || !senderId) {
         return res.status(400).json({
@@ -1920,10 +2020,10 @@ function findAvailablePort(startPort) {
         });
       }
 
-      if (!text && !imageUrl) {
+      if (!text && !imageUrl && !location) {
         return res.status(400).json({
           success: false,
-          message: "Either text or imageUrl is required",
+          message: "Either text, imageUrl, or location is required",
         });
       }
 
@@ -1950,9 +2050,11 @@ function findAvailablePort(startPort) {
       if (isHandyman) {
         if (text) messageObj.handyman = text;
         if (imageUrl) messageObj.handymanImage = imageUrl;
+        if (location) messageObj.handymanLocation = location;
       } else {
         if (text) messageObj.customer = text;
         if (imageUrl) messageObj.customerImage = imageUrl;
+        if (location) messageObj.customerLocation = location;
       }
 
       // Find or create chat document
@@ -2058,10 +2160,28 @@ function findAvailablePort(startPort) {
         }
       );
 
+      // Delete chat from database after rating is submitted (job is completed)
+      const chatsCol = getCollectionChats();
+      let deleteResult = await chatsCol.deleteOne({
+        jobId: new ObjectId(jobId),
+      });
+      if (deleteResult.deletedCount === 0) {
+        // Try alternative: jobId might be stored as string in some cases
+        deleteResult = await chatsCol.deleteOne({ jobId: jobId });
+      }
+      if (deleteResult.deletedCount === 0) {
+        // Try with jobId as string
+        deleteResult = await chatsCol.deleteOne({
+          jobId: String(jobId),
+        });
+      }
+
       // Emit WebSocket event to handyman that rating was submitted
+      // This will trigger navigation to job summary page
       io.to(`job-${jobId}`).emit("rating-submitted", {
         jobId: jobId,
         rating: parseInt(rating),
+        review: review || "",
       });
 
       // Calculate average rating for handyman from all ratings
@@ -2094,6 +2214,140 @@ function findAvailablePort(startPort) {
       return res.status(500).json({
         success: false,
         message: "Error submitting rating",
+        error: error.message,
+      });
+    }
+  });
+
+  // Get rating for a specific job
+  app.get("/ratings/job/:jobId", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const ratingsCol = getCollectionRatings();
+
+      const rating = await ratingsCol.findOne({
+        jobId: new ObjectId(jobId),
+      });
+
+      if (!rating) {
+        return res.json({
+          success: true,
+          rating: null,
+        });
+      }
+
+      return res.json({
+        success: true,
+        rating: {
+          _id: rating._id,
+          handymanId: rating.handymanId,
+          customerId: rating.customerId,
+          jobId: rating.jobId,
+          rating: rating.rating,
+          review: rating.review || "",
+          createdAt: rating.createdAt,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching rating:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching rating",
+        error: error.message,
+      });
+    }
+  });
+
+  // Get all ratings for a handyman with earnings calculation
+  app.get("/ratings/handyman/:handymanId", async (req, res) => {
+    try {
+      const { handymanId } = req.params;
+      const ratingsCol = getCollectionRatings();
+      const jobsCol = getCollectionJobs();
+      const usersCol = getCollection();
+
+      // Get all ratings for this handyman
+      const ratings = await ratingsCol
+        .find({ handymanId: handymanId })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      // Get jobs for these ratings to calculate earnings
+      const jobIds = ratings.map((r) => r.jobId);
+      const jobs = await jobsCol.find({ _id: { $in: jobIds } }).toArray();
+
+      // Calculate earnings
+      let totalEarnings = 0;
+      let monthlyEarnings = 0;
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      const ratingsWithDetails = await Promise.all(
+        ratings.map(async (rating) => {
+          const job = jobs.find(
+            (j) => j._id.toString() === rating.jobId.toString()
+          );
+          const price = job?.price || 0;
+          const commission = Math.round(price * 0.1);
+          const earned = price - commission;
+
+          totalEarnings += earned;
+          if (rating.createdAt >= startOfMonth) {
+            monthlyEarnings += earned;
+          }
+
+          // Get customer name
+          let customerName = null;
+          if (rating.customerId) {
+            try {
+              const customer = await usersCol.findOne({
+                _id: new ObjectId(rating.customerId),
+              });
+              customerName = customer?.username || customer?.firstName || null;
+            } catch (err) {
+              // Ignore error
+            }
+          }
+
+          // Get job name
+          let jobName = null;
+          if (job) {
+            if (job.subcategoryInfo && job.subcategoryInfo.name) {
+              jobName = job.subcategoryInfo.name;
+            } else if (job.workType) {
+              jobName = job.workType;
+            } else if (job.description) {
+              jobName =
+                job.description.substring(0, 50) +
+                (job.description.length > 50 ? "..." : "");
+            }
+          }
+
+          return {
+            _id: rating._id,
+            handymanId: rating.handymanId,
+            customerId: rating.customerId,
+            customerName: customerName,
+            jobId: rating.jobId,
+            jobName: jobName,
+            rating: rating.rating,
+            review: rating.review || "",
+            createdAt: rating.createdAt,
+          };
+        })
+      );
+
+      return res.json({
+        success: true,
+        ratings: ratingsWithDetails,
+        totalEarnings: totalEarnings,
+        monthlyEarnings: monthlyEarnings,
+      });
+    } catch (error) {
+      console.error("Error fetching handyman ratings:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching handyman ratings",
         error: error.message,
       });
     }
@@ -2330,14 +2584,7 @@ function findAvailablePort(startPort) {
             lng: parsedLng,
             lat: parsedLat,
           };
-          console.log(
-            "📍 [CREATE-CALL] Coordinates from request (My Location):",
-            {
-              lng: parsedLng,
-              lat: parsedLat,
-              usingMyLocation: usingMyLocation,
-            }
-          );
+          // Coordinates from request (My Location)
 
           // Reverse geocode רק כאשר זו בחירה של "המיקום שלי"
           if (usingMyLocation) {
@@ -2361,17 +2608,11 @@ function findAvailablePort(startPort) {
                         (f.id || "").startsWith("region")
                     ) || features[0];
                 } catch (fallbackErr) {
-                  console.warn(
-                    "⚠️ Mapbox fallback failed",
-                    fallbackErr?.message || fallbackErr
-                  );
+                  // Mapbox fallback failed
                 }
               }
               if (!feature) {
-                console.warn("⚠️ Mapbox returned no features for coords", {
-                  lng: parsedLng,
-                  lat: parsedLat,
-                });
+                // Mapbox returned no features for coords
               }
               const mapboxNameHe =
                 feature?.text_he ||
@@ -2430,7 +2671,7 @@ function findAvailablePort(startPort) {
                     englishCandidate = nominatimHe;
                   }
                 } catch (nomErr) {
-                  console.error("Error in Nominatim reverse:", nomErr?.message);
+                  // Error in Nominatim reverse
                 }
               }
 
@@ -2475,10 +2716,7 @@ function findAvailablePort(startPort) {
                     translated;
                 }
               } catch (translateErr) {
-                console.error(
-                  "Error translating locationText:",
-                  translateErr?.message
-                );
+                // Error translating locationText
                 translated = hebFromLocal || englishCandidate;
               }
 
@@ -2579,10 +2817,7 @@ function findAvailablePort(startPort) {
       ) {
         // אם יש קואורדינטות אבל זה לא "המיקום שלי", נמחק אותן כדי למצוא אותן מחדש
         if (!usingMyLocation && jobData.coordinates) {
-          console.log(
-            "🧹 [CREATE-CALL] Clearing coordinates (not using My Location):",
-            jobData.coordinates
-          );
+          // Clearing coordinates (not using My Location)
           jobData.location = null;
           jobData.coordinates = null;
         }
@@ -2663,14 +2898,7 @@ function findAvailablePort(startPort) {
               };
               jobData.coordinates = { lng, lat };
               coordinatesFound = true;
-              console.log(
-                "✅ [CREATE-CALL] Coordinates found via forward geocoding (Hebrew):",
-                {
-                  location: originalLocationText,
-                  coordinates: { lng, lat },
-                  matchedFeature: !!matchingFeature,
-                }
-              );
+              // Coordinates found via forward geocoding (Hebrew)
 
               // השתמש בשם מה-JSON אם יש, אחרת מהתוצאה
               const hebName = selectedCity
@@ -2703,7 +2931,7 @@ function findAvailablePort(startPort) {
             }
           }
         } catch (fwdErr) {
-          console.error("Forward geocoding (Hebrew) failed:", fwdErr?.message);
+          // Forward geocoding (Hebrew) failed
         }
 
         // אם לא מצאנו קואורדינטות בעברית, נסה עם השם באנגלית
@@ -2839,7 +3067,7 @@ function findAvailablePort(startPort) {
                   }
                 }
               } catch (nomErr) {
-                console.error("Nominatim geocoding failed:", nomErr?.message);
+                // Nominatim geocoding failed
               }
             }
 
@@ -2859,14 +3087,7 @@ function findAvailablePort(startPort) {
                 };
                 jobData.coordinates = { lng, lat };
                 coordinatesFound = true;
-                console.log(
-                  "✅ [CREATE-CALL] Coordinates found via forward geocoding (English):",
-                  {
-                    location: call.locationEnglishName,
-                    coordinates: { lng, lat },
-                    matchedFeature: !!matchingFeatureEn,
-                  }
-                );
+                // Coordinates found via forward geocoding (English)
 
                 // השתמש בשם מה-JSON אם יש, אחרת מהתוצאה
                 const hebName = selectedCity
@@ -3007,13 +3228,52 @@ function findAvailablePort(startPort) {
           .status(400)
           .json({ success: false, message: "User ID required" });
       }
+
+      const userId = new ObjectId(id);
       const usersCol = getCollection();
-      const result = await usersCol.deleteOne({ _id: new ObjectId(id) });
+      const jobsCol = getCollectionJobs();
+      const ratingsCol = getCollectionRatings();
+      const chatsCol = getCollectionChats();
+
+      // Check if user exists
+      const user = await usersCol.findOne({ _id: userId });
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+
+      // First find all jobs where user is involved (for deleting chats)
+      const userJobs = await jobsCol
+        .find({
+          $or: [{ clientId: userId }, { handymanId: userId }],
+        })
+        .toArray();
+      const jobIds = userJobs.map((job) => job._id);
+
+      // Delete user's chats (before deleting jobs)
+      if (jobIds.length > 0) {
+        await chatsCol.deleteMany({ jobId: { $in: jobIds } });
+      }
+
+      // Delete user's jobs (both as client and as handyman)
+      await jobsCol.deleteMany({
+        $or: [{ clientId: userId }, { handymanId: userId }],
+      });
+
+      // Delete user's ratings (both as customer and as handyman)
+      await ratingsCol.deleteMany({
+        $or: [{ customerId: userId }, { handymanId: userId }],
+      });
+
+      // Finally, delete the user
+      const result = await usersCol.deleteOne({ _id: userId });
       if (result.deletedCount === 0) {
         return res
           .status(404)
           .json({ success: false, message: "User not found" });
       }
+
       return res.json({ success: true });
     } catch (error) {
       return res.status(500).json({
@@ -3023,6 +3283,17 @@ function findAvailablePort(startPort) {
       });
     }
   });
+
+  // Serve static files from Vue app in production
+  if (process.env.NODE_ENV === "production") {
+    const distPath = path.join(__dirname, "..", "dist");
+    app.use(express.static(distPath));
+    
+    // Serve index.html for all routes (SPA fallback)
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  }
 
   // Global error handler for unhandled errors
   app.use((err, req, res, next) => {
@@ -3041,7 +3312,7 @@ function findAvailablePort(startPort) {
   const { Server } = require("socket.io");
   const io = new Server(httpServer, {
     cors: {
-      origin: allowedOrigins,
+      origin: process.env.NODE_ENV === "production" ? true : (allowedOrigins || []),
       credentials: true,
     },
   });
@@ -3065,7 +3336,7 @@ function findAvailablePort(startPort) {
   // Start server
   httpServer
     .listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
+      // Server is running
     })
     .on("error", (err) => {
       if (err.code === "EADDRINUSE") {

@@ -97,28 +97,12 @@
 
       <footer class="sheet__footer">
         <button
-          v-if="!showDeleteConfirm"
           class="btn danger"
           type="button"
           @click="showDeleteConfirm = true"
         >
           מחק משתמש
         </button>
-        <div v-else class="deleteConfirm">
-          <span class="deleteConfirm__text">בטוח שברצונך למחוק את המשתמש?</span>
-          <div class="deleteConfirm__actions">
-            <button class="btn danger" type="button" @click="handleDeleteUser">
-              כן, מחק
-            </button>
-            <button
-              class="btn ghost"
-              type="button"
-              @click="showDeleteConfirm = false"
-            >
-              בטל
-            </button>
-          </div>
-        </div>
         <div class="sheet__footer__right">
           <button class="btn ghost" type="button" @click="$emit('close')">
             בטל
@@ -128,6 +112,39 @@
           </button>
         </div>
       </footer>
+    </div>
+
+    <!-- Delete User Confirmation Modal -->
+    <div
+      v-if="showDeleteConfirm"
+      class="deleteUserModal"
+      dir="rtl"
+      @click.self="showDeleteConfirm = false"
+    >
+      <div class="deleteUserModal__content">
+        <div class="deleteUserModal__icon">⚠️</div>
+        <h2 class="deleteUserModal__title">מחיקת משתמש</h2>
+        <p class="deleteUserModal__message">
+          האם אתה בטוח שברצונך למחוק את המשתמש? פעולה זו אינה ביטול.
+        </p>
+        <div class="deleteUserModal__actions">
+          <button
+            class="deleteUserModal__btn deleteUserModal__btn--cancel"
+            type="button"
+            @click="showDeleteConfirm = false"
+          >
+            בטל
+          </button>
+          <button
+            class="deleteUserModal__btn deleteUserModal__btn--confirm"
+            type="button"
+            @click="handleDeleteUser"
+            :disabled="isDeleting"
+          >
+            {{ isDeleting ? "מוחק..." : "כן, מחק" }}
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -154,6 +171,8 @@ export default {
       cityError: "",
       cityDropdown: false,
       cityEnglishName: null, // שמור את השם באנגלית של הישוב
+      showDeleteConfirm: false,
+      isDeleting: false,
     };
   },
   computed: {
@@ -261,20 +280,35 @@ export default {
       this.$emit("close");
     },
     async handleDeleteUser() {
-      try {
-        const userId = this.user?._id || this.user?.id;
-        if (!userId) return;
+      const userId = this.user?._id || this.user?.id;
+      if (!userId) {
+        alert("שגיאה: לא ניתן לזהות את המשתמש");
+        return;
+      }
 
+      this.isDeleting = true;
+      try {
         const response = await axios.delete(`${URL}/users/${userId}`);
         if (response.data.success) {
+          // Close modal and sheet
+          this.showDeleteConfirm = false;
           this.$emit("delete-user");
           this.$emit("close");
           // Redirect to home or login
           this.$router.push("/");
+        } else {
+          alert(
+            response.data.message || "שגיאה במחיקת המשתמש. נסה שוב מאוחר יותר."
+          );
         }
       } catch (error) {
         console.error("Error deleting user:", error);
-        alert("שגיאה במחיקת המשתמש");
+        const errorMessage =
+          error.response?.data?.message ||
+          "שגיאה במחיקת המשתמש. נסה שוב מאוחר יותר.";
+        alert(errorMessage);
+      } finally {
+        this.isDeleting = false;
       }
     },
   },
@@ -529,6 +563,101 @@ export default {
   grid-column: 1 / -1;
 }
 
+.deleteUserModal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.deleteUserModal__content {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.95),
+    rgba(15, 16, 22, 0.98)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 30px;
+  width: min(400px, 90vw);
+  text-align: center;
+}
+
+.deleteUserModal__icon {
+  font-size: 48px;
+  margin-bottom: 20px;
+}
+
+.deleteUserModal__title {
+  font-size: 22px;
+  font-weight: 900;
+  color: #fff;
+  margin: 0 0 16px 0;
+}
+
+.deleteUserModal__message {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0 0 24px 0;
+  line-height: 1.5;
+}
+
+.deleteUserModal__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.deleteUserModal__btn {
+  padding: 12px 24px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.24);
+  color: rgba(255, 255, 255, 0.92);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 900;
+  transition: all 0.2s ease;
+  min-width: 100px;
+}
+
+.deleteUserModal__btn--cancel {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.deleteUserModal__btn--cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.deleteUserModal__btn--confirm {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.deleteUserModal__btn--confirm:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.6);
+  transform: translateY(-1px);
+}
+
+.deleteUserModal__btn--confirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.deleteUserModal__btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
 @media (max-width: 768px) {
   .sheet__panel {
     width: 100vw;
@@ -538,6 +667,15 @@ export default {
   }
   .form-grid {
     grid-template-columns: 1fr;
+  }
+  .deleteUserModal__content {
+    padding: 20px;
+  }
+  .deleteUserModal__actions {
+    flex-direction: column;
+  }
+  .deleteUserModal__btn {
+    width: 100%;
   }
 }
 </style>

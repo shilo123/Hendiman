@@ -32,22 +32,27 @@
     </div>
 
     <div class="top__right">
-      <!-- <div class="top__chats">
-        <button
-          class="btn btn--ghost"
-          type="button"
-          @click="$emit('open-handymen-chat')"
-        >
-          💬 צ׳אט הנדימנים
-        </button>
-        <button
-          class="btn btn--ghost"
-          type="button"
-          @click="$emit('open-all-users-chat')"
-        >
-          🗣️ צ׳אט כל המשתמשים
-        </button>
-      </div> -->
+      <!-- Return to job button (when job is active but chat is minimized) -->
+      <button
+        v-if="hasActiveJob && isChatMinimized"
+        class="top__returnJobBtn"
+        :class="{ 'top__returnJobBtn--handyman': isHendiman }"
+        type="button"
+        @click="$emit('return-to-job')"
+      >
+        <span class="top__returnJobBtnIcon">🔧</span>
+        <span class="top__returnJobBtnText">חזור לעבודה שלך</span>
+      </button>
+
+      <button
+        v-if="isHendiman"
+        class="top__ratingsBtn"
+        type="button"
+        @click="$emit('view-ratings')"
+      >
+        <span class="top__ratingsBtnIcon">⭐</span>
+        <span class="top__ratingsBtnText">הדירוגים והביקורות שלי</span>
+      </button>
 
       <div class="kpi">
         <div class="kpi__item">
@@ -87,8 +92,22 @@ export default {
       type: Object,
       required: true,
     },
+    hasActiveJob: {
+      type: Boolean,
+      default: false,
+    },
+    isChatMinimized: {
+      type: Boolean,
+      default: false,
+    },
   },
-  emits: ["open-profile", "open-handymen-chat", "open-all-users-chat"],
+  emits: [
+    "open-profile",
+    "open-handymen-chat",
+    "open-all-users-chat",
+    "view-ratings",
+    "return-to-job",
+  ],
 };
 </script>
 
@@ -522,6 +541,227 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   &--ghost {
     background: rgba(0, 0, 0, 0.22);
     border-color: rgba(255, 255, 255, 0.12);
+  }
+}
+
+.top__ratingsBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba($orange, 0.3);
+  background: linear-gradient(135deg, rgba($orange, 0.15), rgba($orange2, 0.1));
+  color: $orange2;
+  cursor: pointer;
+  font-weight: 1000;
+  font-size: 13px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba($orange, 0.1);
+  position: relative;
+  overflow: hidden;
+
+  @media (max-width: 768px) {
+    padding: 6px 10px;
+    gap: 4px;
+    font-size: 11px;
+    border-radius: 12px;
+  }
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba($orange, 0.2);
+    transform: translate(-50%, -50%);
+    transition: width 0.4s ease, height 0.4s ease;
+  }
+
+  &:hover {
+    transform: translateY(-2px);
+    border-color: rgba($orange, 0.5);
+    background: linear-gradient(
+      135deg,
+      rgba($orange, 0.25),
+      rgba($orange2, 0.2)
+    );
+    box-shadow: 0 6px 20px rgba($orange, 0.25);
+
+    &::before {
+      width: 200px;
+      height: 200px;
+    }
+
+    .top__ratingsBtnIcon {
+      transform: rotate(15deg) scale(1.1);
+    }
+
+    .top__ratingsBtnText {
+      color: $orange;
+    }
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  &:focus {
+    @include focusRing;
+  }
+}
+
+.top__ratingsBtnIcon {
+  font-size: 16px;
+  transition: transform 0.25s ease;
+  position: relative;
+  z-index: 1;
+
+  @media (max-width: 768px) {
+    font-size: 14px;
+  }
+}
+
+.top__ratingsBtnText {
+  position: relative;
+  z-index: 1;
+  transition: color 0.25s ease;
+  white-space: nowrap;
+
+  @media (max-width: 768px) {
+    font-size: 10px;
+  }
+}
+
+.top__returnJobBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba($orange, 0.3);
+  background: linear-gradient(135deg, rgba($orange, 0.15), rgba($orange2, 0.1));
+  color: $orange2;
+  cursor: pointer;
+  font-weight: 1000;
+  font-size: 13px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba($orange, 0.1);
+  position: relative;
+  overflow: hidden;
+
+  @media (max-width: 768px) {
+    padding: 6px 10px;
+    gap: 4px;
+    font-size: 11px;
+    border-radius: 12px;
+  }
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba($orange, 0.2);
+    transform: translate(-50%, -50%);
+    transition: width 0.4s ease, height 0.4s ease;
+  }
+
+  &:hover {
+    transform: translateY(-2px);
+    border-color: rgba($orange, 0.5);
+    background: linear-gradient(
+      135deg,
+      rgba($orange, 0.25),
+      rgba($orange2, 0.2)
+    );
+    box-shadow: 0 6px 20px rgba($orange, 0.25);
+    animation: none;
+
+    &::before {
+      width: 200px;
+      height: 200px;
+    }
+
+    .top__returnJobBtnIcon {
+      transform: rotate(15deg) scale(1.1);
+    }
+
+    .top__returnJobBtnText {
+      color: $orange;
+    }
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  &:focus {
+    @include focusRing;
+  }
+
+  // Red style for handyman
+  &.top__returnJobBtn--handyman {
+    border: 2px solid rgba(239, 68, 68, 0.5); /* Red border */
+    background: linear-gradient(
+      135deg,
+      rgba(239, 68, 68, 0.2),
+      rgba(220, 38, 38, 0.15)
+    ); /* Red gradient */
+    color: #ef4444; /* Red text */
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); /* Red shadow */
+
+    &::before {
+      background: rgba(239, 68, 68, 0.3); /* Red ripple */
+    }
+
+    &:hover {
+      border-color: rgba(239, 68, 68, 0.7); /* Darker red border on hover */
+      background: linear-gradient(
+        135deg,
+        rgba(239, 68, 68, 0.3),
+        rgba(220, 38, 38, 0.25)
+      ); /* Darker red gradient on hover */
+      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.35); /* Darker red shadow on hover */
+
+      .top__returnJobBtnText {
+        color: #dc2626; /* Darker red text on hover */
+      }
+    }
+  }
+}
+
+.top__returnJobBtnIcon {
+  font-size: 16px;
+  transition: transform 0.25s ease;
+  position: relative;
+  z-index: 1;
+
+  @media (max-width: 768px) {
+    font-size: 14px;
+  }
+}
+
+.top__returnJobBtnText {
+  position: relative;
+  z-index: 1;
+  transition: color 0.25s ease;
+  white-space: nowrap;
+  color: $orange2; /* Default orange (for client) */
+  font-weight: 1000;
+
+  @media (max-width: 768px) {
+    font-size: 10px;
+  }
+
+  .top__returnJobBtn--handyman & {
+    color: #ef4444; /* Red for handyman */
   }
 }
 </style>

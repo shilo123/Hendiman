@@ -19,8 +19,36 @@
           </div>
           <div class="hcard__meta">
             <div class="hcard__name">{{ h.username }}</div>
+            <div
+              class="hcard__rating"
+              v-if="h.rating !== null && h.rating !== undefined"
+            >
+              <div class="hcard__rating-stars">
+                <template v-for="i in 5" :key="i">
+                  <font-awesome-icon
+                    v-if="i <= getFullStars(h.rating)"
+                    :icon="['fas', 'star']"
+                    class="hcard__star hcard__star--full"
+                  />
+                  <font-awesome-icon
+                    v-else-if="
+                      i === getFullStars(h.rating) + 1 && hasHalfStar(h.rating)
+                    "
+                    :icon="['fas', 'star-half-stroke']"
+                    class="hcard__star hcard__star--half"
+                  />
+                  <font-awesome-icon
+                    v-else
+                    :icon="['fas', 'star']"
+                    class="hcard__star hcard__star--empty"
+                  />
+                </template>
+              </div>
+              <span class="hcard__rating-number">{{
+                formatRating(h.rating)
+              }}</span>
+            </div>
             <div class="hcard__sub">
-              <span v-for="a in h.rating" :key="a">⭐ </span> ·
               {{ h.jobDone || 0 }} עבודות
               <span
                 v-if="
@@ -115,6 +143,25 @@ export default {
     "prev-page",
   ],
   methods: {
+    formatRating(rating) {
+      if (rating === null || rating === undefined) return "0.0";
+      const numRating = Number(rating);
+      if (isNaN(numRating)) return "0.0";
+      // הצג עם ספרה עשרונית אחת אם יש עשרוניות
+      return numRating % 1 === 0 ? numRating.toFixed(0) : numRating.toFixed(1);
+    },
+    getFullStars(rating) {
+      if (rating === null || rating === undefined) return 0;
+      const numRating = Number(rating);
+      if (isNaN(numRating) || numRating < 0) return 0;
+      return Math.floor(numRating);
+    },
+    hasHalfStar(rating) {
+      if (rating === null || rating === undefined) return false;
+      const numRating = Number(rating);
+      if (isNaN(numRating) || numRating < 0) return false;
+      return numRating % 1 >= 0.5;
+    },
     getHandymanImage(handyman) {
       const defaultImage = "/img/Hendima-logo.png";
 
@@ -284,6 +331,68 @@ $text: rgba(255, 255, 255, 0.92);
 
     @media (max-width: 768px) {
       font-size: 12px;
+    }
+  }
+
+  &__rating {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    margin-bottom: 2px;
+
+    @media (max-width: 768px) {
+      gap: 4px;
+      margin-top: 2px;
+      margin-bottom: 1px;
+    }
+  }
+
+  &__rating-stars {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    flex-direction: row-reverse;
+
+    @media (max-width: 768px) {
+      gap: 2px;
+    }
+  }
+
+  &__star {
+    font-size: 11px;
+    line-height: 1;
+    display: inline-block;
+    transition: opacity 0.2s ease, color 0.2s ease;
+    color: #ffd700;
+
+    @media (max-width: 768px) {
+      font-size: 9px;
+    }
+
+    &--full {
+      color: #ffd700;
+      opacity: 1;
+    }
+
+    &--half {
+      color: #ffd700;
+      opacity: 1;
+    }
+
+    &--empty {
+      color: rgba(255, 255, 255, 0.3);
+      opacity: 1;
+    }
+  }
+
+  &__rating-number {
+    color: $orange2;
+    font-weight: 1000;
+    font-size: 12px;
+
+    @media (max-width: 768px) {
+      font-size: 10px;
     }
   }
 

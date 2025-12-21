@@ -197,8 +197,15 @@ export const useMainStore = defineStore("main", {
           }
         }
 
-        // מיון לפי מרחק (אם קיים), אחרת שימור סדר
+        // מיון: קודם כל עבודות דחופות (urgent), ואז לפי מרחק
         const sorted = [...list].sort((a, b) => {
+          // עבודות דחופות תמיד ראשונות
+          const aUrgent = a.urgent === true;
+          const bUrgent = b.urgent === true;
+          if (aUrgent && !bUrgent) return -1;
+          if (!aUrgent && bUrgent) return 1;
+
+          // אם שתיהן דחופות או שתיהן לא דחופות, מיין לפי מרחק
           const da = a.distanceKm;
           const db = b.distanceKm;
           if (da === undefined || da === null) return 1;

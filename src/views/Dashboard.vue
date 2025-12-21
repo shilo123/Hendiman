@@ -14,22 +14,25 @@
       :isHendiman="isHendiman"
       :isAvailable="isAvailable"
       :stats="stats"
+      :hasActiveJob="!!currentAssignedJob"
+      :isChatMinimized="isChatMinimized"
       @open-profile="onOpenProfile"
       @open-handymen-chat="onOpenHandymenChat"
       @open-all-users-chat="onOpenAllUsersChat"
+      @view-ratings="onViewRatings"
+      @return-to-job="onReturnToJob"
     />
 
     <!-- MAIN -->
     <main class="grid">
       <!-- Job Chat (when job is assigned) -->
       <JobChat
-        v-if="currentAssignedJob"
+        v-if="currentAssignedJob && !isChatMinimized"
         :job="currentAssignedJob"
         :isHandyman="isHendiman"
-        @close="activeAssignedJob = null"
+        @minimize="isChatMinimized = true"
         @status-updated="onJobStatusUpdated"
         @rating-submitted="onRatingSubmitted"
-        @open-profile="onOpenProfile"
         @cancel-job="onCancelJob"
       />
 
@@ -130,6 +133,32 @@
           @close="showProfileSheet = false"
           @save="onSaveProfile"
         />
+        <!-- Job Cancelled Modal -->
+        <div v-if="showJobCancelledModal" class="jobCancelledModal" dir="rtl">
+          <div
+            class="jobCancelledModal__backdrop"
+            @click="showJobCancelledModal = false"
+          />
+          <div class="jobCancelledModal__content">
+            <div class="jobCancelledModal__icon">⚠️</div>
+            <h2 class="jobCancelledModal__title">העבודה בוטלה</h2>
+            <p class="jobCancelledModal__message">
+              <span v-if="cancelledBy === 'handyman'">
+                מצטערים, אך ההנדימן ביטל את העבודה
+              </span>
+              <span v-else-if="cancelledBy === 'client'">
+                מצטערים, אך הלקוח ביטל את העבודה
+              </span>
+            </p>
+            <button
+              class="jobCancelledModal__btn"
+              type="button"
+              @click="handleJobCancelledClose"
+            >
+              הבנתי
+            </button>
+          </div>
+        </div>
       </template>
     </main>
 
@@ -213,7 +242,7 @@ export default {
         { label: "הושלמו", value: "done" },
         { label: "בוטלו", value: "cancelled" },
       ],
-      activeStatus: "all",
+      activeStatus: "open", // Default to "open" for handyman
       jobDetails: null,
       showProfileSheet: false,
       profileForm: {
@@ -228,6 +257,9 @@ export default {
       handymanDetails: null,
       dirFilters: { q: "", minRating: 0, minJobs: 0 },
       activeAssignedJob: null,
+      isChatMinimized: false,
+      showJobCancelledModal: false,
+      cancelledBy: "handyman", // Track who cancelled: "handyman" or "client"
     };
   },
 
@@ -335,13 +367,13 @@ export default {
       const assignedJob = allJobs.find((job) => {
         if (this.isHendiman) {
           // עבור הנדימן - בודק אם handymanId תואם
+          // עבור הנדימן: עבודה ב-"done" לא נחשבת כעבודה פעילה (צריך להמתין לדירוג)
           return (
             job.handymanId &&
             String(job.handymanId) === String(userId) &&
             (job.status === "assigned" ||
               job.status === "on_the_way" ||
-              job.status === "in_progress" ||
-              (job.status === "done" && !job.ratingSubmitted))
+              job.status === "in_progress")
           );
         } else {
           // עבור לקוח - בודק אם clientId תואם
@@ -586,46 +618,42 @@ export default {
         }
       }
 
-      // Also update currentAssignedJob if it's found in store
-      const userId = this.store.user?._id || this.me?._id;
-      if (userId && this.store.jobs) {
-        const assignedJob = this.store.jobs.find((job) => {
-          if (this.isHendiman) {
-            return (
-              job.handymanId &&
-              String(job.handymanId) === String(userId) &&
-              String(job._id || job.id) === String(jobId)
-            );
-          } else {
-            return (
-              job.clientId &&
-              String(job.clientId) === String(userId) &&
-              String(job._id || job.id) === String(jobId)
-            );
-          }
-        });
-        if (assignedJob) {
-          assignedJob.status = newStatus;
-        }
-      }
-
-      // Update active job status
-      if (this.activeAssignedJob) {
-        this.activeAssignedJob.status = newStatus;
-      }
-
-      // Refresh jobs after status update (async)
-      if (this.isHendiman) {
-        await this.fetchHandymanJobs();
-        // If handyman marked job as "done", close the chat and return to normal view
-        if (newStatus === "done") {
-          // Close the chat
-          this.activeAssignedJob = null;
-        }
-      } else {
+      // If job is marked as done and user is handyman, close the chat (even if minimized)
+      if (newStatus === "done" && this.isHendiman) {
+        this.activeAssignedJob = null;
+        this.isChatMinimized = false;
+        // Refresh to update job list
         await this.onRefresh();
       }
     },
+
+    async onCancelJob() {
+      // Update the job in store - remove handyman assignment and set status to open
+      const jobId = this.activeAssignedJob?._id || this.activeAssignedJob?.id;
+      if (jobId && this.store.jobs) {
+        const jobIndex = this.store.jobs.findIndex(
+          (j) => String(j._id || j.id) === String(jobId)
+        );
+        if (jobIndex !== -1) {
+          // Update job in store - remove handyman assignment and set status to open
+          const updatedJob = { ...this.store.jobs[jobIndex] };
+          delete updatedJob.handymanId;
+          delete updatedJob.handymanName;
+          updatedJob.status = "open";
+          this.store.jobs[jobIndex] = updatedJob;
+        }
+      }
+      // Clear the assigned job to close the chat
+      this.activeAssignedJob = null;
+      this.isChatMinimized = false;
+      // Refresh jobs list to get updated status
+      await this.onRefresh();
+    },
+
+    handleJobCancelledClose() {
+      this.showJobCancelledModal = false;
+    },
+
     async onRatingSubmitted() {
       // Save jobId before closing
       const jobId = this.activeAssignedJob?._id || this.activeAssignedJob?.id;
@@ -717,7 +745,6 @@ export default {
         this.activeAssignedJob = null;
       }
     },
-
     initWebSocket() {
       // Connect to WebSocket server
       this.socket = io(URL, {
@@ -756,8 +783,34 @@ export default {
           }
         }
       });
-    },
 
+      // Listen for job cancelled event (for both clients and handymen)
+      this.socket.on("job-cancelled", async (data) => {
+        const jobId = String(data.jobId || "");
+        const cancelledBy = data.cancelledBy || "handyman"; // "handyman" or "client"
+        const userId = this.store.user?._id || this.me?.id;
+        if (userId) {
+          // Check if this is the currently assigned job
+          const currentJobId =
+            this.activeAssignedJob?._id || this.activeAssignedJob?.id;
+          if (currentJobId && String(currentJobId) === jobId) {
+            // Close the chat
+            this.activeAssignedJob = null;
+            this.isChatMinimized = false;
+            // Show modal with appropriate message
+            if (
+              (this.isHendiman && cancelledBy === "client") ||
+              (!this.isHendiman && cancelledBy === "handyman")
+            ) {
+              this.cancelledBy = cancelledBy;
+              this.showJobCancelledModal = true;
+            }
+            // Refresh to get updated job data
+            await this.onRefresh();
+          }
+        }
+      });
+    },
     disconnectWebSocket() {
       if (this.socket) {
         // Leave all job rooms
@@ -774,16 +827,24 @@ export default {
         this.socket = null;
       }
     },
-
     onCreateCallCta() {
       this.$router.push({
         name: "CreateCall",
         params: { id: this.$route.params.id },
       });
     },
-
     onGoProfile() {
       this.onOpenProfile();
+    },
+    onViewRatings() {
+      this.$router.push({
+        name: "HandymanRatings",
+        params: { id: this.$route.params.id },
+      });
+    },
+
+    onReturnToJob() {
+      this.isChatMinimized = false;
     },
 
     onBlockHandyman(id) {
@@ -2685,5 +2746,80 @@ $r2: 26px;
   .grid {
     padding-bottom: calc(80px + env(safe-area-inset-bottom));
   }
+}
+
+.jobCancelledModal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: $font-family;
+}
+
+.jobCancelledModal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.jobCancelledModal__content {
+  position: relative;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.95),
+    rgba(15, 16, 22, 0.98)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 32px;
+  max-width: 400px;
+  width: calc(100% - 40px);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+
+.jobCancelledModal__icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  line-height: 1;
+}
+
+.jobCancelledModal__title {
+  font-size: 24px;
+  font-weight: 900;
+  color: #fff;
+  margin: 0 0 12px 0;
+}
+
+.jobCancelledModal__message {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0 0 24px 0;
+  line-height: 1.5;
+}
+
+.jobCancelledModal__btn {
+  padding: 12px 32px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #ff6a00, #ff8a2b);
+  color: #0b0b0f;
+  font-weight: 900;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: $font-family;
+}
+
+.jobCancelledModal__btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 106, 0, 0.4);
+}
+
+.jobCancelledModal__btn:active {
+  transform: translateY(0);
 }
 </style>

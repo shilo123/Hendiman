@@ -15,6 +15,9 @@ import {
   faCheckCircle,
   faComment,
   faCalendar,
+  faStar,
+  faStarHalfStroke,
+  faShare,
 } from "@fortawesome/free-solid-svg-icons";
 
 library.add(
@@ -24,7 +27,10 @@ library.add(
   faInfoCircle,
   faCheckCircle,
   faComment,
-  faCalendar
+  faCalendar,
+  faStar,
+  faStarHalfStroke,
+  faShare
 );
 
 const app = createApp(App);

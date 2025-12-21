@@ -51,29 +51,6 @@
         </div>
       </div>
     </div>
-
-    <div class="selected">
-      <div class="selected-head">
-        <span>התמחויות נבחרות</span>
-        <span class="count">{{ internalValue.length }}</span>
-      </div>
-      <div class="chips" v-if="internalValue.length">
-        <span v-for="item in internalValue" :key="chipKey(item)" class="chip">
-          <span class="chip-name">
-            <span v-if="item.isFullCategory">[קטגוריה שלימה] </span>
-            {{ item.name }}
-          </span>
-          <span class="chip-meta" v-if="item.price || item.typeWork">
-            <span v-if="item.price">{{ item.price }} ₪</span>
-            <span v-if="item.typeWork">• {{ item.typeWork }}</span>
-          </span>
-          <button type="button" class="chip-remove" @click="remove(item)">
-            ✕
-          </button>
-        </span>
-      </div>
-      <div v-else class="muted">לא נבחרו התמחויות</div>
-    </div>
   </div>
 </template>
 
@@ -359,82 +336,6 @@ select option {
   padding: 6px;
   border-radius: 7px;
   border: 1px dashed rgba(255, 255, 255, 0.08);
-  font-size: 11px;
-}
-
-.selected {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.selected-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 900;
-  color: #fff;
-  margin-bottom: 4px;
-  font-size: 12px;
-}
-
-.count {
-  background: rgba(255, 122, 0, 0.18);
-  color: #ffb36b;
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 10px;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  max-height: 50px;
-  overflow-y: auto;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 8px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  color: #fff;
-  font-weight: 800;
-  max-width: 100%;
-  font-size: 11px;
-}
-
-.chip-name {
-  white-space: nowrap;
-}
-
-.chip-meta {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.75);
-  display: flex;
-  gap: 4px;
-}
-
-.chip-remove {
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.75);
-  cursor: pointer;
-  font-weight: 900;
-
-  &:hover {
-    color: #fff;
-  }
-}
-
-.muted {
-  color: rgba(255, 255, 255, 0.6);
-  font-weight: 800;
   font-size: 11px;
 }
 

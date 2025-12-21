@@ -303,6 +303,42 @@
             <p class="description-text">{{ jobDetails.desc }}</p>
           </div>
 
+          <!-- Rating Section (for client, when job is done) -->
+          <div
+            v-if="!isHendiman && jobDetails.status === 'done' && rating"
+            class="job-rating"
+          >
+            <h3 class="section-title">דירוג:</h3>
+            <div class="rating-display">
+              <div class="rating-stars">
+                <template v-for="i in 5" :key="i">
+                  <font-awesome-icon
+                    v-if="i <= fullStars"
+                    :icon="['fas', 'star']"
+                    class="rating-star rating-star--full"
+                  />
+                  <font-awesome-icon
+                    v-else-if="i === fullStars + 1 && hasHalfStar"
+                    :icon="['fas', 'star-half-stroke']"
+                    class="rating-star rating-star--half"
+                  />
+                  <font-awesome-icon
+                    v-else
+                    :icon="['fas', 'star']"
+                    class="rating-star rating-star--empty"
+                  />
+                </template>
+              </div>
+              <span class="rating-number">{{ rating.rating }}/5</span>
+            </div>
+            <div v-if="rating.review" class="rating-review">
+              <p class="review-text">{{ rating.review }}</p>
+            </div>
+            <div v-else class="rating-review rating-review--empty">
+              <p class="review-text">לא ניתנה ביקורת</p>
+            </div>
+          </div>
+
           <!-- Actions -->
           <div class="job-actions">
             <button class="btn-action btn-action--ghost" @click="onClose">
@@ -352,6 +388,9 @@
 </template>
 
 <script>
+import axios from "axios";
+import { URL } from "@/Url/url";
+
 export default {
   name: "ViewJob",
   props: {
@@ -368,7 +407,71 @@ export default {
       required: true,
     },
   },
+  data() {
+    return {
+      rating: null,
+      isLoadingRating: false,
+    };
+  },
+  watch: {
+    jobDetails: {
+      immediate: true,
+      handler(newJob) {
+        if (
+          newJob &&
+          !this.isHendiman &&
+          newJob.status === "done" &&
+          newJob._id
+        ) {
+          this.loadRating(newJob._id);
+        }
+      },
+    },
+  },
+  computed: {
+    fullStars() {
+      if (!this.rating || !this.rating.rating) return 0;
+      return Math.floor(this.rating.rating);
+    },
+    hasHalfStar() {
+      if (!this.rating || !this.rating.rating) return false;
+      return this.rating.rating % 1 >= 0.5;
+    },
+    jobCoordinates() {
+      const coords = this.jobDetails?.coordinates;
+      if (coords && coords.lat !== undefined && coords.lng !== undefined) {
+        return { lat: coords.lat, lng: coords.lng };
+      }
+      const locArray = this.jobDetails?.location?.coordinates;
+      if (
+        Array.isArray(locArray) &&
+        locArray.length >= 2 &&
+        typeof locArray[1] === "number" &&
+        typeof locArray[0] === "number"
+      ) {
+        return { lat: locArray[1], lng: locArray[0] };
+      }
+      return null;
+    },
+  },
   methods: {
+    async loadRating(jobId) {
+      if (this.isLoadingRating) return;
+      this.isLoadingRating = true;
+      try {
+        const response = await axios.get(`${URL}/ratings/job/${jobId}`);
+        if (response.data.success && response.data.rating) {
+          this.rating = response.data.rating;
+        } else {
+          this.rating = null;
+        }
+      } catch (error) {
+        console.error("Error loading rating:", error);
+        this.rating = null;
+      } finally {
+        this.isLoadingRating = false;
+      }
+    },
     onClose() {
       this.$emit("close");
     },
@@ -420,24 +523,6 @@ export default {
       }
     },
   },
-  computed: {
-    jobCoordinates() {
-      const coords = this.jobDetails?.coordinates;
-      if (coords && coords.lat !== undefined && coords.lng !== undefined) {
-        return { lat: coords.lat, lng: coords.lng };
-      }
-      const locArray = this.jobDetails?.location?.coordinates;
-      if (
-        Array.isArray(locArray) &&
-        locArray.length >= 2 &&
-        typeof locArray[1] === "number" &&
-        typeof locArray[0] === "number"
-      ) {
-        return { lat: locArray[1], lng: locArray[0] };
-      }
-      return null;
-    },
-  },
 };
 </script>
 
@@ -484,7 +569,7 @@ $r2: 26px;
   justify-content: center;
   z-index: 1000;
   padding: 20px;
-  overflow-y: auto;
+  overflow-y: hidden;
   font-family: $font-family;
 }
 
@@ -532,7 +617,7 @@ $r2: 26px;
   color: $text;
   direction: rtl;
   text-align: right;
-  overflow-y: auto;
+  overflow-y: hidden;
   display: flex;
   flex-direction: column;
   font-family: $font-family;
@@ -856,27 +941,35 @@ $r2: 26px;
 
 .job-details {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
   padding: 12px 0;
   margin-bottom: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 
+  @media (max-width: 1024px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
   @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-    gap: 10px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
     padding: 10px 0;
+  }
+
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
   }
 }
 
 .detail-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
+  gap: 8px;
+  padding: 8px 10px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
+  border-radius: 10px;
   transition: all 0.2s ease;
 
   &:hover {
@@ -885,9 +978,9 @@ $r2: 26px;
   }
 
   @media (max-width: 768px) {
-    padding: 10px;
-    gap: 10px;
-    border-radius: 10px;
+    padding: 8px;
+    gap: 8px;
+    border-radius: 8px;
   }
 }
 
@@ -902,23 +995,23 @@ $r2: 26px;
 }
 
 .detail-icon {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba($orange, 0.1);
   border: 1px solid rgba($orange, 0.2);
-  border-radius: 10px;
+  border-radius: 8px;
   color: $orange3;
-  font-size: 16px;
+  font-size: 12px;
   flex-shrink: 0;
 
   @media (max-width: 768px) {
-    width: 32px;
-    height: 32px;
-    font-size: 14px;
-    border-radius: 8px;
+    width: 24px;
+    height: 24px;
+    font-size: 11px;
+    border-radius: 6px;
   }
 }
 
@@ -931,45 +1024,46 @@ $r2: 26px;
 .detail-content {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   flex: 1;
   min-width: 0;
 
   @media (max-width: 768px) {
-    gap: 3px;
+    gap: 2px;
   }
 }
 
 .detail-label {
   font-weight: 900;
   color: $muted;
-  font-size: 11px;
+  font-size: 9px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
+  line-height: 1.2;
 
   @media (max-width: 768px) {
-    font-size: 10px;
+    font-size: 8px;
   }
 }
 
 .detail-value {
   font-weight: 1000;
   color: $text;
-  font-size: 14px;
-  line-height: 1.3;
+  font-size: 11px;
+  line-height: 1.2;
   word-break: break-word;
 
   @media (max-width: 768px) {
-    font-size: 13px;
+    font-size: 10px;
   }
 
   &--price {
     color: $orange3;
     font-weight: 1100;
-    font-size: 16px;
+    font-size: 12px;
 
     @media (max-width: 768px) {
-      font-size: 15px;
+      font-size: 11px;
     }
   }
 }
@@ -1132,5 +1226,86 @@ $r2: 26px;
         0 0 0 4px rgba(73, 196, 255, 0.14);
     }
   }
+}
+
+.job-rating {
+  padding: 12px 0;
+  margin-bottom: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+  @media (max-width: 768px) {
+    padding: 10px 0;
+  }
+}
+
+.rating-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rating-stars {
+  display: flex;
+  gap: 4px;
+  direction: ltr;
+}
+
+.rating-star {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.2);
+  transition: color 0.2s ease;
+
+  @media (max-width: 768px) {
+    font-size: 16px;
+  }
+
+  &--full {
+    color: #ffb300;
+  }
+
+  &--half {
+    color: #ffb300;
+  }
+
+  &--empty {
+    color: rgba(255, 255, 255, 0.2);
+  }
+}
+
+.rating-number {
+  font-weight: 1000;
+  font-size: 16px;
+  color: $text;
+
+  @media (max-width: 768px) {
+    font-size: 14px;
+  }
+}
+
+.rating-review {
+  margin-top: 8px;
+}
+
+.review-text {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: $text;
+  line-height: 1.5;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+
+  @media (max-width: 768px) {
+    font-size: 12px;
+    padding: 10px;
+  }
+}
+
+.rating-review--empty .review-text {
+  color: $muted;
+  font-style: italic;
 }
 </style>

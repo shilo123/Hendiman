@@ -4,6 +4,8 @@ import LogIn from "@/views/Login/log-in.vue";
 import Register from "@/views/Login/register.vue";
 import Dashboard from "@/views/Dashboard.vue";
 import CreateCall from "@/views/CreateCall.vue";
+import JobSummary from "@/views/JobSummary.vue";
+import HandymanRatings from "@/views/HandymanRatings.vue";
 
 const routes = [
   {
@@ -36,6 +38,18 @@ const routes = [
     path: "/Dashboard/:id/create-call",
     name: "CreateCall",
     component: CreateCall,
+    props: true,
+  },
+  {
+    path: "/Dashboard/:id/job-summary/:jobId",
+    name: "JobSummary",
+    component: JobSummary,
+    props: true,
+  },
+  {
+    path: "/Dashboard/:id/ratings",
+    name: "HandymanRatings",
+    component: HandymanRatings,
     props: true,
   },
 ];
