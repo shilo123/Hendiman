@@ -5,12 +5,17 @@
     ref="overlayAnchor"
   >
     <label for="specialtiesTextarea">תחומי התמחות</label>
+    <!-- הוראות למובייל -->
+    <div class="mobile-instructions">
+      <p>לחיצה אחת: פתיחת תת-קטגוריות | לחיצה כפולה: בחירת קטגוריה שלימה</p>
+    </div>
     <div class="textarea-wrapper">
       <textarea
         id="specialtiesTextarea"
         v-model="textareaValue"
         readonly
-        @mouseenter="openDropdown"
+        @mouseenter="!isMobile && openDropdown()"
+        @click="isMobile && !showDropdown && openDropdown()"
         class="specialties-textarea"
         placeholder="עבור עם העכבר לבחירת תחומי התמחות"
       ></textarea>
@@ -23,6 +28,7 @@
       :style="overlayMode ? overlayStyle : null"
       @mouseenter="keepDropdownVisible"
       @mouseleave="hideDropdown"
+      @click.stop
     >
       <div class="full-category-hint">
         לחץ על קטגוריה כדי להוסיף אותה כקטגוריה שלימה
@@ -32,10 +38,15 @@
           v-for="category in displayedCategories"
           :key="category.name"
           class="category-item"
-          @mouseenter="showSubcategories(category)"
-          @mouseleave="hideSubcategories"
-          @click.stop="selectFullCategory(category.name)"
-          title="לחץ כדי להוסיף קטגוריה שלימה"
+          @mouseenter="!isMobile && showSubcategories(category)"
+          @mouseleave="!isMobile && hideSubcategories"
+          @click.stop="handleCategoryClick(category)"
+          @dblclick.stop="handleCategoryDoubleClick(category.name)"
+          :title="
+            isMobile
+              ? 'לחיצה אחת: פתיחת תת-קטגוריות | לחיצה כפולה: בחירת קטגוריה שלימה'
+              : 'לחץ כדי להוסיף קטגוריה שלימה'
+          "
         >
           <span class="category-name">{{ category.name }}</span>
           <span class="arrow">←</span>
@@ -135,6 +146,7 @@ export default {
       subcategorySearchQuery: "",
       overlayStyle: null,
       subOverlayStyle: null,
+      isMobile: window.innerWidth <= 768, // זיהוי מובייל
     };
   },
   computed: {
@@ -306,6 +318,19 @@ export default {
     },
   },
   methods: {
+    handleResize() {
+      this.isMobile = window.innerWidth <= 768;
+    },
+    handleClickOutside(event) {
+      // סגור את הדרופדאון אם הלחיצה הייתה מחוץ לקומפוננטה
+      if (
+        this.showDropdown &&
+        this.$refs.overlayAnchor &&
+        !this.$refs.overlayAnchor.contains(event.target)
+      ) {
+        this.hideDropdown();
+      }
+    },
     handleTextareaLeave() {
       // סגור כאשר העכבר יוצא מהאזור
       this.keepDropdown = false;
@@ -316,6 +341,21 @@ export default {
       this.showDropdown = true;
       if (this.overlayMode) {
         this.$nextTick(() => this.updateOverlayPositions());
+      }
+    },
+    handleCategoryClick(category) {
+      // במובייל: לחיצה אחת פותחת תת-קטגוריות
+      if (this.isMobile) {
+        this.showSubcategories(category);
+      } else {
+        // במחשב: לחיצה בוחרת קטגוריה שלימה (התנהגות ישנה)
+        this.selectFullCategory(category.name);
+      }
+    },
+    handleCategoryDoubleClick(categoryName) {
+      // במובייל: לחיצה כפולה בוחרת קטגוריה שלימה
+      if (this.isMobile) {
+        this.selectFullCategory(categoryName);
       }
     },
     keepDropdownVisible() {
@@ -338,6 +378,10 @@ export default {
       this.subcategorySearchQuery = "";
     },
     hideSubcategories() {
+      // במובייל - אל תסתיר אוטומטית
+      if (this.isMobile) {
+        return;
+      }
       // רק אם לא עוברים על התת-קטגוריות
       // בטל את ה-timeout הקודם אם קיים
       if (this.hideSubcategoriesTimeout) {
@@ -533,11 +577,19 @@ export default {
     if (this.overlayMode) {
       window.addEventListener("resize", this.updateOverlayPositions);
     }
+    // עדכן את isMobile ב-resize
+    this.handleResize();
+    window.addEventListener("resize", this.handleResize);
+    // הוסף listener ללחיצות מחוץ לדרופדאון
+    document.addEventListener("click", this.handleClickOutside);
   },
   beforeUnmount() {
     if (this.overlayMode) {
       window.removeEventListener("resize", this.updateOverlayPositions);
     }
+    window.removeEventListener("resize", this.handleResize);
+    // הסר listener ללחיצות מחוץ לדרופדאון
+    document.removeEventListener("click", this.handleClickOutside);
   },
 };
 </script>
@@ -562,6 +614,20 @@ export default {
   font-weight: 600;
   font-size: 0.8rem;
   text-align: right;
+}
+
+.mobile-instructions {
+  display: none;
+  color: #9ca3af;
+  font-size: 0.75rem;
+  padding: 6px 0;
+  text-align: right;
+  direction: rtl;
+  line-height: 1.4;
+}
+
+.mobile-instructions p {
+  margin: 0;
 }
 
 .textarea-wrapper {
@@ -699,6 +765,49 @@ export default {
   width: 100%;
   max-width: none;
   z-index: 1000000;
+}
+
+/* Overlay mode responsive for mobile */
+@media (max-width: 768px) {
+  :deep(.category-selector-overlay .dropdown-container) {
+    max-height: 250px;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  :deep(.category-selector-overlay .categories-dropdown) {
+    width: 100%;
+    max-width: 100%;
+    max-height: 200px;
+    position: relative;
+  }
+
+  :deep(.category-selector-overlay .subcategories-dropdown-wrapper) {
+    position: relative;
+    top: auto;
+    left: auto;
+    margin-top: 8px;
+    width: 100%;
+  }
+
+  :deep(.category-selector-overlay .subcategories-dropdown-scroll) {
+    width: 100%;
+    max-height: 250px;
+  }
+}
+
+@media (max-width: 480px) {
+  :deep(.category-selector-overlay .dropdown-container) {
+    max-height: 220px;
+  }
+
+  :deep(.category-selector-overlay .categories-dropdown) {
+    max-height: 180px;
+  }
+
+  :deep(.category-selector-overlay .subcategories-dropdown-scroll) {
+    max-height: 220px;
+  }
 }
 
 .subcategories-dropdown-scroll {
@@ -852,6 +961,13 @@ export default {
 
 /* Responsive design for mobile */
 @media (max-width: 768px) {
+  .mobile-instructions {
+    display: block;
+  }
+
+  .full-category-hint {
+    display: none;
+  }
   .dropdown-container {
     position: fixed;
     bottom: auto;
@@ -860,37 +976,75 @@ export default {
     right: auto;
     transform: translate(-50%, -50%);
     margin: 0;
-    max-width: 90vw;
+    max-width: 85vw;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
   }
 
   .categories-dropdown {
+    position: relative;
     width: 100%;
-    max-width: 300px;
+    max-width: 85vw;
+    max-height: 200px;
+    width: 100%;
+  }
+
+  .subcategories-dropdown-wrapper {
+    position: relative;
+    right: auto;
+    top: auto;
+    margin: 8px 0 0 0;
+    width: 100%;
+  }
+
+  .subcategories-dropdown-scroll {
+    width: 100%;
+    max-width: 85vw;
     max-height: 250px;
+    height: auto;
   }
 
   .subcategories-dropdown {
     position: relative;
     right: auto;
     top: auto;
-    margin: 10px 0 0 0;
+    margin: 0;
     width: 100%;
-    max-width: 300px;
-    max-height: 350px;
+    max-width: 100%;
+    max-height: 250px;
   }
 
   .specialties-textarea {
-    min-height: 80px;
+    min-height: 70px;
     font-size: 0.85rem;
+    padding: 8px 10px;
   }
 
   .category-item,
   .subcategory-item {
-    padding: 10px 12px;
-    margin: 3px 5px;
-    font-size: 0.85rem;
+    padding: 8px 10px;
+    margin: 2px 4px;
+    font-size: 0.75rem;
+  }
+
+  .category-name,
+  .subcategory-name {
+    font-size: 0.75rem;
+  }
+
+  .subcategory-item {
+    width: auto;
+    min-width: 0;
+  }
+
+  .subcategories-search-input {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+
+  .full-category-hint {
+    font-size: 0.7rem;
+    padding: 4px 8px;
   }
 
   .tooltip {
@@ -899,31 +1053,73 @@ export default {
     left: 50% !important;
     right: auto !important;
     transform: translate(-50%, -50%) !important;
-    min-width: 200px;
-    max-width: 90vw;
+    min-width: 180px;
+    max-width: 85vw;
+    font-size: 0.75rem;
+  }
+
+  .arrow {
+    font-size: 0.85rem;
+    margin-left: 4px;
   }
 }
 
 @media (max-width: 480px) {
   .dropdown-container {
-    max-width: 95vw;
+    max-width: 92vw;
   }
 
-  .categories-dropdown,
+  .categories-dropdown {
+    max-width: 92vw;
+    max-height: 180px;
+  }
+
+  .subcategories-dropdown-scroll {
+    max-width: 92vw;
+    max-height: 220px;
+  }
+
   .subcategories-dropdown {
-    max-width: 100%;
-    max-height: 300px;
+    max-height: 220px;
   }
 
   .category-item,
   .subcategory-item {
-    padding: 8px 10px;
-    margin: 2px 4px;
+    padding: 6px 8px;
+    margin: 2px 3px;
+    font-size: 0.7rem;
+  }
+
+  .category-name,
+  .subcategory-name {
+    font-size: 0.7rem;
+  }
+
+  .subcategories-search-input {
+    padding: 5px 8px;
+    font-size: 0.7rem;
+  }
+
+  .full-category-hint {
+    font-size: 0.65rem;
+    padding: 3px 6px;
+  }
+
+  .specialties-textarea {
+    min-height: 60px;
     font-size: 0.8rem;
+    padding: 6px 8px;
   }
 
   .arrow {
-    font-size: 1rem;
+    font-size: 0.75rem;
+    margin-left: 3px;
+  }
+
+  .tooltip {
+    min-width: 160px;
+    max-width: 92vw;
+    font-size: 0.7rem;
   }
 }
 </style>

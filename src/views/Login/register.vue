@@ -30,10 +30,6 @@
       <!-- צד ימין - טופס -->
       <div class="register-form-section">
         <div class="register-card">
-          <div class="logo-circle">H</div>
-          <h1 class="register-title">הרשמה</h1>
-          <p class="register-subtitle">הצטרף להנדימן</p>
-
           <!-- טאבים -->
           <div class="tabs">
             <button
@@ -1790,6 +1786,39 @@ export default {
 
   .form-row {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .register-card {
+    max-width: 140%;
+    padding: 25px 20px;
+  }
+
+  .tabs {
+    margin-bottom: 20px;
+    gap: 12px;
+  }
+
+  .tab-button {
+    padding: 16px 20px;
+    font-size: 1rem;
+  }
+
+  .logo-circle {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+    margin: 0 auto 15px;
+  }
+
+  .register-title {
+    font-size: 1.5rem;
+  }
+
+  .register-subtitle {
+    font-size: 0.8rem;
+    margin-bottom: 15px;
   }
 }
 

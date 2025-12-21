@@ -30,9 +30,11 @@
       <!-- צד ימין - טופס -->
       <div class="login-form-section">
         <div class="login-card">
-          <div class="logo-circle">H</div>
-          <h1 class="login-title">התחברות</h1>
-          <p class="login-subtitle">ברוך שובך להנדימן</p>
+          <!-- קישור למובייל - מופיע רק במובייל -->
+          <p class="register-link register-link--mobile">
+            עדיין לא רשום?
+            <a href="#" @click.prevent="goToRegister">הרשם כאן</a>
+          </p>
 
           <form @submit.prevent="handleLogin" class="login-form">
             <div class="input-group">
@@ -98,7 +100,8 @@
             </button>
           </div>
 
-          <p class="register-link">
+          <!-- קישור למחשב - מופיע רק במחשב -->
+          <p class="register-link register-link--desktop">
             עדיין לא רשום?
             <a href="#" @click.prevent="goToRegister">הרשם כאן</a>
           </p>
@@ -211,7 +214,19 @@ export default {
           this.toast.showError("מייל לא נכון");
         }
       } catch (error) {
-        this.toast.showError("שגיאה בהתחברות");
+        console.error("Login error:", error);
+        const errorMessage =
+          error.response?.data?.message || error.message || "שגיאה בהתחברות";
+        this.toast.showError(errorMessage);
+
+        // אם זו שגיאת רשת, נסה להציג הודעה יותר מפורטת
+        if (
+          error.code === "ECONNREFUSED" ||
+          error.message?.includes("Network")
+        ) {
+          console.error("Network error - URL:", URL);
+          this.toast.showError("לא ניתן להתחבר לשרת. אנא ודא שהשרת רץ");
+        }
       }
     },
     ConenectWithGoogle() {
@@ -625,26 +640,37 @@ export default {
   }
 }
 
+/* קישור למעלה - מופיע רק במובייל */
+.register-link--mobile {
+  display: none;
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+
+/* קישור למטה - מופיע רק במחשב */
+.register-link--desktop {
+  display: block;
+}
+
 @media (max-width: 1024px) {
   .login-wrapper {
     grid-template-columns: 1fr;
     gap: 20px;
   }
 
+  /* הסתר את ה-sidebar במובייל */
   .login-sidebar {
-    padding: 20px;
+    display: none;
   }
 
-  .sidebar-title {
-    font-size: 2.5rem;
+  /* הצג את הקישור למעלה במובייל */
+  .register-link--mobile {
+    display: block;
   }
 
-  .tagline-main {
-    font-size: 1.5rem;
-  }
-
-  .tagline-sub {
-    font-size: 1.2rem;
+  /* הסתר את הקישור למטה במובייל */
+  .register-link--desktop {
+    display: none;
   }
 }
 
