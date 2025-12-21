@@ -55,7 +55,7 @@ function findAvailablePort(startPort) {
 (async () => {
   const PORT = process.env.PORT || (await findAvailablePort(3003));
   const URL_SERVER = `http://localhost:${PORT}`;
-  
+
   // Only write port.json in development
   if (process.env.NODE_ENV !== "production") {
     try {
@@ -3288,7 +3288,7 @@ function findAvailablePort(startPort) {
   if (process.env.NODE_ENV === "production") {
     const distPath = path.join(__dirname, "..", "dist");
     app.use(express.static(distPath));
-    
+
     // Serve index.html for all routes (SPA fallback)
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
@@ -3312,7 +3312,8 @@ function findAvailablePort(startPort) {
   const { Server } = require("socket.io");
   const io = new Server(httpServer, {
     cors: {
-      origin: process.env.NODE_ENV === "production" ? true : (allowedOrigins || []),
+      origin:
+        process.env.NODE_ENV === "production" ? true : allowedOrigins || [],
       credentials: true,
     },
   });

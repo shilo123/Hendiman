@@ -1,13 +1,22 @@
 <template>
   <div class="action-buttons">
     <button
-      class="btn-create-call"
+      class="button"
       type="button"
       @click="$emit('create-call')"
       aria-label="צור קריאה חדשה"
     >
-      <span class="icon" aria-hidden="true">⚡</span>
       <span>צור קריאה</span>
+      <svg
+        class="svgIcon"
+        viewBox="0 0 512 512"
+        height="1em"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zm50.7-186.9L162.4 380.6c-19.4 7.5-38.5-11.6-31-31l55.5-144.3c3.3-8.5 9.9-15.1 18.4-18.4l144.3-55.5c19.4-7.5 38.5 11.6 31 31L325.1 306.7c-3.2 8.5-9.9 15.1-18.4 18.4zM288 256a32 32 0 1 0 -64 0 32 32 0 1 0 64 0z"
+        ></path>
+      </svg>
     </button>
   </div>
 </template>
@@ -32,126 +41,50 @@ export default {
   }
 }
 
-.btn-create-call {
-  --orange: #ff7a00;
-  --orange-2: #ff9a3c;
-  --black: #0b0b0f;
-  --black-2: #14141a;
-  --text-on-orange: #0b0b0f; // High contrast for WCAG AA
-
+.button {
   width: 100%;
+  height: 40px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.55rem;
-  padding: 0.95rem 1.25rem;
-  min-height: 48px;
-  border-radius: 14px;
-  border: 2px solid var(--orange);
-  color: var(--text-on-orange);
-  background: linear-gradient(135deg, var(--orange) 0%, var(--orange-2) 100%);
-  box-shadow: 0 4px 12px rgba(255, 122, 0, 0.3);
-  cursor: pointer;
-  user-select: none;
-  -webkit-tap-highlight-color: rgba(255, 122, 0, 0.2);
-  font-weight: 800;
-  letter-spacing: 0.2px;
-  text-transform: none;
-  transition: transform 0.12s ease, box-shadow 0.18s ease,
-    border-color 0.18s ease, background 0.18s ease, filter 0.18s ease;
+  justify-content: flex-start;
+  gap: 10px;
+  background-color: #ff7a00; // Orange
+  border-radius: 30px;
+  color: #0b0b0f; // Black text
+  font-weight: 600;
+  border: none;
   position: relative;
-  overflow: hidden;
-  font-size: clamp(14px, 2.5vw, 16px);
-  touch-action: manipulation;
-
-  .icon {
-    width: 18px;
-    height: 18px;
-    flex: 0 0 auto;
-    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
-  }
-
-  &:hover {
-    border-color: rgba(255, 122, 0, 0.9);
-    background: linear-gradient(
-      135deg,
-      #0f0f14 0%,
-      #1a1a22 55%,
-      rgba(255, 122, 0, 0.16) 100%
-    );
-    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55),
-      0 0 0 6px rgba(255, 122, 0, 0.12);
-    transform: translateY(-1px);
-  }
-
-  &:active {
-    transform: translateY(0px) scale(0.99);
-    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.5), 0 0 0 4px rgba(255, 122, 0, 0.1);
-  }
-
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 4px rgba(255, 122, 0, 0.25),
-      0 16px 40px rgba(0, 0, 0, 0.55);
-  }
-
-  &:disabled,
-  &.is-disabled {
-    cursor: not-allowed;
-    opacity: 0.55;
-    filter: grayscale(0.2);
-    transform: none;
-    box-shadow: none;
-  }
-
-  &::after {
-    content: "";
-    position: absolute;
-    inset: -40% -60%;
-    background: linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0) 0%,
-      rgba(255, 255, 255, 0.1) 35%,
-      rgba(255, 255, 255, 0) 70%
-    );
-    transform: translateX(-40%) rotate(10deg);
-    transition: transform 0.55s ease;
-    pointer-events: none;
-  }
-
-  &:hover::after {
-    transform: translateX(40%) rotate(10deg);
-  }
-
-  &.is-urgent {
-    border-color: rgba(255, 122, 0, 0.95);
-    background: linear-gradient(
-      135deg,
-      #0b0b0f 0%,
-      #1b1208 55%,
-      rgba(255, 122, 0, 0.22) 100%
-    );
-    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55),
-      0 0 0 6px rgba(255, 122, 0, 0.18);
-  }
+  cursor: pointer;
+  transition-duration: 0.2s;
+  box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.116);
+  padding-right: 8px; // RTL: padding on right (start)
+  padding-left: 16px; // RTL: padding on left (end)
+  transition-duration: 0.5s;
 
   @media (max-width: 768px) {
-    padding: 0.875rem 1.125rem;
-    min-height: 52px; // Increased for better touch target (48-56px range)
-    font-size: clamp(15px, 4vw, 16px);
-    border-radius: 16px;
-    gap: 0.6rem;
-    border-width: 2px;
-
-    .icon {
-      width: 20px;
-      height: 20px;
-    }
+    height: 44px;
+    padding-left: 20px;
   }
+}
 
-  @media (max-width: 480px) {
-    min-height: 56px; // Maximum recommended height
-    padding: 1rem 1.25rem;
-  }
+.svgIcon {
+  height: 25px;
+  transition-duration: 1.5s;
+  fill: #0b0b0f; // Black icon
+}
+
+.button:hover {
+  background-color: #ff9a3c; // Lighter orange
+  transition-duration: 0.5s;
+}
+
+.button:active {
+  transform: scale(0.97);
+  transition-duration: 0.2s;
+}
+
+.button:hover .svgIcon {
+  transform: rotate(250deg);
+  transition-duration: 1.5s;
 }
 </style>
