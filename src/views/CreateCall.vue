@@ -569,8 +569,7 @@ export default {
             params: { id: this.$route.params.id },
           });
         } else {
-          const errorMessage =
-            response.data.message || "שגיאה בשליחת הקריאה";
+          const errorMessage = response.data.message || "שגיאה בשליחת הקריאה";
           this.toast.showError(errorMessage);
         }
       } catch (error) {

@@ -78,22 +78,22 @@ function findAvailablePort(startPort) {
         origin: function (origin, callback) {
           // Allow requests with no origin (like mobile apps or curl requests)
           if (!origin) return callback(null, true);
-          
+
           // Allow same origin
           if (origin.includes("handiman-98cc6d1f0a79.herokuapp.com")) {
             return callback(null, true);
           }
-          
+
           // Allow IP addresses for mobile access
           if (/^http:\/\/\d+\.\d+\.\d+\.\d+:\d+$/.test(origin)) {
             return callback(null, true);
           }
-          
+
           // Allow localhost for development
           if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
             return callback(null, true);
           }
-          
+
           callback(new Error("Not allowed by CORS"));
         },
         credentials: true,
@@ -2523,7 +2523,10 @@ function findAvailablePort(startPort) {
 
   app.post("/create-call", async (req, res) => {
     try {
-      console.log("Received create-call request from origin:", req.headers.origin);
+      console.log(
+        "Received create-call request from origin:",
+        req.headers.origin
+      );
       console.log("Request body keys:", Object.keys(req.body || {}));
       const call = req.body;
       // קבל את אוסף העבודות
