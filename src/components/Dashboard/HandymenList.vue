@@ -77,14 +77,6 @@
             ראה עוד
           </button>
           <button
-            class="mini mini--ghost"
-            type="button"
-            @click="$emit('open-chat', h.id || h._id)"
-          >
-            <font-awesome-icon :icon="['fas', 'comment']" class="mini__icon" />
-            צ׳אט
-          </button>
-          <button
             class="mini mini--primary"
             type="button"
             @click="$emit('personal-request', h.id || h._id)"
@@ -135,13 +127,7 @@ export default {
       required: true,
     },
   },
-  emits: [
-    "view-details",
-    "open-chat",
-    "personal-request",
-    "next-page",
-    "prev-page",
-  ],
+  emits: ["view-details", "personal-request", "next-page", "prev-page"],
   methods: {
     formatRating(rating) {
       if (rating === null || rating === undefined) return "0.0";

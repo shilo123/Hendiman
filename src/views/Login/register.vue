@@ -464,7 +464,12 @@
                       >ניתן לבחור קטגוריה שלימה או תת-קטגוריות ספציפיות</span
                     >
                   </div>
-                  <CategorySelector v-model="handymanForm.specialties" />
+                  <MobileCategorySelector
+                    v-model="handymanForm.specialties"
+                    label="תחומי התמחות"
+                    placeholder="לחץ לבחירת תחומי התמחות"
+                    :single="false"
+                  />
                 </div>
 
                 <div class="input-group">
@@ -530,13 +535,13 @@ import axios from "axios";
 import { useToast } from "@/composables/useToast";
 import { URL } from "@/Url/url";
 import AddressAutocomplete from "@/components/AddressAutocomplete.vue";
-import CategorySelector from "@/components/CategorySelector.vue";
+import MobileCategorySelector from "@/components/MobileCategorySelector.vue";
 
 export default {
   name: "RegisterView",
   components: {
     AddressAutocomplete,
-    CategorySelector,
+    MobileCategorySelector,
   },
   data() {
     return {

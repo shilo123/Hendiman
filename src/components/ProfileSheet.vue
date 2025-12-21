@@ -96,6 +96,14 @@
       </section>
 
       <footer class="sheet__footer">
+        <div class="sheet__footer__left">
+          <button class="btn primary" type="button" @click="onSave">
+            שמור
+          </button>
+          <button class="btn ghost" type="button" @click="$emit('close')">
+            בטל
+          </button>
+        </div>
         <button
           class="btn danger"
           type="button"
@@ -103,14 +111,6 @@
         >
           מחק משתמש
         </button>
-        <div class="sheet__footer__right">
-          <button class="btn ghost" type="button" @click="$emit('close')">
-            בטל
-          </button>
-          <button class="btn primary" type="button" @click="onSave">
-            שמור
-          </button>
-        </div>
       </footer>
     </div>
 
@@ -340,11 +340,18 @@ export default {
   border-radius: 18px;
   padding: 16px;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
-  overflow: visible; /* allow dropdowns to overflow */
+  overflow-y: auto;
+  overflow-x: hidden;
   color: #f7f7f7;
+  display: flex;
+  flex-direction: column;
 }
 .sheet__panel--handyman {
   width: min(1100px, 95vw);
+
+  @media (max-width: 768px) {
+    width: 100vw;
+  }
 }
 .sheet__header {
   display: flex;
@@ -358,6 +365,7 @@ export default {
 }
 .sheet__section {
   margin-bottom: 12px;
+  flex-shrink: 0;
 }
 .section__title {
   margin: 0 0 10px 0;
@@ -366,8 +374,22 @@ export default {
 }
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
+
+  @media (max-width: 1024px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  @media (max-width: 480px) {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
 }
 .field {
   display: flex;
@@ -483,9 +505,14 @@ export default {
   top: 0;
   right: calc(100% + 10px);
   width: 360px;
-  max-height: 380px;
+  max-height: 250px;
   overflow: auto;
   z-index: 20001;
+
+  @media (max-width: 768px) {
+    max-height: 200px;
+    width: 300px;
+  }
 }
 .add-row {
   display: flex;
@@ -548,13 +575,30 @@ export default {
   gap: 10px;
   margin-top: 20px;
   padding-top: 15px;
+  padding-bottom: 10px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+
+  @media (max-width: 768px) {
+    flex-direction: row;
+    gap: 6px;
+    margin-top: 16px;
+    padding-top: 12px;
+    padding-bottom: 20px;
+    justify-content: space-between;
+  }
 }
 
-.sheet__footer__right {
+.sheet__footer__left {
   display: flex;
   gap: 10px;
-  margin-right: auto; /* דחוף את הכפתורים לצד ימין */
+  margin-left: auto; /* דחוף את הכפתורים לצד שמאל */
+
+  @media (max-width: 768px) {
+    gap: 6px;
+    margin-left: 0;
+    order: 1;
+  }
 }
 .muted {
   color: rgba(255, 255, 255, 0.6);
@@ -664,9 +708,31 @@ export default {
     height: 100vh;
     max-height: 100vh;
     border-radius: 0;
+    padding: 12px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    margin-top: 20px;
+    margin-bottom: 20px;
   }
-  .form-grid {
-    grid-template-columns: 1fr;
+  .sheet__section {
+    margin-bottom: 16px;
+  }
+  .field {
+    min-width: 0;
+  }
+  .field span {
+    font-size: 11px;
+  }
+  .edit-row {
+    padding: 5px 6px;
+    gap: 6px;
+  }
+  .edit-row input {
+    font-size: 12px;
+  }
+  .icon-btn {
+    padding: 4px 6px;
+    font-size: 12px;
   }
   .deleteUserModal__content {
     padding: 20px;
@@ -676,6 +742,27 @@ export default {
   }
   .deleteUserModal__btn {
     width: 100%;
+  }
+  .btn {
+    font-size: 12px;
+    padding: 8px 14px;
+  }
+  .btn.danger {
+    order: 2;
+    margin-right: 0;
+    flex: 0 0 auto;
+    min-width: auto;
+  }
+  .btn.primary,
+  .btn.ghost {
+    flex: 0 0 auto;
+    min-width: auto;
+    margin-right: 0;
+  }
+  .btn {
+    font-size: 11px;
+    padding: 6px 12px;
+    white-space: nowrap;
   }
 }
 </style>

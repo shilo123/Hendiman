@@ -1,16 +1,6 @@
 <template>
   <section class="jobs" id="jobs">
     <div class="jobs__head">
-      <div class="headActions">
-        <button
-          class="btn btn--primary"
-          type="button"
-          @click="$emit('refresh')"
-        >
-          ↻ רענן
-        </button>
-      </div>
-
       <div>
         <h2 class="h2">עבודות</h2>
         <p class="sub">
@@ -20,6 +10,16 @@
               : "כל הקריאות שלך · צפייה וסטטוסים"
           }}
         </p>
+      </div>
+
+      <div class="headActions">
+        <button
+          class="btn btn--primary"
+          type="button"
+          @click="$emit('refresh')"
+        >
+          ↻ רענן
+        </button>
       </div>
     </div>
 
@@ -327,10 +327,12 @@ $r2: 26px;
   &__head {
     padding: 14px;
     display: flex;
-    flex-direction: row-reverse;
+    flex-direction: row;
     justify-content: space-between;
     gap: 12px;
     flex-wrap: wrap;
+    direction: rtl;
+    text-align: right;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     background: radial-gradient(
         900px 240px at 20% 0%,

@@ -38,6 +38,12 @@
 
       <!-- Regular Dashboard (when no assigned job) -->
       <template v-else>
+        <!-- CLIENT: Create Call Button (above jobs) -->
+        <ClientActions
+          v-if="!isHendiman"
+          @create-call="onCreateCallCta"
+          class="client-actions-top"
+        />
         <!-- LEFT ~60% JOBS -->
         <JobsSection
           :isHendiman="isHendiman"
@@ -82,8 +88,6 @@
                 הנדימנים הזמינים באזור שלך · לחץ על כפתור לפעולה
               </p>
             </div>
-
-            <ClientActions @create-call="onCreateCallCta" />
 
             <HandymenList
               :filteredHandymen="filteredHandymen"
@@ -163,26 +167,7 @@
     </main>
 
     <!-- Mobile Bottom Navigation & CTA -->
-    <nav v-if="!isHendiman" class="mobile-nav" aria-label="ניווט ראשי">
-      <button
-        class="nav-btn nav-btn--primary"
-        type="button"
-        @click="onCreateCallCta"
-        aria-label="צור קריאה חדשה"
-      >
-        <span class="nav-btn__icon" aria-hidden="true">⚡</span>
-        <span class="nav-btn__label">צור קריאה</span>
-      </button>
-      <button
-        class="nav-btn"
-        type="button"
-        @click="onOpenAllUsersChat"
-        aria-label="פתח צ'אט"
-      >
-        <span class="nav-btn__icon" aria-hidden="true">💬</span>
-        <span class="nav-btn__label">צ׳אט</span>
-      </button>
-    </nav>
+    <!-- Removed: Create Call button moved to top -->
   </div>
 </template>
 
@@ -2661,6 +2646,23 @@ $r2: 26px;
 }
 
 /* Mobile Bottom Navigation & CTA */
+.client-actions-top {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  margin-bottom: 16px;
+  background: #0b0b0f;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  backdrop-filter: blur(10px);
+
+  @media (max-width: 1024px) {
+    margin-bottom: 12px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+}
+
 .mobile-nav {
   position: fixed;
   bottom: 0;
@@ -2748,9 +2750,9 @@ $r2: 26px;
     display: flex;
   }
 
-  // Add padding to main content to prevent overlap with bottom nav
+  // Removed bottom nav padding since nav is removed
   .grid {
-    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
   }
 }
 

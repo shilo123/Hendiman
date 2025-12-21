@@ -97,8 +97,12 @@ function findAvailablePort(startPort) {
           if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
           } else {
-            // In development, allow any localhost origin
-            if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
+            // In development, allow any localhost origin or IP address
+            if (
+              origin.includes("localhost") ||
+              origin.includes("127.0.0.1") ||
+              /^http:\/\/\d+\.\d+\.\d+\.\d+:\d+$/.test(origin)
+            ) {
               callback(null, true);
             } else {
               callback(new Error("Not allowed by CORS"));

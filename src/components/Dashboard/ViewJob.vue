@@ -341,23 +341,25 @@
 
           <!-- Actions -->
           <div class="job-actions">
-            <button class="btn-action btn-action--ghost" @click="onClose">
-              סגירה
-            </button>
-            <button
-              v-if="isHendiman && jobDetails.status === 'open'"
-              class="btn-action btn-action--primary"
-              @click="onAccept"
-            >
-              קבל עבודה
-            </button>
-            <button
-              v-if="isHendiman && jobDetails.status === 'open'"
-              class="btn-action btn-action--ghost"
-              @click="onSkip"
-            >
-              דלג
-            </button>
+            <div class="job-actions-left">
+              <button
+                v-if="isHendiman && jobDetails.status === 'open'"
+                class="btn-action btn-action--primary"
+                @click="onAccept"
+              >
+                קבל עבודה
+              </button>
+              <button class="btn-action btn-action--ghost" @click="onClose">
+                סגירה
+              </button>
+              <button
+                v-if="isHendiman && jobDetails.status === 'open'"
+                class="btn-action btn-action--ghost btn-action--skip"
+                @click="onSkip"
+              >
+                דלג
+              </button>
+            </div>
             <div class="map-actions">
               <button
                 v-if="isHendiman && jobCoordinates"
@@ -367,7 +369,7 @@
                 @click="openGoogleMaps"
               >
                 <i class="fas fa-map-marked-alt"></i>
-                <span>פתיחה בגוגל מפות</span>
+                <span>גוגל מפות</span>
               </button>
               <button
                 v-if="isHendiman && jobCoordinates"
@@ -377,7 +379,7 @@
                 @click="openWaze"
               >
                 <i class="fas fa-location-arrow"></i>
-                <span>פתיחה בוויז</span>
+                <span>וויז</span>
               </button>
             </div>
           </div>
@@ -569,8 +571,14 @@ $r2: 26px;
   justify-content: center;
   z-index: 1000;
   padding: 20px;
-  overflow-y: hidden;
+  overflow-y: auto;
   font-family: $font-family;
+
+  @media (max-width: 768px) {
+    align-items: flex-start;
+    padding: 10px;
+    overflow-y: auto;
+  }
 }
 
 /* Modal Animation */
@@ -617,7 +625,7 @@ $r2: 26px;
   color: $text;
   direction: rtl;
   text-align: right;
-  overflow-y: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   font-family: $font-family;
@@ -625,8 +633,10 @@ $r2: 26px;
   @media (max-width: 768px) {
     padding: 16px;
     border-radius: 14px;
-    max-width: 95%;
-    max-height: 95vh;
+    max-width: 100%;
+    max-height: calc(100vh - 20px);
+    margin-top: 0;
+    margin-bottom: 10px;
   }
 }
 
@@ -952,13 +962,13 @@ $r2: 26px;
   }
 
   @media (max-width: 768px) {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 6px;
     padding: 10px 0;
   }
 
   @media (max-width: 480px) {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -1127,16 +1137,30 @@ $r2: 26px;
 
 .job-actions {
   display: flex;
-  justify-content: flex-start;
+  justify-content: space-between;
+  align-items: center;
   gap: 10px;
   padding-top: 12px;
   margin-top: 0;
   flex-wrap: wrap;
 
   @media (max-width: 768px) {
-    flex-direction: column;
-    gap: 8px;
+    flex-direction: row;
+    gap: 6px;
     padding-top: 10px;
+    flex-wrap: nowrap;
+  }
+}
+
+.job-actions-left {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+
+  @media (max-width: 768px) {
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
   }
 }
 
@@ -1145,6 +1169,12 @@ $r2: 26px;
   gap: 10px;
   margin-inline-start: auto; /* ב-RTL יידחף שמאלה */
   flex-wrap: wrap;
+
+  @media (max-width: 768px) {
+    gap: 4px;
+    margin-inline-start: 0;
+    flex-shrink: 0;
+  }
 }
 
 .btn-action {
@@ -1160,10 +1190,19 @@ $r2: 26px;
   margin-inline-end: 20px;
 
   @media (max-width: 768px) {
-    padding: 10px 16px;
-    font-size: 12px;
-    width: 100%;
+    padding: 6px 10px;
+    font-size: 10px;
     min-width: unset;
+    margin-inline-end: 0;
+    border-radius: 8px;
+    white-space: nowrap;
+    width: auto;
+  }
+
+  &.btn-action--skip {
+    @media (max-width: 768px) {
+      display: none;
+    }
   }
 
   &--primary {
@@ -1201,6 +1240,22 @@ $r2: 26px;
       font-size: 14px;
     }
 
+    @media (max-width: 768px) {
+      padding: 6px 10px;
+      gap: 6px;
+      min-width: auto;
+      width: auto;
+      height: auto;
+
+      i {
+        font-size: 11px;
+      }
+
+      span {
+        font-size: 9px;
+      }
+    }
+
     &:hover {
       transform: translateY(-2px);
       box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4), 0 0 0 4px rgba($orange, 0.12);
@@ -1218,6 +1273,22 @@ $r2: 26px;
 
     i {
       font-size: 14px;
+    }
+
+    @media (max-width: 768px) {
+      padding: 6px 10px;
+      gap: 6px;
+      min-width: auto;
+      width: auto;
+      height: auto;
+
+      i {
+        font-size: 11px;
+      }
+
+      span {
+        font-size: 9px;
+      }
     }
 
     &:hover {

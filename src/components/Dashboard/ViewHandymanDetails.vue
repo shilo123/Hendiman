@@ -1205,9 +1205,10 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   flex-wrap: wrap;
 
   @media (max-width: 768px) {
-    flex-direction: column;
-    gap: 8px;
+    flex-direction: row;
+    gap: 6px;
     padding-top: 12px;
+    flex-wrap: nowrap;
   }
 }
 
@@ -1227,10 +1228,12 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   gap: 6px;
 
   @media (max-width: 768px) {
-    padding: 10px 16px;
-    font-size: 12px;
-    width: 100%;
+    padding: 6px 10px;
+    font-size: 10px;
     min-width: auto;
+    width: auto;
+    flex: 1;
+    white-space: nowrap;
   }
 
   &--primary {

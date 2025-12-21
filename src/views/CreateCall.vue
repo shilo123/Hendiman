@@ -11,7 +11,12 @@
 
       <div class="form-container">
         <div class="field">
-          <SingleCategorySelector v-model="call.selectedSubcategory" />
+          <MobileCategorySelector
+            v-model="call.selectedSubcategory"
+            label="תחום התמחות"
+            placeholder="לחץ לבחירת תחום התמחות דרוש"
+            :single="true"
+          />
           <span v-if="errors.selectedSubcategory" class="error-message">
             {{ errors.selectedSubcategory }}
           </span>
@@ -175,7 +180,7 @@
 </template>
 
 <script>
-import SingleCategorySelector from "@/components/SingleCategorySelector.vue";
+import MobileCategorySelector from "@/components/MobileCategorySelector.vue";
 import AddressAutocomplete from "@/components/AddressAutocomplete.vue";
 import { URL } from "@/Url/url";
 import axios from "axios";
@@ -186,7 +191,7 @@ import citiesData from "@/APIS/AdressFromIsrael.json";
 export default {
   name: "CreateCall",
   components: {
-    SingleCategorySelector,
+    MobileCategorySelector,
     AddressAutocomplete,
   },
   setup() {
@@ -397,10 +402,16 @@ export default {
           const formData = new FormData();
           formData.append("image", file);
 
-          const response = await axios.post(`${URL}/pick-call123`, formData, {
+          const uploadUrl = `${URL}/pick-call123`;
+          console.log("Uploading image to:", uploadUrl);
+          console.log("File size:", file.size, "bytes");
+          console.log("File type:", file.type);
+
+          const response = await axios.post(uploadUrl, formData, {
             headers: {
               "Content-Type": "multipart/form-data",
             },
+            timeout: 30000, // 30 seconds timeout
           });
 
           // שמור את ה-URL מהשרת
@@ -412,7 +423,13 @@ export default {
           }
         } catch (error) {
           console.error("Error uploading image:", error);
-          this.errors.image = "שגיאה בהעלאת התמונה. נסה שוב.";
+          const errorMessage =
+            error.response?.data?.message ||
+            error.response?.data?.error ||
+            error.message ||
+            "שגיאה בהעלאת התמונה. נסה שוב.";
+          this.errors.image = errorMessage;
+          this.toast.showError(`שגיאה בהעלאת התמונה: ${errorMessage}`);
         }
       }
     },
