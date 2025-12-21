@@ -777,7 +777,13 @@ export default {
             const acceptedJob = this.store.jobs?.find(
               (j) => String(j._id || j.id) === jobId
             );
-            if (acceptedJob && !this.activeAssignedJob) {
+            // Only open chat if this job belongs to the current client
+            if (
+              acceptedJob &&
+              !this.activeAssignedJob &&
+              String(acceptedJob.clientId || acceptedJob.client?._id || "") ===
+                String(userId)
+            ) {
               this.activeAssignedJob = acceptedJob;
             }
           }

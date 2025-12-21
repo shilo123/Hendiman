@@ -9,7 +9,7 @@ if (process.env.NODE_ENV === "production") {
   // In development, read port from port.json
   try {
     const portData = require("./port.json");
-    const port = portData.port || 3003;
+const port = portData.port || 3003;
     URL = `http://localhost:${port}`;
   } catch (e) {
     // Fallback if port.json doesn't exist
