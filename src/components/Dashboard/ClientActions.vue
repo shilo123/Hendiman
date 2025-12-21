@@ -24,11 +24,12 @@ export default {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
-  margin-bottom: 20px;
+  margin-bottom: 0; // Remove default margin, let parent control spacing
 
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
     gap: 8px;
+    margin-bottom: 20px;
   }
 }
 

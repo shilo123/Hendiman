@@ -2670,7 +2670,8 @@ $r2: 26px;
 
 .client-actions-desktop {
   display: block; // Visible on desktop
-  margin-bottom: 20px;
+  width: 100%;
+  // No margin-bottom - let .side gap handle spacing
 
   @media (max-width: 768px) {
     display: none; // Hidden on mobile
