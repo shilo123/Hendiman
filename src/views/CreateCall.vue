@@ -547,10 +547,19 @@ export default {
         delete callData.image; // לא צריך לשלוח את ה-File object
         delete callData.imagePreview; // לא צריך לשלוח את ה-preview
 
-        const response = await axios.post(`${URL}/create-call`, callData, {
+        const createCallUrl = `${URL}/create-call`;
+        console.log("Sending call to:", createCallUrl);
+        console.log("Call data:", {
+          ...callData,
+          image: callData.image ? "[File]" : null,
+          imagePreview: callData.imagePreview ? "[Preview]" : null,
+        });
+
+        const response = await axios.post(createCallUrl, callData, {
           headers: {
             "Content-Type": "application/json",
           },
+          timeout: 30000, // 30 seconds timeout
         });
 
         if (response.data.success) {
@@ -560,10 +569,18 @@ export default {
             params: { id: this.$route.params.id },
           });
         } else {
-          this.toast.showError(response.data.message);
+          const errorMessage =
+            response.data.message || "שגיאה בשליחת הקריאה";
+          this.toast.showError(errorMessage);
         }
       } catch (error) {
-        this.toast.showError("שגיאה בשליחת הקריאה. נסה שוב מאוחר יותר.");
+        console.error("Error creating call:", error);
+        const errorMessage =
+          error.response?.data?.message ||
+          error.response?.data?.error ||
+          error.message ||
+          "שגיאה בשליחת הקריאה. נסה שוב מאוחר יותר.";
+        this.toast.showError(`שגיאה בשליחת הקריאה: ${errorMessage}`);
       }
     },
   },
