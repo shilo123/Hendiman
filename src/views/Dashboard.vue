@@ -38,7 +38,7 @@
 
       <!-- Regular Dashboard (when no assigned job) -->
       <template v-else>
-        <!-- CLIENT: Create Call Button (above jobs) -->
+        <!-- CLIENT: Create Call Button (above jobs - mobile only) -->
         <ClientActions
           v-if="!isHendiman"
           @create-call="onCreateCallCta"
@@ -75,6 +75,12 @@
 
         <!-- RIGHT SIDE -->
         <aside class="side">
+          <!-- CLIENT: Create Call Button (desktop only) -->
+          <ClientActions
+            v-if="!isHendiman"
+            @create-call="onCreateCallCta"
+            class="client-actions-desktop"
+          />
           <!-- CLIENT: handymen in area + action buttons -->
           <section v-if="!isHendiman" class="panel">
             <div class="panel__head">
@@ -2647,19 +2653,27 @@ $r2: 26px;
 
 /* Mobile Bottom Navigation & CTA */
 .client-actions-top {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  margin-bottom: 16px;
-  background: #0b0b0f;
-  padding-top: 10px;
-  padding-bottom: 10px;
-  backdrop-filter: blur(10px);
+  display: none; // Hidden on desktop
 
-  @media (max-width: 1024px) {
+  @media (max-width: 768px) {
+    display: block;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: #0b0b0f;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    backdrop-filter: blur(10px);
     margin-bottom: 12px;
-    padding-top: 8px;
-    padding-bottom: 8px;
+  }
+}
+
+.client-actions-desktop {
+  display: block; // Visible on desktop
+  margin-bottom: 20px;
+
+  @media (max-width: 768px) {
+    display: none; // Hidden on mobile
   }
 }
 

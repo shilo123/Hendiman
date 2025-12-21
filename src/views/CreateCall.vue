@@ -430,13 +430,21 @@ export default {
             "שגיאה בהעלאת התמונה. נסה שוב.";
 
           // אם השגיאה היא בגלל AWS credentials, נשתמש ב-base64 במקום
-          if (
+          const isCredentialsIssue =
+            error.response?.data?.isCredentialsIssue ||
             errorMessage.includes("credentials") ||
             errorMessage.includes("Credential") ||
             errorMessage.includes("AWS") ||
-            errorMessage.includes("not configured")
-          ) {
+            errorMessage.includes("not configured") ||
+            errorMessage.includes("InvalidAccessKeyId") ||
+            errorMessage.includes("SignatureDoesNotMatch");
+
+          if (isCredentialsIssue) {
             console.log("AWS credentials issue - using base64 image instead");
+            console.error(
+              "AWS credentials error details:",
+              error.response?.data
+            );
             // נשתמש ב-imagePreview (base64) במקום imageUrl
             // זה יאפשר למשתמש להמשיך גם בלי AWS credentials
             this.toast.showWarning("התמונה תישמר באופן מקומי (לא הועלתה לענן)");

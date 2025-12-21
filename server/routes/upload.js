@@ -23,13 +23,8 @@ function setupUploadRoutes(app) {
         let errorMessage = result.error;
 
         // Provide more user-friendly error messages
-        if (result.code === "CredentialsNotConfigured") {
-          errorMessage = "AWS credentials not configured on server";
-        } else if (
-          result.error?.includes("credentials") ||
-          result.error?.includes("Credential")
-        ) {
-          errorMessage = "AWS credentials are invalid or expired";
+        if (result.isCredentialsIssue) {
+          errorMessage = "AWS credentials not configured or invalid on server";
         } else if (result.isAccessDenied) {
           errorMessage =
             "No permission to upload to S3. Please check AWS IAM permissions.";
@@ -41,6 +36,7 @@ function setupUploadRoutes(app) {
             message: errorMessage,
             details: result.error,
             code: result.code,
+            isCredentialsIssue: result.isCredentialsIssue,
           });
         }
         return;
@@ -73,13 +69,8 @@ function setupUploadRoutes(app) {
         let errorMessage = result.error;
 
         // Provide more user-friendly error messages
-        if (result.code === "CredentialsNotConfigured") {
-          errorMessage = "AWS credentials not configured on server";
-        } else if (
-          result.error?.includes("credentials") ||
-          result.error?.includes("Credential")
-        ) {
-          errorMessage = "AWS credentials are invalid or expired";
+        if (result.isCredentialsIssue) {
+          errorMessage = "AWS credentials not configured or invalid on server";
         } else if (result.isAccessDenied) {
           errorMessage =
             "No permission to upload to S3. Please check AWS IAM permissions.";
@@ -91,6 +82,7 @@ function setupUploadRoutes(app) {
             message: errorMessage,
             details: result.error,
             code: result.code,
+            isCredentialsIssue: result.isCredentialsIssue,
           });
         }
         return;
@@ -124,13 +116,8 @@ function setupUploadRoutes(app) {
         let errorMessage = result.error;
 
         // Provide more user-friendly error messages
-        if (result.code === "CredentialsNotConfigured") {
-          errorMessage = "AWS credentials not configured on server";
-        } else if (
-          result.error?.includes("credentials") ||
-          result.error?.includes("Credential")
-        ) {
-          errorMessage = "AWS credentials are invalid or expired";
+        if (result.isCredentialsIssue) {
+          errorMessage = "AWS credentials not configured or invalid on server";
         } else if (result.isAccessDenied) {
           errorMessage =
             "No permission to upload to S3. Please check AWS IAM permissions.";
@@ -142,6 +129,7 @@ function setupUploadRoutes(app) {
             message: errorMessage,
             details: result.error,
             code: result.code,
+            isCredentialsIssue: result.isCredentialsIssue,
           });
         }
         return;
