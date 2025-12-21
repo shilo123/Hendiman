@@ -36,19 +36,19 @@
       >
         ערוך פרופיל (אזור פעילות/זמינות)
       </button>
-      <button
+      <!-- <button
         class="btn btn--ghost btn--full"
         type="button"
         @click="$emit('open-chat')"
       >
         פתח צ׳אט הנדימנים
-      </button>
+      </button> -->
     </div>
 
     <div class="note">
       <div class="note__icon">🧠</div>
       <div class="note__txt">
-        טיפ: סנן לפי <b>open</b> כדי לראות רק קריאות חדשות, ואז קבל מהר.
+        טיפ: סנן לפי <b>פתוחות</b> כדי לראות רק קריאות חדשות, ואז קבל מהר.
       </div>
     </div>
   </div>

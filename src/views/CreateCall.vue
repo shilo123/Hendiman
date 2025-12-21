@@ -428,8 +428,26 @@ export default {
             error.response?.data?.error ||
             error.message ||
             "שגיאה בהעלאת התמונה. נסה שוב.";
-          this.errors.image = errorMessage;
-          this.toast.showError(`שגיאה בהעלאת התמונה: ${errorMessage}`);
+          
+          // אם השגיאה היא בגלל AWS credentials, נשתמש ב-base64 במקום
+          if (
+            errorMessage.includes("credentials") ||
+            errorMessage.includes("Credential") ||
+            errorMessage.includes("AWS") ||
+            errorMessage.includes("not configured")
+          ) {
+            console.log("AWS credentials issue - using base64 image instead");
+            // נשתמש ב-imagePreview (base64) במקום imageUrl
+            // זה יאפשר למשתמש להמשיך גם בלי AWS credentials
+            this.toast.showWarning(
+              "התמונה תישמר באופן מקומי (לא הועלתה לענן)"
+            );
+            // לא נציג שגיאה - נמשיך עם base64
+            this.clearError("image");
+          } else {
+            this.errors.image = errorMessage;
+            this.toast.showError(`שגיאה בהעלאת התמונה: ${errorMessage}`);
+          }
         }
       }
     },
@@ -545,7 +563,14 @@ export default {
 
         // הסר שדות שלא צריך לשלוח
         delete callData.image; // לא צריך לשלוח את ה-File object
-        delete callData.imagePreview; // לא צריך לשלוח את ה-preview
+        // אם אין imageUrl אבל יש imagePreview (base64), נשמור את ה-base64
+        // זה מאפשר לעבוד גם בלי AWS credentials
+        if (!callData.imageUrl && callData.imagePreview) {
+          // נשמור את ה-base64 - השרת יוכל לטפל בו
+          // לא נמחק את imagePreview
+        } else {
+          delete callData.imagePreview; // לא צריך לשלוח את ה-preview אם יש imageUrl
+        }
 
         const createCallUrl = `${URL}/create-call`;
         console.log("Sending call to:", createCallUrl);
