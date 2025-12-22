@@ -91,24 +91,24 @@
     <!-- Pagination -->
     <div class="pagination" v-if="pagination.totalPages > 1">
       <button
-        class="btn btn--ghost"
+        class="btn btn--ghost pagination__btn pagination__btn--prev"
         type="button"
-        :disabled="!pagination.hasNext"
-        @click="$emit('next-page')"
+        :disabled="!pagination.hasPrev"
+        @click="$emit('prev-page')"
       >
-        → הבא
+        הקודם ←
       </button>
       <span class="pagination__info">
         עמוד {{ pagination.currentPage || pagination.page }} מתוך
         {{ pagination.totalPages }}
       </span>
       <button
-        class="btn btn--ghost"
+        class="btn btn--ghost pagination__btn pagination__btn--next"
         type="button"
-        :disabled="!pagination.hasPrev"
-        @click="$emit('prev-page')"
+        :disabled="!pagination.hasNext"
+        @click="$emit('next-page')"
       >
-        הקודם ←
+        → הבא
       </button>
     </div>
   </div>
@@ -255,9 +255,10 @@ $text: rgba(255, 255, 255, 0.92);
   transition: transform 120ms ease, box-shadow 120ms ease;
 
   @media (max-width: 768px) {
-    padding: 6px;
+    padding: 8px 6px;
     border-radius: 12px;
     gap: 6px;
+    min-height: 60px;
   }
 
   &:hover {
@@ -408,9 +409,12 @@ $text: rgba(255, 255, 255, 0.92);
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+    align-items: center;
 
     @media (max-width: 768px) {
       gap: 4px;
+      flex-wrap: nowrap;
+      flex-shrink: 0;
     }
   }
 }
@@ -427,18 +431,22 @@ $text: rgba(255, 255, 255, 0.92);
   background: rgba(255, 255, 255, 0.04);
 
   @media (max-width: 768px) {
-    flex-direction: column;
-    gap: 8px;
-    padding: 8px;
+    flex-direction: row;
+    gap: 6px;
+    padding: 8px 10px;
+    margin-top: 12px;
   }
 
   &__info {
     color: $muted;
     font-weight: 900;
     font-size: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
 
     @media (max-width: 768px) {
-      font-size: 10px;
+      font-size: 9px;
+      order: 2;
     }
   }
 
@@ -446,14 +454,31 @@ $text: rgba(255, 255, 255, 0.92);
     min-width: 100px;
 
     @media (max-width: 768px) {
-      min-width: 80px;
-      width: 100%;
+      min-width: auto;
+      width: auto;
+      padding: 4px 8px;
+      font-size: 9px;
+      flex: 0 0 auto;
     }
 
     &:disabled {
       opacity: 0.4;
       cursor: not-allowed;
       pointer-events: none;
+    }
+  }
+
+  &__btn {
+    @media (max-width: 768px) {
+      order: 1;
+
+      &--prev {
+        order: 1;
+      }
+
+      &--next {
+        order: 3;
+      }
     }
   }
 }
@@ -473,11 +498,14 @@ $text: rgba(255, 255, 255, 0.92);
   transition: all 0.2s ease;
   position: relative;
   overflow: hidden;
+  white-space: nowrap;
 
   @media (max-width: 768px) {
-    padding: 6px 8px;
-    font-size: 11px;
-    gap: 4px;
+    padding: 4px 6px;
+    font-size: 9px;
+    gap: 3px;
+    min-width: auto;
+    flex: 0 0 auto;
   }
 
   &::before {
@@ -516,9 +544,10 @@ $text: rgba(255, 255, 255, 0.92);
   &__icon {
     font-size: 11px;
     transition: transform 0.2s ease;
+    flex-shrink: 0;
 
     @media (max-width: 768px) {
-      font-size: 10px;
+      font-size: 8px;
     }
   }
 

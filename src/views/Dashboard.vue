@@ -8,8 +8,9 @@
       </div>
     </div>
 
-    <!-- TOP BAR -->
+    <!-- TOP BAR - hidden when chat is active, shown when minimized or no job -->
     <DashboardTopBar
+      v-if="!currentAssignedJob || isChatMinimized"
       :me="me"
       :isHendiman="isHendiman"
       :isAvailable="isAvailable"

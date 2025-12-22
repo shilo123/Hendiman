@@ -1,15 +1,17 @@
 <template>
-  <div class="register-page">
-    <div class="register-wrapper">
-      <!-- צד שמאל - טקסטים מעוצבים -->
-      <div class="register-sidebar">
+  <div class="register-page" dir="rtl">
+    <div class="register-shell">
+      <!-- Sidebar (רק בדסקטופ) -->
+      <aside class="register-sidebar">
         <div class="sidebar-content">
           <div class="logo-circle-large">H</div>
           <h1 class="sidebar-title">Hendiman</h1>
+
           <div class="tagline-box">
             <p class="tagline-main">תיקונים קטנים</p>
             <p class="tagline-sub">פתרונות גדולים</p>
           </div>
+
           <div class="features-list">
             <div class="feature-item">
               <span class="feature-icon">⚡</span>
@@ -25,53 +27,65 @@
             </div>
           </div>
         </div>
-      </div>
+      </aside>
 
-      <!-- צד ימין - טופס -->
-      <div class="register-form-section">
-        <div class="register-card">
-          <!-- טאבים -->
+      <!-- Form -->
+      <main class="register-main">
+        <section class="register-card" aria-label="טופס הרשמה">
+          <!-- Header קטן למובייל (במקום ה-sidebar) -->
+          <div class="mobile-brand">
+            <div class="logo-circle">H</div>
+            <div class="mobile-brand__text">
+              <div class="mobile-brand__title">Hendiman</div>
+              <div class="mobile-brand__subtitle">
+                בעיות קטנות · פתרונות גדולים
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabs sticky בתוך הכרטיס -->
           <div class="tabs">
             <button
-              :class="['tab-button', { active: activeTab === 'client' }]"
+              type="button"
+              class="tab"
+              :class="{ active: activeTab === 'client' }"
               @click="activeTab = 'client'"
             >
               לקוח
             </button>
             <button
-              :class="['tab-button', { active: activeTab === 'handyman' }]"
+              type="button"
+              class="tab"
+              :class="{ active: activeTab === 'handyman' }"
               @click="activeTab = 'handyman'"
             >
               הנדימן
             </button>
           </div>
 
-          <!-- הודעת ברכה למשתמש Google -->
-          <div v-if="isGoogleUser && googleUserData" class="google-welcome">
+          <!-- Google welcome -->
+          <div v-if="isGoogleUser && googleUserData" class="notice notice--ok">
             <font-awesome-icon :icon="['fas', 'check-circle']" />
-            <h3>
-              ברוך הבא,
-              {{ googleUserData.name || googleUserData.username }}!
-            </h3>
-            <p>אנא השלם את הפרטים החסרים להשלמת ההרשמה</p>
+            <div class="notice__text">
+              <div class="notice__title">
+                ברוך הבא, {{ googleUserData.name || googleUserData.username }}!
+              </div>
+              <div class="notice__sub">רק נשלים כמה פרטים ונגמר הסיפור</div>
+            </div>
           </div>
 
-          <!-- טופס לקוח -->
+          <!-- Client -->
           <Transition name="tab-fade" mode="out-in">
-            <div v-if="activeTab === 'client'" key="client">
-              <form
-                @submit.prevent="handleClientRegister"
-                class="register-form"
-              >
-                <!-- תצוגת תמונות למעלה -->
-                <!-- תמונת גוגל -->
-                <div
-                  v-if="
-                    isGoogleUser && googleUserData && googleUserData.picture
-                  "
-                  class="input-group image-section-top"
-                >
-                  <div class="image-preview google-image-preview profile-image">
+            <div v-if="activeTab === 'client'" key="client" class="tab-body">
+              <form @submit.prevent="handleClientRegister" class="form">
+                <!-- תמונת פרופיל -->
+                <div class="profile-top">
+                  <div
+                    v-if="
+                      isGoogleUser && googleUserData && googleUserData.picture
+                    "
+                    class="avatar"
+                  >
                     <img
                       :src="googleUserData.picture"
                       alt="Google Profile"
@@ -81,54 +95,55 @@
                       @load="handleImageLoad"
                     />
                   </div>
-                </div>
 
-                <!-- תמונה שהועלתה -->
-                <div
-                  v-if="clientForm.image"
-                  class="input-group image-section-top"
-                >
-                  <div class="image-preview profile-image">
+                  <div v-else-if="clientForm.image" class="avatar">
                     <img :src="clientForm.imagePreview" alt="Preview" />
+                  </div>
+
+                  <div v-else class="avatar avatar--empty">
+                    <span>📷</span>
                   </div>
                 </div>
 
-                <!-- העלאת תמונה (אם אין תמונה) -->
+                <!-- העלאת תמונה (רק אם אין תמונת גוגל) -->
                 <div
                   v-if="
                     !isGoogleUser || !googleUserData || !googleUserData.picture
                   "
-                  class="input-group"
+                  class="field"
                 >
-                  <label for="clientImage">תמונה</label>
-                  <div class="file-upload-wrapper">
+                  <label class="label" for="clientImage">תמונה</label>
+                  <div class="file">
                     <input
                       id="clientImage"
                       type="file"
                       accept="image/*"
                       @change="handleClientImageUpload"
-                      class="file-input"
+                      class="file__input"
                       :disabled="!!clientForm.image"
                     />
                     <label
                       for="clientImage"
-                      class="file-label"
+                      class="file__btn"
                       :class="{ disabled: clientForm.image }"
                     >
                       <font-awesome-icon :icon="['fas', 'upload']" />
-                      {{ clientForm.image ? "תמונה נבחרה" : "בחר תמונה" }}
+                      <span>{{
+                        clientForm.image ? "נבחרה תמונה" : "בחר תמונה"
+                      }}</span>
                     </label>
                   </div>
                 </div>
 
+                <!-- שם פרטי/משפחה (גריד רספונסיבי) -->
                 <div
                   v-if="
                     !isGoogleUser || !googleUserData || !googleUserData.name
                   "
-                  class="form-row"
+                  class="grid2"
                 >
-                  <div class="input-group">
-                    <label for="clientFirstName">שם פרטי</label>
+                  <div class="field">
+                    <label class="label" for="clientFirstName">שם פרטי</label>
                     <input
                       id="clientFirstName"
                       v-model="clientForm.firstName"
@@ -139,8 +154,8 @@
                       "
                     />
                   </div>
-                  <div class="input-group">
-                    <label for="clientLastName">שם משפחה</label>
+                  <div class="field">
+                    <label class="label" for="clientLastName">שם משפחה</label>
                     <input
                       id="clientLastName"
                       v-model="clientForm.lastName"
@@ -157,9 +172,9 @@
                   v-if="
                     !isGoogleUser || !googleUserData || !googleUserData.email
                   "
-                  class="input-group"
+                  class="field"
                 >
-                  <label for="clientEmail">מייל</label>
+                  <label class="label" for="clientEmail">מייל</label>
                   <input
                     id="clientEmail"
                     v-model="clientForm.email"
@@ -171,12 +186,9 @@
                   />
                 </div>
 
-                <div
-                  v-if="!isGoogleUser"
-                  class="input-group password-input-group"
-                >
-                  <label for="clientPassword">סיסמה</label>
-                  <div class="password-input-wrapper">
+                <div v-if="!isGoogleUser" class="field">
+                  <label class="label" for="clientPassword">סיסמה</label>
+                  <div class="input-with-icon">
                     <input
                       id="clientPassword"
                       v-model="clientForm.password"
@@ -186,7 +198,7 @@
                     />
                     <button
                       type="button"
-                      class="show-password-button"
+                      class="icon"
                       @click="clientShowPassword = !clientShowPassword"
                       :aria-label="
                         clientShowPassword ? 'הסתר סיסמה' : 'הראה סיסמה'
@@ -203,8 +215,8 @@
                   </div>
                 </div>
 
-                <div class="input-group">
-                  <label for="clientPhone">פלאפון</label>
+                <div class="field">
+                  <label class="label" for="clientPhone">פלאפון</label>
                   <input
                     id="clientPhone"
                     v-model="clientForm.phone"
@@ -214,8 +226,8 @@
                   />
                 </div>
 
-                <div class="input-group">
-                  <label for="clientAddress">עיר</label>
+                <div class="field">
+                  <label class="label" for="clientAddress">עיר</label>
                   <AddressAutocomplete
                     v-model="clientForm.city"
                     input-id="clientAddress"
@@ -224,35 +236,41 @@
                   />
                 </div>
 
-                <div class="input-group">
-                  <label for="clientHowDidYouHear"
+                <div class="field">
+                  <label class="label" for="clientHowDidYouHear"
                     >איך הגעת אלינו? (רשות)</label
                   >
                   <input
                     id="clientHowDidYouHear"
                     v-model="clientForm.howDidYouHear"
                     type="text"
-                    placeholder="איך הגעת אלינו?"
+                    placeholder="אינסטגרם / חבר / מודעה..."
                   />
                 </div>
 
-                <button type="submit" class="register-button">הרשמה</button>
+                <button
+                  type="submit"
+                  class="btn btn--primary"
+                  :disabled="isSubmitting"
+                >
+                  {{ isSubmitting ? "שולח..." : "הרשמה" }}
+                </button>
               </form>
 
-              <div v-if="!isGoogleUser" class="divider">
-                <span>או</span>
-              </div>
+              <div v-if="!isGoogleUser" class="divider"><span>או</span></div>
 
-              <div v-if="!isGoogleUser" class="social-login">
+              <div v-if="!isGoogleUser" class="social">
                 <button
-                  class="social-button google"
+                  class="btn btn--social"
+                  type="button"
                   @click="ConenectWithGoogle"
                 >
                   <img src="@/assets/Google.png" alt="Google" />
                   הרשם עם Google
                 </button>
                 <button
-                  class="social-button facebook"
+                  class="btn btn--social"
+                  type="button"
                   @click="ConenectWithFacebook"
                 >
                   <img src="@/assets/FaceBook.png" alt="Facebook" />
@@ -262,26 +280,31 @@
             </div>
           </Transition>
 
-          <!-- טופס הנדימן -->
+          <!-- Handyman -->
           <Transition name="tab-fade" mode="out-in">
-            <div v-if="activeTab === 'handyman'" key="handyman">
-              <div class="price-notice">
+            <div
+              v-if="activeTab === 'handyman'"
+              key="handyman"
+              class="tab-body"
+            >
+              <div class="notice notice--info">
                 <font-awesome-icon :icon="['fas', 'info-circle']" />
-                <span>הרשמה להנדימן 49.90 ₪</span>
+                <div class="notice__text">
+                  <div class="notice__title">הרשמה להנדימן 49.90 ₪</div>
+                  <div class="notice__sub">
+                    אחרי זה תוכל לקבל עבודות דרך האפליקקה
+                  </div>
+                </div>
               </div>
-              <form
-                @submit.prevent="handleHandymanRegister"
-                class="register-form"
-              >
-                <!-- תצוגת תמונות למעלה -->
-                <!-- תמונת גוגל -->
-                <div
-                  v-if="
-                    isGoogleUser && googleUserData && googleUserData.picture
-                  "
-                  class="input-group image-section-top"
-                >
-                  <div class="image-preview google-image-preview profile-image">
+
+              <form @submit.prevent="handleHandymanRegister" class="form">
+                <div class="profile-top">
+                  <div
+                    v-if="
+                      isGoogleUser && googleUserData && googleUserData.picture
+                    "
+                    class="avatar"
+                  >
                     <img
                       :src="googleUserData.picture"
                       alt="Google Profile"
@@ -291,52 +314,41 @@
                       @load="handleImageLoad"
                     />
                   </div>
-                </div>
 
-                <!-- תמונה שהועלתה -->
-                <div
-                  v-if="handymanForm.image"
-                  class="input-group image-section-top"
-                >
-                  <div class="image-preview profile-image">
+                  <div v-else-if="handymanForm.image" class="avatar">
                     <img :src="handymanForm.imagePreview" alt="Preview" />
                   </div>
-                </div>
 
-                <!-- לוגו שהועלה -->
-                <div
-                  v-if="handymanForm.logo"
-                  class="input-group image-section-top"
-                >
-                  <div class="image-preview profile-image">
-                    <img :src="handymanForm.logoPreview" alt="Logo Preview" />
+                  <div v-else class="avatar avatar--empty">
+                    <span>🧰</span>
                   </div>
                 </div>
 
-                <!-- העלאת תמונה (אם אין תמונה) -->
                 <div
                   v-if="
                     !isGoogleUser || !googleUserData || !googleUserData.picture
                   "
-                  class="input-group"
+                  class="field"
                 >
-                  <label for="handymanImage">תמונה</label>
-                  <div class="file-upload-wrapper">
+                  <label class="label" for="handymanImage">תמונה</label>
+                  <div class="file">
                     <input
                       id="handymanImage"
                       type="file"
                       accept="image/*"
                       @change="handleHandymanImageUpload"
-                      class="file-input"
+                      class="file__input"
                       :disabled="!!handymanForm.image"
                     />
                     <label
                       for="handymanImage"
-                      class="file-label"
+                      class="file__btn"
                       :class="{ disabled: handymanForm.image }"
                     >
                       <font-awesome-icon :icon="['fas', 'upload']" />
-                      {{ handymanForm.image ? "תמונה נבחרה" : "בחר תמונה" }}
+                      <span>{{
+                        handymanForm.image ? "נבחרה תמונה" : "בחר תמונה"
+                      }}</span>
                     </label>
                   </div>
                 </div>
@@ -345,10 +357,10 @@
                   v-if="
                     !isGoogleUser || !googleUserData || !googleUserData.name
                   "
-                  class="form-row"
+                  class="grid2"
                 >
-                  <div class="input-group">
-                    <label for="handymanFirstName">שם פרטי</label>
+                  <div class="field">
+                    <label class="label" for="handymanFirstName">שם פרטי</label>
                     <input
                       id="handymanFirstName"
                       v-model="handymanForm.firstName"
@@ -359,8 +371,8 @@
                       "
                     />
                   </div>
-                  <div class="input-group">
-                    <label for="handymanLastName">שם משפחה</label>
+                  <div class="field">
+                    <label class="label" for="handymanLastName">שם משפחה</label>
                     <input
                       id="handymanLastName"
                       v-model="handymanForm.lastName"
@@ -377,9 +389,9 @@
                   v-if="
                     !isGoogleUser || !googleUserData || !googleUserData.email
                   "
-                  class="input-group"
+                  class="field"
                 >
-                  <label for="handymanEmail">מייל</label>
+                  <label class="label" for="handymanEmail">מייל</label>
                   <input
                     id="handymanEmail"
                     v-model="handymanForm.email"
@@ -391,12 +403,9 @@
                   />
                 </div>
 
-                <div
-                  v-if="!isGoogleUser"
-                  class="input-group password-input-group"
-                >
-                  <label for="handymanPassword">סיסמה</label>
-                  <div class="password-input-wrapper">
+                <div v-if="!isGoogleUser" class="field">
+                  <label class="label" for="handymanPassword">סיסמה</label>
+                  <div class="input-with-icon">
                     <input
                       id="handymanPassword"
                       v-model="handymanForm.password"
@@ -406,7 +415,7 @@
                     />
                     <button
                       type="button"
-                      class="show-password-button"
+                      class="icon"
                       @click="handymanShowPassword = !handymanShowPassword"
                       :aria-label="
                         handymanShowPassword ? 'הסתר סיסמה' : 'הראה סיסמה'
@@ -423,8 +432,8 @@
                   </div>
                 </div>
 
-                <div class="input-group">
-                  <label for="handymanPhone">פלאפון</label>
+                <div class="field">
+                  <label class="label" for="handymanPhone">פלאפון</label>
                   <input
                     id="handymanPhone"
                     v-model="handymanForm.phone"
@@ -434,8 +443,8 @@
                   />
                 </div>
 
-                <div class="input-group">
-                  <label for="handymanAddress">עיר</label>
+                <div class="field">
+                  <label class="label" for="handymanAddress">עיר</label>
                   <AddressAutocomplete
                     v-model="handymanForm.city"
                     @update:englishName="handymanForm.addressEnglish = $event"
@@ -445,72 +454,78 @@
                   />
                 </div>
 
-                <div class="input-group">
-                  <label for="handymanHowDidYouHear"
+                <div class="field">
+                  <label class="label" for="handymanHowDidYouHear"
                     >איך הגעת אלינו? (רשות)</label
                   >
                   <input
                     id="handymanHowDidYouHear"
                     v-model="handymanForm.howDidYouHear"
                     type="text"
-                    placeholder="איך הגעת אלינו?"
+                    placeholder="אינסטגרם / חבר / מודעה..."
                   />
                 </div>
 
-                <div class="input-group">
-                  <div class="category-selector-info">
-                    <font-awesome-icon :icon="['fas', 'info-circle']" />
-                    <span
-                      >ניתן לבחור קטגוריה שלימה או תת-קטגוריות ספציפיות</span
-                    >
-                  </div>
-                  <MobileCategorySelector
+                <div class="field">
+                  <!-- Mobile selector (up to 400px) -->
+                  <MobileCategorySelectorSimple
                     v-model="handymanForm.specialties"
                     label="תחומי התמחות"
                     placeholder="לחץ לבחירת תחומי התמחות"
-                    :single="false"
                   />
-                </div>
 
-                <div class="input-group">
-                  <label for="handymanLogo">לוגו (רשות)</label>
-                  <div class="file-upload-wrapper">
+                  <!-- Desktop selector (above 400px) -->
+                  <div class="desktop-category-selector">
+                    <CategorySelector v-model="handymanForm.specialties" />
+                  </div>
+                </div>
+                <div class="field">
+                  <label class="label" for="handymanLogo">לוגו (רשות)</label>
+                  <div class="file">
                     <input
                       id="handymanLogo"
                       type="file"
                       accept="image/*"
                       @change="handleHandymanLogoUpload"
-                      class="file-input"
+                      class="file__input"
                       :disabled="!!handymanForm.logo"
                     />
                     <label
                       for="handymanLogo"
-                      class="file-label"
+                      class="file__btn"
                       :class="{ disabled: handymanForm.logo }"
                     >
                       <font-awesome-icon :icon="['fas', 'upload']" />
-                      {{ handymanForm.logo ? "לוגו נבחר" : "בחר לוגו" }}
+                      <span>{{
+                        handymanForm.logo ? "נבחר לוגו" : "בחר לוגו"
+                      }}</span>
                     </label>
                   </div>
                 </div>
 
-                <button type="submit" class="register-button">הרשמה</button>
+                <button
+                  type="submit"
+                  class="btn btn--primary"
+                  :disabled="isSubmitting"
+                >
+                  {{ isSubmitting ? "שולח..." : "הרשמה" }}
+                </button>
               </form>
 
-              <div class="divider">
-                <span>או</span>
-              </div>
+              <div class="divider"><span>או</span></div>
 
-              <div class="social-login">
+              <div class="social">
                 <button
-                  class="social-button google"
+                  class="btn btn--social"
+                  type="button"
                   @click="ConenectWithGoogle"
                 >
                   <img src="@/assets/Google.png" alt="Google" />
                   הרשם עם Google
                 </button>
                 <button
-                  class="social-button facebook"
+                  class="btn btn--social"
+                  type="button"
                   @click="ConenectWithFacebook"
                 >
                   <img src="@/assets/FaceBook.png" alt="Facebook" />
@@ -524,8 +539,8 @@
             כבר יש לך חשבון?
             <router-link :to="{ name: 'logIn' }">התחבר כאן</router-link>
           </p>
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   </div>
 </template>
@@ -535,13 +550,14 @@ import axios from "axios";
 import { useToast } from "@/composables/useToast";
 import { URL } from "@/Url/url";
 import AddressAutocomplete from "@/components/AddressAutocomplete.vue";
-import MobileCategorySelector from "@/components/MobileCategorySelector.vue";
-
+import MobileCategorySelectorSimple from "@/components/MobileCategorySelectorSimple.vue";
+import CategorySelector from "@/components/CategorySelector.vue";
 export default {
   name: "RegisterView",
   components: {
     AddressAutocomplete,
-    MobileCategorySelector,
+    MobileCategorySelectorSimple,
+    CategorySelector,
   },
   data() {
     return {
@@ -551,7 +567,7 @@ export default {
       toast: null,
       isGoogleUser: false,
       googleUserData: null,
-      isSubmitting: false, // הגנה מפני שליחה כפולה
+      isSubmitting: false,
       clientForm: {
         firstName: "",
         lastName: "",
@@ -592,33 +608,26 @@ export default {
   watch: {
     "$route.query": {
       handler() {
-        if (this.toast) {
-          this.handleGoogleCallback();
-        }
+        if (this.toast) this.handleGoogleCallback();
       },
       immediate: true,
     },
   },
   methods: {
     handleImageError(event) {
-      // אם יש שגיאה בטעינת התמונה, נסה ללא crossorigin
       if (event.target.crossOrigin === "anonymous") {
         const imageUrl = event.target.src;
         event.target.crossOrigin = null;
         event.target.src = "";
-        // טען מחדש את התמונה ללא crossorigin
         setTimeout(() => {
           event.target.src = imageUrl;
         }, 100);
       }
     },
-    handleImageLoad() {
-      // תמונה נטענה בהצלחה
-    },
+    handleImageLoad() {},
+
     handleGoogleCallback() {
-      if (!this.toast) {
-        this.toast = useToast();
-      }
+      if (!this.toast) this.toast = useToast();
 
       const googleAuth =
         this.$route.query.googleAuth ||
@@ -629,16 +638,12 @@ export default {
           this.$route.query.user ||
           new URLSearchParams(window.location.search).get("user");
 
-        // Get the tab parameter to know which form to show (client/handyman)
         const tab =
           this.$route.query.tab ||
           new URLSearchParams(window.location.search).get("tab") ||
           "client";
 
-        // Set the active tab
-        if (tab === "client" || tab === "handyman") {
-          this.activeTab = tab;
-        }
+        if (tab === "client" || tab === "handyman") this.activeTab = tab;
 
         if (userData) {
           try {
@@ -646,31 +651,22 @@ export default {
             this.googleUserData = user;
             this.isGoogleUser = true;
 
-            // Fill in available data from Google to the appropriate form
             const targetForm =
               this.activeTab === "handyman"
                 ? this.handymanForm
                 : this.clientForm;
 
-            // שמור את הנתונים מגוגל - גם אם השדות מוסתרים
             if (user.name) {
               const nameParts = user.name.split(" ");
               targetForm.firstName = nameParts[0] || "";
               targetForm.lastName = nameParts.slice(1).join(" ") || "";
             }
-            if (user.email) {
-              targetForm.email = user.email;
-            }
-            if (user.picture) {
-              // You can use the Google picture as default image URL
-              targetForm.imageUrl = user.picture;
-            }
-            // Set Google ID as password for Google users
+            if (user.email) targetForm.email = user.email;
+            if (user.picture) targetForm.imageUrl = user.picture;
             if (user.googleId || user._id) {
               targetForm.password = user.googleId || user._id.toString();
             }
 
-            // שמור את הנתונים גם ב-googleUserData למקרה שצריך
             this.googleUserData = {
               ...user,
               firstName: targetForm.firstName,
@@ -681,7 +677,6 @@ export default {
 
             this.toast.showSuccess("התחברות עם Google בוצעה בהצלחה!");
 
-            // Clean URL - remove query params but keep tab if needed
             this.$router.replace({
               path: this.$route.path,
               query: {},
@@ -692,185 +687,123 @@ export default {
         }
       }
     },
+
     async handleClientImageUpload(event) {
       const file = event.target.files[0];
-      if (file) {
-        this.clientForm.image = file;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          this.clientForm.imagePreview = e.target.result;
-        };
-        reader.readAsDataURL(file);
+      if (!file) return;
 
-        // שליחת התמונה לשרת לקבלת קישור
-        try {
-          const formData = new FormData();
-          formData.append("image", file);
+      this.clientForm.image = file;
+      const reader = new FileReader();
+      reader.onload = (e) => (this.clientForm.imagePreview = e.target.result);
+      reader.readAsDataURL(file);
 
-          const uploadUrl = `${URL}/upload-image`;
+      try {
+        const formData = new FormData();
+        formData.append("image", file);
 
-          const { data } = await axios.post(uploadUrl, formData, {
-            headers: {
-              "Content-Type": "multipart/form-data",
-            },
-          });
-
-          // שמירת הקישור שהתקבל מהשרת
-          this.clientForm.imageUrl = data.imageUrl;
-        } catch (error) {
-          if (this.toast) {
-            const errorMessage =
-              error.response?.data?.message ||
-              (error.response?.status === 403
-                ? "אין הרשאה להעלות תמונות. אנא בדוק את הרשאות AWS."
-                : error.response?.status === 404
-                ? "שרת לא זמין. אנא ודא שהשרת רץ"
-                : "שגיאה בהעלאת התמונה");
-            this.toast.showError(errorMessage);
-          }
-        }
+        const { data } = await axios.post(`${URL}/upload-image`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        this.clientForm.imageUrl = data.imageUrl;
+      } catch (error) {
+        const msg =
+          error.response?.data?.message ||
+          (error.response?.status === 403
+            ? "אין הרשאה להעלות תמונות. אנא בדוק הרשאות AWS."
+            : error.response?.status === 404
+            ? "שרת לא זמין. אנא ודא שהשרת רץ"
+            : "שגיאה בהעלאת התמונה");
+        this.toast?.showError(msg);
       }
     },
+
     async handleHandymanImageUpload(event) {
       const file = event.target.files[0];
-      if (file) {
-        this.handymanForm.image = file;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          this.handymanForm.imagePreview = e.target.result;
-        };
-        reader.readAsDataURL(file);
+      if (!file) return;
 
-        // שליחת התמונה לשרת לקבלת קישור
-        try {
-          const formData = new FormData();
-          formData.append("image", file);
+      this.handymanForm.image = file;
+      const reader = new FileReader();
+      reader.onload = (e) => (this.handymanForm.imagePreview = e.target.result);
+      reader.readAsDataURL(file);
 
-          const uploadUrl = `${URL}/upload-image`;
+      try {
+        const formData = new FormData();
+        formData.append("image", file);
 
-          const { data } = await axios.post(uploadUrl, formData, {
-            headers: {
-              "Content-Type": "multipart/form-data",
-            },
-          });
-
-          // שמירת הקישור שהתקבל מהשרת
-          this.handymanForm.imageUrl = data.imageUrl;
-        } catch (error) {
-          if (this.toast) {
-            const errorMessage =
-              error.response?.data?.message ||
-              (error.response?.status === 403
-                ? "אין הרשאה להעלות תמונות. אנא בדוק את הרשאות AWS."
-                : error.response?.status === 404
-                ? "שרת לא זמין. אנא ודא שהשרת רץ"
-                : "שגיאה בהעלאת התמונה");
-            this.toast.showError(errorMessage);
-          }
-        }
+        const { data } = await axios.post(`${URL}/upload-image`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        this.handymanForm.imageUrl = data.imageUrl;
+      } catch (error) {
+        const msg =
+          error.response?.data?.message ||
+          (error.response?.status === 403
+            ? "אין הרשאה להעלות תמונות. אנא בדוק הרשאות AWS."
+            : error.response?.status === 404
+            ? "שרת לא זמין. אנא ודא שהשרת רץ"
+            : "שגיאה בהעלאת התמונה");
+        this.toast?.showError(msg);
       }
     },
+
     async handleHandymanLogoUpload(event) {
       const file = event.target.files[0];
-      if (file) {
-        this.handymanForm.logo = file;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          this.handymanForm.logoPreview = e.target.result;
-        };
-        reader.readAsDataURL(file);
+      if (!file) return;
 
-        // שליחת הלוגו לשרת לקבלת קישור
-        try {
-          const formData = new FormData();
-          formData.append("image", file);
+      this.handymanForm.logo = file;
+      const reader = new FileReader();
+      reader.onload = (e) => (this.handymanForm.logoPreview = e.target.result);
+      reader.readAsDataURL(file);
 
-          const uploadUrl = `${URL}/upload-logo`;
+      try {
+        const formData = new FormData();
+        formData.append("image", file);
 
-          const { data } = await axios.post(uploadUrl, formData, {
-            headers: {
-              "Content-Type": "multipart/form-data",
-            },
-          });
-
-          // שמירת הקישור שהתקבל מהשרת
-          this.handymanForm.logoUrl = data.imageUrl;
-        } catch (error) {
-          if (this.toast) {
-            const errorMessage =
-              error.response?.data?.message ||
-              (error.response?.status === 403
-                ? "אין הרשאה להעלות תמונות. אנא בדוק את הרשאות AWS."
-                : error.response?.status === 404
-                ? "שרת לא זמין. אנא ודא שהשרת רץ"
-                : "שגיאה בהעלאת הלוגו");
-            this.toast.showError(errorMessage);
-          }
-        }
+        const { data } = await axios.post(`${URL}/upload-logo`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        this.handymanForm.logoUrl = data.imageUrl;
+      } catch (error) {
+        const msg =
+          error.response?.data?.message ||
+          (error.response?.status === 403
+            ? "אין הרשאה להעלות תמונות. אנא בדוק הרשאות AWS."
+            : error.response?.status === 404
+            ? "שרת לא זמין. אנא ודא שהשרת רץ"
+            : "שגיאה בהעלאת הלוגו");
+        this.toast?.showError(msg);
       }
     },
+
     async handleClientRegister() {
-      // הגנה מפני שליחה כפולה
-      if (this.isSubmitting) {
-        return;
-      }
+      if (this.isSubmitting) return;
 
       try {
         this.isSubmitting = true;
         let formData = { ...this.clientForm };
 
-        // אם משתמש מגוגל, ודא שהנתונים מגוגל נשמרים
         if (this.isGoogleUser && this.googleUserData) {
-          if (this.googleUserData.firstName && !formData.firstName) {
+          if (this.googleUserData.firstName && !formData.firstName)
             formData.firstName = this.googleUserData.firstName;
-          }
-          if (this.googleUserData.lastName && !formData.lastName) {
+          if (this.googleUserData.lastName && !formData.lastName)
             formData.lastName = this.googleUserData.lastName;
-          }
-          if (this.googleUserData.email && !formData.email) {
+          if (this.googleUserData.email && !formData.email)
             formData.email = this.googleUserData.email;
-          }
-          if (this.googleUserData.picture && !formData.imageUrl) {
+          if (this.googleUserData.picture && !formData.imageUrl)
             formData.imageUrl = this.googleUserData.picture;
-          }
-          if (this.googleUserData.googleId && !formData.password) {
+          if (this.googleUserData.googleId && !formData.password)
             formData.password = this.googleUserData.googleId;
-          }
         }
 
-        // אם יש תמונה אבל עדיין לא imageUrl, צריך להעלות אותה קודם
         if (formData.image && !formData.imageUrl) {
-          try {
-            const formDataUpload = new FormData();
-            formDataUpload.append("image", formData.image);
-
-            const { data } = await axios.post(
-              `${URL}/upload-image`,
-              formDataUpload,
-              {
-                headers: {
-                  "Content-Type": "multipart/form-data",
-                },
-              }
-            );
-
-            formData.imageUrl = data.imageUrl;
-          } catch (uploadError) {
-            if (this.toast) {
-              const errorMessage =
-                uploadError.response?.data?.message ||
-                (uploadError.response?.status === 403
-                  ? "אין הרשאה להעלות תמונות. אנא בדוק את הרשאות AWS."
-                  : uploadError.response?.status === 404
-                  ? "שרת לא זמין. אנא ודא שהשרת רץ"
-                  : "שגיאה בהעלאת התמונה");
-              this.toast.showError(errorMessage);
-            }
-            return;
-          }
+          const upload = new FormData();
+          upload.append("image", formData.image);
+          const { data } = await axios.post(`${URL}/upload-image`, upload, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+          formData.imageUrl = data.imageUrl;
         }
 
-        // מחק את ה-image object לפני השליחה (שלח רק URL)
         delete formData.image;
         delete formData.imagePreview;
 
@@ -883,169 +816,99 @@ export default {
               params: { id: data.user._id },
             });
           } else {
-            // If no user data, redirect to login
             this.$router.push({ name: "logIn" });
           }
         } else {
           this.toast.showError(data?.message || "שגיאה בהרשמה");
         }
       } catch (error) {
-        const errorMessage = error.response?.data?.message || "שגיאה בהרשמה";
-        this.toast.showError(errorMessage);
+        this.toast.showError(error.response?.data?.message || "שגיאה בהרשמה");
       } finally {
         this.isSubmitting = false;
       }
     },
+
     async handleHandymanRegister() {
-      // הגנה מפני שליחה כפולה
-      if (this.isSubmitting) {
-        return;
-      }
+      if (this.isSubmitting) return;
 
       try {
         this.isSubmitting = true;
-        let formData = null;
-        if (this.activeTab === "handyman") {
-          formData = { ...this.handymanForm };
+        let formData = { ...this.handymanForm };
 
-          // ודא ש-addressEnglish קיים לפני השליחה
-          // אם אין, נסה למצוא אותו מהעיר ישירות מהמאגר
-          if (!formData.addressEnglish && formData.city) {
-            try {
-              const citiesData = await import("@/APIS/AdressFromIsrael.json");
-              const cities = Array.isArray(citiesData.default)
-                ? citiesData.default
-                : citiesData;
+        if (!formData.addressEnglish && formData.city) {
+          try {
+            const citiesData = await import("@/APIS/AdressFromIsrael.json");
+            const cities = Array.isArray(citiesData.default)
+              ? citiesData.default
+              : citiesData;
 
-              const searchValue = formData.city.trim();
-              const foundCity = cities.find((city) => {
-                const cityName = (city.name || city.שם_ישוב || "").trim();
-                if (!cityName) return false;
+            const searchValue = formData.city.trim();
+            const foundCity = cities.find((city) => {
+              const cityName = (city.name || city.שם_ישוב || "").trim();
+              if (!cityName) return false;
+              const a = cityName.replace(/\s+/g, " ");
+              const b = searchValue.replace(/\s+/g, " ");
+              return (
+                a === b ||
+                a.toLowerCase() === b.toLowerCase() ||
+                a.replace(/['"()]/g, "").trim() ===
+                  b.replace(/['"()]/g, "").trim()
+              );
+            });
 
-                const normalizedCityName = cityName.replace(/\s+/g, " ");
-                const normalizedSearch = searchValue.replace(/\s+/g, " ");
-
-                return (
-                  normalizedCityName === normalizedSearch ||
-                  normalizedCityName.toLowerCase() ===
-                    normalizedSearch.toLowerCase() ||
-                  normalizedCityName.replace(/['"()]/g, "").trim() ===
-                    normalizedSearch.replace(/['"()]/g, "").trim()
-                );
-              });
-
-              if (foundCity && foundCity.english_name) {
-                formData.addressEnglish = foundCity.english_name;
-                this.handymanForm.addressEnglish = foundCity.english_name;
-              }
-            } catch (error) {
-              console.error("Error loading cities data:", error);
+            if (foundCity && foundCity.english_name) {
+              formData.addressEnglish = foundCity.english_name;
+              this.handymanForm.addressEnglish = foundCity.english_name;
             }
+          } catch (e) {
+            console.error(e);
           }
-        } else {
-          formData = { ...this.clientForm };
         }
 
-        // אם משתמש מגוגל, ודא שהנתונים מגוגל נשמרים
         if (this.isGoogleUser && this.googleUserData) {
-          if (this.googleUserData.firstName && !formData.firstName) {
+          if (this.googleUserData.firstName && !formData.firstName)
             formData.firstName = this.googleUserData.firstName;
-          }
-          if (this.googleUserData.lastName && !formData.lastName) {
+          if (this.googleUserData.lastName && !formData.lastName)
             formData.lastName = this.googleUserData.lastName;
-          }
-          if (this.googleUserData.email && !formData.email) {
+          if (this.googleUserData.email && !formData.email)
             formData.email = this.googleUserData.email;
-          }
-          if (this.googleUserData.picture && !formData.imageUrl) {
+          if (this.googleUserData.picture && !formData.imageUrl)
             formData.imageUrl = this.googleUserData.picture;
-          }
-          if (this.googleUserData.googleId && !formData.password) {
+          if (this.googleUserData.googleId && !formData.password)
             formData.password = this.googleUserData.googleId;
-          }
         }
 
-        // אם יש תמונה אבל עדיין לא imageUrl, צריך להעלות אותה קודם
         if (formData.image && !formData.imageUrl) {
-          try {
-            const formDataUpload = new FormData();
-            formDataUpload.append("image", formData.image);
-
-            const { data } = await axios.post(
-              `${URL}/upload-image`,
-              formDataUpload,
-              {
-                headers: {
-                  "Content-Type": "multipart/form-data",
-                },
-              }
-            );
-
-            formData.imageUrl = data.imageUrl;
-          } catch (uploadError) {
-            if (this.toast) {
-              const errorMessage =
-                uploadError.response?.data?.message ||
-                (uploadError.response?.status === 403
-                  ? "אין הרשאה להעלות תמונות. אנא בדוק את הרשאות AWS."
-                  : uploadError.response?.status === 404
-                  ? "שרת לא זמין. אנא ודא שהשרת רץ"
-                  : "שגיאה בהעלאת התמונה");
-              this.toast.showError(errorMessage);
-            }
-            return;
-          }
+          const upload = new FormData();
+          upload.append("image", formData.image);
+          const { data } = await axios.post(`${URL}/upload-image`, upload, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+          formData.imageUrl = data.imageUrl;
         }
 
-        // אם יש לוגו אבל עדיין לא logoUrl, צריך להעלות אותו קודם
         if (formData.logo && !formData.logoUrl) {
-          try {
-            const formDataUpload = new FormData();
-            formDataUpload.append("image", formData.logo);
-
-            const { data } = await axios.post(
-              `${URL}/upload-logo`,
-              formDataUpload,
-              {
-                headers: {
-                  "Content-Type": "multipart/form-data",
-                },
-              }
-            );
-
-            formData.logoUrl = data.imageUrl;
-          } catch (uploadError) {
-            if (this.toast) {
-              const errorMessage =
-                uploadError.response?.data?.message ||
-                (uploadError.response?.status === 403
-                  ? "אין הרשאה להעלות תמונות. אנא בדוק את הרשאות AWS."
-                  : uploadError.response?.status === 404
-                  ? "שרת לא זמין. אנא ודא שהשרת רץ"
-                  : "שגיאה בהעלאת הלוגו");
-              this.toast.showError(errorMessage);
-            }
-            return;
-          }
+          const upload = new FormData();
+          upload.append("image", formData.logo);
+          const { data } = await axios.post(`${URL}/upload-logo`, upload, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+          formData.logoUrl = data.imageUrl;
         }
 
-        // מחק את ה-image וה-logo objects לפני השליחה (שלח רק URLs)
         delete formData.image;
         delete formData.logo;
         delete formData.imagePreview;
         delete formData.logoPreview;
 
-        // ודא ש-specialties הוא מערך של אובייקטים (רק להנדימן)
         if (formData.isHandyman) {
           if (formData.specialties && Array.isArray(formData.specialties)) {
-            // ודא שכל האיברים הם אובייקטים עם name, price, typeWork
             formData.specialties = formData.specialties
               .filter((item) => item && (item.name || item.subcategory))
               .map((item) => {
                 const isFull =
                   item.isFullCategory === true || item.type === "category";
                 const resolvedType = isFull ? "category" : "subCategory";
-                // אם זה אובייקט עם name, price, typeWork (הפורמט החדש)
                 if (item.name) {
                   return {
                     name: String(item.name).trim(),
@@ -1055,7 +918,6 @@ export default {
                     type: item.type || resolvedType,
                   };
                 }
-                // אם זה אובייקט ישן עם subcategory, workType
                 if (item.subcategory) {
                   return {
                     name: String(item.subcategory).trim(),
@@ -1065,7 +927,6 @@ export default {
                     type: "subCategory",
                   };
                 }
-                // אם זה string (תאימות לאחור)
                 if (typeof item === "string") {
                   return {
                     name: String(item).trim(),
@@ -1077,9 +938,8 @@ export default {
                 }
                 return null;
               })
-              .filter((item) => item && item.name && item.name.length > 0);
-          } else if (formData.isHandyman) {
-            // אם זה הנדימן אבל אין specialties, הגדר כמערך ריק
+              .filter((x) => x && x.name);
+          } else {
             formData.specialties = [];
           }
         }
@@ -1088,12 +948,10 @@ export default {
           `${URL}/register-handyman`,
           formData,
           {
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
           }
         );
-        console.log("📥 Server response:", data);
+
         if (data === true || (data && data.success !== false)) {
           this.toast.showSuccess("הרשמה בוצעה בהצלחה!");
           if (data?.user?._id) {
@@ -1102,24 +960,19 @@ export default {
               params: { id: data.user._id },
             });
           } else {
-            // If no user data, redirect to login
             this.$router.push({ name: "logIn" });
           }
         } else {
-          console.error("❌ Registration failed:", data);
           this.toast.showError(data?.message || "שגיאה בהרשמה");
         }
       } catch (error) {
-        console.error("❌ Registration error:", error);
-        console.error("❌ Error response:", error.response);
-        const errorMessage = error.response?.data?.message || "שגיאה בהרשמה";
-        this.toast.showError(errorMessage);
+        this.toast.showError(error.response?.data?.message || "שגיאה בהרשמה");
       } finally {
         this.isSubmitting = false;
       }
     },
+
     ConenectWithGoogle() {
-      // Redirect to Google OAuth with source and tab parameters
       window.location.href = `${URL}/auth/google?source=register&tab=${this.activeTab}`;
     },
     ConenectWithFacebook() {
@@ -1129,725 +982,563 @@ export default {
 };
 </script>
 
-<style lang="scss" scoped>
+<style scoped lang="scss">
+/* Mobile-first: בלי “כרטיס צר” */
 .register-page {
-  font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
   min-height: 100vh;
-  background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
-  padding: 20px;
+  background: radial-gradient(
+      1200px 600px at 50% -10%,
+      rgba(255, 106, 0, 0.18),
+      transparent 60%
+    ),
+    linear-gradient(135deg, #0b0b0f 0%, #12121a 100%);
+  padding: 14px;
+  font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Arial, sans-serif;
 }
 
-.register-wrapper {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  min-height: calc(100vh - 40px);
-  max-width: 1400px;
+.register-shell {
+  max-width: 1200px;
   margin: 0 auto;
-  gap: 40px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
   align-items: start;
 }
 
-/* צד שמאל - טקסטים מעוצבים */
 .register-sidebar {
+  display: none;
+}
+
+.register-main {
   display: flex;
-  align-items: center;
   justify-content: center;
-  padding: 40px;
-  direction: rtl;
-  position: sticky;
-  top: 20px;
-  align-self: start;
 }
 
-.sidebar-content {
-  width: 100%;
-  max-width: 500px;
-}
-
-.logo-circle-large {
-  width: 80px;
-  height: 80px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #000000;
-  font-weight: 700;
-  font-size: 36px;
-  margin: 0 auto 30px;
-  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.4);
-}
-
-.sidebar-title {
-  color: #f97316;
-  font-size: 3rem;
-  font-weight: bold;
-  text-align: center;
-  margin: 0 0 40px 0;
-  text-shadow: 0 0 20px rgba(249, 115, 22, 0.5);
-  letter-spacing: 2px;
-}
-
-.tagline-box {
-  background: #111111;
-  border: 2px solid #f97316;
-  border-radius: 16px;
-  padding: 30px;
-  margin-bottom: 40px;
-  text-align: center;
-  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.2);
-}
-
-.tagline-main {
-  color: #f97316;
-  font-size: 2rem;
-  font-weight: bold;
-  margin: 0 0 10px 0;
-  text-shadow: 0 0 15px rgba(249, 115, 22, 0.4);
-}
-
-.tagline-sub {
-  color: #ffffff;
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin: 0;
-  opacity: 0.9;
-}
-
-.features-list {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.feature-item {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  color: #ffffff;
-  font-size: 1.1rem;
-}
-
-.feature-icon {
-  font-size: 1.5rem;
-}
-
-/* צד ימין - טופס */
-.register-form-section {
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 40px;
-  direction: rtl;
-}
-
+/* הכרטיס עכשיו רחב במובייל */
 .register-card {
-  background: #111111;
-  border: 2px solid #f97316;
-  border-radius: 14px;
-  padding: 25px;
-  box-shadow: 0 8px 32px rgba(249, 115, 22, 0.2);
-  animation: slideIn 0.5s ease-out;
   width: 100%;
-  max-width: 420px;
+  max-width: 560px; /* במקום 420 */
+  background: rgba(15, 16, 22, 0.92);
+  border: 1px solid rgba(255, 106, 0, 0.35);
+  border-radius: 18px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+  padding: 16px;
   overflow: hidden;
-  position: relative;
 }
 
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.mobile-brand {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .logo-circle {
-  width: 45px;
-  height: 45px;
+  width: 44px;
+  height: 44px;
   border-radius: 999px;
-  background: #f97316;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #000000;
-  font-weight: 700;
-  font-size: 20px;
-  margin: 0 auto 15px;
+  background: linear-gradient(135deg, #ff6a00, #ff8a2b);
+  display: grid;
+  place-items: center;
+  color: #0b0b0f;
+  font-weight: 1000;
 }
 
-.register-title {
-  color: #f97316;
-  font-size: 1.75rem;
-  font-weight: bold;
-  text-align: center;
-  margin: 0 0 6px 0;
+.mobile-brand__title {
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 1000;
+  font-size: 16px;
+}
+.mobile-brand__subtitle {
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 800;
+  font-size: 12px;
 }
 
-.register-subtitle {
-  color: #9ca3af;
-  text-align: center;
-  margin: 0 0 20px 0;
-  font-size: 0.85rem;
-}
-
-/* הודעת מחיר */
-.price-notice {
-  background: rgba(249, 115, 22, 0.1);
-  border: 2px solid #f97316;
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #f97316;
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-align: right;
-  direction: rtl;
-
-  svg,
-  font-awesome-icon {
-    font-size: 1rem;
-    flex-shrink: 0;
-  }
-}
-
-/* טאבים */
 .tabs {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
+  width: 100%;
   gap: 8px;
-  margin-bottom: 20px;
-  border-bottom: 2px solid #2d2d2d;
+  padding: 8px;
+  margin: -12px -12px 16px -12px;
+  background: linear-gradient(135deg, #1a1a1a, #0f0f0f);
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 10px 30px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 106, 0, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
-.tab-button {
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: #9ca3af;
-  padding: 10px 16px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  border-bottom: 3px solid transparent;
-  margin-bottom: -2px;
+.tab {
   position: relative;
-  transform: translateY(0);
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 14px 20px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  color: #a0a0a0;
+  letter-spacing: 0.5px;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   &::before {
     content: "";
     position: absolute;
-    bottom: -2px;
+    top: 0;
     left: 0;
     right: 0;
-    height: 3px;
-    background: #f97316;
-    transform: scaleX(0);
-    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    transform-origin: center;
+    bottom: 0;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 159, 28, 0.1),
+      rgba(255, 106, 0, 0.05)
+    );
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 0;
+  }
+
+  &::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%) scaleX(0);
+    width: 80%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #ff9f1c, transparent);
+    transition: transform 0.3s ease;
+    z-index: 1;
   }
 
   &:hover {
-    color: #f97316;
+    color: #ff9f1c;
+    background: rgba(255, 159, 28, 0.12);
     transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 159, 28, 0.2);
+
+    &::before {
+      opacity: 1;
+    }
+
+    &::after {
+      transform: translateX(-50%) scaleX(1);
+    }
   }
 
   &.active {
-    color: #f97316;
-    border-bottom-color: #f97316;
+    color: #0f0f0f;
+    background: linear-gradient(135deg, #ff9f1c, #ff6a00);
+    box-shadow: 0 8px 24px rgba(255, 122, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 20px rgba(255, 159, 28, 0.3);
+    transform: translateY(-2px);
+    font-weight: 900;
 
     &::before {
-      transform: scaleX(1);
+      opacity: 0;
     }
+
+    &::after {
+      display: none;
+    }
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  &.active:active {
+    transform: translateY(-1px);
   }
 }
 
-.register-form {
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  margin: 10px 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+}
+.notice--ok {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.08);
+}
+.notice--info {
+  border-color: rgba(255, 106, 0, 0.28);
+  background: rgba(255, 106, 0, 0.08);
+}
+.notice__title {
+  font-weight: 1000;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 14px;
+}
+.notice__sub {
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.62);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.tab-body {
+  padding-top: 4px;
+}
+
+.form {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+.profile-top {
+  display: flex;
+  justify-content: center;
+  padding: 6px 0 2px;
 }
 
-.input-group {
+.avatar {
+  width: 92px;
+  height: 92px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 106, 0, 0.55);
+  overflow: hidden;
+  box-shadow: 0 10px 26px rgba(255, 106, 0, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+  display: grid;
+  place-items: center;
+}
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.avatar--empty {
+  border-style: dashed;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 22px;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-
-  label {
-    color: #f97316;
-    font-weight: 600;
-    font-size: 0.8rem;
-    text-align: right;
-  }
-
-  input,
-  textarea {
-    background: #1f1f1f;
-    border: 2px solid #2d2d2d;
-    border-radius: 6px;
-    padding: 10px 12px;
-    color: #ffffff;
-    font-size: 0.9rem;
-    transition: all 0.3s ease;
-    text-align: right;
-    direction: rtl;
-    width: 100%;
-    box-sizing: border-box;
-    max-width: 100%;
-    font-family: inherit;
-
-    &::placeholder {
-      color: #666;
-      font-size: 0.85rem;
-    }
-
-    &:focus {
-      outline: none;
-      border-color: #f97316;
-      box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.1);
-      background: #2a2a2a;
-    }
-
-    &:hover {
-      border-color: #f97316;
-    }
-  }
-
-  textarea {
-    resize: vertical;
-    min-height: 60px;
-  }
+  gap: 6px;
+}
+.label {
+  color: rgba(255, 106, 0, 0.95);
+  font-weight: 900;
+  font-size: 12px;
 }
 
-.password-input-group {
-  .password-input-wrapper {
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
-
-  .password-input-wrapper input {
-    padding-left: 35px;
-  }
+input {
+  height: 46px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.92);
+  padding: 0 14px;
+  font-weight: 800;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+input:focus {
+  border-color: rgba(255, 106, 0, 0.55);
+  box-shadow: 0 0 0 3px rgba(255, 106, 0, 0.16);
 }
 
-.show-password-button {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  margin: 0;
+.input-with-icon {
+  position: relative;
+}
+.input-with-icon input {
+  padding-left: 44px;
+}
+.icon {
   position: absolute;
-  left: 6px;
+  left: 8px;
   top: 50%;
   transform: translateY(-50%);
-  color: #9ca3af;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  width: 28px;
-  height: 28px;
-
-  svg,
-  font-awesome-icon {
-    width: 16px;
-    height: 16px;
-    font-size: 16px;
-  }
-
-  &:hover {
-    color: #f97316;
-    background: rgba(249, 115, 22, 0.1);
-  }
-
-  &:active {
-    transform: translateY(-50%) scale(0.95);
-  }
-
-  &:focus {
-    outline: 2px solid #f97316;
-    outline-offset: 2px;
-  }
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.28);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+.icon:active {
+  transform: translateY(-50%) scale(0.96);
 }
 
-/* העלאת קבצים */
-.file-upload-wrapper {
+.file {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-
-.file-input {
+.file__input {
   display: none;
 }
-
-.file-label {
-  background: #1f1f1f;
-  border: 2px dashed #2d2d2d;
-  border-radius: 6px;
-  padding: 10px 12px;
-  color: #9ca3af;
-  font-size: 0.85rem;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
+.file__btn {
+  height: 46px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.75);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-
-  &:hover {
-    border-color: #f97316;
-    color: #f97316;
-    background: rgba(249, 115, 22, 0.05);
-  }
-
-  &.disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    background: #1a1a1a;
-    border-color: #1a1a1a;
-    color: #666;
-
-    &:hover {
-      border-color: #1a1a1a;
-      color: #666;
-      background: #1a1a1a;
-    }
-  }
+  gap: 10px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: 0.2s ease;
 }
-
-.file-input:disabled + .file-label {
-  opacity: 0.5;
+.file__btn:hover {
+  border-color: rgba(255, 106, 0, 0.6);
+  color: rgba(255, 106, 0, 0.95);
+}
+.file__btn.disabled {
+  opacity: 0.55;
   cursor: not-allowed;
-  background: #1a1a1a;
-  border-color: #1a1a1a;
-  color: #666;
-
-  &:hover {
-    border-color: #1a1a1a;
-    color: #666;
-    background: #1a1a1a;
-  }
 }
 
-.image-preview {
-  margin-top: 10px;
-  width: 100%;
-  max-width: 200px;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 2px solid #f97316;
-
-  img {
-    width: 100%;
-    height: auto;
-    display: block;
-  }
-}
-
-.image-section-top {
+.mini-info {
   display: flex;
-  justify-content: center;
-  margin-bottom: 20px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 106, 0, 0.08);
+  border: 1px solid rgba(255, 106, 0, 0.22);
+  color: rgba(255, 106, 0, 0.95);
+  font-weight: 900;
+  font-size: 12px;
 }
 
-.profile-image {
-  width: 120px;
-  height: 120px;
-  max-width: 120px;
-  border-radius: 50%;
-  overflow: hidden;
-  border: 3px solid #f97316;
-  box-shadow: 0 4px 16px rgba(249, 115, 22, 0.4);
-  background: #1f1f1f;
+.btn {
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  font-weight: 1000;
+  transition: 0.2s ease;
+}
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn--primary {
+  height: 48px;
+  width: 100%;
+  background: linear-gradient(135deg, #ff6a00, #ff8a2b);
+  color: #0b0b0f;
+  box-shadow: 0 10px 24px rgba(255, 106, 0, 0.22);
+}
+.btn--primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 900;
+  font-size: 12px;
+}
+.divider::before,
+.divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.social {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.btn--social {
+  height: 48px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.9);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto;
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    border-radius: 50%;
-  }
+  gap: 10px;
 }
-
-.google-image-preview {
-  border: 2px solid #f97316;
-  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
-
-  img {
-    width: 100%;
-    height: auto;
-    display: block;
-    border-radius: 6px;
-  }
-}
-
-.register-button {
-  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-  color: #000000;
-  border: none;
+.btn--social img {
+  width: 22px;
+  height: 22px;
   border-radius: 6px;
-  padding: 12px;
-  font-size: 0.95rem;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  margin-top: 8px;
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(249, 115, 22, 0.4);
-  }
-
-  &:active {
-    transform: translateY(0);
-  }
 }
 
 .login-link {
   text-align: center;
-  margin-top: 20px;
-  color: #9ca3af;
-  font-size: 0.9rem;
-
-  a {
-    color: #f97316;
-    text-decoration: none;
-    font-weight: 600;
-
-    &:hover {
-      text-decoration: underline;
-    }
-  }
+  margin-top: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 800;
+  font-size: 13px;
+}
+.login-link a {
+  color: rgba(255, 106, 0, 0.95);
+  text-decoration: none;
+  font-weight: 1000;
+}
+.login-link a:hover {
+  text-decoration: underline;
 }
 
-/* Divider */
-.divider {
-  display: flex;
-  align-items: center;
-  text-align: center;
-  margin: 20px 0;
-  color: #9ca3af;
-  font-size: 0.85rem;
-
-  &::before,
-  &::after {
-    content: "";
-    flex: 1;
-    border-bottom: 1px solid #2d2d2d;
-  }
-
-  span {
-    padding: 0 12px;
-  }
-}
-
-/* Social Login */
-.social-login {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.social-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  background: #1f1f1f;
-  border: 2px solid #2d2d2d;
-  border-radius: 6px;
-  padding: 10px 14px;
-  color: #ffffff;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-
-  img {
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
-  }
-
-  &:hover {
-    border-color: #f97316;
-    background: rgba(249, 115, 22, 0.05);
-    transform: translateY(-2px);
-  }
-
-  &:active {
-    transform: translateY(0);
-  }
-
-  &.google {
-    &:hover {
-      border-color: #4285f4;
-      background: rgba(66, 133, 244, 0.05);
-    }
-  }
-
-  &.facebook {
-    &:hover {
-      border-color: #1877f2;
-      background: rgba(24, 119, 242, 0.05);
-    }
-  }
-}
-
-/* אנימציות מעבר בין טאבים - רק בתוך הכרטסייה */
+/* Anim */
 .register-card .tab-fade-enter-active {
-  transition: all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: all 0.25s ease;
 }
-
 .register-card .tab-fade-leave-active {
-  transition: all 0.3s cubic-bezier(0.55, 0.06, 0.68, 0.19);
+  transition: all 0.18s ease;
 }
-
 .register-card .tab-fade-enter-from {
   opacity: 0;
-  transform: translateY(30px);
-  filter: blur(4px);
+  transform: translateY(8px);
 }
-
 .register-card .tab-fade-leave-to {
   opacity: 0;
-  transform: translateY(-20px);
-  filter: blur(2px);
+  transform: translateY(-6px);
 }
 
-.register-card .tab-fade-enter-to,
-.register-card .tab-fade-leave-from {
-  opacity: 1;
-  transform: translateY(0);
-  filter: blur(0);
-}
-
-.google-welcome {
-  background: rgba(249, 115, 22, 0.1);
-  border: 2px solid #f97316;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 20px;
-  text-align: center;
-  direction: rtl;
-
-  svg,
-  font-awesome-icon {
-    color: #f97316;
-    font-size: 1.5rem;
-    margin-bottom: 10px;
-    display: block;
+/* Desktop */
+@media (min-width: 1024px) {
+  .register-page {
+    padding: 22px;
   }
 
-  h3 {
-    color: #f97316;
-    font-size: 1.2rem;
-    font-weight: bold;
-    margin: 8px 0;
-  }
-
-  p {
-    color: #9ca3af;
-    font-size: 0.9rem;
-    margin: 0;
-  }
-}
-
-/* Responsive */
-@media (max-width: 968px) {
-  .register-wrapper {
-    grid-template-columns: 1fr;
+  .register-shell {
+    grid-template-columns: 1fr 1.2fr;
+    gap: 26px;
   }
 
   .register-sidebar {
+    display: block;
+    position: sticky;
+    top: 22px;
+    align-self: start;
+    background: rgba(15, 16, 22, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    padding: 22px;
+  }
+
+  .sidebar-content {
+    max-width: 460px;
+    margin: 0 auto;
+  }
+
+  .logo-circle-large {
+    width: 84px;
+    height: 84px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ff6a00, #ff8a2b);
+    display: grid;
+    place-items: center;
+    color: #0b0b0f;
+    font-weight: 1000;
+    font-size: 40px;
+    margin: 0 auto 18px;
+    box-shadow: 0 12px 30px rgba(255, 106, 0, 0.25);
+  }
+
+  .sidebar-title {
+    text-align: center;
+    color: rgba(255, 106, 0, 0.95);
+    font-size: 42px;
+    font-weight: 1000;
+    margin: 0 0 16px;
+  }
+
+  .tagline-box {
+    border: 1px solid rgba(255, 106, 0, 0.35);
+    border-radius: 18px;
+    padding: 18px;
+    background: rgba(0, 0, 0, 0.25);
+    margin-bottom: 16px;
+    text-align: center;
+  }
+
+  .tagline-main {
+    margin: 0;
+    color: rgba(255, 106, 0, 0.95);
+    font-weight: 1000;
+    font-size: 24px;
+  }
+
+  .tagline-sub {
+    margin: 6px 0 0;
+    color: rgba(255, 255, 255, 0.85);
+    font-weight: 900;
+    font-size: 18px;
+  }
+
+  .features-list {
+    display: grid;
+    gap: 10px;
+  }
+  .feature-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: rgba(255, 255, 255, 0.88);
+    font-weight: 900;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 12px;
+  }
+  .feature-icon {
+    filter: drop-shadow(0 0 10px rgba(255, 106, 0, 0.35));
+  }
+
+  .mobile-brand {
     display: none;
   }
 
-  .register-card {
-    padding: 30px 20px;
+  .grid2 {
+    grid-template-columns: 1fr 1fr;
   }
 
-  .form-row {
-    grid-template-columns: 1fr;
+  .register-card {
+    max-width: 640px;
+    padding: 18px 18px 16px;
   }
 }
 
-@media (max-width: 480px) {
-  .register-card {
-    max-width: 140%;
-    padding: 25px 20px;
-  }
+// Desktop category selector - hidden on mobile (up to 400px)
+.desktop-category-selector {
+  display: block;
 
-  .tabs {
-    margin-bottom: 20px;
-    gap: 12px;
-  }
-
-  .tab-button {
-    padding: 16px 20px;
-    font-size: 1rem;
-  }
-
-  .logo-circle {
-    width: 40px;
-    height: 40px;
-    font-size: 18px;
-    margin: 0 auto 15px;
-  }
-
-  .register-title {
-    font-size: 1.5rem;
-  }
-
-  .register-subtitle {
-    font-size: 0.8rem;
-    margin-bottom: 15px;
-  }
-}
-
-.category-selector-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: rgba(249, 115, 22, 0.1);
-  border: 1px solid rgba(249, 115, 22, 0.3);
-  border-radius: 6px;
-  margin-bottom: 8px;
-  direction: rtl;
-  font-size: 0.85rem;
-  color: #f97316;
-
-  svg,
-  font-awesome-icon {
-    color: #f97316;
-    font-size: 0.9rem;
-  }
-
-  span {
-    color: #f97316;
+  @media (max-width: 400px) {
+    display: none;
   }
 }
 </style>

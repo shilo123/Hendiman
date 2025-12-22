@@ -238,6 +238,7 @@
           </button>
         </div>
         <input
+          ref="imagePreviewTextInput"
           v-model="imagePreviewText"
           class="composer__input"
           type="text"
@@ -745,7 +746,20 @@ export default {
               const timeDiff = Math.abs(
                 createdAt.getTime() - (m.createdAt?.getTime() || 0)
               );
-              return timeDiff < 5000;
+              // Match by tempId (optimistic message) or by time and text match
+              if (m.tempId && m.tempId.startsWith("temp-img")) {
+                // Match text if both have it, or match if both don't have text
+                const textMatch =
+                  (!text && !m.text) ||
+                  (text && m.text && text.trim() === m.text.trim());
+                return textMatch && timeDiff < 5000;
+              }
+              // Also check if image URLs match (for base64 preview vs server URL)
+              // This handles cases where tempId might not be set
+              const textMatch =
+                (!text && !m.text) ||
+                (text && m.text && text.trim() === m.text.trim());
+              return textMatch && timeDiff < 5000;
             }
             // For location messages
             if (location && m.location) {
@@ -1080,6 +1094,12 @@ export default {
         this.imagePreview = ev.target.result;
         this.imagePreviewFile = file;
         this.imagePreviewText = "";
+        // Autofocus on the text input after image is loaded
+        this.$nextTick(() => {
+          if (this.$refs.imagePreviewTextInput) {
+            this.$refs.imagePreviewTextInput.focus();
+          }
+        });
       };
       reader.readAsDataURL(file);
 
@@ -1099,15 +1119,21 @@ export default {
       const file = this.imagePreviewFile;
       const imageText = this.imagePreviewText.trim();
 
+      // Create temporary ID for optimistic message
+      const tempId = `temp-img-${Date.now()}-${Math.random()}`;
+      const tempCreatedAt = new Date();
+
+      // Add optimistic message with tempId
       this.messages.push({
         sender: "me",
         image: this.imagePreview,
         text: imageText || null,
-        time: new Date().toLocaleTimeString("he-IL", {
+        time: tempCreatedAt.toLocaleTimeString("he-IL", {
           hour: "2-digit",
           minute: "2-digit",
         }),
-        createdAt: new Date(),
+        createdAt: tempCreatedAt,
+        tempId, // Mark as temporary
       });
 
       this.cancelImagePreview();
@@ -1125,6 +1151,11 @@ export default {
           await this.sendImageMessage(data.imageUrl, imageText);
         }
       } catch (e) {
+        // Remove optimistic message on error
+        const index = this.messages.findIndex((m) => m.tempId === tempId);
+        if (index !== -1) {
+          this.messages.splice(index, 1);
+        }
         this.toast?.showError("שגיאה בהעלאת התמונה");
       }
     },
@@ -1736,6 +1767,7 @@ $orange2: #ff8a2b;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0; // Allow flex shrinking
 }
 .composer__previewTop {
   position: relative;
@@ -1744,6 +1776,7 @@ $orange2: #ff8a2b;
   border-radius: 14px;
   overflow: hidden;
   border: 1px solid rgba($orange, 0.2);
+  flex-shrink: 0; // Don't shrink the image
 }
 .composer__previewImg {
   width: 100%;
@@ -1762,6 +1795,15 @@ $orange2: #ff8a2b;
   background: rgba(0, 0, 0, 0.6);
   color: #fff;
   font-weight: 1000;
+}
+
+// Ensure the input inside preview is at least the same size as regular input, but taller
+.composer__preview .composer__input {
+  flex: 1;
+  min-width: 0; // Allow flex shrinking
+  width: 100%; // Take full width of parent
+  height: 50px; // Taller than regular input (42px)
+  min-height: 50px; // Ensure minimum height
 }
 
 /* Tools sheet */

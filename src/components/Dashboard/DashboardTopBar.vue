@@ -1,71 +1,111 @@
 <template>
   <header class="top">
-    <div class="top__left">
-      <div class="me" role="button" tabindex="0" @click="$emit('open-profile')">
-        <div class="me__avatar-wrapper">
-          <div class="me__avatar-container">
-            <img class="me__avatar" :src="me.avatarUrl" alt="avatar" />
-            <div class="me__edit-overlay">
-              <span class="me__edit-text">ערוך פרופיל</span>
-            </div>
+    <!-- LEFT: Profile -->
+    <button class="me" type="button" @click="$emit('open-profile')">
+      <div class="me__avatar-wrapper">
+        <div class="me__avatar-container">
+          <img class="me__avatar" :src="me.avatarUrl" alt="avatar" />
+          <div class="me__edit-overlay">
+            <span class="me__edit-text">ערוך פרופיל</span>
           </div>
-          <div class="me__status-indicator">
-            <span
-              class="dot"
-              :class="{
-                'dot--on': isHendiman ? isAvailable : true,
-                'dot--green': !isHendiman,
-              }"
-            ></span>
-          </div>
-        </div>
-        <div class="me__meta">
-          <div class="me__name">{{ me.name }}</div>
-          <div class="me__role">{{ isHendiman ? "הנדימן" : "לקוח" }}</div>
-          <!-- <span class="me__status-text">{{
-            isHendiman ? (isAvailable ? "זמין" : "לא זמין") : "מחובר"
-          }}</span> -->
         </div>
 
-        <span class="me__chev">›</span>
+        <div class="me__status-indicator">
+          <span
+            class="dot"
+            :class="{
+              'dot--on': isHendiman ? isAvailable : true,
+              'dot--green': !isHendiman,
+            }"
+          />
+        </div>
       </div>
-    </div>
 
-    <div class="top__right">
-      <!-- Return to job button (when job is active but chat is minimized) - hidden on mobile -->
+      <div class="me__meta">
+        <div class="me__name">{{ me.name }}</div>
+        <div class="me__role">{{ isHendiman ? "הנדימן" : "לקוח" }}</div>
+      </div>
+
+      <span class="me__chev">›</span>
+    </button>
+
+    <!-- RIGHT: Actions + KPI (same row always on mobile) -->
+    <div class="right">
+      <!-- Return to job (desktop only) -->
       <button
         v-if="hasActiveJob && isChatMinimized"
-        class="top__returnJobBtn top__returnJobBtn--desktop"
-        :class="{ 'top__returnJobBtn--handyman': isHendiman }"
+        class="btn btn--job"
+        :class="{ 'btn--job-red': isHendiman }"
         type="button"
         @click="$emit('return-to-job')"
       >
-        <span class="top__returnJobBtnIcon">🔧</span>
-        <span class="top__returnJobBtnText">חזור לעבודה שלך</span>
+        <span class="btn__icon">🔧</span>
+        <span class="btn__text">חזור לעבודה שלך</span>
       </button>
 
+      <!-- Ratings (handyman) -->
       <button
         v-if="isHendiman"
-        class="top__ratingsBtn"
+        class="btn btn--ratings"
         type="button"
         @click="$emit('view-ratings')"
+        aria-label="הדירוגים והביקורות שלי"
+        title="הדירוגים והביקורות שלי"
       >
-        <span class="top__ratingsBtnIcon">⭐</span>
-        <span class="top__ratingsBtnText">הדירוגים והביקורות שלי</span>
+        <span class="btn__icon">⭐</span>
+        <span class="btn__text">הדירוגים והביקורות שלי</span>
       </button>
 
-      <div class="kpi">
+      <!-- Desktop: KPI -->
+      <div class="kpi kpi--desktop" role="group" aria-label="סטטיסטיקות">
         <div class="kpi__item">
           <div class="kpi__num">{{ stats.clients }}</div>
           <div class="kpi__label">לקוחות</div>
         </div>
+
         <div class="kpi__item">
           <div class="kpi__num">{{ stats.handymen }}</div>
           <div class="kpi__label">הנדימנים</div>
         </div>
+
         <div class="kpi__item kpi__item--hot">
           <div class="kpi__num">{{ stats.users }}</div>
           <div class="kpi__label">משתמשים</div>
+        </div>
+      </div>
+
+      <!-- Mobile: Stats Dropdown -->
+      <div v-if="isMobile" class="stats-dropdown-mobile">
+        <button
+          class="stats-dropdown-mobile__trigger"
+          type="button"
+          @click="isStatsDropdownOpen = !isStatsDropdownOpen"
+        >
+          <span class="stats-dropdown-mobile__text">סטטוסים</span>
+          <span class="stats-dropdown-mobile__icon">▼</span>
+        </button>
+        <div
+          v-if="isStatsDropdownOpen"
+          class="stats-dropdown-mobile__menu"
+          @click.stop
+        >
+          <div class="stats-dropdown-mobile__item">
+            <span class="stats-dropdown-mobile__item-label"
+              >{{ stats.clients }} לקוחות</span
+            >
+          </div>
+          <div class="stats-dropdown-mobile__item">
+            <span class="stats-dropdown-mobile__item-label"
+              >{{ stats.handymen }} הנדימנים</span
+            >
+          </div>
+          <div
+            class="stats-dropdown-mobile__item stats-dropdown-mobile__item--hot"
+          >
+            <span class="stats-dropdown-mobile__item-label"
+              >{{ stats.users }} משתמשים</span
+            >
+          </div>
         </div>
       </div>
     </div>
@@ -76,30 +116,12 @@
 export default {
   name: "DashboardTopBar",
   props: {
-    me: {
-      type: Object,
-      required: true,
-    },
-    isHendiman: {
-      type: Boolean,
-      default: false,
-    },
-    isAvailable: {
-      type: Boolean,
-      default: true,
-    },
-    stats: {
-      type: Object,
-      required: true,
-    },
-    hasActiveJob: {
-      type: Boolean,
-      default: false,
-    },
-    isChatMinimized: {
-      type: Boolean,
-      default: false,
-    },
+    me: { type: Object, required: true },
+    isHendiman: { type: Boolean, default: false },
+    isAvailable: { type: Boolean, default: true },
+    stats: { type: Object, required: true },
+    hasActiveJob: { type: Boolean, default: false },
+    isChatMinimized: { type: Boolean, default: false },
   },
   emits: [
     "open-profile",
@@ -108,15 +130,38 @@ export default {
     "view-ratings",
     "return-to-job",
   ],
+  data() {
+    return {
+      isStatsDropdownOpen: false,
+      isMobile: window.innerWidth <= 768,
+    };
+  },
+  mounted() {
+    window.addEventListener("resize", this.handleResize);
+    document.addEventListener("click", this.handleClickOutside);
+  },
+  beforeUnmount() {
+    window.removeEventListener("resize", this.handleResize);
+    document.removeEventListener("click", this.handleClickOutside);
+  },
+  methods: {
+    handleResize() {
+      this.isMobile = window.innerWidth <= 768;
+    },
+    handleClickOutside(event) {
+      if (
+        this.isStatsDropdownOpen &&
+        !event.target.closest(".stats-dropdown-mobile")
+      ) {
+        this.isStatsDropdownOpen = false;
+      }
+    },
+  },
 };
 </script>
 
 <style lang="scss" scoped>
-$font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-  "Helvetica Neue", Arial, sans-serif;
-
 $bg: #0b0b0f;
-$bg2: #0f1016;
 $card: rgba(255, 255, 255, 0.06);
 $card2: rgba(255, 255, 255, 0.085);
 $stroke: rgba(255, 255, 255, 0.12);
@@ -137,25 +182,30 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 
 .top {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
   margin-bottom: 14px;
+  min-width: 0;
 
   @media (max-width: 768px) {
+    // חד-שורה קשיח
+    flex-wrap: nowrap;
+    gap: 8px;
+
     margin-bottom: 6px;
-    gap: 4px;
-    padding: 6px 8px;
+    padding: 8px 10px;
     background: linear-gradient(180deg, $card2, $card);
-    border-radius: 12px;
+    border-radius: 14px;
     border: 1px solid $stroke;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
+
     position: sticky;
     top: 0;
-    z-index: 100;
+    z-index: 100000;
+
     margin-left: calc(-6px - env(safe-area-inset-left));
     margin-right: calc(-6px - env(safe-area-inset-right));
     padding-left: calc(14px + env(safe-area-inset-left));
@@ -163,152 +213,11 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   }
 }
 
-.kpi {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-
-  @media (max-width: 768px) {
-    gap: 4px;
-  }
-
-  &__item {
-    background: linear-gradient(180deg, $card2, $card);
-    border: 1px solid $stroke;
-    border-radius: 999px;
-    padding: 10px 12px;
-    box-shadow: $shadow;
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    cursor: pointer;
-    position: relative;
-    overflow: hidden;
-
-    @media (max-width: 768px) {
-      padding: 4px 6px;
-      gap: 4px;
-      border-radius: 12px;
-    }
-
-    &::before {
-      content: "";
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 0;
-      height: 0;
-      border-radius: 50%;
-      background: rgba($orange, 0.1);
-      transform: translate(-50%, -50%);
-      transition: width 0.4s ease, height 0.4s ease;
-    }
-
-    &:hover {
-      transform: translateY(-2px);
-      border-color: rgba($orange, 0.4);
-      box-shadow: $shadow, 0 8px 20px rgba($orange, 0.2);
-      background: linear-gradient(
-        180deg,
-        rgba($orange, 0.08),
-        rgba($orange, 0.04)
-      );
-
-      &::before {
-        width: 200px;
-        height: 200px;
-      }
-
-      .kpi__num {
-        color: $orange;
-        transform: scale(1.05);
-      }
-
-      .kpi__label {
-        color: rgba(255, 255, 255, 0.8);
-      }
-    }
-  }
-
-  &__num {
-    font-size: 18px;
-    font-weight: 1000;
-    color: $text;
-    transition: all 0.25s ease;
-    position: relative;
-    z-index: 1;
-
-    @media (max-width: 768px) {
-      font-size: 11px;
-    }
-  }
-
-  &__label {
-    font-size: 12px;
-    font-weight: 900;
-    color: $muted;
-    transition: color 0.25s ease;
-    position: relative;
-    z-index: 1;
-
-    @media (max-width: 768px) {
-      font-size: 8px;
-    }
-  }
-
-  &__item--hot {
-    border-color: rgba($orange, 0.45);
-    box-shadow: $shadow, $shadowO;
-
-    .kpi__num {
-      color: $orange3;
-    }
-  }
-}
-
-.top__left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  flex: 1;
-
-  @media (max-width: 768px) {
-    gap: 4px;
-    flex: 0 0 auto;
-  }
-}
-
-.top__chats {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-  margin-left: 70px;
-
-  @media (max-width: 768px) {
-    display: none;
-  }
-}
-
-.top__right {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-
-  @media (max-width: 768px) {
-    gap: 6px;
-    flex: 1;
-    justify-content: flex-end;
-  }
-}
-
+/* LEFT: profile */
 .me {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   background: linear-gradient(180deg, $card2, $card);
   border: 1px solid rgba($orange, 0.22);
   border-radius: 999px;
@@ -319,9 +228,11 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   min-width: 0;
 
   @media (max-width: 768px) {
+    // קומפקט במובייל כדי להשאיר מקום ל-KPI
     padding: 6px 8px;
-    gap: 6px;
-    border-radius: 12px;
+    border-radius: 14px;
+    gap: 8px;
+    flex: 0 0 auto;
   }
 
   &:hover {
@@ -342,7 +253,6 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   &__avatar-container {
     position: relative;
     display: inline-block;
-    flex-shrink: 0;
   }
 
   &__avatar {
@@ -351,52 +261,18 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     border-radius: 999px;
     object-fit: cover;
     border: 2px solid rgba($orange, 0.35);
-    transition: all 0.25s ease;
     display: block;
 
     @media (max-width: 768px) {
-      width: 28px;
-      height: 28px;
+      width: 30px;
+      height: 30px;
       border-width: 1.5px;
     }
-  }
-
-  &__status-indicator {
-    position: absolute;
-    bottom: -2px;
-    right: -2px;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    border: 2px solid $bg;
-    background: rgba(0, 0, 0, 0.3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 5;
-
-    @media (max-width: 768px) {
-      width: 12px;
-      height: 12px;
-      border-width: 1.5px;
-      bottom: -1px;
-      right: -1px;
-    }
-  }
-
-  &__status-text {
-    line-height: 1;
-    font-size: 10px;
-    font-weight: 900;
-    color: $muted;
   }
 
   &__edit-overlay {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 40px;
-    height: 40px;
+    inset: 0;
     border-radius: 999px;
     background: rgba(0, 0, 0, 0.85);
     backdrop-filter: blur(4px);
@@ -406,7 +282,6 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     opacity: 0;
     transition: opacity 0.2s ease;
     pointer-events: none;
-    z-index: 10;
   }
 
   &__edit-text {
@@ -418,17 +293,29 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     padding: 0 4px;
   }
 
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: $shadow, $shadowO;
+  &:hover .me__avatar-container:hover .me__edit-overlay {
+    opacity: 1;
+    pointer-events: auto;
+  }
 
-    .me__avatar-container:hover .me__avatar {
-      border-color: rgba($orange, 0.6);
-    }
+  &__status-indicator {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid $bg;
+    background: rgba(0, 0, 0, 0.3);
+    display: grid;
+    place-items: center;
 
-    .me__avatar-container:hover .me__edit-overlay {
-      opacity: 1;
-      pointer-events: auto;
+    @media (max-width: 768px) {
+      width: 12px;
+      height: 12px;
+      border-width: 1.5px;
+      bottom: -1px;
+      right: -1px;
     }
   }
 
@@ -437,9 +324,9 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     flex-direction: column;
     gap: 2px;
     min-width: 0;
-    flex: 1;
 
     @media (max-width: 768px) {
+      // במובייל — אין מקום לטקסט, אז לא מציגים
       display: none;
     }
   }
@@ -450,7 +337,6 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.2;
   }
 
   &__role {
@@ -460,7 +346,6 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.2;
   }
 
   &__chev {
@@ -475,6 +360,174 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   }
 }
 
+/* RIGHT side */
+.right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  position: relative;
+
+  @media (max-width: 768px) {
+    // חד-שורה קשיח + בלי wrap
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    gap: 8px;
+    justify-content: flex-end;
+    z-index: 100001;
+  }
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba($orange, 0.3);
+  background: linear-gradient(135deg, rgba($orange, 0.15), rgba($orange2, 0.1));
+  color: $orange2;
+  cursor: pointer;
+  font-weight: 1000;
+  font-size: 13px;
+  box-shadow: 0 4px 12px rgba($orange, 0.1);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba($orange, 0.22);
+  }
+  &:focus {
+    @include focusRing;
+  }
+
+  &__icon {
+    font-size: 16px;
+    line-height: 1;
+  }
+  &__text {
+    white-space: nowrap;
+  }
+
+  @media (max-width: 768px) {
+    // במובייל: כפתורים קטנים יותר
+    padding: 8px 10px;
+    border-radius: 14px;
+    flex: 0 0 auto;
+
+    &__text {
+      display: none;
+    }
+  }
+}
+
+/* Ratings button - show text on mobile */
+.btn--ratings {
+  @media (max-width: 768px) {
+    padding: 8px 10px;
+    border-radius: 14px;
+    flex: 0 0 auto;
+    font-size: 11px;
+    gap: 6px;
+
+    .btn__text {
+      display: inline;
+      white-space: nowrap;
+      font-size: 10px;
+    }
+
+    .btn__icon {
+      font-size: 14px;
+    }
+  }
+}
+
+/* Job button stays desktop-only */
+.btn--job {
+  @media (max-width: 768px) {
+    display: none;
+  }
+}
+.btn--job-red {
+  border: 2px solid rgba(239, 68, 68, 0.55);
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.22),
+    rgba(220, 38, 38, 0.16)
+  );
+  color: #ef4444;
+}
+
+/* KPI: forced single row */
+.kpi {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+
+  &--desktop {
+    @media (max-width: 768px) {
+      display: none;
+    }
+  }
+
+  &__item {
+    background: linear-gradient(180deg, $card2, $card);
+    border: 1px solid $stroke;
+    border-radius: 999px;
+    padding: 10px 12px;
+    box-shadow: $shadow;
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 8px;
+    min-width: 0;
+
+    @media (max-width: 768px) {
+      // הכי חשוב: כולם שווים ומצטמצמים שווה
+      flex: 1 1 0;
+      padding: 6px 8px;
+      border-radius: 14px;
+      gap: 6px;
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  &__num {
+    font-size: 18px;
+    font-weight: 1000;
+    color: $text;
+
+    @media (max-width: 768px) {
+      font-size: 12px;
+      line-height: 1;
+    }
+  }
+
+  &__label {
+    font-size: 12px;
+    font-weight: 900;
+    color: $muted;
+    white-space: nowrap;
+
+    @media (max-width: 768px) {
+      font-size: 9px;
+      line-height: 1;
+    }
+  }
+
+  &__item--hot {
+    border-color: rgba($orange, 0.45);
+    box-shadow: $shadow, $shadowO;
+
+    .kpi__num {
+      color: $orange3;
+    }
+  }
+}
+
+/* Status dot */
 .dot {
   width: 10px;
   height: 10px;
@@ -506,267 +559,121 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   }
 }
 
-.btn {
-  border-radius: 16px;
-  padding: 11px 12px;
-  border: 1px solid rgba($orange, 0.18);
-  background: rgba(255, 255, 255, 0.06);
-  color: $text;
-  cursor: pointer;
-  font-weight: 1000;
-  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
-  font-size: 13px;
-
-  @media (max-width: 768px) {
-    padding: 6px 8px;
-    font-size: 10px;
-    border-radius: 10px;
-    min-height: 32px;
-  }
-
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 14px 22px rgba($orange, 0.12);
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  &:active {
-    transform: translateY(0) scale(0.99);
-  }
-
-  &:focus {
-    @include focusRing;
-  }
-
-  &--ghost {
-    background: rgba(0, 0, 0, 0.22);
-    border-color: rgba(255, 255, 255, 0.12);
-  }
-}
-
-.top__ratingsBtn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border-radius: 999px;
-  border: 1px solid rgba($orange, 0.3);
-  background: linear-gradient(135deg, rgba($orange, 0.15), rgba($orange2, 0.1));
-  color: $orange2;
-  cursor: pointer;
-  font-weight: 1000;
-  font-size: 13px;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 12px rgba($orange, 0.1);
-  position: relative;
-  overflow: hidden;
-
-  @media (max-width: 768px) {
-    padding: 6px 10px;
-    gap: 4px;
-    font-size: 11px;
-    border-radius: 12px;
-  }
-
-  &::before {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 0;
-    height: 0;
-    border-radius: 50%;
-    background: rgba($orange, 0.2);
-    transform: translate(-50%, -50%);
-    transition: width 0.4s ease, height 0.4s ease;
-  }
-
-  &:hover {
-    transform: translateY(-2px);
-    border-color: rgba($orange, 0.5);
-    background: linear-gradient(
-      135deg,
-      rgba($orange, 0.25),
-      rgba($orange2, 0.2)
-    );
-    box-shadow: 0 6px 20px rgba($orange, 0.25);
-
-    &::before {
-      width: 200px;
-      height: 200px;
-    }
-
-    .top__ratingsBtnIcon {
-      transform: rotate(15deg) scale(1.1);
-    }
-
-    .top__ratingsBtnText {
-      color: $orange;
-    }
-  }
-
-  &:active {
-    transform: translateY(0);
-  }
-
-  &:focus {
-    @include focusRing;
-  }
-}
-
-.top__ratingsBtnIcon {
-  font-size: 16px;
-  transition: transform 0.25s ease;
-  position: relative;
-  z-index: 1;
-
-  @media (max-width: 768px) {
-    font-size: 14px;
-  }
-}
-
-.top__ratingsBtnText {
-  position: relative;
-  z-index: 1;
-  transition: color 0.25s ease;
-  white-space: nowrap;
-
-  @media (max-width: 768px) {
-    font-size: 10px;
-  }
-}
-
-.top__returnJobBtn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border-radius: 999px;
-  border: 1px solid rgba($orange, 0.3);
-  background: linear-gradient(135deg, rgba($orange, 0.15), rgba($orange2, 0.1));
-  color: $orange2;
-  cursor: pointer;
-  font-weight: 1000;
-  font-size: 13px;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 12px rgba($orange, 0.1);
-  position: relative;
-  overflow: hidden;
-
-  // Hide on mobile (will be shown above jobs section)
-  @media (max-width: 768px) {
+/* אם המסך ממש צר — מסתירים תוויות KPI ומשאירים רק מספרים (עדיין אותה שורה) */
+@media (max-width: 360px) {
+  .kpi__label {
     display: none;
   }
+}
 
-  @media (max-width: 768px) {
+/* Mobile Stats Dropdown */
+.stats-dropdown-mobile {
+  position: relative;
+  flex: 0 0 auto;
+  z-index: 100000;
+
+  &__trigger {
     padding: 6px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba($orange, 0.25);
+    background: rgba($orange, 0.12);
+    color: $text;
+    font-weight: 1000;
+    font-size: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
     gap: 4px;
-    font-size: 11px;
-    border-radius: 12px;
-  }
-
-  &::before {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 0;
-    height: 0;
-    border-radius: 50%;
-    background: rgba($orange, 0.2);
-    transform: translate(-50%, -50%);
-    transition: width 0.4s ease, height 0.4s ease;
-  }
-
-  &:hover {
-    transform: translateY(-2px);
-    border-color: rgba($orange, 0.5);
-    background: linear-gradient(
-      135deg,
-      rgba($orange, 0.25),
-      rgba($orange2, 0.2)
-    );
-    box-shadow: 0 6px 20px rgba($orange, 0.25);
-    animation: none;
-
-    &::before {
-      width: 200px;
-      height: 200px;
-    }
-
-    .top__returnJobBtnIcon {
-      transform: rotate(15deg) scale(1.1);
-    }
-
-    .top__returnJobBtnText {
-      color: $orange;
-    }
-  }
-
-  &:active {
-    transform: translateY(0);
-  }
-
-  &:focus {
-    @include focusRing;
-  }
-
-  // Red style for handyman
-  &.top__returnJobBtn--handyman {
-    border: 2px solid rgba(239, 68, 68, 0.5); /* Red border */
-    background: linear-gradient(
-      135deg,
-      rgba(239, 68, 68, 0.2),
-      rgba(220, 38, 38, 0.15)
-    ); /* Red gradient */
-    color: #ef4444; /* Red text */
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); /* Red shadow */
-
-    &::before {
-      background: rgba(239, 68, 68, 0.3); /* Red ripple */
-    }
+    transition: all 0.2s ease;
+    white-space: nowrap;
 
     &:hover {
-      border-color: rgba(239, 68, 68, 0.7); /* Darker red border on hover */
-      background: linear-gradient(
-        135deg,
-        rgba(239, 68, 68, 0.3),
-        rgba(220, 38, 38, 0.25)
-      ); /* Darker red gradient on hover */
-      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.35); /* Darker red shadow on hover */
+      background: rgba($orange, 0.18);
+      border-color: rgba($orange, 0.35);
+    }
 
-      .top__returnJobBtnText {
-        color: #dc2626; /* Darker red text on hover */
+    &:focus {
+      @include focusRing;
+    }
+  }
+
+  &__text {
+    font-size: 10px;
+  }
+
+  &__icon {
+    font-size: 8px;
+    color: rgba(255, 255, 255, 0.6);
+    transition: transform 0.2s ease;
+  }
+
+  &__trigger:focus &__icon,
+  &__menu:not([style*="display: none"]) ~ &__trigger &__icon {
+    transform: rotate(180deg);
+  }
+
+  &__menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: -10px;
+    z-index: 100000;
+    background: rgba(15, 16, 22, 0.98);
+    border: 1px solid rgba($orange, 0.25);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+    min-width: 140px;
+    margin-top: 4px;
+    margin-right: 0;
+    margin-left: 8px;
+  }
+
+  &__item {
+    padding: 10px 12px;
+    background: transparent;
+    color: $text;
+    font-weight: 1000;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    text-align: right;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    margin: 0 4px;
+
+    &:first-child {
+      margin-top: 4px;
+    }
+
+    &:last-child {
+      border-bottom: none;
+      margin-bottom: 4px;
+    }
+
+    &--hot {
+      .stats-dropdown-mobile__item-count {
+        color: $orange3;
       }
     }
   }
-}
 
-.top__returnJobBtnIcon {
-  font-size: 16px;
-  transition: transform 0.25s ease;
-  position: relative;
-  z-index: 1;
-
-  @media (max-width: 768px) {
-    font-size: 14px;
-  }
-}
-
-.top__returnJobBtnText {
-  position: relative;
-  z-index: 1;
-  transition: color 0.25s ease;
-  white-space: nowrap;
-  color: $orange2; /* Default orange (for client) */
-  font-weight: 1000;
-
-  @media (max-width: 768px) {
-    font-size: 10px;
+  &__item-label {
+    flex: 1;
+    text-align: right;
   }
 
-  .top__returnJobBtn--handyman & {
-    color: #ef4444; /* Red for handyman */
+  &__item-count {
+    font-size: 12px;
+    font-weight: 1000;
+    white-space: nowrap;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(0, 0, 0, 0.25);
+    min-width: 30px;
+    text-align: center;
   }
 }
 </style>
