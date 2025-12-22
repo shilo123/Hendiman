@@ -230,6 +230,7 @@
                   <label class="label" for="clientAddress">עיר</label>
                   <AddressAutocomplete
                     v-model="clientForm.city"
+                    @update:modelValue="clientForm.address = $event"
                     input-id="clientAddress"
                     placeholder="בחר עיר"
                     :required="true"
@@ -448,6 +449,7 @@
                   <AddressAutocomplete
                     v-model="handymanForm.city"
                     @update:englishName="handymanForm.addressEnglish = $event"
+                    @update:modelValue="handymanForm.address = $event"
                     input-id="handymanAddress"
                     placeholder="בחר עיר"
                     :required="true"
@@ -575,6 +577,7 @@ export default {
         password: "",
         phone: "",
         city: "",
+        address: "",
         howDidYouHear: "",
         image: null,
         imagePreview: null,
@@ -588,6 +591,7 @@ export default {
         password: "",
         phone: "",
         city: "",
+        address: "",
         addressEnglish: "",
         howDidYouHear: "",
         specialties: [],
@@ -626,7 +630,7 @@ export default {
     },
     handleImageLoad() {},
 
-    handleGoogleCallback() {
+    async handleGoogleCallback() {
       if (!this.toast) this.toast = useToast();
 
       const googleAuth =
@@ -662,7 +666,29 @@ export default {
               targetForm.lastName = nameParts.slice(1).join(" ") || "";
             }
             if (user.email) targetForm.email = user.email;
-            if (user.picture) targetForm.imageUrl = user.picture;
+
+            // העלה את התמונה מ-Google ל-S3
+            if (user.picture) {
+              try {
+                const { data } = await axios.post(
+                  `${URL}/upload-image-from-url`,
+                  {
+                    imageUrl: user.picture,
+                  }
+                );
+                if (data.imageUrl) {
+                  targetForm.imageUrl = data.imageUrl;
+                } else {
+                  // Fallback: use original URL if upload fails
+                  targetForm.imageUrl = user.picture;
+                }
+              } catch (error) {
+                console.warn("Failed to upload Google image to S3:", error);
+                // Fallback: use original URL if upload fails
+                targetForm.imageUrl = user.picture;
+              }
+            }
+
             if (user.googleId || user._id) {
               targetForm.password = user.googleId || user._id.toString();
             }
@@ -791,8 +817,12 @@ export default {
             formData.email = this.googleUserData.email;
           if (this.googleUserData.picture && !formData.imageUrl)
             formData.imageUrl = this.googleUserData.picture;
-          if (this.googleUserData.googleId && !formData.password)
-            formData.password = this.googleUserData.googleId;
+          if (this.googleUserData.googleId) {
+            if (!formData.password)
+              formData.password = this.googleUserData.googleId;
+            // שלח את ה-googleId כפרמטר נפרד
+            formData.googleId = this.googleUserData.googleId;
+          }
         }
 
         if (formData.image && !formData.imageUrl) {
@@ -901,8 +931,12 @@ export default {
             formData.email = this.googleUserData.email;
           if (this.googleUserData.picture && !formData.imageUrl)
             formData.imageUrl = this.googleUserData.picture;
-          if (this.googleUserData.googleId && !formData.password)
-            formData.password = this.googleUserData.googleId;
+          if (this.googleUserData.googleId) {
+            if (!formData.password)
+              formData.password = this.googleUserData.googleId;
+            // שלח את ה-googleId כפרמטר נפרד
+            formData.googleId = this.googleUserData.googleId;
+          }
         }
 
         if (formData.image && !formData.imageUrl) {
@@ -935,28 +969,47 @@ export default {
               .map((item) => {
                 const isFull =
                   item.isFullCategory === true || item.type === "category";
-                const resolvedType = isFull ? "category" : "subCategory";
+                // const resolvedType = isFull ? "category" : "subCategory";
+
+                // אם זה קטגוריה שלמה
+                if (isFull && item.name) {
+                  return {
+                    name: String(item.name).trim(),
+                    category: "",
+                    price: null,
+                    typeWork: null,
+                    isFullCategory: true,
+                    type: "category",
+                  };
+                }
+
+                // אם זה תת-קטגוריה
                 if (item.name) {
                   return {
                     name: String(item.name).trim(),
+                    category: String(item.category || "").trim(),
                     price: item.price || null,
                     typeWork: item.typeWork || null,
-                    isFullCategory: isFull,
-                    type: item.type || resolvedType,
+                    isFullCategory: false,
+                    type: "subCategory",
                   };
                 }
+
                 if (item.subcategory) {
                   return {
                     name: String(item.subcategory).trim(),
+                    category: String(item.category || "").trim(),
                     price: item.price || null,
                     typeWork: item.workType || item.typeWork || null,
                     isFullCategory: false,
                     type: "subCategory",
                   };
                 }
+
                 if (typeof item === "string") {
                   return {
                     name: String(item).trim(),
+                    category: "",
                     price: null,
                     typeWork: null,
                     isFullCategory: false,

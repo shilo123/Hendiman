@@ -290,7 +290,7 @@ function findAvailablePort(startPort) {
   app.use(passport.session());
 
   // Setup routes
-  setupAuthRoutes(app, URL_CLIENT);
+  setupAuthRoutes(app, URL_CLIENT, collection);
   setupUploadRoutes(app);
 
   // Routes
@@ -324,12 +324,17 @@ function findAvailablePort(startPort) {
         if (!user.googleId) {
           return res.json({ message: "NoUser" });
         }
+        // בדוק אם ה-googleId שהתקבל מהקליינט תואם ל-googleId שיש בשרת
+        if (user.googleId !== googleId) {
+          return res.json({ message: "NoUser" });
+        }
         // Return success with the googleId as password for the client to use
+        // המר את ה-_id ל-string כדי שיעבוד עם Vue Router
         return res.json({
           message: "Success",
           password: user.googleId,
           user: {
-            _id: user._id,
+            _id: user._id ? user._id.toString() : user._id,
             username: user.username,
             email: user.email,
             isHandyman: user.isHandyman,

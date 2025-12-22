@@ -121,8 +121,15 @@ export default {
       return `${this.selectedItems.length} התמחויות נבחרו`;
     },
     availableCategories() {
-      // Filter out categories that are fully selected (all subcategories selected)
+      // Filter out categories that are fully selected (all subcategories selected) or full category selected
       return this.categories.filter((category) => {
+        // אם הקטגוריה השלמה כבר נבחרה, הסתר אותה
+        const fullCategorySelected = this.selectedItems.some(
+          (item) =>
+            item.category === category.name && item.isFullCategory === true
+        );
+        if (fullCategorySelected) return false;
+
         if (!category.subcategories || category.subcategories.length === 0) {
           return true; // Keep categories without subcategories
         }
@@ -130,7 +137,9 @@ export default {
         const allSelected = category.subcategories.every((sub) =>
           this.selectedItems.some(
             (item) =>
-              item.category === category.name && item.subcategory === sub.name
+              item.category === category.name &&
+              item.subcategory === sub.name &&
+              item.isFullCategory !== true
           )
         );
         return !allSelected; // Show only if not all selected
@@ -150,12 +159,26 @@ export default {
     modelValue: {
       handler(newValue) {
         if (Array.isArray(newValue) && newValue.length > 0) {
-          this.selectedItems = newValue.map((item) => ({
-            category: item.category || "",
-            subcategory: item.name || item,
-            price: item.price || null,
-            workType: item.typeWork || item.workType || null,
-          }));
+          this.selectedItems = newValue.map((item) => {
+            // אם זה קטגוריה שלמה
+            if (item.isFullCategory === true || item.type === "category") {
+              return {
+                category: item.name,
+                subcategory: null,
+                isFullCategory: true,
+                price: null,
+                workType: null,
+              };
+            }
+            // אם זה תת-קטגוריה
+            return {
+              category: item.category || "",
+              subcategory: item.name || item,
+              price: item.price || null,
+              workType: item.typeWork || item.workType || null,
+              isFullCategory: false,
+            };
+          });
         } else {
           this.selectedItems = [];
         }
@@ -204,25 +227,27 @@ export default {
       }
     },
     selectFullCategory(category) {
-      // Long press - select all subcategories
-      if (category.subcategories && category.subcategories.length > 0) {
-        category.subcategories.forEach((sub) => {
-          const item = {
-            category: category.name,
-            subcategory: sub.name,
-            price: sub.price || null,
-            workType: sub.workType || null,
-          };
-          if (
-            !this.selectedItems.some(
-              (existing) => existing.subcategory === item.subcategory
-            )
-          ) {
-            this.selectedItems.push(item);
-          }
-        });
-        this.closeModal();
+      // Long press - select full category (not all subcategories)
+      const item = {
+        category: category.name,
+        subcategory: null, // קטגוריה שלמה, לא תת-קטגוריה
+        isFullCategory: true,
+        price: null,
+        workType: null,
+      };
+
+      // בדוק אם הקטגוריה כבר קיימת
+      const exists = this.selectedItems.some(
+        (existing) =>
+          existing.category === item.category &&
+          existing.isFullCategory === true
+      );
+
+      if (!exists) {
+        this.selectedItems.push(item);
       }
+      this.closeModal();
+      this.emitUpdate();
     },
     toggleSubcategory(subcategory) {
       const item = {
@@ -230,10 +255,13 @@ export default {
         subcategory: subcategory.name,
         price: subcategory.price || null,
         workType: subcategory.workType || null,
+        isFullCategory: false,
       };
 
       const index = this.selectedItems.findIndex(
-        (existing) => existing.subcategory === item.subcategory
+        (existing) =>
+          existing.category === item.category &&
+          existing.subcategory === item.subcategory
       );
 
       if (index === -1) {
@@ -246,7 +274,8 @@ export default {
       return this.selectedItems.some(
         (item) =>
           item.category === this.selectedCategory.name &&
-          item.subcategory === subcategory.name
+          item.subcategory === subcategory.name &&
+          item.isFullCategory !== true
       );
     },
     clearAll() {
@@ -254,12 +283,28 @@ export default {
       this.emitUpdate();
     },
     emitUpdate() {
-      const formatted = this.selectedItems.map((item) => ({
-        category: item.category,
-        name: item.subcategory,
-        price: item.price,
-        typeWork: item.workType,
-      }));
+      const formatted = this.selectedItems.map((item) => {
+        // אם זה קטגוריה שלמה
+        if (item.isFullCategory === true) {
+          return {
+            name: item.category,
+            category: "",
+            price: null,
+            typeWork: null,
+            isFullCategory: true,
+            type: "category",
+          };
+        }
+        // אם זה תת-קטגוריה
+        return {
+          name: item.subcategory,
+          category: item.category || "",
+          price: item.price || null,
+          typeWork: item.workType || null,
+          isFullCategory: false,
+          type: "subCategory",
+        };
+      });
       this.$emit("update:modelValue", formatted);
     },
   },

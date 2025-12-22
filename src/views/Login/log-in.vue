@@ -82,10 +82,11 @@
                 v-else
                 v-model="password"
                 class="field__input"
-                type="email"
-                placeholder="הכנס כתובת מייל"
+                type="text"
+                placeholder="סיסמה (Google)"
                 required
-                autocomplete="email"
+                autocomplete="current-password"
+                readonly
               />
             </label>
 
@@ -211,7 +212,13 @@ export default {
             });
           }
         } else if (data.message === "NoUser") {
-          this.toast.showError("שם משתמש לא נכון");
+          if (this.ifGoogleUser) {
+            this.toast.showError(
+              "משתמש Google לא נמצא במערכת. אנא הירשם תחילה."
+            );
+          } else {
+            this.toast.showError("שם משתמש לא נכון");
+          }
         } else if (data.message === "NoPass") {
           this.toast.showError("סיסמה לא נכונה");
         } else if (data.message === "NoEmail") {

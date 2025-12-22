@@ -539,14 +539,17 @@ export default {
         this.selectedItems = [];
       }
 
-      // המר למערך של אובייקטים עם name, price, typeWork
+      // המר למערך של אובייקטים עם name, category, price, typeWork, type
       const subcategoriesValue = this.selectedItems
         .filter((item) => item && item.subcategory)
         .map((item) => {
           return {
             name: String(item.subcategory).trim(),
+            category: String(item.category || "").trim(),
             price: item.price || null,
             typeWork: item.workType || null,
+            isFullCategory: false,
+            type: "subCategory",
           };
         })
         .filter((obj) => obj.name.length > 0); // הסר אובייקטים עם name ריק
@@ -557,9 +560,11 @@ export default {
         .map((cat) => {
           return {
             name: String(cat).trim(),
+            category: "",
             price: null,
             typeWork: null,
-            isFullCategory: true, // סימון שזה קטגוריה שלימה
+            isFullCategory: true,
+            type: "category",
           };
         });
 
