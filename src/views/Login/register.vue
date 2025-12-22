@@ -807,7 +807,13 @@ export default {
         delete formData.image;
         delete formData.imagePreview;
 
-        const { data } = await axios.post(`${URL}/register-handyman`, formData);
+        const { data } = await axios.post(
+          `${URL}/register-handyman`,
+          formData,
+          {
+            timeout: 30000, // 30 seconds timeout
+          }
+        );
         if (data === true || (data && data.success !== false)) {
           this.toast.showSuccess("הרשמה בוצעה בהצלחה!");
           if (data?.user?._id) {
@@ -822,7 +828,28 @@ export default {
           this.toast.showError(data?.message || "שגיאה בהרשמה");
         }
       } catch (error) {
-        this.toast.showError(error.response?.data?.message || "שגיאה בהרשמה");
+        // טיפול בשגיאות שונות - הודעות שגיאה יוצגו למשך 6 שניות
+        if (
+          error.code === "ECONNABORTED" ||
+          error.message?.includes("timeout")
+        ) {
+          this.toast.showError("הזמן הקצוב להרשמה פג. אנא נסה שוב.", 6000);
+        } else if (error.response?.data?.message) {
+          // הודעת שגיאה מהשרת
+          this.toast.showError(error.response.data.message, 6000);
+        } else if (error.response?.status === 400) {
+          this.toast.showError(
+            "הנתונים שהוזנו לא תקינים. אנא בדוק ונסה שוב.",
+            6000
+          );
+        } else if (error.response?.status === 500) {
+          this.toast.showError("שגיאה בשרת. אנא נסה שוב מאוחר יותר.", 6000);
+        } else if (error.message) {
+          this.toast.showError(`שגיאה בהרשמה: ${error.message}`, 6000);
+        } else {
+          this.toast.showError("שגיאה בהרשמה. אנא נסה שוב.", 6000);
+        }
+        console.error("Registration error:", error);
       } finally {
         this.isSubmitting = false;
       }
@@ -949,6 +976,7 @@ export default {
           formData,
           {
             headers: { "Content-Type": "application/json" },
+            timeout: 30000, // 30 seconds timeout
           }
         );
 
@@ -966,7 +994,28 @@ export default {
           this.toast.showError(data?.message || "שגיאה בהרשמה");
         }
       } catch (error) {
-        this.toast.showError(error.response?.data?.message || "שגיאה בהרשמה");
+        // טיפול בשגיאות שונות - הודעות שגיאה יוצגו למשך 6 שניות
+        if (
+          error.code === "ECONNABORTED" ||
+          error.message?.includes("timeout")
+        ) {
+          this.toast.showError("הזמן הקצוב להרשמה פג. אנא נסה שוב.", 6000);
+        } else if (error.response?.data?.message) {
+          // הודעת שגיאה מהשרת
+          this.toast.showError(error.response.data.message, 6000);
+        } else if (error.response?.status === 400) {
+          this.toast.showError(
+            "הנתונים שהוזנו לא תקינים. אנא בדוק ונסה שוב.",
+            6000
+          );
+        } else if (error.response?.status === 500) {
+          this.toast.showError("שגיאה בשרת. אנא נסה שוב מאוחר יותר.", 6000);
+        } else if (error.message) {
+          this.toast.showError(`שגיאה בהרשמה: ${error.message}`, 6000);
+        } else {
+          this.toast.showError("שגיאה בהרשמה. אנא נסה שוב.", 6000);
+        }
+        console.error("Registration error:", error);
       } finally {
         this.isSubmitting = false;
       }

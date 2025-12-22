@@ -47,6 +47,13 @@ function setupAuthRoutes(app, URL_CLIENT) {
         const source = req.session?.oauthSource || "login";
         const tab = req.session?.oauthTab || "client";
 
+        // Debug logging
+        console.log("🔍 Google OAuth Callback:");
+        console.log("  - source:", source);
+        console.log("  - tab:", tab);
+        console.log("  - session exists:", !!req.session);
+        console.log("  - oauthSource in session:", req.session?.oauthSource);
+
         // Clear session data
         if (req.session) {
           delete req.session.oauthSource;
@@ -63,8 +70,10 @@ function setupAuthRoutes(app, URL_CLIENT) {
           redirectUrl = `${URL_CLIENT}/login?googleAuth=success&user=${userData}`;
         }
 
+        console.log("  - redirectUrl:", redirectUrl);
         res.redirect(redirectUrl);
       } catch (error) {
+        console.error("❌ Google OAuth Callback error:", error);
         return res.redirect(`${URL_CLIENT}/login?error=callback_error`);
       }
     }

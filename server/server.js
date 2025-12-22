@@ -355,71 +355,73 @@ function findAvailablePort(startPort) {
     }
   });
   app.post("/register-handyman", async (req, res) => {
-    if (!collection) {
-      return res
-        .status(500)
-        .json({ message: "Database not connected", success: false });
-    }
-    let {
-      firstName,
-      lastName,
-      email,
-      password,
-      phone,
-      address,
-      addressEnglish,
-      howDidYouHear,
-      specialties,
-      imageUrl,
-      logoUrl,
-      isHandyman,
-      googleId, // בדוק אם יש googleId נפרד
-    } = req.body;
+    try {
+      if (!collection) {
+        return res
+          .status(500)
+          .json({ message: "Database not connected", success: false });
+      }
+      let {
+        firstName,
+        lastName,
+        email,
+        password,
+        phone,
+        address,
+        addressEnglish,
+        howDidYouHear,
+        specialties,
+        imageUrl,
+        logoUrl,
+        isHandyman,
+        googleId, // בדוק אם יש googleId נפרד
+      } = req.body;
 
-    const fullName = `${firstName || ""} ${lastName || ""}`.trim();
+      const fullName = `${firstName || ""} ${lastName || ""}`.trim();
 
-    // אם אין addressEnglish, נסה למצוא אותו מהמאגר
-    let finalAddressEnglish = addressEnglish;
-    if (!finalAddressEnglish && address) {
-      if (usingMyLocation) {
-        try {
-          const citiesPath = path.join(
-            __dirname,
-            "..",
-            "src",
-            "APIS",
-            "AdressFromIsrael.json"
-          );
-          const citiesData = JSON.parse(fs.readFileSync(citiesPath, "utf8"));
-          const cities = Array.isArray(citiesData) ? citiesData : [];
-
-          const searchValue = address.trim();
-          const foundCity = cities.find((city) => {
-            // דלג על שורת הכותרת
-            if (city.name === "שם_ישוב" || city.שם_ישוב === "שם_ישוב") {
-              return false;
-            }
-
-            const cityName = (city.name || city.שם_ישוב || "").trim();
-            if (!cityName) return false;
-
-            const normalizedCityName = cityName.replace(/\s+/g, " ");
-            const normalizedSearch = searchValue.replace(/\s+/g, " ");
-
-            return (
-              normalizedCityName === normalizedSearch ||
-              normalizedCityName.toLowerCase() ===
-                normalizedSearch.toLowerCase() ||
-              normalizedCityName.replace(/['"()]/g, "").trim() ===
-                normalizedSearch.replace(/['"()]/g, "").trim()
+      // אם אין addressEnglish, נסה למצוא אותו מהמאגר
+      let finalAddressEnglish = addressEnglish;
+      if (!finalAddressEnglish && address) {
+        if (usingMyLocation) {
+          try {
+            const citiesPath = path.join(
+              __dirname,
+              "..",
+              "src",
+              "APIS",
+              "AdressFromIsrael.json"
             );
-          });
+            const citiesData = JSON.parse(fs.readFileSync(citiesPath, "utf8"));
+            const cities = Array.isArray(citiesData) ? citiesData : [];
 
-          if (foundCity && foundCity.english_name) {
-            finalAddressEnglish = foundCity.english_name;
+            const searchValue = address.trim();
+            const foundCity = cities.find((city) => {
+              // דלג על שורת הכותרת
+              if (city.name === "שם_ישוב" || city.שם_ישוב === "שם_ישוב") {
+                return false;
+              }
+
+              const cityName = (city.name || city.שם_ישוב || "").trim();
+              if (!cityName) return false;
+
+              const normalizedCityName = cityName.replace(/\s+/g, " ");
+              const normalizedSearch = searchValue.replace(/\s+/g, " ");
+
+              return (
+                normalizedCityName === normalizedSearch ||
+                normalizedCityName.toLowerCase() ===
+                  normalizedSearch.toLowerCase() ||
+                normalizedCityName.replace(/['"()]/g, "").trim() ===
+                  normalizedSearch.replace(/['"()]/g, "").trim()
+              );
+            });
+
+            if (foundCity && foundCity.english_name) {
+              finalAddressEnglish = foundCity.english_name;
+            }
+          } catch (error) {
+            console.error("Error loading cities data:", error.message);
           }
-        } catch (error) {
-          console.error("Error loading cities data:", error.message);
         }
       }
 
@@ -455,7 +457,9 @@ function findAvailablePort(startPort) {
         const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encoded}.json?country=il&access_token=${process.env.MAPBOX_TOKEN}`;
 
         try {
-          const response = await axios.get(url);
+          const response = await axios.get(url, {
+            timeout: 10000, // 10 seconds timeout
+          });
           if (response.data.features && response.data.features.length > 0) {
             return response.data;
           }
@@ -464,6 +468,13 @@ function findAvailablePort(startPort) {
             `Error searching for "${cleaned}"${label ? ` (${label})` : ""}:`,
             error.message
           );
+          // אם זה timeout, נחזיר null כדי להמשיך בלי קואורדינטות
+          if (
+            error.code === "ECONNABORTED" ||
+            error.message.includes("timeout")
+          ) {
+            console.error(`Timeout searching for address: "${cleaned}"`);
+          }
         }
         return null;
       };
@@ -557,8 +568,24 @@ function findAvailablePort(startPort) {
       if (existingUserByEmail) {
         return res.status(400).json({
           success: false,
-          message: "המייל כבר קיים במערכת",
+          message:
+            "המייל כבר בשימוש. אנא השתמש במייל אחר או התחבר לחשבון הקיים.",
         });
+      }
+
+      // בדיקה אם מספר הטלפון כבר קיים במערכת
+      if (phone && phone.trim()) {
+        const existingUserByPhone = await collection.findOne({
+          phone: phone.trim(),
+        });
+
+        if (existingUserByPhone) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "מספר הטלפון כבר בשימוש. אנא השתמש במספר טלפון אחר או התחבר לחשבון הקיים.",
+          });
+        }
       }
 
       // בדיקה אם משתמש Google כבר קיים (לפי googleId)
@@ -571,7 +598,7 @@ function findAvailablePort(startPort) {
         if (existingUserByGoogleId) {
           return res.status(400).json({
             success: false,
-            message: "משתמש Google כבר קיים במערכת",
+            message: "משתמש Google כבר קיים במערכת. אנא התחבר לחשבון הקיים.",
           });
         }
       }
@@ -783,8 +810,22 @@ function findAvailablePort(startPort) {
           .status(500)
           .json({ message: "Failed to register", success: false });
       }
-    } // end register-handyman handler
-  });
+    } catch (error) {
+      // תפוס כל שגיאה שלא נתפסה
+      console.error("❌ Error in /register-handyman:", error);
+      console.error("Error stack:", error.stack);
+
+      // ודא שהתשובה לא נשלחה כבר
+      if (!res.headersSent) {
+        return res.status(500).json({
+          success: false,
+          message: "שגיאה בהרשמה. אנא נסה שוב מאוחר יותר.",
+          error:
+            process.env.NODE_ENV === "development" ? error.message : undefined,
+        });
+      }
+    }
+  }); // end register-handyman handler
   async function calculateTravelTimes(userLng, userLat, handymen) {
     try {
       if (!process.env.MAPBOX_TOKEN) {
@@ -1042,8 +1083,6 @@ function findAvailablePort(startPort) {
       return handymen.map((h) => ({ ...h, travelTimeMinutes: null }));
     }
   }
-
-  // Helper: calculate distance between two coordinates in KM (Haversine)
   function calculateDistanceKm(lng1, lat1, lng2, lat2) {
     if (
       [lng1, lat1, lng2, lat2].some(
@@ -1065,8 +1104,6 @@ function findAvailablePort(startPort) {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return Math.round(R * c * 100) / 100; // two decimals
   }
-
-  // Jobs filtering for handyman (status + distance)
   app.get("/jobs/filter", async (req, res) => {
     try {
       if (!collectionJobs) {
@@ -1479,8 +1516,6 @@ function findAvailablePort(startPort) {
       });
     }
   });
-
-  // Get static map image for location (uses Mapbox Static Images API)
   app.get("/location-map-image", async (req, res) => {
     try {
       const { lat, lng, zoom = 15, width = 400, height = 300 } = req.query;
@@ -1512,8 +1547,6 @@ function findAvailablePort(startPort) {
       });
     }
   });
-
-  // ודא אינדקס 2dsphere על jobs.location
   async function ensureJobsGeoIndex() {
     try {
       const col = getCollectionJobs();
@@ -1964,8 +1997,6 @@ function findAvailablePort(startPort) {
       });
     }
   });
-
-  // Get job by ID
   app.get("/jobs/:jobId", async (req, res) => {
     try {
       const { jobId } = req.params;
@@ -2000,8 +2031,6 @@ function findAvailablePort(startPort) {
       });
     }
   });
-
-  // Get messages for a job
   app.get("/jobs/:jobId/messages", async (req, res) => {
     try {
       const { jobId } = req.params;
@@ -2031,8 +2060,6 @@ function findAvailablePort(startPort) {
       });
     }
   });
-
-  // Send a message
   app.post("/jobs/:jobId/messages", async (req, res) => {
     try {
       const { jobId } = req.params;
@@ -2137,7 +2164,6 @@ function findAvailablePort(startPort) {
       });
     }
   });
-
   app.post("/jobs/rate", async (req, res) => {
     try {
       const { jobId, handymanId, customerId, rating, review } = req.body;
@@ -2243,8 +2269,6 @@ function findAvailablePort(startPort) {
       });
     }
   });
-
-  // Get rating for a specific job
   app.get("/ratings/job/:jobId", async (req, res) => {
     try {
       const { jobId } = req.params;
@@ -2282,8 +2306,6 @@ function findAvailablePort(startPort) {
       });
     }
   });
-
-  // Get all ratings for a handyman with earnings calculation
   app.get("/ratings/handyman/:handymanId", async (req, res) => {
     try {
       const { handymanId } = req.params;

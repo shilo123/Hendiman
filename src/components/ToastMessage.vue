@@ -6,6 +6,7 @@
           type === "success" ? "✓" : type === "error" ? "✕" : "⚠"
         }}</span>
         <span class="toast-message">{{ content }}</span>
+        <button class="toast-close" @click="hide" aria-label="סגור">✕</button>
       </div>
     </div>
   </Transition>
@@ -89,6 +90,7 @@ export default {
   align-items: center;
   gap: 12px;
   color: #ffffff;
+  position: relative;
 }
 
 .toast-icon {
@@ -109,6 +111,33 @@ export default {
   font-weight: 500;
   line-height: 1.5;
   flex: 1;
+}
+
+.toast-close {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #ffffff;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: bold;
+  padding: 0;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
 }
 
 @keyframes slideInDown {

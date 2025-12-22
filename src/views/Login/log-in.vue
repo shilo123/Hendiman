@@ -177,7 +177,8 @@ export default {
             const user = JSON.parse(decodeURIComponent(userData));
             this.toast.showSuccess("התחברות עם Google בוצעה בהצלחה!");
             this.username = user.username;
-            this.password = user.email;
+            // השתמש ב-googleId כסיסמה, לא במייל
+            this.password = user.googleId || user._id?.toString() || user.email;
             this.googleId = user.googleId;
             await this.handleLogin();
           } catch (error) {
