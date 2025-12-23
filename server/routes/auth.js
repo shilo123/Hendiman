@@ -46,7 +46,7 @@ function setupAuthRoutes(app, URL_CLIENT, collection) {
             tab = stateData.tab || "client";
           }
         } catch (e) {
-          console.warn("⚠️ Could not parse state parameter:", e);
+          // Silent fail - use defaults
         }
 
         // Check if user already exists in database
@@ -58,16 +58,9 @@ function setupAuthRoutes(app, URL_CLIENT, collection) {
             });
             userExists = !!existingUser;
           } catch (dbError) {
-            console.error("❌ Database error checking user:", dbError);
+            // Silent fail
           }
         }
-
-        // Debug logging
-        console.log("🔍 Google OAuth Callback:");
-        console.log("  - source:", source);
-        console.log("  - tab:", tab);
-        console.log("  - googleId:", req.user.googleId);
-        console.log("  - userExists:", userExists);
 
         // Successful authentication - redirect to frontend with token or user data
         const userData = encodeURIComponent(JSON.stringify(req.user));
@@ -84,10 +77,8 @@ function setupAuthRoutes(app, URL_CLIENT, collection) {
           redirectUrl = `${URL_CLIENT}/login?googleAuth=success&user=${userData}`;
         }
 
-        console.log("  - redirectUrl:", redirectUrl);
         res.redirect(redirectUrl);
       } catch (error) {
-        console.error("❌ Google OAuth Callback error:", error);
         return res.redirect(`${URL_CLIENT}/login?error=callback_error`);
       }
     }

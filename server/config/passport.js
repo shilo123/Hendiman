@@ -5,7 +5,16 @@ const { ObjectId } = require("mongodb");
 function setupPassport(collection) {
   const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
   const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-  const URL_SERVER = process.env.SERVER_URL || "http://localhost:3003";
+
+  // Use SERVER_URL from environment
+  // In production, SERVER_URL MUST be set in .env (e.g., https://yourdomain.com)
+  // In development, fallback to localhost
+  let URL_SERVER = process.env.SERVER_URL;
+
+  if (!URL_SERVER) {
+    URL_SERVER = "http://localhost:3003";
+  }
+
   const callbackURL = `${URL_SERVER}/auth/google/callback`;
 
   // Passport serialization (must be defined before strategies)
@@ -38,9 +47,7 @@ function setupPassport(collection) {
 
   // Google OAuth Strategy
   if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
-    const URL_SERVER = process.env.SERVER_URL || "http://localhost:3003";
-    const callbackURL = `${URL_SERVER}/auth/google/callback`;
-
+    // Use the same URL_SERVER and callbackURL defined above
     passport.use(
       new GoogleStrategy(
         {
