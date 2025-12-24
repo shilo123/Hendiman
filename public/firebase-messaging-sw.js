@@ -44,9 +44,7 @@ self.addEventListener("activate", (event) => {
 // ⚠️ CRITICAL: This handler MUST exist for notifications to work when app is closed
 // Service Worker can ONLY show notifications if payload.notification exists
 messaging.onBackgroundMessage((payload) => {
-  console.log("[Service Worker] Received background message:", payload);
-
-  // Firebase automatically provides payload.notification when using notification field in message
+  // ⚠️ CRITICAL: Firebase automatically provides payload.notification when using notification field in message
   // This is REQUIRED - without notification field, Service Worker cannot show notification
   const notificationTitle =
     payload.notification?.title || payload.data?.title || "הודעה חדשה";
@@ -68,6 +66,7 @@ messaging.onBackgroundMessage((payload) => {
 
   // ⚠️ MUST use self.registration.showNotification for background messages
   // This is the ONLY way to show notifications when app is closed
+  // This works even when tab is closed, browser is in background, or screen is locked
   return self.registration.showNotification(
     notificationTitle,
     notificationOptions

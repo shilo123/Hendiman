@@ -2680,47 +2680,49 @@ app.head("/health-check", (req, res) => {
         });
       }
 
-      // Send Push Notification to recipient
+      // Send Push Notification to recipient - CRITICAL: Send on EVERY message
       const usersCol = getCollection();
       try {
         if (senderIsHandyman) {
           // Handyman sent message, notify client
-          const clientObjectId =
-            customerId instanceof ObjectId
-              ? customerId
-              : new ObjectId(customerId);
-          const client = await usersCol.findOne({ _id: clientObjectId });
+          if (customerId) {
+            const clientObjectId =
+              customerId instanceof ObjectId
+                ? customerId
+                : new ObjectId(customerId);
+            const client = await usersCol.findOne({ _id: clientObjectId });
 
-          if (client?.fcmToken) {
-            const handymanName =
-              Array.isArray(job.handymanName) && job.handymanName.length > 0
-                ? job.handymanName[0]
-                : "ההנדימן";
+            if (client?.fcmToken) {
+              const handymanName =
+                Array.isArray(job.handymanName) && job.handymanName.length > 0
+                  ? job.handymanName[0]
+                  : "ההנדימן";
 
-            const messagePreview = text
-              ? text.substring(0, 50) + (text.length > 50 ? "..." : "")
-              : imageUrl
-              ? "📷 תמונה"
-              : location
-              ? "📍 מיקום"
-              : "הודעה חדשה";
+              const messagePreview = text
+                ? text.substring(0, 50) + (text.length > 50 ? "..." : "")
+                : imageUrl
+                ? "📷 תמונה"
+                : location
+                ? "📍 מיקום"
+                : "הודעה חדשה";
 
-            const pushResult = await sendPushNotification(
-              client.fcmToken,
-              handymanName,
-              messagePreview,
-              {
-                type: "new_message",
-                jobId: jobId.toString(),
-                senderId: senderId.toString(),
-              }
-            );
-
-            if (pushResult.shouldRemove) {
-              await usersCol.updateOne(
-                { _id: clientObjectId },
-                { $unset: { fcmToken: "" } }
+              const pushResult = await sendPushNotification(
+                client.fcmToken,
+                handymanName,
+                messagePreview,
+                {
+                  type: "new_message",
+                  jobId: jobId.toString(),
+                  senderId: senderId.toString(),
+                }
               );
+
+              if (pushResult.shouldRemove) {
+                await usersCol.updateOne(
+                  { _id: clientObjectId },
+                  { $unset: { fcmToken: "" } }
+                );
+              }
             }
           }
         } else {

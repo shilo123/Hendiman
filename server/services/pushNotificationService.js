@@ -42,15 +42,15 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
   try {
     initializeFirebaseAdmin();
 
+    // ⚠️ CRITICAL for Web Push: Payload structure
     const message = {
-      // ⚠️ CRITICAL: notification field is REQUIRED for background messages (when app is closed)
-      // Service Worker can ONLY show notifications if payload.notification exists
+      // Root-level notification - REQUIRED for Service Worker background messages
       notification: {
         title: title,
         body: body,
         icon: "/icon-192x192.png",
       },
-      // Additional data for the app to use (optional)
+      // Data field for navigation and app logic (optional)
       data: {
         ...data,
         // Convert all data values to strings (FCM requirement)
@@ -60,12 +60,9 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
         }, {}),
       },
       token: fcmToken,
-      // Android priority - ensures high priority delivery
-      android: {
-        priority: "high",
-      },
-      // Web push specific options - REQUIRED for web browsers
+      // ⚠️ CRITICAL for Web Push: webpush configuration - This is what makes it work when app is closed
       webpush: {
+        // Notification payload specifically for web browsers - REQUIRED
         notification: {
           title: title,
           body: body,
@@ -74,13 +71,19 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
           dir: "rtl", // Right-to-left for Hebrew
           requireInteraction: false,
         },
+        // FCM options for web
         fcmOptions: {
           link: "/", // Link to open when notification is clicked
         },
-        // Add priority headers for web push
+        // ⚠️ CRITICAL: Headers for web push delivery - ensures reliable delivery
         headers: {
-          Urgency: "high",
+          Urgency: "high", // High urgency for immediate delivery (not "normal")
+          TTL: "86400", // 24 hours in seconds - how long message is stored if device is offline
         },
+      },
+      // Android priority (for Android apps, not web)
+      android: {
+        priority: "high",
       },
       // APNS for iOS devices (if needed)
       apns: {
@@ -134,12 +137,13 @@ async function sendPushNotificationToMultiple(
     }
 
     const messages = fcmTokens.map((token) => ({
-      // ⚠️ CRITICAL: notification field is REQUIRED for background messages
+      // Root-level notification - REQUIRED for Service Worker background messages
       notification: {
         title: title,
         body: body,
         icon: "/icon-192x192.png",
       },
+      // Data field for navigation and app logic
       data: {
         ...data,
         ...Object.keys(data).reduce((acc, key) => {
@@ -148,9 +152,7 @@ async function sendPushNotificationToMultiple(
         }, {}),
       },
       token: token,
-      android: {
-        priority: "high",
-      },
+      // ⚠️ CRITICAL for Web Push: webpush configuration
       webpush: {
         notification: {
           title: title,
@@ -165,7 +167,11 @@ async function sendPushNotificationToMultiple(
         },
         headers: {
           Urgency: "high",
+          TTL: "86400",
         },
+      },
+      android: {
+        priority: "high",
       },
       apns: {
         headers: {
