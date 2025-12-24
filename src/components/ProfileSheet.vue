@@ -123,6 +123,18 @@
           </div>
         </section>
 
+        <!-- Logout section -->
+        <section class="card">
+          <button
+            class="logoutBtn"
+            type="button"
+            @click="handleLogout"
+            :disabled="isLoggingOut"
+          >
+            {{ isLoggingOut ? "מתנתק..." : "התנתק" }}
+          </button>
+        </section>
+
         <!-- Danger zone -->
         <section class="card card--danger">
           <div class="card__head card__head--row">
@@ -241,7 +253,7 @@ export default {
     user: { type: Object, default: () => ({}) },
     isHandyman: { type: Boolean, default: false },
   },
-  emits: ["close", "save", "delete-user"],
+  emits: ["close", "save", "delete-user", "logout"],
   data() {
     return {
       form: this.buildForm(this.user),
@@ -257,6 +269,7 @@ export default {
 
       showDeleteConfirm: false,
       isDeleting: false,
+      isLoggingOut: false,
     };
   },
   computed: {
@@ -396,6 +409,28 @@ export default {
         alert(errorMessage);
       } finally {
         this.isDeleting = false;
+      }
+    },
+
+    async handleLogout() {
+      this.isLoggingOut = true;
+      try {
+        // Call logout endpoint
+        await axios.get(`${URL}/auth/logout`);
+
+        // Emit logout event to parent
+        this.$emit("logout");
+        this.$emit("close");
+
+        // Redirect to home page
+        this.$router.push("/");
+      } catch (error) {
+        // Even if logout fails on server, still redirect
+        this.$emit("logout");
+        this.$emit("close");
+        this.$router.push("/");
+      } finally {
+        this.isLoggingOut = false;
       }
     },
   },
@@ -687,6 +722,28 @@ $orange2: #ff8a2b;
   color: $muted;
   font-weight: 800;
   font-size: 12px;
+}
+
+.logoutBtn {
+  width: 100%;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba($orange, 0.35);
+  background: rgba($orange, 0.12);
+  color: $orange;
+  font-weight: 1000;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.logoutBtn:hover:not(:disabled) {
+  background: rgba($orange, 0.18);
+  border-color: rgba($orange, 0.45);
+}
+
+.logoutBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .dangerBtn {

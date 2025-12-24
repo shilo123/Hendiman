@@ -2416,10 +2416,33 @@ app.head("/health-check", (req, res) => {
       };
 
       await jobsCol.updateOne(query, { $set: { status: "done" } });
-      await usersCol.updateOne(
-        { _id: new ObjectId(handymanId) },
-        { $inc: { jobDone: 1 } }
-      );
+
+      // Update jobDone for handyman (handle both array and single handymanId)
+      if (job.handymanId) {
+        const handymanIds = Array.isArray(job.handymanId)
+          ? job.handymanId
+          : [job.handymanId];
+        const handymanIdString = handymanId.toString();
+
+        // Find the handyman in the array that matches
+        for (const hId of handymanIds) {
+          if (String(hId) === handymanIdString) {
+            const handymanObjectId =
+              hId instanceof ObjectId ? hId : new ObjectId(hId);
+            await usersCol.updateOne(
+              { _id: handymanObjectId },
+              { $inc: { jobDone: 1 } }
+            );
+            break;
+          }
+        }
+      } else {
+        // Fallback to provided handymanId if job.handymanId is not set
+        await usersCol.updateOne(
+          { _id: new ObjectId(handymanId) },
+          { $inc: { jobDone: 1 } }
+        );
+      }
 
       // Emit WebSocket event to notify clients
       const io = req.app.get("io");
@@ -2896,6 +2919,20 @@ app.head("/health-check", (req, res) => {
         }
       } catch (pushError) {
         // Don't fail the request if push notification fails
+      }
+
+      // Update jobDone for handyman when rating is submitted
+      try {
+        const handymanObjectId =
+          finalHandymanId instanceof ObjectId
+            ? new ObjectId(finalHandymanId)
+            : new ObjectId(finalHandymanId);
+        await usersCol.updateOne(
+          { _id: handymanObjectId },
+          { $inc: { jobDone: 1 } }
+        );
+      } catch (jobDoneError) {
+        // Don't fail the request if jobDone update fails
       }
 
       // Calculate average rating for handyman from all ratings

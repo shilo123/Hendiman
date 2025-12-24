@@ -82,13 +82,13 @@
       </button>
 
       <!-- Handyman: one smart status button instead of 3 blocks -->
-      <div v-if="isHandyman && nextStatus" class="status-update-section">
-        <span class="status-update-label">עדכון סטטוס ללקוח:</span>
+      <div v-if="isHandyman && nextStatus" class="status-update-wrapper">
         <button
-          class="chip chip--primary"
+          class="chip chip--primary status-update-btn"
           type="button"
           @click="updateStatus(nextStatus)"
         >
+          <span class="status-update-label-inline">עדכון סטטוס ללקוח:</span>
           {{ nextStatusLabel }}
         </button>
       </div>
@@ -1459,9 +1459,22 @@ export default {
       try {
         const job = this.currentJob;
         const endpoint = `/jobs/${newStatus.replaceAll("_", "-")}`;
+
+        // Get handymanId - handle both array and single value
+        let handymanId = job.handymanId;
+        if (Array.isArray(handymanId) && handymanId.length > 0) {
+          // If it's an array, use the first handyman (or find current user's ID)
+          const userId = this.store.user?._id || this.store.user?.id;
+          const userIdString = userId?.toString();
+          const foundHandyman = handymanId.find(
+            (id) => String(id) === userIdString
+          );
+          handymanId = foundHandyman || handymanId[0];
+        }
+
         await axios.post(`${URL}${endpoint}`, {
           jobId: job._id || job.id,
-          handymanId: job.handymanId,
+          handymanId: handymanId,
         });
 
         // Show success message with status info
@@ -1507,9 +1520,16 @@ export default {
           return;
         }
 
+        // Get handymanId - handle both array and single value
+        let handymanId = job.handymanId;
+        if (Array.isArray(handymanId) && handymanId.length > 0) {
+          // If it's an array, use the first handyman (usually there's only one for rating)
+          handymanId = handymanId[0];
+        }
+
         await axios.post(`${URL}/jobs/rate`, {
           jobId: job._id || job.id,
-          handymanId: job.handymanId,
+          handymanId: handymanId,
           customerId,
           rating: this.rating,
           review: this.reviewText,
@@ -1763,18 +1783,22 @@ $orange2: #ff8a2b;
 }
 
 /* Action chips */
-.status-update-section {
+.status-update-wrapper {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: flex-start;
+  align-items: center;
 }
 
-.status-update-label {
+.status-update-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.status-update-label-inline {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.7);
-  font-weight: 600;
-  padding: 0 4px;
+  opacity: 0.85;
+  font-weight: 500;
 }
 
 .chat__actions {

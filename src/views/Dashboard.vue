@@ -161,6 +161,7 @@
           :isHandyman="isHendiman"
           @close="showProfileSheet = false"
           @save="onSaveProfile"
+          @logout="onLogout"
         />
         <!-- Job Cancelled Modal -->
         <div v-if="showJobCancelledModal" class="jobCancelledModal" dir="rtl">
@@ -212,7 +213,7 @@ import axios from "axios";
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
 import { io } from "socket.io-client";
-import { messaging, VAPID_KEY, getToken } from "@/firebase";
+import { messaging, VAPID_KEY, getToken, onMessage } from "@/firebase";
 
 export default {
   name: "DashboardView",
@@ -1016,6 +1017,20 @@ export default {
       this.isChatMinimized = false;
     },
 
+    async onLogout() {
+      try {
+        // Clear store data
+        this.store.user = null;
+        this.store.jobs = [];
+
+        // Redirect to home
+        this.$router.push("/");
+      } catch (error) {
+        // Even if there's an error, redirect to home
+        this.$router.push("/");
+      }
+    },
+
     async enablePushNotifications() {
       // Check if browser supports notifications
       if (!("Notification" in window) || !("serviceWorker" in navigator)) {
@@ -1052,6 +1067,29 @@ export default {
             // Always update the token on server (even if it's the same or changed)
             await this.saveTokenToServer(token);
           }
+
+          // Set up message handler for when app is in foreground
+          onMessage(messaging, (payload) => {
+            // Show notification when app is open
+            const notificationTitle =
+              payload.notification?.title || "הודעה חדשה";
+            const notificationBody =
+              payload.notification?.body || "יש לך הודעה חדשה";
+
+            // Show browser notification
+            if (
+              "Notification" in window &&
+              Notification.permission === "granted"
+            ) {
+              new Notification(notificationTitle, {
+                body: notificationBody,
+                icon: payload.notification?.icon || "/icon-192x192.png",
+                badge: "/icon-192x192.png",
+                dir: "rtl",
+                tag: payload.data?.jobId || "default",
+              });
+            }
+          });
         }
       } catch (error) {
         // Silently fail if notification setup fails
