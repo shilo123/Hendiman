@@ -1022,51 +1022,39 @@ export default {
         return;
       }
 
-      // Check if permission already granted
-      if (Notification.permission === "granted") {
-        try {
-          // Register service worker
-          const registration = await navigator.serviceWorker.register(
-            "/firebase-messaging-sw.js"
-          );
+      // If permission is denied, don't try to get token
+      if (Notification.permission === "denied") {
+        return;
+      }
 
-          // Get FCM token
-          if (messaging) {
-            const token = await getToken(messaging, {
-              vapidKey: VAPID_KEY,
-              serviceWorkerRegistration: registration,
-            });
-
-            if (token) {
-              // שמור את ה-token בשרת
-              await this.saveTokenToServer(token);
-            }
-          }
-        } catch (error) {}
-      } else if (Notification.permission === "default") {
-        // Request permission
-        try {
+      try {
+        // If permission is default, request it
+        if (Notification.permission === "default") {
           const permission = await Notification.requestPermission();
-          if (permission === "granted") {
-            // Register service worker
-            const registration = await navigator.serviceWorker.register(
-              "/firebase-messaging-sw.js"
-            );
-
-            // Get FCM token
-            if (messaging) {
-              const token = await getToken(messaging, {
-                vapidKey: VAPID_KEY,
-                serviceWorkerRegistration: registration,
-              });
-
-              if (token) {
-                // שמור את ה-token בשרת
-                await this.saveTokenToServer(token);
-              }
-            }
+          if (permission !== "granted") {
+            return; // User denied permission
           }
-        } catch (error) {}
+        }
+
+        // Register service worker (or get existing registration)
+        const registration = await navigator.serviceWorker.register(
+          "/firebase-messaging-sw.js"
+        );
+
+        // Get FCM token (this will always get the current token, even if it changed)
+        if (messaging) {
+          const token = await getToken(messaging, {
+            vapidKey: VAPID_KEY,
+            serviceWorkerRegistration: registration,
+          });
+
+          if (token) {
+            // Always update the token on server (even if it's the same or changed)
+            await this.saveTokenToServer(token);
+          }
+        }
+      } catch (error) {
+        // Silently fail if notification setup fails
       }
     },
 
