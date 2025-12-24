@@ -43,7 +43,7 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
     initializeFirebaseAdmin();
 
     const message = {
-      // CRITICAL: notification field is REQUIRED for background messages (when app is closed)
+      // ⚠️ CRITICAL: notification field is REQUIRED for background messages (when app is closed)
       // Service Worker can ONLY show notifications if payload.notification exists
       notification: {
         title: title,
@@ -60,6 +60,10 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
         }, {}),
       },
       token: fcmToken,
+      // Android priority - ensures high priority delivery
+      android: {
+        priority: "high",
+      },
       // Web push specific options - REQUIRED for web browsers
       webpush: {
         notification: {
@@ -68,10 +72,26 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
           icon: "/icon-192x192.png",
           badge: "/icon-192x192.png",
           dir: "rtl", // Right-to-left for Hebrew
-          requireInteraction: false, // Changed to false so it doesn't block user
+          requireInteraction: false,
         },
         fcmOptions: {
           link: "/", // Link to open when notification is clicked
+        },
+        // Add priority headers for web push
+        headers: {
+          Urgency: "high",
+        },
+      },
+      // APNS for iOS devices (if needed)
+      apns: {
+        headers: {
+          "apns-priority": "10",
+        },
+        payload: {
+          aps: {
+            sound: "default",
+            badge: 1,
+          },
         },
       },
     };
@@ -114,7 +134,7 @@ async function sendPushNotificationToMultiple(
     }
 
     const messages = fcmTokens.map((token) => ({
-      // CRITICAL: notification field is REQUIRED for background messages
+      // ⚠️ CRITICAL: notification field is REQUIRED for background messages
       notification: {
         title: title,
         body: body,
@@ -128,6 +148,9 @@ async function sendPushNotificationToMultiple(
         }, {}),
       },
       token: token,
+      android: {
+        priority: "high",
+      },
       webpush: {
         notification: {
           title: title,
@@ -139,6 +162,20 @@ async function sendPushNotificationToMultiple(
         },
         fcmOptions: {
           link: "/",
+        },
+        headers: {
+          Urgency: "high",
+        },
+      },
+      apns: {
+        headers: {
+          "apns-priority": "10",
+        },
+        payload: {
+          aps: {
+            sound: "default",
+            badge: 1,
+          },
         },
       },
     }));
