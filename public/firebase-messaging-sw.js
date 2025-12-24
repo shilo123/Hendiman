@@ -24,25 +24,75 @@ firebase.initializeApp({
 // messages.
 const messaging = firebase.messaging();
 
-// Optional:
-// If you want to customize the notification that appears when a message is received
-// while the app is in the background, you can set a default background message handler
-// here. For more information, see:
-// https://firebase.google.com/docs/cloud-messaging/js/receive#handle_background_messages
+// Handle service worker updates
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
+// Handle service worker activation
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    clients.claim().then(() => {
+      // Service worker is now active and controlling all clients
+    })
+  );
+});
+
+// Handle background messages when app is closed or in background
+// ⚠️ CRITICAL: This handler MUST exist for notifications to work when app is closed
+// Service Worker can ONLY show notifications if payload.notification exists
 messaging.onBackgroundMessage((payload) => {
-  // Customize notification here
-  const notificationTitle = payload.notification?.title || "הודעה חדשה";
+  console.log("[Service Worker] Received background message:", payload);
+
+  // Firebase automatically provides payload.notification when using notification field in message
+  // This is REQUIRED - without notification field, Service Worker cannot show notification
+  const notificationTitle =
+    payload.notification?.title || payload.data?.title || "הודעה חדשה";
+  const notificationBody =
+    payload.notification?.body || payload.data?.body || "יש לך הודעה חדשה";
+  const notificationIcon = payload.notification?.icon || "/icon-192x192.png";
+
   const notificationOptions = {
-    body: payload.notification?.body || "יש לך הודעה חדשה",
-    icon: payload.notification?.icon || "/icon-192x192.png",
+    body: notificationBody,
+    icon: notificationIcon,
     badge: "/icon-192x192.png",
-    tag: payload.data?.tag || "default",
-    requireInteraction: true,
+    tag: payload.data?.jobId || payload.data?.tag || "default",
+    requireInteraction: false,
     dir: "rtl",
+    data: payload.data || {},
+    vibrate: [200, 100, 200],
+    timestamp: Date.now(),
   };
 
+  // ⚠️ MUST use self.registration.showNotification for background messages
+  // This is the ONLY way to show notifications when app is closed
   return self.registration.showNotification(
     notificationTitle,
     notificationOptions
+  );
+});
+
+// Handle notification clicks
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  // Open the app when notification is clicked
+  event.waitUntil(
+    clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        // If app is already open, focus it
+        for (const client of clientList) {
+          if (client.url === self.location.origin && "focus" in client) {
+            return client.focus();
+          }
+        }
+        // Otherwise open new window
+        if (clients.openWindow) {
+          return clients.openWindow(self.location.origin);
+        }
+      })
   );
 });

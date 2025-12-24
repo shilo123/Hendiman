@@ -1051,21 +1051,49 @@ export default {
           }
         }
 
-        // Register service worker (or get existing registration)
-        const registration = await navigator.serviceWorker.register(
-          "/firebase-messaging-sw.js"
+        // Wait for service worker to be ready
+        let registration = await navigator.serviceWorker.ready;
+
+        // Register or update service worker (force update check)
+        registration = await navigator.serviceWorker.register(
+          "/firebase-messaging-sw.js",
+          { updateViaCache: "none" } // Always check for updates
         );
+
+        // Wait for service worker to be ready after registration
+        if (registration.waiting) {
+          // If there's a waiting service worker, skip waiting
+          registration.waiting.postMessage({ type: "SKIP_WAITING" });
+        }
+
+        if (registration.installing) {
+          // Wait for installation to complete
+          await new Promise((resolve) => {
+            registration.installing.addEventListener(
+              "statechange",
+              function () {
+                if (this.state === "installed") {
+                  resolve();
+                }
+              }
+            );
+          });
+        }
 
         // Get FCM token (this will always get the current token, even if it changed)
         if (messaging) {
-          const token = await getToken(messaging, {
-            vapidKey: VAPID_KEY,
-            serviceWorkerRegistration: registration,
-          });
+          try {
+            const token = await getToken(messaging, {
+              vapidKey: VAPID_KEY,
+              serviceWorkerRegistration: registration,
+            });
 
-          if (token) {
-            // Always update the token on server (even if it's the same or changed)
-            await this.saveTokenToServer(token);
+            if (token) {
+              // Always update the token on server (even if it's the same or changed)
+              await this.saveTokenToServer(token);
+            }
+          } catch (tokenError) {
+            // Token error - might be permission issue or service worker issue
           }
 
           // Set up message handler for when app is in foreground
