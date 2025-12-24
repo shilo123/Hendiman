@@ -14,8 +14,6 @@ if (hasCredentials) {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   };
-} else {
-  console.warn("⚠️  AWS credentials not configured. S3 uploads will fail.");
 }
 
 const s3 = new S3Client(s3Config);

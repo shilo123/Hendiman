@@ -6,12 +6,10 @@
         <div class="luxTop__title">צ'אט עבודה</div>
         <div class="luxTop__meta">
           <span class="luxTop__name">{{
-            isHandyman ? clientName : handymanName
+            isHandyman ? clientName : getHandymanName()
           }}</span>
           <span class="luxTop__sep">•</span>
-          <span class="luxTop__sub">{{
-            jobInfo?.subcategoryInfo?.name || "עבודה"
-          }}</span>
+          <span class="luxTop__sub">{{ getJobDisplayName() || "עבודה" }}</span>
         </div>
       </div>
 
@@ -80,7 +78,7 @@
         <div class="sideCard__hero">
           <div class="sideCard__badge">קריאה</div>
           <div class="sideCard__headline">
-            {{ jobInfo?.subcategoryInfo?.name || "עבודה" }}
+            {{ getJobDisplayName() || "עבודה" }}
           </div>
           <div class="sideCard__desc">
             סטטוס: <b>{{ statusLabel }}</b>
@@ -568,6 +566,13 @@ export default {
       return this.job?.clientName || "לקוח";
     },
     handymanName() {
+      // Handle handymanName as array
+      if (
+        Array.isArray(this.job?.handymanName) &&
+        this.job.handymanName.length > 0
+      ) {
+        return this.job.handymanName[0]; // Return first handyman name
+      }
       return this.job?.handymanName || "הנדימן";
     },
     jobInfo() {
@@ -734,6 +739,42 @@ export default {
       }
     },
 
+    getJobDisplayName() {
+      if (!this.jobInfo) return "עבודה";
+      // Handle subcategoryInfo as array
+      if (
+        Array.isArray(this.jobInfo.subcategoryInfo) &&
+        this.jobInfo.subcategoryInfo.length > 0
+      ) {
+        if (this.jobInfo.subcategoryInfo.length === 1) {
+          // Single job - show name
+          return (
+            this.jobInfo.subcategoryInfo[0].subcategory ||
+            this.jobInfo.subcategoryInfo[0].category ||
+            "עבודה"
+          );
+        } else {
+          // Multiple jobs - show count
+          return `${this.jobInfo.subcategoryInfo.length} עבודות`;
+        }
+      }
+      // Fallback for old format (object) or no subcategoryInfo
+      return (
+        this.jobInfo.subcategoryInfo?.name ||
+        this.jobInfo.subcategoryInfo?.subcategory ||
+        "עבודה"
+      );
+    },
+    getHandymanName() {
+      // Handle handymanName as array
+      if (
+        Array.isArray(this.job?.handymanName) &&
+        this.job.handymanName.length > 0
+      ) {
+        return this.job.handymanName[0]; // Return first handyman name
+      }
+      return this.job?.handymanName || "הנדימן";
+    },
     async loadMessages() {
       try {
         const jobId = this.job?.id || this.job?._id;
@@ -1147,7 +1188,6 @@ export default {
         // Message will be added via WebSocket, but we already added it optimistically
         // The WebSocket handler will check for duplicates
       } catch (error) {
-        console.error("Error sending message:", error);
         // Remove the optimistic message on error
         const index = this.messages.findIndex(
           (m) =>
@@ -1308,7 +1348,6 @@ export default {
         this.$emit("status-updated", newStatus);
       } catch (err) {
         this.toast.showError("שגיאה בעדכון הסטטוס");
-        console.error(err);
       }
     },
 
@@ -1342,7 +1381,6 @@ export default {
         );
       } catch (err) {
         this.toast.showError("שגיאה בשליחת הדירוג");
-        console.error(err);
       }
     },
 
@@ -1373,7 +1411,6 @@ export default {
         this.showCancelConfirmModal = false;
         this.$emit("cancel-job");
       } catch (error) {
-        console.error("Error cancelling job:", error);
         this.toast.showError("שגיאה בביטול העבודה");
         this.showCancelConfirmModal = false;
       }
@@ -1642,7 +1679,7 @@ $orange2: #ff8a2b;
 .cancelConfirmModal {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: 100002;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2430,7 +2467,7 @@ $orange2: #ff8a2b;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: 100002;
   padding: 16px;
   animation: fadeIn 0.2s ease;
 }

@@ -222,7 +222,6 @@ function findAvailablePort(startPort) {
     collection = getCollection();
     collectionJobs = getCollectionJobs();
     } catch (error) {
-    console.error("Error connecting to MongoDB:", error);
   }
   //
 
@@ -364,13 +363,11 @@ function findAvailablePort(startPort) {
             finalAddressEnglish = foundCity.english_name;
           }
         } catch (error) {
-          console.error("Error loading cities data:", error.message);
         }
       }
 
       // בדוק אם יש MAPBOX_TOKEN
       if (!process.env.MAPBOX_TOKEN) {
-        console.error("⚠️ MAPBOX_TOKEN is not defined in .env file");
         return res.status(500).json({
           success: false,
           message:
@@ -405,10 +402,6 @@ function findAvailablePort(startPort) {
             return response.data;
           }
         } catch (error) {
-          console.error(
-            `Error searching for "${cleaned}"${label ? ` (${label})` : ""}:`,
-            error.message
-          );
         }
         return null;
       };
@@ -439,13 +432,6 @@ function findAvailablePort(startPort) {
         !Coordinates.features ||
         Coordinates.features.length === 0
       ) {
-        console.error(
-          "⚠️ Address not found in Mapbox, continuing without coordinates:",
-          {
-            addressEnglish: finalAddressEnglish,
-            address: address,
-          }
-        );
         // נמשיך בלי קואורדינטות - לא נחזיר שגיאה
       }
 
@@ -481,7 +467,6 @@ function findAvailablePort(startPort) {
           }
         }
       } catch (coordError) {
-        console.error("Error extracting coordinates:", coordError.message);
         // נמשיך גם בלי קואורדינטות
       }
 
@@ -495,12 +480,6 @@ function findAvailablePort(startPort) {
       });
 
       if (existingUserByName) {
-        console.error("❌ Username already exists:", fullName);
-        console.error("   Existing user:", {
-          _id: existingUserByName._id,
-          username: existingUserByName.username,
-          email: existingUserByName.email,
-        });
         return res.status(400).json({
           success: false,
           message: "השם כבר קיים במערכת",
@@ -513,7 +492,6 @@ function findAvailablePort(startPort) {
       });
 
       if (existingUserByEmail) {
-        console.error("❌ Email already exists:", email);
         return res.status(400).json({
           success: false,
           message: "המייל כבר קיים במערכת",
@@ -723,10 +701,6 @@ function findAvailablePort(startPort) {
           });
           return res.json({ success: true, user: savedUser });
         } catch (findError) {
-          console.error(
-            "⚠️ Error retrieving saved user, but registration succeeded:",
-            findError.message
-          );
           // Return success anyway with the insertedId
           return res.json({
             success: true,
@@ -738,19 +712,11 @@ function findAvailablePort(startPort) {
           });
         }
       } else {
-        console.error("❌ Failed to save user - no insertedId returned");
         return res
           .status(500)
           .json({ message: "Failed to register", success: false });
       }
     } catch (error) {
-      console.error("❌ Error in register-handyman:", error);
-      console.error("❌ Error stack:", error.stack);
-      console.error("❌ Error details:", {
-        message: error.message,
-        name: error.name,
-        code: error.code,
-      });
       return res.status(500).json({
         message: error.message || "Error registering user",
         success: false,

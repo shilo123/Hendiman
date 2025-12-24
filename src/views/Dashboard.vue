@@ -29,8 +29,9 @@
       <!-- Job Chat (when job is assigned) -->
       <component
         :is="isMobile ? 'JobChatMobile' : 'JobChat'"
-        v-if="currentAssignedJob && !isChatMinimized"
+        v-if="(currentAssignedJob || activeAssignedJob) && !isChatMinimized"
         :job="currentAssignedJob"
+        :jobs="currentAssignedJobs.length > 1 ? currentAssignedJobs : undefined"
         :isHandyman="isHendiman"
         @minimize="isChatMinimized = true"
         @status-updated="onJobStatusUpdated"
@@ -81,6 +82,7 @@
           @pick-status="onPickStatus"
           @change-km="onChangeKm"
           @reset-km="onResetKm"
+          @change-location-type="onChangeLocationType"
           @skip="onSkip"
           @accept="onAccept"
           @view="onView"
@@ -209,6 +211,7 @@ import axios from "axios";
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
 import { io } from "socket.io-client";
+import { messaging, VAPID_KEY, getToken } from "@/firebase";
 
 export default {
   name: "DashboardView",
@@ -262,7 +265,8 @@ export default {
         specialties: [],
       },
       socket: null,
-      handymanFilters: { maxKm: 25 },
+      handymanFilters: { maxKm: 25, locationType: "residence" }, // "myLocation" or "residence"
+      geoCoordinates: null, // For "myLocation" option
       handymanDetails: null,
       dirFilters: { q: "", minRating: 0, minJobs: 0 },
       activeAssignedJob: null,
@@ -367,20 +371,32 @@ export default {
         return { ...tab, count };
       });
     },
-    currentAssignedJob() {
-      if (this.activeAssignedJob) return this.activeAssignedJob;
+    currentAssignedJobs() {
+      // Get all active assigned jobs
       const userId = this.store.user?._id || this.me?._id;
-      if (!userId) return null;
+      if (!userId) return [];
+
+      // Ensure userId is a string for comparison
+      const userIdStr = String(userId);
 
       // חיפוש ישירות ב-store.jobs
       const allJobs = this.store.jobs || [];
-      const assignedJob = allJobs.find((job) => {
+      const assignedJobs = allJobs.filter((job) => {
         if (this.isHendiman) {
-          // עבור הנדימן - בודק אם handymanId תואם
+          // עבור הנדימן - בודק אם handymanId תואם (תמיכה במערך)
           // עבור הנדימן: עבודה ב-"done" לא נחשבת כעבודה פעילה (צריך להמתין לדירוג)
+          let isHandymanInJob = false;
+          if (job.handymanId) {
+            if (Array.isArray(job.handymanId)) {
+              isHandymanInJob = job.handymanId.some(
+                (id) => String(id) === userIdStr
+              );
+            } else {
+              isHandymanInJob = String(job.handymanId) === userIdStr;
+            }
+          }
           return (
-            job.handymanId &&
-            String(job.handymanId) === String(userId) &&
+            isHandymanInJob &&
             (job.status === "assigned" ||
               job.status === "on_the_way" ||
               job.status === "in_progress")
@@ -389,7 +405,7 @@ export default {
           // עבור לקוח - בודק אם clientId תואם
           return (
             job.clientId &&
-            String(job.clientId) === String(userId) &&
+            String(job.clientId) === userIdStr &&
             job.handymanId && // רק עבודות ששובצו
             (job.status === "assigned" ||
               job.status === "on_the_way" ||
@@ -399,7 +415,21 @@ export default {
         }
       });
 
-      return assignedJob || null;
+      return assignedJobs;
+    },
+    currentAssignedJob() {
+      // Return activeAssignedJob if set, otherwise return first from currentAssignedJobs
+      // activeAssignedJob takes priority to ensure immediate chat opening
+      if (
+        this.activeAssignedJob &&
+        (this.activeAssignedJob._id || this.activeAssignedJob.id)
+      ) {
+        return this.activeAssignedJob;
+      }
+      if (this.currentAssignedJobs.length > 0) {
+        return this.currentAssignedJobs[0];
+      }
+      return null;
     },
   },
 
@@ -415,56 +445,25 @@ export default {
 
     async fetchHandymanJobs(userData = null) {
       try {
-        // השתמש בקואורדינטות מה-user במסד הנתונים, לא מ-geolocation
-        // אם userData לא נשלח, נסה מ-store.user
+        // השתמש בקואורדינטות לפי הבחירה של המשתמש
         const user = userData || this.store.user || this.me;
         let coordinates = null;
-        if (user) {
-          if (user.location && user.location.coordinates) {
+
+        if (this.handymanFilters.locationType === "myLocation") {
+          // השתמש במיקום הנוכחי של ההנדימן
+          if (this.geoCoordinates) {
             coordinates = {
-              lng: user.location.coordinates[0],
-              lat: user.location.coordinates[1],
+              lng: this.geoCoordinates.lon || this.geoCoordinates.lng,
+              lat: this.geoCoordinates.lat,
             };
-            console.log(
-              "📍 [HANDYMAN] Using coordinates from user.location:",
-              coordinates
-            );
-          } else if (user.coordinates) {
-            coordinates = {
-              lng: user.coordinates.lng,
-              lat: user.coordinates.lat,
-            };
-            console.log(
-              "📍 [HANDYMAN] Using coordinates from user.coordinates:",
-              coordinates
-            );
-          } else if (user.Coordinates) {
-            // Fallback למקרה של Coordinates עם C גדולה
-            coordinates = {
-              lng: user.Coordinates.lng,
-              lat: user.Coordinates.lat,
-            };
-            console.log(
-              "📍 [HANDYMAN] Using coordinates from user.Coordinates:",
-              coordinates
-            );
           } else {
-            console.warn("⚠️ [HANDYMAN] No coordinates found in user object:", {
-              hasLocation: !!user.location,
-              hasCoordinates: !!user.coordinates,
-              hasCoordinatesCapital: !!user.Coordinates,
-            });
+            // Fallback למקום המגורים אם אין GPS
+            coordinates = this.getResidenceCoordinates(user);
           }
         } else {
-          console.warn("⚠️ [HANDYMAN] No user data available!");
+          // השתמש במקום המגורים של ההנדימן
+          coordinates = this.getResidenceCoordinates(user);
         }
-
-        console.log("🔍 [HANDYMAN] Fetching jobs with:", {
-          status: this.activeStatus,
-          maxKm: this.handymanFilters.maxKm,
-          coordinates,
-        });
-
         // אם אין קואורדינטות, עדיין נטען עבודות (בלי סינון מרחק)
         await this.store.fetchFilteredJobsForHandyman({
           status: this.activeStatus,
@@ -476,7 +475,6 @@ export default {
           this.checkForAssignedJob();
         });
       } catch (error) {
-        console.error("Error fetching handyman jobs:", error);
         // גם אם יש שגיאה, נסה לטעון עבודות בלי סינון
         try {
           await this.store.fetchFilteredJobsForHandyman({
@@ -484,9 +482,7 @@ export default {
             maxKm: null,
             coordinates: null,
           });
-        } catch (fallbackError) {
-          console.error("Error in fallback fetch:", fallbackError);
-        }
+        } catch (fallbackError) {}
       }
     },
 
@@ -503,13 +499,9 @@ export default {
       this.showProfileSheet = true;
     },
 
-    onOpenHandymenChat() {
-      console.log("open handymen general chat");
-    },
+    onOpenHandymenChat() {},
 
-    onOpenAllUsersChat() {
-      console.log("open all users chat");
-    },
+    onOpenAllUsersChat() {},
 
     onPickStatus(v) {
       this.activeStatus = v;
@@ -535,17 +527,41 @@ export default {
       }
     },
 
-    onOpenJobMenu(job) {
-      console.log("open job menu", job.id);
+    onChangeLocationType(locationType) {
+      this.handymanFilters.locationType = locationType;
+      this.jobsPage = 1;
+      if (this.isHendiman) {
+        this.fetchHandymanJobs();
+      }
     },
 
-    onOpenJobChat(job) {
-      console.log("open job chat", job.id);
+    getResidenceCoordinates(user) {
+      if (!user) return null;
+
+      if (user.location && user.location.coordinates) {
+        return {
+          lng: user.location.coordinates[0],
+          lat: user.location.coordinates[1],
+        };
+      } else if (user.coordinates) {
+        return {
+          lng: user.coordinates.lng,
+          lat: user.coordinates.lat,
+        };
+      } else if (user.Coordinates) {
+        return {
+          lng: user.Coordinates.lng,
+          lat: user.Coordinates.lat,
+        };
+      }
+      return null;
     },
 
-    onOpenUserChat(userId) {
-      console.log("open user chat", userId);
-    },
+    onOpenJobMenu(job) {},
+
+    onOpenJobChat(job) {},
+
+    onOpenUserChat(userId) {},
 
     onSkip(job) {
       const handymanId = this.store.user?._id || this.me?.id;
@@ -565,44 +581,103 @@ export default {
       const handymanId = this.store.user?._id || this.me?.id;
       if (!handymanId) return;
       try {
+        const jobId = job._id || job.id;
         const { data } = await axios.post(`${URL}/jobs/accept`, {
-          jobId: job._id || job.id,
+          jobId: jobId,
           handymanId,
         });
 
-        // Refresh dashboard data to get all jobs including the accepted one
-        await this.store.fetchDashboardData(
-          this.$route.params.id,
-          this.userCoordinates
-        );
+        // Update the job immediately with the new status
+        // Make sure to preserve _id and all other fields
+        // Handle handymanId and handymanName as arrays
+        let handymanIdArray = [];
+        let handymanNameArray = [];
 
-        // Wait for store to update
-        await this.$nextTick();
-
-        // Find the accepted job in store
-        const jobId = job._id || job.id;
-        const acceptedJob = this.store.jobs?.find(
-          (j) => String(j._id || j.id) === String(jobId)
-        );
-
-        if (acceptedJob) {
-          // Open chat with the updated job
-          this.activeAssignedJob = acceptedJob;
-        } else {
-          // Fallback: use the job with updated status from response or original job
-          this.activeAssignedJob = data?.job || {
-            ...job,
-            status: "assigned",
-            handymanId: handymanId.toString(),
-          };
+        if (job.handymanId) {
+          if (Array.isArray(job.handymanId)) {
+            handymanIdArray = [...job.handymanId];
+          } else {
+            handymanIdArray = [job.handymanId];
+          }
         }
+
+        if (job.handymanName) {
+          if (Array.isArray(job.handymanName)) {
+            handymanNameArray = [...job.handymanName];
+          } else {
+            handymanNameArray = [job.handymanName];
+          }
+        }
+
+        // Add new handyman if not already in array
+        const handymanIdStr = String(handymanId);
+        const existingIndex = handymanIdArray.findIndex(
+          (id) => String(id) === handymanIdStr
+        );
+
+        const handymanName = this.store.user?.username || this.me?.name || "";
+        if (existingIndex === -1) {
+          handymanIdArray.push(handymanIdStr);
+          handymanNameArray.push(handymanName);
+        } else {
+          handymanNameArray[existingIndex] = handymanName;
+        }
+
+        const updatedJob = {
+          ...job,
+          _id: job._id || jobId,
+          id: job.id || jobId,
+          status: "assigned",
+          handymanId: handymanIdArray,
+          handymanName: handymanNameArray,
+        };
+
+        // Open chat immediately with the updated job - do this FIRST!
+        // Make sure to create a new object to ensure reactivity
+        this.activeAssignedJob = JSON.parse(JSON.stringify(updatedJob));
+        this.isChatMinimized = false;
+
+        // Update the job in store immediately so currentAssignedJobs includes it
+        if (this.store.jobs) {
+          const jobIndex = this.store.jobs.findIndex(
+            (j) => String(j._id || j.id) === String(jobId)
+          );
+          if (jobIndex !== -1) {
+            // Update existing job - use Vue.set to ensure reactivity
+            this.$set(this.store.jobs, jobIndex, updatedJob);
+          } else {
+            // Add new job if not found
+            this.store.jobs.push(updatedJob);
+          }
+        } else {
+          this.store.setJobs([updatedJob]);
+        }
+
+        // Force Vue to update the view immediately - no waiting
+        this.$forceUpdate();
+
+        // Refresh dashboard data in the background (don't wait for it)
+        // Don't refresh immediately to avoid clearing activeAssignedJob
+        setTimeout(() => {
+          this.store
+            .fetchDashboardData(this.$route.params.id, this.userCoordinates)
+            .then(() => {
+              // After refresh, update activeAssignedJob with the job from store if it exists
+              const refreshedJob = this.store.jobs?.find(
+                (j) => String(j._id || j.id) === String(jobId)
+              );
+              if (refreshedJob) {
+                this.activeAssignedJob = refreshedJob;
+              }
+            })
+            .catch((error) => {});
+        }, 1000);
       } catch (error) {
-        console.error("Error accepting job:", error);
+        this.toast?.showError("שגיאה בקבלת העבודה");
       }
     },
 
     onView(job) {
-      console.log("view job", job.id);
       this.jobDetails = job;
     },
     onJobsNextPage() {
@@ -641,19 +716,19 @@ export default {
     },
 
     async onCancelJob() {
-      // Update the job in store - remove handyman assignment and set status to open
+      // Update the job in store - set handymanId and handymanName to null
       const jobId = this.activeAssignedJob?._id || this.activeAssignedJob?.id;
       if (jobId && this.store.jobs) {
         const jobIndex = this.store.jobs.findIndex(
           (j) => String(j._id || j.id) === String(jobId)
         );
         if (jobIndex !== -1) {
-          // Update job in store - remove handyman assignment and set status to open
+          // Update job in store - set handymanId and handymanName to null
           const updatedJob = { ...this.store.jobs[jobIndex] };
-          delete updatedJob.handymanId;
-          delete updatedJob.handymanName;
+          updatedJob.handymanId = null;
+          updatedJob.handymanName = null;
           updatedJob.status = "open";
-          this.store.jobs[jobIndex] = updatedJob;
+          this.$set(this.store.jobs, jobIndex, updatedJob);
         }
       }
       // Clear the assigned job to close the chat
@@ -693,13 +768,22 @@ export default {
 
       // בדוק ישירות בנתונים הראשוניים (data.Jobs) שמכילים את כל העבודות
       const allJobs = data.Jobs || [];
+      const userIdStr = String(userId);
       const assignedJob = allJobs.find((job) => {
         if (this.isHendiman) {
-          // עבור הנדימן - בודק אם handymanId תואם
-          // עבור הנדימן: עבודה ב-"done" לא נחשבת כעבודה פעילה (צריך להמתין לדירוג)
+          // עבור הנדימן - בודק אם handymanId תואם (תמיכה במערך)
+          let isHandymanInJob = false;
+          if (job.handymanId) {
+            if (Array.isArray(job.handymanId)) {
+              isHandymanInJob = job.handymanId.some(
+                (id) => String(id) === userIdStr
+              );
+            } else {
+              isHandymanInJob = String(job.handymanId) === userIdStr;
+            }
+          }
           return (
-            job.handymanId &&
-            String(job.handymanId) === String(userId) &&
+            isHandymanInJob &&
             (job.status === "assigned" ||
               job.status === "on_the_way" ||
               job.status === "in_progress")
@@ -708,7 +792,7 @@ export default {
           // עבור לקוח - בודק אם clientId תואם
           return (
             job.clientId &&
-            String(job.clientId) === String(userId) &&
+            String(job.clientId) === userIdStr &&
             job.handymanId && // רק עבודות ששובצו
             (job.status === "assigned" ||
               job.status === "on_the_way" ||
@@ -729,12 +813,22 @@ export default {
 
       // קודם נבדוק ב-store.jobs הקיים
       let allJobs = this.store.jobs || [];
+      const userIdStr = String(userId);
       let assignedJob = allJobs.find((job) => {
         if (this.isHendiman) {
-          // עבור הנדימן - בודק אם handymanId תואם
+          // עבור הנדימן - בודק אם handymanId תואם (תמיכה במערך)
+          let isHandymanInJob = false;
+          if (job.handymanId) {
+            if (Array.isArray(job.handymanId)) {
+              isHandymanInJob = job.handymanId.some(
+                (id) => String(id) === userIdStr
+              );
+            } else {
+              isHandymanInJob = String(job.handymanId) === userIdStr;
+            }
+          }
           return (
-            job.handymanId &&
-            String(job.handymanId) === String(userId) &&
+            isHandymanInJob &&
             (job.status === "assigned" ||
               job.status === "on_the_way" ||
               job.status === "in_progress" ||
@@ -744,7 +838,7 @@ export default {
           // עבור לקוח - בודק אם clientId תואם
           return (
             job.clientId &&
-            String(job.clientId) === String(userId) &&
+            String(job.clientId) === userIdStr &&
             job.handymanId && // רק עבודות ששובצו
             (job.status === "assigned" ||
               job.status === "on_the_way" ||
@@ -770,9 +864,19 @@ export default {
               if (dashboardData && dashboardData.Jobs) {
                 allJobs = dashboardData.Jobs || [];
                 assignedJob = allJobs.find((job) => {
+                  // עבור הנדימן - בודק אם handymanId תואם (תמיכה במערך)
+                  let isHandymanInJob = false;
+                  if (job.handymanId) {
+                    if (Array.isArray(job.handymanId)) {
+                      isHandymanInJob = job.handymanId.some(
+                        (id) => String(id) === userIdStr
+                      );
+                    } else {
+                      isHandymanInJob = String(job.handymanId) === userIdStr;
+                    }
+                  }
                   return (
-                    job.handymanId &&
-                    String(job.handymanId) === String(userId) &&
+                    isHandymanInJob &&
                     (job.status === "assigned" ||
                       job.status === "on_the_way" ||
                       job.status === "in_progress" ||
@@ -781,18 +885,15 @@ export default {
                 });
               }
             }
-          } catch (error) {
-            console.error("Error checking for assigned job:", error);
-          }
+          } catch (error) {}
         }
       }
 
       if (assignedJob && !this.activeAssignedJob) {
         this.activeAssignedJob = assignedJob;
-      } else if (!assignedJob && this.activeAssignedJob) {
-        // אם אין עבודה משובצת אבל יש activeAssignedJob, נסיר אותו
-        this.activeAssignedJob = null;
       }
+      // Note: We don't clear activeAssignedJob here to prevent clearing it
+      // right after setting it in onAccept
     },
     initWebSocket() {
       // Connect to WebSocket server
@@ -902,13 +1003,75 @@ export default {
       this.isChatMinimized = false;
     },
 
-    onBlockHandyman(id) {
-      console.log("block handyman", id);
+    async enablePushNotifications() {
+      // Check if browser supports notifications
+      if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+        return;
+      }
+
+      // Check if permission already granted
+      if (Notification.permission === "granted") {
+        try {
+          // Register service worker
+          const registration = await navigator.serviceWorker.register(
+            "/firebase-messaging-sw.js"
+          );
+
+          // Get FCM token
+          if (messaging) {
+            const token = await getToken(messaging, {
+              vapidKey: VAPID_KEY,
+              serviceWorkerRegistration: registration,
+            });
+
+            if (token) {
+              // שמור את ה-token בשרת
+              await this.saveTokenToServer(token);
+            }
+          }
+        } catch (error) {}
+      } else if (Notification.permission === "default") {
+        // Request permission
+        try {
+          const permission = await Notification.requestPermission();
+          if (permission === "granted") {
+            // Register service worker
+            const registration = await navigator.serviceWorker.register(
+              "/firebase-messaging-sw.js"
+            );
+
+            // Get FCM token
+            if (messaging) {
+              const token = await getToken(messaging, {
+                vapidKey: VAPID_KEY,
+                serviceWorkerRegistration: registration,
+              });
+
+              if (token) {
+                // שמור את ה-token בשרת
+                await this.saveTokenToServer(token);
+              }
+            }
+          }
+        } catch (error) {}
+      }
     },
 
-    onPersonalRequest(id) {
-      console.log("personal request handyman", id);
+    async saveTokenToServer(token) {
+      try {
+        const userId = this.store.user?._id || this.me?.id;
+        if (!userId) return;
+
+        await axios.post(`${URL}/save-fcm-token`, {
+          userId: userId,
+          fcmToken: token,
+        });
+      } catch (error) {}
     },
+
+    onBlockHandyman(id) {},
+
+    onPersonalRequest(id) {},
 
     async onSaveProfile(form) {
       const userId = this.store.user?._id;
@@ -947,7 +1110,6 @@ export default {
           this.toast?.showError("שגיאה בעדכון הפרופיל");
         }
       } catch (error) {
-        console.error("Error updating profile:", error);
         this.toast?.showError("שגיאה בעדכון הפרופיל");
       }
     },
@@ -955,14 +1117,12 @@ export default {
     async onViewHandymanDetails(id) {
       try {
         const { data } = await axios.get(`${URL}/Gethandyman/${id}`);
-        console.log("handyman details", data);
         if (data.success) {
           this.handymanDetails = data.Handyman;
         } else {
           this.toast.showError(data.message);
         }
       } catch (error) {
-        console.log("error", error);
         this.toast.showError("שגיאה בטעינת פרטי ההנדימן");
       }
     },
@@ -972,13 +1132,11 @@ export default {
     },
 
     onBookHandyman(handyman) {
-      console.log("book handyman", handyman);
       this.onPersonalRequest(handyman._id || handyman.id);
       this.onCloseHandymanDetails();
     },
 
     onBlockHandymanFromModal(handyman) {
-      console.log("block handyman from modal", handyman);
       this.onBlockHandyman(handyman._id || handyman.id);
       this.onCloseHandymanDetails();
     },
@@ -988,13 +1146,11 @@ export default {
     },
 
     onAcceptJobFromModal(job) {
-      console.log("accept job from modal", job.id);
       this.onAccept(job);
       this.onCloseJobDetails();
     },
 
     onSkipJobFromModal(job) {
-      console.log("skip job from modal", job.id);
       this.onSkip(job);
       this.onCloseJobDetails();
     },
@@ -1089,6 +1245,19 @@ export default {
   async mounted() {
     // Listen for window resize to update mobile state
     window.addEventListener("resize", this.handleResize);
+
+    // Get current GPS location for handymen (if "myLocation" is selected)
+    if (this.isHendiman) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          this.geoCoordinates = { lat: latitude, lon: longitude };
+        },
+        (err) => {},
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    }
+
     try {
       // קבל את הקואורדינטות הנוכחיות של המשתמש
       let coordinates = null;
@@ -1184,6 +1353,9 @@ export default {
 
       // Initialize WebSocket for real-time updates
       this.initWebSocket();
+
+      // Enable Push Notifications
+      this.enablePushNotifications();
     } catch (error) {
       // אם יש שגיאה או שהמשתמש לא נמצא, החזר ל-דף הבית
       this.$router.push("/");

@@ -67,6 +67,33 @@
           </div>
         </div>
 
+        <!-- Location Filter -->
+        <div class="panel">
+          <div class="panel__label">סנן לפי:</div>
+          <div class="radio-group">
+            <label class="radio-item">
+              <input
+                type="radio"
+                name="locationFilter"
+                value="myLocation"
+                :checked="handymanFilters.locationType === 'myLocation'"
+                @change="$emit('change-location-type', 'myLocation')"
+              />
+              <span class="radio-label">המיקום שלי</span>
+            </label>
+            <label class="radio-item">
+              <input
+                type="radio"
+                name="locationFilter"
+                value="residence"
+                :checked="handymanFilters.locationType === 'residence'"
+                @change="$emit('change-location-type', 'residence')"
+              />
+              <span class="radio-label">מקום המגורים שלי</span>
+            </label>
+          </div>
+        </div>
+
         <!-- Distance -->
         <div class="panel">
           <div class="panel__top">
@@ -102,7 +129,7 @@
       <article v-for="job in filteredJobs" :key="job.id" class="job">
         <div class="job__header">
           <div class="job__title">
-            {{ job.subcategoryInfo?.name || job.subcategoryName || "ללא שם" }}
+            {{ getJobDisplayName(job) }}
           </div>
         </div>
 
@@ -247,6 +274,33 @@ export default {
     document.removeEventListener("click", this.handleClickOutside);
   },
   methods: {
+    getJobDisplayName(job) {
+      // Handle subcategoryInfo as array
+      if (
+        Array.isArray(job.subcategoryInfo) &&
+        job.subcategoryInfo.length > 0
+      ) {
+        if (job.subcategoryInfo.length === 1) {
+          // Single job - show name
+          return (
+            job.subcategoryInfo[0].subcategory ||
+            job.subcategoryInfo[0].category ||
+            job.subcategoryName ||
+            "ללא שם"
+          );
+        } else {
+          // Multiple jobs - show count
+          return `${job.subcategoryInfo.length} עבודות`;
+        }
+      }
+      // Fallback for old format (object) or no subcategoryInfo
+      return (
+        job.subcategoryInfo?.name ||
+        job.subcategoryInfo?.subcategory ||
+        job.subcategoryName ||
+        "ללא שם"
+      );
+    },
     handleClickOutside(e) {
       if (this.isStatusDropdownOpen && !e.target.closest(".selectWrap")) {
         this.isStatusDropdownOpen = false;
@@ -639,6 +693,53 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   width: 100%;
   accent-color: $orange;
 }
+/* Radio Group */
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.radio-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba($orange, 0.2);
+  }
+
+  input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: $orange;
+    margin: 0;
+    flex-shrink: 0;
+  }
+
+  input[type="radio"]:checked + .radio-label {
+    color: $orange3;
+    font-weight: 1100;
+  }
+}
+
+.radio-label {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 900;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
 .hint {
   margin-top: 8px;
   font-size: 11px;
@@ -912,6 +1013,7 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     white-space: normal;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
     line-height: 1.25;

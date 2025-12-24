@@ -144,40 +144,66 @@
           <div class="job-header">
             <div class="job-header-content">
               <div class="job-image-wrapper">
-                <img
-                  class="job-image"
-                  :src="jobDetails.imageUrl || '/img/Hendima-logo.png'"
-                  :alt="
-                    jobDetails.subcategoryInfo?.name ||
-                    jobDetails.subcategoryName ||
-                    'תמונה'
-                  "
-                  @error="onImageError"
-                />
+                <!-- Single image (backward compatibility) -->
+                <template v-if="!Array.isArray(jobDetails.imageUrl)">
+                  <img
+                    class="job-image"
+                    :src="jobDetails.imageUrl || '/img/Hendima-logo.png'"
+                    :alt="getJobDisplayName()"
+                    @error="onImageError"
+                  />
+                </template>
+                <!-- Multiple images grid -->
+                <div
+                  v-else
+                  class="job-images-grid"
+                  :class="`job-images-grid--${jobDetails.imageUrl.length}`"
+                >
+                  <div
+                    v-for="(imgUrl, index) in jobDetails.imageUrl"
+                    :key="index"
+                    class="job-image-item"
+                  >
+                    <img
+                      class="job-image"
+                      :src="imgUrl || '/img/Hendima-logo.png'"
+                      :alt="`${getJobDisplayName()} - תמונה ${index + 1}`"
+                      @error="onImageError"
+                    />
+                  </div>
+                </div>
                 <span v-if="jobDetails.urgent" class="urgent-badge">דחוף</span>
               </div>
               <div class="job-header-info">
                 <h1 class="job-title">
-                  {{
-                    jobDetails.subcategoryInfo?.name ||
-                    jobDetails.subcategoryName ||
-                    "ללא שם"
-                  }}
+                  {{ getJobDisplayName() }}
                 </h1>
                 <div class="job-tags">
                   <span
+                    v-if="
+                      !Array.isArray(jobDetails.subcategoryInfo) ||
+                      jobDetails.subcategoryInfo.length === 1
+                    "
                     class="tag"
                     :class="
-                      (jobDetails.subcategoryInfo?.typeWork ||
-                        jobDetails.billingType) === 'לשעה'
+                      (Array.isArray(jobDetails.subcategoryInfo) &&
+                      jobDetails.subcategoryInfo.length === 1
+                        ? jobDetails.subcategoryInfo[0].workType
+                        : jobDetails.subcategoryInfo?.typeWork ||
+                          jobDetails.billingType) === 'לשעה'
                         ? 'tag--hourly'
                         : 'tag--fixed'
                     "
                   >
                     {{
-                      jobDetails.subcategoryInfo?.typeWork ||
-                      jobDetails.billingType ||
-                      "קבלנות"
+                      Array.isArray(jobDetails.subcategoryInfo) &&
+                      jobDetails.subcategoryInfo.length === 1
+                        ? jobDetails.subcategoryInfo[0].workType ||
+                          jobDetails.billingType ||
+                          "קבלנות"
+                        : jobDetails.subcategoryInfo?.typeWork ||
+                          jobDetails.billingType ||
+                          "קבלנות"
                     }}
                   </span>
                   <span
@@ -196,6 +222,65 @@
             </div>
           </div>
 
+          <!-- Multiple Jobs Dropdown -->
+          <div
+            v-if="
+              Array.isArray(jobDetails.subcategoryInfo) &&
+              jobDetails.subcategoryInfo.length > 1
+            "
+            class="jobs-dropdown-section"
+          >
+            <div class="jobs-dropdown">
+              <button
+                class="jobs-dropdown__toggle"
+                :class="{ 'jobs-dropdown__toggle--open': isJobsDropdownOpen }"
+                @click="isJobsDropdownOpen = !isJobsDropdownOpen"
+              >
+                <span>{{ jobDetails.subcategoryInfo.length }} עבודות</span>
+                <i
+                  class="fas"
+                  :class="
+                    isJobsDropdownOpen ? 'fa-chevron-up' : 'fa-chevron-down'
+                  "
+                ></i>
+              </button>
+              <div v-if="isJobsDropdownOpen" class="jobs-dropdown__content">
+                <div
+                  v-for="(subcat, index) in jobDetails.subcategoryInfo"
+                  :key="index"
+                  class="jobs-dropdown__item"
+                >
+                  <div class="jobs-dropdown__item-header">
+                    <span class="jobs-dropdown__item-name">
+                      {{
+                        subcat.subcategory ||
+                        subcat.category ||
+                        `עבודה ${index + 1}`
+                      }}
+                    </span>
+                    <span v-if="subcat.price" class="jobs-dropdown__item-price">
+                      {{ subcat.price }} ₪
+                    </span>
+                  </div>
+                  <div class="jobs-dropdown__item-details">
+                    <span
+                      v-if="subcat.category"
+                      class="jobs-dropdown__item-category"
+                    >
+                      קטגוריה: {{ subcat.category }}
+                    </span>
+                    <span
+                      v-if="subcat.workType"
+                      class="jobs-dropdown__item-work-type"
+                    >
+                      סוג: {{ subcat.workType }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Details Section -->
           <div class="job-details">
             <div class="detail-card">
@@ -208,7 +293,13 @@
               </div>
             </div>
 
-            <div class="detail-card detail-card--price">
+            <div
+              v-if="
+                !Array.isArray(jobDetails.subcategoryInfo) ||
+                jobDetails.subcategoryInfo.length === 1
+              "
+              class="detail-card detail-card--price"
+            >
               <div class="detail-icon">
                 <i class="fas fa-shekel-sign"></i>
               </div>
@@ -216,9 +307,25 @@
                 <span class="detail-label">מחיר</span>
                 <span class="detail-value detail-value--price">
                   {{
-                    jobDetails.subcategoryInfo?.price || jobDetails.price || 0
+                    Array.isArray(jobDetails.subcategoryInfo) &&
+                    jobDetails.subcategoryInfo.length === 1
+                      ? jobDetails.subcategoryInfo[0].price || 0
+                      : jobDetails.subcategoryInfo?.price ||
+                        jobDetails.price ||
+                        0
                   }}
                   שקלים
+                </span>
+              </div>
+            </div>
+            <div v-else class="detail-card detail-card--price">
+              <div class="detail-icon">
+                <i class="fas fa-shekel-sign"></i>
+              </div>
+              <div class="detail-content">
+                <span class="detail-label">סך הכל</span>
+                <span class="detail-value detail-value--price">
+                  {{ getTotalPrice() }} שקלים
                 </span>
               </div>
             </div>
@@ -256,8 +363,11 @@
             </div>
 
             <div
+              v-if="
+                !Array.isArray(jobDetails.subcategoryInfo) ||
+                jobDetails.subcategoryInfo.length === 1
+              "
               class="detail-card"
-              v-if="jobDetails.subcategoryInfo?.category"
             >
               <div class="detail-icon">
                 <i class="fas fa-folder"></i>
@@ -265,21 +375,35 @@
               <div class="detail-content">
                 <span class="detail-label">קטגוריה</span>
                 <span class="detail-value">{{
-                  jobDetails.subcategoryInfo.category || "ללא קטגוריה"
+                  Array.isArray(jobDetails.subcategoryInfo) &&
+                  jobDetails.subcategoryInfo.length === 1
+                    ? jobDetails.subcategoryInfo[0].category || "ללא קטגוריה"
+                    : jobDetails.subcategoryInfo?.category || "ללא קטגוריה"
                 }}</span>
               </div>
             </div>
 
-            <div class="detail-card">
+            <div
+              v-if="
+                !Array.isArray(jobDetails.subcategoryInfo) ||
+                jobDetails.subcategoryInfo.length === 1
+              "
+              class="detail-card"
+            >
               <div class="detail-icon">
                 <i class="fas fa-tools"></i>
               </div>
               <div class="detail-content">
                 <span class="detail-label">סוג עבודה</span>
                 <span class="detail-value">{{
-                  jobDetails.subcategoryInfo?.typeWork ||
-                  jobDetails.billingType ||
-                  "קבלנות"
+                  Array.isArray(jobDetails.subcategoryInfo) &&
+                  jobDetails.subcategoryInfo.length === 1
+                    ? jobDetails.subcategoryInfo[0].workType ||
+                      jobDetails.billingType ||
+                      "קבלנות"
+                    : jobDetails.subcategoryInfo?.typeWork ||
+                      jobDetails.billingType ||
+                      "קבלנות"
                 }}</span>
               </div>
             </div>
@@ -413,6 +537,7 @@ export default {
     return {
       rating: null,
       isLoadingRating: false,
+      isJobsDropdownOpen: false,
     };
   },
   watch: {
@@ -457,6 +582,45 @@ export default {
     },
   },
   methods: {
+    getJobDisplayName() {
+      if (!this.jobDetails) return "ללא שם";
+      // Handle subcategoryInfo as array
+      if (
+        Array.isArray(this.jobDetails.subcategoryInfo) &&
+        this.jobDetails.subcategoryInfo.length > 0
+      ) {
+        if (this.jobDetails.subcategoryInfo.length === 1) {
+          // Single job - show name
+          return (
+            this.jobDetails.subcategoryInfo[0].subcategory ||
+            this.jobDetails.subcategoryInfo[0].category ||
+            this.jobDetails.subcategoryName ||
+            "ללא שם"
+          );
+        } else {
+          // Multiple jobs - show count
+          return `${this.jobDetails.subcategoryInfo.length} עבודות`;
+        }
+      }
+      // Fallback for old format (object) or no subcategoryInfo
+      return (
+        this.jobDetails.subcategoryInfo?.name ||
+        this.jobDetails.subcategoryInfo?.subcategory ||
+        this.jobDetails.subcategoryName ||
+        "ללא שם"
+      );
+    },
+    getTotalPrice() {
+      if (!Array.isArray(this.jobDetails.subcategoryInfo)) {
+        return (
+          this.jobDetails.subcategoryInfo?.price || this.jobDetails.price || 0
+        );
+      }
+      return this.jobDetails.subcategoryInfo.reduce((total, subcat) => {
+        const price = subcat.price || 0;
+        return total + price;
+      }, 0);
+    },
     async loadRating(jobId) {
       if (this.isLoadingRating) return;
       this.isLoadingRating = true;
@@ -468,7 +632,6 @@ export default {
           this.rating = null;
         }
       } catch (error) {
-        console.error("Error loading rating:", error);
         this.rating = null;
       } finally {
         this.isLoadingRating = false;
@@ -569,7 +732,7 @@ $r2: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 100001; /* Higher than DashboardTopBar (100000) */
   padding: 20px;
   overflow-y: auto;
   font-family: $font-family;
@@ -847,6 +1010,52 @@ $r2: 26px;
   }
 }
 
+.job-images-grid {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  gap: 2px;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+
+  &.job-images-grid--1 {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+  }
+
+  &.job-images-grid--2 {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: 1fr;
+  }
+
+  &.job-images-grid--3 {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+
+    .job-image-item:first-child {
+      grid-column: 1 / -1;
+    }
+  }
+
+  &.job-images-grid--4 {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+  }
+}
+
+.job-image-item {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+
+  .job-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
 .urgent-badge {
   position: absolute;
   top: 6px;
@@ -913,7 +1122,6 @@ $r2: 26px;
     background: rgba(255, 255, 255, 0.06);
     color: rgba(255, 255, 255, 0.84);
   }
-
   &--hourly {
     border-color: rgba($orange2, 0.28);
     background: rgba($orange2, 0.14);
@@ -1378,5 +1586,181 @@ $r2: 26px;
 .rating-review--empty .review-text {
   color: $muted;
   font-style: italic;
+}
+
+/* Jobs Dropdown */
+.jobs-dropdown-section {
+  margin: 16px 0;
+  padding: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+  @media (max-width: 768px) {
+    margin: 12px 0;
+  }
+}
+
+.jobs-dropdown {
+  position: relative;
+  width: 100%;
+}
+
+.jobs-dropdown__toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba($orange, 0.1);
+  border: 1px solid rgba($orange, 0.2);
+  border-radius: 12px;
+  color: $orange3;
+  font-weight: 900;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  @media (max-width: 768px) {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  &:hover {
+    background: rgba($orange, 0.15);
+    border-color: rgba($orange, 0.3);
+  }
+
+  &--open {
+    border-radius: 12px 12px 0 0;
+    border-bottom: none;
+  }
+
+  i {
+    font-size: 12px;
+    transition: transform 0.2s ease;
+  }
+
+  &--open i {
+    transform: rotate(180deg);
+  }
+}
+
+.jobs-dropdown__content {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba($orange, 0.2);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  padding: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+
+  @media (max-width: 768px) {
+    max-height: 300px;
+    padding: 6px;
+  }
+}
+
+.jobs-dropdown__item {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  transition: all 0.2s ease;
+
+  @media (max-width: 768px) {
+    padding: 10px;
+    margin-bottom: 6px;
+  }
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba($orange, 0.2);
+  }
+}
+
+.jobs-dropdown__item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+
+  @media (max-width: 768px) {
+    margin-bottom: 6px;
+    gap: 8px;
+  }
+}
+
+.jobs-dropdown__item-name {
+  font-weight: 1000;
+  font-size: 14px;
+  color: $text;
+  flex: 1;
+
+  @media (max-width: 768px) {
+    font-size: 13px;
+  }
+}
+
+.jobs-dropdown__item-price {
+  font-weight: 1000;
+  font-size: 14px;
+  color: $orange3;
+  white-space: nowrap;
+
+  @media (max-width: 768px) {
+    font-size: 13px;
+  }
+}
+
+.jobs-dropdown__item-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 8px;
+
+  @media (max-width: 768px) {
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+}
+
+.jobs-dropdown__item-category,
+.jobs-dropdown__item-work-type {
+  font-weight: 800;
+  font-size: 11px;
+  color: $muted;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+
+  @media (max-width: 768px) {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+}
+
+/* Custom scrollbar for dropdown */
+.jobs-dropdown__content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.jobs-dropdown__content::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.jobs-dropdown__content::-webkit-scrollbar-thumb {
+  background: rgba($orange, 0.3);
+  border-radius: 3px;
+
+  &:hover {
+    background: rgba($orange, 0.5);
+  }
 }
 </style>

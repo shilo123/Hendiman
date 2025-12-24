@@ -184,7 +184,6 @@ export default {
         if (jobResponse.data.success && jobResponse.data.job) {
           this.jobInfo = jobResponse.data.job;
         } else {
-          console.error("Failed to load job:", jobResponse.data);
         }
 
         // Load rating
@@ -200,7 +199,6 @@ export default {
           this.review = "";
         }
       } catch (error) {
-        console.error("Error loading job summary:", error);
         // Show error to user
         if (this.store?.toast) {
           this.store.toast.showError("שגיאה בטעינת סיכום העבודה");
@@ -234,7 +232,6 @@ export default {
       } catch (error) {
         // User cancelled share or error occurred
         if (error.name !== "AbortError") {
-          console.error("Error sharing:", error);
           // Fallback to clipboard
           try {
             const shareText = `${this.getShareText()}\n\n${
@@ -243,7 +240,6 @@ export default {
             await navigator.clipboard.writeText(shareText);
             alert("הקישור הועתק ללוח");
           } catch (clipboardError) {
-            console.error("Error copying to clipboard:", clipboardError);
           }
         }
       }

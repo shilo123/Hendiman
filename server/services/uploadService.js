@@ -23,10 +23,9 @@ async function uploadImageToS3(file, bucketName) {
     const imageUrl = `https://${bucketName}.s3.amazonaws.com/${fileName}`;
     return { success: true, imageUrl, fileName };
   } catch (error) {
-    console.error("S3 Upload Error:", error);
     const errorMessage = error.message || "Unknown S3 error";
     const errorCode = error.Code || error.name || "UnknownError";
-    
+
     // Check if it's a credentials issue
     const isCredentialsIssue =
       !process.env.AWS_ACCESS_KEY_ID ||
@@ -82,7 +81,6 @@ async function uploadLogoToS3(file) {
     const logoUrl = `https://${bucketName}.s3.amazonaws.com/${fileName}`;
     return { success: true, logoUrl, fileName };
   } catch (error) {
-    console.error("S3 Upload Error:", error);
     return {
       success: false,
       error: error.message || "Unknown S3 error",
@@ -102,7 +100,8 @@ async function uploadImageFromUrl(imageUrl, bucketName) {
     const response = await axios.get(imageUrl, {
       responseType: "arraybuffer",
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       },
     });
 
@@ -119,7 +118,9 @@ async function uploadImageFromUrl(imageUrl, bucketName) {
       if (urlMatch) fileExtension = urlMatch[1].toLowerCase();
     }
 
-    const fileName = `google-${Date.now()}-${Math.round(Math.random() * 1e9)}.${fileExtension}`;
+    const fileName = `google-${Date.now()}-${Math.round(
+      Math.random() * 1e9
+    )}.${fileExtension}`;
 
     const uploadParams = {
       Bucket: bucketName,
@@ -142,7 +143,6 @@ async function uploadImageFromUrl(imageUrl, bucketName) {
     const uploadedImageUrl = `https://${bucketName}.s3.amazonaws.com/${fileName}`;
     return { success: true, imageUrl: uploadedImageUrl, fileName };
   } catch (error) {
-    console.error("Upload Image From URL Error:", error);
     const errorMessage = error.message || "Unknown error";
     const errorCode = error.Code || error.name || "UnknownError";
 

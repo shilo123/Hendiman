@@ -413,7 +413,7 @@ $orange2: #ff8a2b;
 .ps {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: 100001; /* Higher than DashboardTopBar (100000) */
   display: flex;
   align-items: flex-end; /* bottom sheet feel */
   justify-content: center;
@@ -740,7 +740,7 @@ $orange2: #ff8a2b;
 .pickerModal {
   position: fixed;
   inset: 0;
-  z-index: 10050;
+  z-index: 100002; /* Higher than ProfileSheet */
   background: rgba(0, 0, 0, 0.72);
   display: flex;
   align-items: flex-end;
@@ -817,7 +817,7 @@ $orange2: #ff8a2b;
 .deleteUserModal {
   position: fixed;
   inset: 0;
-  z-index: 11000;
+  z-index: 100003; /* Higher than pickerModal */
   display: flex;
   align-items: center;
   justify-content: center;

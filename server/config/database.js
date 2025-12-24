@@ -24,14 +24,10 @@ async function connectDatabase() {
     } catch (indexError) {
       // אם ה-index כבר קיים או יש שגיאה אחרת, זה בסדר
       // 85 = IndexOptionsConflict, 86 = IndexKeySpecsConflict (index כבר קיים)
-      if (indexError.code !== 85 && indexError.code !== 86) {
-        console.error("Error creating index:", indexError.message);
-      }
     }
 
     return { collection, collectionJobs, db };
   } catch (error) {
-    console.error("Error connecting to MongoDB:", error);
     throw error;
   }
 }

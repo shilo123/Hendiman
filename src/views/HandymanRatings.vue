@@ -169,7 +169,6 @@ export default {
           this.totalEarnings = response.data.totalEarnings || 0;
         }
       } catch (error) {
-        console.error("Error loading ratings:", error);
       } finally {
         this.isLoading = false;
       }

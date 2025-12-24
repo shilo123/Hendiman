@@ -1,232 +1,601 @@
 <template>
   <div class="create-call-page" dir="rtl">
-    <div class="shell">
+    <!-- Loading Screen -->
+    <div v-if="isLoading && !foundHandymen.length" class="loading-screen">
+      <div class="loadingspinner">
+        <div id="square1"></div>
+        <div id="square2"></div>
+        <div id="square3"></div>
+        <div id="square4"></div>
+        <div id="square5"></div>
+      </div>
+      <p class="loading-text">מחפש הנדימנים בעזרת AI</p>
+
+      <!-- Patience Message -->
+      <Transition name="patience-message">
+        <div v-if="showPatienceMessage" class="patience-message">
+          <div class="patience-message__content">
+            <span class="patience-message__icon">⏳</span>
+            <span class="patience-message__text">{{
+              patienceMessageText
+            }}</span>
+          </div>
+        </div>
+      </Transition>
+    </div>
+
+    <!-- Handymen Results Screen -->
+    <div
+      v-if="isLoading && foundHandymen.length > 0"
+      class="handymen-results-screen"
+    >
+      <div class="handymen-results-header">
+        <h2>נמצאו {{ foundHandymen.length }} הנדימנים שמתאימים לכל התחומים</h2>
+        <p class="handymen-results-subtitle">
+          הקריאה נוצרה ומחכה לאישור של הנדימן
+        </p>
+      </div>
+      <div class="handymen-list">
+        <div
+          v-for="(handyman, index) in foundHandymen"
+          :key="handyman._id"
+          class="handyman-card"
+          :style="{ animationDelay: `${index * 0.15}s` }"
+        >
+          <div class="handyman-card__image">
+            <img
+              :src="handyman.imageUrl || 'https://via.placeholder.com/80'"
+              :alt="handyman.username"
+            />
+          </div>
+          <div class="handyman-card__content">
+            <h3 class="handyman-card__name">{{ handyman.username }}</h3>
+            <div class="handyman-card__info">
+              <span v-if="handyman.city" class="handyman-card__city">
+                📍 {{ handyman.city }}
+              </span>
+              <div class="handyman-card__rating" v-if="handyman.rating">
+                <span>⭐</span>
+                <span>{{ handyman.rating.toFixed(1) }}</span>
+                <span v-if="handyman.jobDone"
+                  >({{ handyman.jobDone }} עבודות)</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div v-else class="shell">
       <!-- Top bar -->
       <header class="topbar">
         <button class="topbar__back" type="button" @click="goBack">←</button>
-
         <div class="topbar__center">
           <div class="topbar__title">צור קריאה</div>
-          <div class="topbar__sub">בחר תת־קטגוריה, תיאור, מיקום וזמן</div>
         </div>
-
-        <!-- <div class="topbar__step">
-          <span class="stepPill">{{ progressText }}</span>
-        </div> -->
       </header>
+
+      <!-- Step Indicator -->
+      <div class="step-indicator">
+        <div
+          class="step-item"
+          :class="{ active: currentStep >= 1, completed: currentStep > 1 }"
+        >
+          <div class="step-number">1</div>
+          <div class="step-label">תיאור</div>
+        </div>
+        <div class="step-line" :class="{ active: currentStep > 1 }"></div>
+        <div
+          class="step-item"
+          :class="{ active: currentStep >= 2, completed: currentStep > 2 }"
+        >
+          <div class="step-number">2</div>
+          <div class="step-label">פרטים</div>
+        </div>
+        <div class="step-line" :class="{ active: currentStep > 2 }"></div>
+        <div
+          class="step-item"
+          :class="{ active: currentStep >= 3, completed: currentStep > 3 }"
+        >
+          <div class="step-number">3</div>
+          <div class="step-label">סיום</div>
+        </div>
+      </div>
 
       <!-- Content -->
       <main class="content">
-        <!-- SECTION: category -->
-        <section class="block">
-          <div class="block__head">
-            <div class="block__label">תחום התמחות</div>
-            <div class="block__req">חובה</div>
-          </div>
-
-          <div class="control">
-            <MobileCategorySelector
-              v-model="call.selectedSubcategory"
-              label=""
-              placeholder="לחץ לבחירת תחום התמחות דרוש"
-              :single="true"
-            />
-          </div>
-
-          <div v-if="errors.selectedSubcategory" class="msg msg--err">
-            {{ errors.selectedSubcategory }}
-          </div>
-
-          <div v-if="selectedSub" class="summary">
-            <div class="summary__row">
-              <div class="summary__name">
-                <span class="okDot">✓</span>
-                <span class="summary__txt">{{
-                  call.selectedSubcategory.name
-                }}</span>
+        <!-- STEP 1: Describe what needs to be done -->
+        <div
+          v-if="currentStep === 1"
+          class="step-content step-content--animated"
+        >
+          <div class="step-container">
+            <section class="block">
+              <div class="block__head">
+                <div class="block__label">תאר בקצרה מה צריך שנעשה?</div>
               </div>
-              <div class="summary__price">{{ selectedSub.price }} ₪</div>
-            </div>
 
-            <div class="summary__row summary__row--meta">
-              <span class="tag">
-                {{ selectedSub.billingType === "hourly" ? "לשעה" : "קבלנות" }}
-              </span>
-              <span class="tag tag--ghost">סוג חיוב</span>
-            </div>
+              <input
+                class="input-small"
+                type="text"
+                v-model="call.requests[0]"
+                @input="clearError('requests')"
+                placeholder="למשל: תליית מדף"
+              />
+
+              <div v-if="errors.requests" class="msg msg--err">
+                {{ errors.requests }}
+              </div>
+
+              <!-- Additional Requests -->
+              <div
+                v-for="(request, index) in call.requests.slice(1)"
+                :key="index"
+                class="additional-request"
+              >
+                <input
+                  class="input-small"
+                  type="text"
+                  v-model="call.requests[index + 1]"
+                  :placeholder="`בקשה ${index + 2}`"
+                />
+                <button
+                  type="button"
+                  class="remove-request-btn"
+                  @click="removeRequest(index + 1)"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <button type="button" class="add-request-btn" @click="addRequest">
+                ➕ הוסף בקשה נוספת
+              </button>
+            </section>
           </div>
-        </section>
 
-        <!-- SECTION: desc -->
-        <section class="block">
-          <div class="block__head">
-            <div class="block__label">תיאור</div>
-            <div class="block__req">חובה</div>
-          </div>
-
-          <textarea
-            class="textarea"
-            :class="{ 'is-err': errors.desc }"
-            v-model="call.desc"
-            @input="clearError('desc')"
-            rows="4"
-            placeholder="תאר בקצרה מה הבעיה…"
-          ></textarea>
-
-          <div v-if="errors.desc" class="msg msg--err">{{ errors.desc }}</div>
-          <div class="msg msg--hint">מומלץ לפחות 10 תווים.</div>
-        </section>
-
-        <!-- SECTION: image -->
-        <section class="block">
-          <div class="block__head">
-            <div class="block__label">תמונה</div>
-            <div class="block__req">חובה</div>
-          </div>
-
-          <div class="uploadRow">
-            <input
-              id="callImage"
-              type="file"
-              accept="image/*"
-              @change="handleCallImageUpload"
-              class="file-input"
-            />
-
-            <label
-              for="callImage"
-              class="uploadBtn"
-              :class="{
-                'uploadBtn--done': call.imageUrl || call.imagePreview,
-                'uploadBtn--err': errors.image,
-              }"
+          <button class="next-btn-animated" type="button" @click="nextStep">
+            <svg
+              viewBox="0 0 320 512"
+              height="1em"
+              xmlns="http://www.w3.org/2000/svg"
             >
-              <span class="uploadBtn__icon">📷</span>
-              <span class="uploadBtn__txt">
-                {{
-                  call.imageUrl || call.imagePreview
-                    ? "תמונה נבחרה"
-                    : "בחר תמונה"
-                }}
-              </span>
-            </label>
+              <path
+                d="M310.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-192 192c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L242.7 256 73.4 86.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l192 192z"
+              ></path>
+            </svg>
+            <span>שלב הבא</span>
+          </button>
+        </div>
 
-            <button
-              v-if="call.imageUrl || call.imagePreview"
-              type="button"
-              class="miniGhost"
-              @click="removeCallImage"
+        <!-- STEP 2: Expand details + Location -->
+        <div
+          v-if="currentStep === 2"
+          class="step-content step-content--animated"
+        >
+          <div class="step-container">
+            <!-- Loading Categories Card -->
+            <section
+              v-if="isLoadingCategories"
+              class="block block--loading-categories"
             >
-              הסר
+              <div class="loading-categories">
+                <div class="loading-categories__spinner">
+                  <div class="spinner-dot"></div>
+                  <div class="spinner-dot"></div>
+                  <div class="spinner-dot"></div>
+                </div>
+                <p class="loading-categories__text">
+                  מחפש את התחומים הדרושים לך באמצעות AI
+                </p>
+              </div>
+            </section>
+
+            <!-- Found Categories Card -->
+            <section
+              v-else-if="foundCategories.length > 0"
+              class="block block--found-categories"
+            >
+              <div class="block__head">
+                <div class="block__label">התחומים שנמצאו:</div>
+                <button
+                  type="button"
+                  class="block__refine-btn"
+                  @click="refineCategories"
+                >
+                  זה לא נכון? נסה לדייק יותר
+                </button>
+              </div>
+              <div class="categories-list">
+                <div
+                  v-for="(category, index) in foundCategories"
+                  :key="index"
+                  class="category-card"
+                >
+                  <div class="category-card__header">
+                    <span class="category-card__name">
+                      {{
+                        category.subcategory ||
+                        category.category ||
+                        `תחום ${index + 1}`
+                      }}
+                    </span>
+                    <span v-if="category.price" class="category-card__price">
+                      {{ category.price }} ₪
+                    </span>
+                  </div>
+                  <div class="category-card__details">
+                    <span
+                      v-if="category.category"
+                      class="category-card__category"
+                    >
+                      קטגוריה: {{ category.category }}
+                    </span>
+                    <span
+                      v-if="category.workType"
+                      class="category-card__work-type"
+                    >
+                      סוג: {{ category.workType }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="block">
+              <div class="block__head">
+                <div class="block__label">הרחב להנדימן על התקלות</div>
+              </div>
+
+              <textarea
+                class="textarea"
+                v-model="call.desc"
+                @input="clearError('desc')"
+                rows="6"
+                placeholder="תאר בפירוט את הבעיה, מה צריך לתקן, וכל מידע רלוונטי..."
+              ></textarea>
+
+              <div v-if="errors.desc" class="msg msg--err">
+                {{ errors.desc }}
+              </div>
+            </section>
+
+            <section class="block block--location">
+              <div class="block__head">
+                <div class="block__label">מיקום</div>
+                <div class="block__req">חובה</div>
+              </div>
+
+              <div class="location-content">
+                <div v-if="!selectedMapLocation" class="location-input-wrapper">
+                  <AddressAutocomplete
+                    v-model="call.location"
+                    input-id="call-location"
+                    :placeholder="
+                      usingMyLocation ? 'המיקום שלי' : 'הכנס שם ישוב'
+                    "
+                    :required="!usingMyLocation && !selectedMapLocation"
+                    @update:modelValue="onLocationChange"
+                    @update:englishName="onEnglishNameUpdate"
+                    @update:selectedCity="onCitySelected"
+                  />
+                </div>
+
+                <div
+                  v-if="
+                    call.location &&
+                    call.location !== 'המיקום שלי' &&
+                    !selectedMapLocation
+                  "
+                  class="house-number-input"
+                >
+                  <input
+                    type="text"
+                    v-model="call.houseNumber"
+                    placeholder="מספר בית\בלוק"
+                    class="input-small"
+                  />
+                </div>
+
+                <div v-if="selectedMapLocation" class="selected-location">
+                  <span class="selected-location__text"> מיקום נבחר במפה </span>
+                  <button
+                    type="button"
+                    class="selected-location__change"
+                    @click="
+                      selectedMapLocation = null;
+                      call.coordinates = {};
+                    "
+                  >
+                    שנה
+                  </button>
+                </div>
+
+                <div v-if="!selectedMapLocation" class="location-actions">
+                  <button
+                    class="location-btn location-btn--map"
+                    type="button"
+                    @click="openMapPicker"
+                  >
+                    <span class="location-btn__icon">🗺️</span>
+                    <span class="location-btn__text">דקור במפה</span>
+                  </button>
+                  <button
+                    class="location-btn location-btn--gps"
+                    type="button"
+                    @click="setMyLocation"
+                  >
+                    <span class="location-btn__icon">📍</span>
+                    <span class="location-btn__text">לפי מיקום</span>
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="errors.location" class="msg msg--err">
+                {{ errors.location }}
+              </div>
+            </section>
+          </div>
+
+          <div class="step-actions">
+            <button class="back-btn" type="button" @click="prevStep">
+              חזרה
+            </button>
+            <button class="next-btn-animated" type="button" @click="nextStep">
+              <svg
+                viewBox="0 0 320 512"
+                height="1em"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M310.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-192 192c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L242.7 256 73.4 86.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l192 192z"
+                ></path>
+              </svg>
+              <span>שלב הבא</span>
             </button>
           </div>
+        </div>
 
-          <div v-if="call.imageUrl || call.imagePreview" class="thumb">
-            <img :src="call.imageUrl || call.imagePreview" alt="Preview" />
-          </div>
+        <!-- STEP 3: Image + Urgent + Work Type + When + Cancel Note + Submit -->
+        <div
+          v-if="currentStep === 3"
+          class="step-content step-content--animated"
+        >
+          <div class="step-container">
+            <section class="block">
+              <div class="block__head">
+                <div class="block__label">תמונות</div>
+                <div class="block__req">חובה</div>
+              </div>
 
-          <div v-if="errors.image" class="msg msg--err">{{ errors.image }}</div>
-        </section>
+              <div class="uploadRow">
+                <input
+                  :id="`callImage-${call.imageUrls.length}`"
+                  type="file"
+                  accept="image/*"
+                  @change="handleCallImageUpload"
+                  class="file-input"
+                  :disabled="call.imageUrls.length >= 4"
+                />
 
-        <!-- SECTION: location -->
-        <section class="block">
-          <div class="block__head">
-            <div class="block__label">מיקום</div>
-            <div class="block__req">חובה</div>
-          </div>
+                <label
+                  :for="`callImage-${call.imageUrls.length}`"
+                  class="uploadBtn"
+                  :class="{
+                    'uploadBtn--done': call.imageUrls.length > 0,
+                    'uploadBtn--err': errors.image,
+                    'uploadBtn--disabled': call.imageUrls.length >= 4,
+                  }"
+                >
+                  <span class="uploadBtn__icon">📷</span>
+                  <span class="uploadBtn__txt">
+                    {{
+                      call.imageUrls.length === 0
+                        ? "בחר תמונה"
+                        : call.imageUrls.length >= 4
+                        ? "הגעת למקסימום (4 תמונות)"
+                        : `העלה עוד תמונה (${call.imageUrls.length}/4)`
+                    }}
+                  </span>
+                </label>
+              </div>
 
-          <div class="locGrid">
-            <div class="locGrid__input">
-              <AddressAutocomplete
-                v-model="call.location"
-                input-id="call-location"
-                :placeholder="usingMyLocation ? 'המיקום שלי' : 'הכנס שם ישוב'"
-                :required="!usingMyLocation"
-                @update:modelValue="onLocationChange"
-                @update:englishName="onEnglishNameUpdate"
-                @update:selectedCity="onCitySelected"
-              />
-            </div>
+              <!-- Images Grid -->
+              <div
+                v-if="
+                  call.imageUrls.length > 0 || call.imagePreviews.length > 0
+                "
+                class="images-grid"
+              >
+                <div
+                  v-for="(img, index) in call.imageUrls.length > 0
+                    ? call.imageUrls
+                    : call.imagePreviews"
+                  :key="index"
+                  class="image-item"
+                >
+                  <img
+                    :src="img"
+                    :alt="`תמונה ${index + 1}`"
+                    class="image-item__img"
+                  />
+                  <button
+                    type="button"
+                    class="image-item__remove"
+                    @click="removeCallImage(index)"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
 
-            <div class="locGrid__actions">
-              <button class="ghostBtn" type="button" @click="$emit('open-map')">
-                🗺️ דקור במפה
+              <div v-if="errors.image" class="msg msg--err">
+                {{ errors.image }}
+              </div>
+            </section>
+
+            <section class="block">
+              <button
+                class="urgentRow"
+                :class="{ 'urgentRow--on': call.urgent }"
+                type="button"
+                @click="onToggleUrgent"
+              >
+                <span class="urgentRow__left">
+                  <span class="toggleDot" />
+                  <span class="urgentRow__title">קריאה דחופה</span>
+                </span>
+                <span class="urgentRow__right">
+                  +10 ₪ <span class="chev">›</span>
+                </span>
               </button>
-              <button class="solidBtn" type="button" @click="setMyLocation">
-                📍 לפי מיקום
-              </button>
-            </div>
+            </section>
+
+            <section class="block">
+              <div class="twoCols">
+                <div class="field">
+                  <div class="field__label">סוג עבודה</div>
+                  <select class="select" v-model="call.workType">
+                    <option value="קלה">קלה</option>
+                    <option value="מורכבת">מורכבת</option>
+                    <option value="קשה">קשה</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <div class="field__label">זמן הגעה</div>
+                  <select class="select" v-model="call.when">
+                    <option value="asap">כמה שיותר מהר</option>
+                    <option value="today">היום</option>
+                    <option value="tomorrow">מחר</option>
+                    <option value="pick">בחר זמן</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            <section class="block block--last">
+              <div class="note note--warn">
+                <span class="note__icon">⚠️</span>
+                <span>קנס על ביטול: <b>250</b> שקלות</span>
+              </div>
+            </section>
           </div>
 
-          <div v-if="errors.location" class="msg msg--err">
-            {{ errors.location }}
+          <div class="step-actions">
+            <button class="back-btn" type="button" @click="prevStep">
+              חזרה
+            </button>
+            <button class="submit-btn" type="button" @click="onSubmitCall">
+              שלח קריאה
+            </button>
           </div>
-        </section>
-
-        <!-- SECTION: selects -->
-        <section class="block">
-          <div class="twoCols">
-            <div class="field">
-              <div class="field__label">זמן הגעה</div>
-              <select class="select" v-model="call.when">
-                <option value="asap">כמה שיותר מהר</option>
-                <option value="today">היום</option>
-                <option value="tomorrow">מחר</option>
-                <option value="pick">בחר זמן</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <div class="field__label">סוג עבודה</div>
-              <select class="select" v-model="call.workType">
-                <option value="קלה">קלה</option>
-                <option value="מורכבת">מורכבת</option>
-                <option value="קשה">קשה</option>
-              </select>
-            </div>
-          </div>
-        </section>
-
-        <!-- SECTION: urgent + fine -->
-        <section class="block block--last">
-          <button
-            class="urgentRow"
-            :class="{ 'urgentRow--on': call.urgent }"
-            type="button"
-            @click="onToggleUrgent"
-          >
-            <span class="urgentRow__left">
-              <span class="toggleDot" />
-              <span class="urgentRow__title">קריאה דחופה</span>
-            </span>
-            <span class="urgentRow__right">
-              +10 ₪ <span class="chev">›</span>
-            </span>
-          </button>
-
-          <div class="note note--warn">
-            <span class="note__icon">⚠️</span>
-            <span>קנס על ביטול: <b>250</b> שקלות</span>
-          </div>
-        </section>
-
-        <!-- Spacer so footer won't cover -->
-        <div class="spacer" />
+        </div>
       </main>
+    </div>
 
-      <!-- Sticky footer -->
-      <footer class="footer">
-        <button class="cta animated-button" type="button" @click="onSubmitCall">
-          <span>שלח קריאה</span>
-          <span></span>
-        </button>
-      </footer>
+    <!-- Map Picker Modal -->
+    <div v-if="showMapPicker" class="map-modal" @click.self="closeMapPicker">
+      <div class="map-modal__content">
+        <div class="map-modal__header">
+          <h3>בחר מיקום במפה</h3>
+          <button class="map-modal__close" @click="closeMapPicker">×</button>
+        </div>
+        <div class="map-modal__map" id="mapPicker"></div>
+        <div class="map-modal__footer">
+          <button
+            class="map-modal__btn map-modal__btn--cancel"
+            @click="closeMapPicker"
+          >
+            ביטול
+          </button>
+          <button
+            class="map-modal__btn map-modal__btn--confirm"
+            @click="confirmMapLocation"
+          >
+            אישור
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Split Call Modal -->
+    <div
+      v-if="showSplitCallModal"
+      class="modal-overlay"
+      @click.self="showSplitCallModal = false"
+    >
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>אין הנדימן אחד שמתמחה במה שאמרת</h3>
+          <button class="modal-close" @click="showSplitCallModal = false">
+            ×
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>אין הנדימן אחד שמתמחה במה שאמרת.</p>
+          <p>תרצה לפצל את העבודה?</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn--secondary" @click="handleCancelSplit">
+            אני אוותר
+          </button>
+          <button class="btn btn--primary" @click="handleSplitCall">
+            כן פצל
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Partial Match Modal -->
+    <div
+      v-if="showPartialMatchModal"
+      class="modal-overlay"
+      @click.self="showPartialMatchModal = false"
+    >
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>לא מצאנו הנדימן אחד לתחומים שרצית</h3>
+          <button class="modal-close" @click="showPartialMatchModal = false">
+            ×
+          </button>
+        </div>
+        <div class="modal-body">
+          <p style="margin-bottom: 16px">לא מצאנו הנדימן אחד לתחומים שרצית.</p>
+          <div class="matched-subcategories-list">
+            <p
+              v-for="(subcat, index) in partialMatchData.matchedSubcategories"
+              :key="index"
+              class="subcategory-item"
+            >
+              <span v-if="index === 0">מצאנו הנדימן לתחום: </span>
+              <span v-else>והנדימן לתחום: </span>
+              <strong>{{ getSubcategoryName(subcat) }}</strong>
+            </p>
+          </div>
+          <p style="margin-top: 20px; font-weight: 600">
+            האם תרצה לפצל את הקריאה?
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button
+            class="btn btn--secondary"
+            @click="showPartialMatchModal = false"
+          >
+            ביטול
+          </button>
+          <button class="btn btn--primary" @click="handlePartialMatchApprove">
+            כן, פצל
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
-import MobileCategorySelector from "@/components/MobileCategorySelector.vue";
 import AddressAutocomplete from "@/components/AddressAutocomplete.vue";
 import { URL } from "@/Url/url";
 import axios from "axios";
@@ -237,10 +606,8 @@ import citiesData from "@/APIS/AdressFromIsrael.json";
 export default {
   name: "CreateCall",
   components: {
-    MobileCategorySelector,
     AddressAutocomplete,
   },
-  emits: ["open-map"],
 
   setup() {
     const store = useMainStore();
@@ -249,17 +616,17 @@ export default {
   data() {
     return {
       toast: null,
+      currentStep: 1,
+      isLoading: false,
       call: {
-        selectedSubcategory: null,
-        selectedSub: null,
-        subId: "",
+        requests: [""], // Array of requests
         desc: "",
         location: "המיקום שלי",
         when: "asap",
         urgent: false,
-        image: null,
-        imageUrl: "",
-        imagePreview: null,
+        images: [], // Array of image files
+        imageUrls: [], // Array of uploaded image URLs
+        imagePreviews: [], // Array of preview URLs
         coordinates: {},
         workType: "קלה",
       },
@@ -269,6 +636,29 @@ export default {
       cities: [],
       locationEnglishName: null,
       selectedCity: null,
+      showMapPicker: false,
+      mapPicker: null,
+      foundHandymen: [],
+      showSplitCallModal: false,
+      showPartialMatchModal: false,
+      partialMatchData: {
+        handymen: [],
+        matchedSubcategories: [],
+        allSubcategories: [],
+      },
+      splitNeededData: {
+        handymen: [],
+      },
+      mapMarker: null,
+      selectedMapLocation: null,
+      showPatienceMessage: false,
+      patienceMessageInterval: null,
+      patienceMessageTimeout: null,
+      requestStartTime: null,
+      patienceMessageText: "אנחנו מצטערים אך הסבלנות תשתלם",
+      isLoadingCategories: false,
+      foundCategories: [],
+      subcategoryInfoArray: [],
     };
   },
   created() {
@@ -298,47 +688,71 @@ export default {
     }
   },
 
-  computed: {
-    selectedSub() {
-      if (this.call.selectedSubcategory) {
-        return {
-          name: this.call.selectedSubcategory.name,
-          price: this.call.selectedSubcategory.price || 0,
-          billingType:
-            this.call.selectedSubcategory.typeWork === "לשעה"
-              ? "hourly"
-              : "fixed",
-        };
-      }
-      return null;
-    },
-
-    // progress bar-ish text (pure UI)
-    progressText() {
-      let n = 0;
-      if (this.call.selectedSubcategory) n++;
-      if (this.call.desc && this.call.desc.trim().length >= 10) n++;
-      if (this.call.location && this.call.location.trim().length > 0) n++;
-      if (this.call.imageUrl || this.call.imagePreview || this.call.image) n++;
-      return `${n}/4`;
-    },
-  },
-
-  watch: {
-    selectedSub: {
-      handler(newValue) {
-        this.call.selectedSub = newValue;
-      },
-      immediate: true,
-    },
-    "call.selectedSubcategory": {
-      handler() {
-        this.clearError("selectedSubcategory");
-      },
-    },
-  },
-
   methods: {
+    addRequest() {
+      this.call.requests.push("");
+    },
+    removeRequest(index) {
+      if (this.call.requests.length > 1) {
+        this.call.requests.splice(index, 1);
+      }
+    },
+    async nextStep() {
+      // Validate current step
+      if (this.currentStep === 1) {
+        const hasValidRequest = this.call.requests.some(
+          (req) => req && req.trim().length > 0
+        );
+        if (!hasValidRequest) {
+          this.errors.requests = "יש למלא לפחות בקשה אחת";
+          this.toast?.showError("יש למלא לפחות בקשה אחת");
+          return;
+        }
+        this.clearError("requests");
+
+        // Move to step 2 immediately
+        this.currentStep = 2;
+
+        // Start loading and call AI endpoint in background
+        this.isLoadingCategories = true;
+        this.fetchCategoriesFromAI();
+
+        return; // Don't continue to the rest of the function
+      } else if (this.currentStep === 2) {
+        if (!this.call.desc || this.call.desc.trim().length < 10) {
+          this.errors.desc = "התיאור חייב להכיל לפחות 10 תווים";
+          this.toast?.showError("התיאור חייב להכיל לפחות 10 תווים");
+          return;
+        }
+        if (!this.call.location || this.call.location.trim().length === 0) {
+          this.errors.location = "יש למלא מיקום";
+          this.toast?.showError("יש למלא מיקום");
+          return;
+        }
+        // Skip city validation if location was selected from map
+        if (
+          !this.selectedMapLocation &&
+          this.call.location !== "המיקום שלי" &&
+          !this.isValidCity(this.call.location)
+        ) {
+          this.errors.location =
+            "ישוב זה לא נמצא במאגר. בחר ישוב מהרשימה או לחץ על 'לפי מיקום'";
+          this.toast?.showError(this.errors.location);
+          return;
+        }
+        this.clearError("desc");
+        this.clearError("location");
+      }
+
+      if (this.currentStep < 3) {
+        this.currentStep++;
+      }
+    },
+    prevStep() {
+      if (this.currentStep > 1) {
+        this.currentStep--;
+      }
+    },
     setMyLocation() {
       this.call.location = "המיקום שלי";
       this.clearError("location");
@@ -355,7 +769,8 @@ export default {
         this.usingMyLocation = false;
         this.call.coordinates = {};
 
-        if (value && value.trim() !== "") {
+        // Skip city validation if location was selected from map
+        if (value && value.trim() !== "" && !this.selectedMapLocation) {
           if (!this.isValidCity(value)) {
             this.errors.location =
               "ישוב זה לא נמצא במאגר. בחר ישוב מהרשימה או לחץ על 'לפי מיקום'";
@@ -404,191 +819,460 @@ export default {
       });
     },
     goBack() {
-      this.$router.go(-1);
+      if (this.currentStep > 1) {
+        this.prevStep();
+      } else {
+        this.$router.go(-1);
+      }
     },
     onToggleUrgent() {
       this.call.urgent = !this.call.urgent;
     },
     async handleCallImageUpload(event) {
       const file = event.target.files[0];
-      if (file) {
-        const maxSize = 5 * 1024 * 1024;
-        if (file.size > maxSize) {
-          this.errors.image = "גודל התמונה חייב להיות קטן מ-5MB";
-          const input = document.getElementById("callImage");
-          if (input) input.value = "";
-          return;
-        }
+      if (!file) return;
 
-        if (!file.type.startsWith("image/")) {
-          this.errors.image = "יש להעלות קובץ תמונה בלבד";
-          const input = document.getElementById("callImage");
-          if (input) input.value = "";
-          return;
-        }
+      // Check if we've reached the limit
+      if (this.call.imageUrls.length >= 4) {
+        this.toast?.showError("ניתן להעלות עד 4 תמונות");
+        event.target.value = "";
+        return;
+      }
 
-        this.clearError("image");
-        this.call.image = file;
+      const maxSize = 5 * 1024 * 1024;
+      if (file.size > maxSize) {
+        this.errors.image = "גודל התמונה חייב להיות קטן מ-5MB";
+        event.target.value = "";
+        return;
+      }
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          this.call.imagePreview = e.target.result;
-        };
-        reader.readAsDataURL(file);
+      if (!file.type.startsWith("image/")) {
+        this.errors.image = "יש להעלות קובץ תמונה בלבד";
+        event.target.value = "";
+        return;
+      }
 
-        try {
-          const formData = new FormData();
-          formData.append("image", file);
+      this.clearError("image");
 
-          const uploadUrl = `${URL}/pick-call123`;
-          const response = await axios.post(uploadUrl, formData, {
-            headers: { "Content-Type": "multipart/form-data" },
-            timeout: 30000,
-          });
+      // Create preview immediately
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        this.call.imagePreviews.push(e.target.result);
+      };
+      reader.readAsDataURL(file);
 
-          if (response.data && response.data.imageUrl) {
-            this.call.imageUrl = response.data.imageUrl;
+      // Add file to images array
+      this.call.images.push(file);
+
+      try {
+        const formData = new FormData();
+        formData.append("image", file);
+
+        const uploadUrl = `${URL}/pick-call123`;
+        const response = await axios.post(uploadUrl, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+          timeout: 30000,
+        });
+
+        if (response.data && response.data.imageUrl) {
+          // Replace preview with actual URL
+          const previewIndex = this.call.imagePreviews.length - 1;
+          if (previewIndex >= 0) {
+            this.call.imagePreviews.splice(previewIndex, 1);
           }
-        } catch (error) {
-          const errorMessage =
-            error.response?.data?.message ||
-            error.response?.data?.error ||
-            error.message ||
-            "שגיאה בהעלאת התמונה. נסה שוב.";
+          this.call.imageUrls.push(response.data.imageUrl);
+        }
+      } catch (error) {
+        // Remove the preview and file if upload failed
+        this.call.imagePreviews.pop();
+        this.call.images.pop();
 
-          const isCredentialsIssue =
-            error.response?.data?.isCredentialsIssue ||
-            errorMessage.includes("credentials") ||
-            errorMessage.includes("Credential") ||
-            errorMessage.includes("AWS") ||
-            errorMessage.includes("not configured") ||
-            errorMessage.includes("InvalidAccessKeyId") ||
-            errorMessage.includes("SignatureDoesNotMatch");
+        const errorMessage =
+          error.response?.data?.message ||
+          error.response?.data?.error ||
+          error.message ||
+          "שגיאה בהעלאת התמונה. נסה שוב.";
 
-          if (isCredentialsIssue) {
-            this.toast.showWarning("התמונה תישמר באופן מקומי (לא הועלתה לענן)");
-            this.clearError("image");
-          } else {
-            this.errors.image = errorMessage;
-            this.toast.showError(`שגיאה בהעלאת התמונה: ${errorMessage}`);
-          }
+        const isCredentialsIssue =
+          error.response?.data?.isCredentialsIssue ||
+          errorMessage.includes("credentials") ||
+          errorMessage.includes("Credential") ||
+          errorMessage.includes("AWS") ||
+          errorMessage.includes("not configured") ||
+          errorMessage.includes("InvalidAccessKeyId") ||
+          errorMessage.includes("SignatureDoesNotMatch");
+
+        if (isCredentialsIssue) {
+          this.toast.showWarning("התמונה תישמר באופן מקומי (לא הועלתה לענן)");
+          this.clearError("image");
+        } else {
+          this.errors.image = errorMessage;
+          this.toast.showError(`שגיאה בהעלאת התמונה: ${errorMessage}`);
         }
       }
+
+      // Reset input
+      event.target.value = "";
     },
-    removeCallImage() {
-      this.call.image = null;
-      this.call.imageUrl = "";
-      this.call.imagePreview = null;
+    removeCallImage(index) {
+      // Remove from all arrays
+      if (index < this.call.imageUrls.length) {
+        this.call.imageUrls.splice(index, 1);
+      }
+      if (index < this.call.imagePreviews.length) {
+        this.call.imagePreviews.splice(index, 1);
+      }
+      if (index < this.call.images.length) {
+        this.call.images.splice(index, 1);
+      }
       this.clearError("image");
-      const input = document.getElementById("callImage");
-      if (input) input.value = "";
     },
     clearError(field) {
       if (this.errors[field]) delete this.errors[field];
     },
-    validateForm() {
-      this.errors = {};
+    openMapPicker() {
+      this.showMapPicker = true;
+      this.$nextTick(() => {
+        this.initMapPicker();
+      });
+    },
+    closeMapPicker() {
+      this.showMapPicker = false;
+      if (this.mapPicker) {
+        this.mapPicker.remove();
+        this.mapPicker = null;
+        this.mapMarker = null;
+      }
+    },
+    initMapPicker() {
+      const loadLeaflet = () => {
+        if (typeof window.L !== "undefined") {
+          this.createMap();
+          return;
+        }
 
-      if (
-        !this.call.selectedSubcategory ||
-        !this.call.selectedSubcategory.name
-      ) {
-        this.errors.selectedSubcategory = "יש לבחור תת-קטגוריה";
+        if (!document.querySelector('link[href*="leaflet"]')) {
+          const link = document.createElement("link");
+          link.rel = "stylesheet";
+          link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+          link.crossOrigin = "";
+          document.head.appendChild(link);
+        }
+
+        if (!document.querySelector('script[src*="leaflet"]')) {
+          const script = document.createElement("script");
+          script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+          script.crossOrigin = "";
+          script.onload = () => {
+            setTimeout(() => {
+              if (typeof window.L !== "undefined") {
+                this.createMap();
+              } else {
+                this.toast?.showError("שגיאה בטעינת המפה. נסה שוב.");
+              }
+            }, 100);
+          };
+          script.onerror = () => {
+            this.toast?.showError("שגיאה בטעינת המפה. נסה שוב.");
+          };
+          document.body.appendChild(script);
+        } else {
+          const checkInterval = setInterval(() => {
+            if (typeof window.L !== "undefined") {
+              clearInterval(checkInterval);
+              this.createMap();
+            }
+          }, 100);
+
+          setTimeout(() => {
+            clearInterval(checkInterval);
+            if (typeof window.L === "undefined") {
+              this.toast?.showError("שגיאה בטעינת המפה. נסה שוב.");
+            }
+          }, 5000);
+        }
+      };
+
+      loadLeaflet();
+    },
+    createMap() {
+      if (typeof window.L === "undefined") {
+        this.toast?.showError("שגיאה בטעינת המפה. נסה שוב.");
+        return;
       }
 
-      if (!this.call.desc || this.call.desc.trim().length === 0) {
-        this.errors.desc = "יש למלא תיאור של הבעיה";
-      } else if (this.call.desc.trim().length < 10) {
-        this.errors.desc = "התיאור חייב להכיל לפחות 10 תווים";
+      const mapContainer = document.getElementById("mapPicker");
+      if (!mapContainer) {
+        return;
       }
 
-      if (!this.call.imageUrl && !this.call.imagePreview && !this.call.image) {
-        this.errors.image = "יש להעלות תמונה";
+      if (this.mapPicker) {
+        this.mapPicker.remove();
+        this.mapPicker = null;
+        this.mapMarker = null;
       }
 
-      if (!this.call.location || this.call.location.trim().length === 0) {
-        this.errors.location = "יש למלא מיקום";
-      } else if (this.call.location === "המיקום שלי") {
-        // ok
-      } else if (!this.isValidCity(this.call.location)) {
-        this.errors.location =
-          "ישוב זה לא נמצא במאגר. בחר ישוב מהרשימה או לחץ על 'לפי מיקום'";
+      const defaultLat = this.geoCoordinates?.lat || 32.0853;
+      const defaultLng = this.geoCoordinates?.lon || 34.7818;
+
+      try {
+        this.mapPicker = window.L.map("mapPicker", {
+          center: [defaultLat, defaultLng],
+          zoom: 13,
+          zoomControl: true,
+        });
+
+        window.L.tileLayer(
+          "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          {
+            attribution:
+              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19,
+          }
+        ).addTo(this.mapPicker);
+
+        this.mapMarker = window.L.marker([defaultLat, defaultLng], {
+          draggable: true,
+        }).addTo(this.mapPicker);
+
+        this.mapMarker.on("dragend", () => {
+          const position = this.mapMarker.getLatLng();
+          this.selectedMapLocation = {
+            lat: position.lat,
+            lng: position.lng,
+          };
+        });
+
+        this.mapPicker.on("click", (e) => {
+          const { lat, lng } = e.latlng;
+          this.mapMarker.setLatLng([lat, lng]);
+          this.selectedMapLocation = { lat, lng };
+        });
+
+        this.selectedMapLocation = { lat: defaultLat, lng: defaultLng };
+
+        setTimeout(() => {
+          if (this.mapPicker) {
+            this.mapPicker.invalidateSize();
+          }
+        }, 100);
+      } catch (error) {
+        this.toast?.showError("שגיאה ביצירת המפה. נסה שוב.");
+      }
+    },
+    async confirmMapLocation() {
+      if (!this.selectedMapLocation) {
+        this.toast?.showError("אנא בחר מיקום במפה");
+        return;
       }
 
-      return Object.keys(this.errors).length === 0;
+      const { lat, lng } = this.selectedMapLocation;
+
+      try {
+        const response = await axios.get(
+          `https://nominatim.openstreetmap.org/reverse`,
+          {
+            params: {
+              format: "json",
+              lat: lat,
+              lon: lng,
+              zoom: 14,
+              addressdetails: 1,
+              "accept-language": "he",
+            },
+            headers: {
+              "User-Agent": "hendiman-app",
+            },
+          }
+        );
+
+        if (response.data) {
+          const address = response.data.address || {};
+          const cityName =
+            address.city ||
+            address.town ||
+            address.village ||
+            address.suburb ||
+            address.region ||
+            "";
+
+          this.call.location = cityName || "מיקום שנבחר במפה";
+          this.locationEnglishName = cityName || null;
+          this.call.coordinates = {
+            lat: lat,
+            lng: lng,
+          };
+          this.usingMyLocation = false;
+          this.selectedMapLocation = { lat, lng };
+          this.clearError("location");
+        } else {
+          this.call.location = "מיקום שנבחר במפה";
+          this.locationEnglishName = null;
+          this.call.coordinates = {
+            lat: lat,
+            lng: lng,
+          };
+          this.usingMyLocation = false;
+          this.selectedMapLocation = { lat, lng };
+        }
+
+        this.closeMapPicker();
+        this.toast?.showSuccess("מיקום נבחר בהצלחה");
+      } catch (error) {
+        this.call.location = "מיקום שנבחר במפה";
+        this.call.coordinates = {
+          lat: lat,
+          lng: lng,
+        };
+        this.usingMyLocation = false;
+        this.selectedMapLocation = { lat, lng };
+        this.clearError("location");
+        this.closeMapPicker();
+        this.toast?.showSuccess("מיקום נבחר בהצלחה");
+      }
     },
     async onSubmitCall() {
       this.errors = {};
 
-      const isValid = this.validateForm();
-      if (!isValid) {
-        this.toast.showError("יש למלא את כל השדות הנדרשים");
-        const firstErrorField = document.querySelector(
-          ".input-error, .file-label-error"
-        );
-        if (firstErrorField) {
-          firstErrorField.scrollIntoView({
-            behavior: "smooth",
-            block: "center",
-          });
-        }
+      // Validate step 3
+      if (
+        this.call.imageUrls.length === 0 &&
+        this.call.imagePreviews.length === 0 &&
+        this.call.images.length === 0
+      ) {
+        this.errors.image = "יש להעלות לפחות תמונה אחת";
+        this.toast?.showError("יש להעלות לפחות תמונה אחת");
         return;
       }
 
-      try {
-        if (!this.call.selectedSubcategory) {
-          this.toast.showError("יש לבחור תת-קטגוריה");
-          return;
-        }
+      // Show loading
+      this.isLoading = true;
 
-        if (this.usingMyLocation && this.geoCoordinates) {
-          this.call.coordinates = { ...this.geoCoordinates };
+      try {
+        // Combine location with house number if exists
+        let finalLocation = this.call.location;
+        if (this.call.houseNumber && this.call.houseNumber.trim()) {
+          finalLocation = `${
+            this.call.location
+          } ${this.call.houseNumber.trim()}`;
         }
 
         const callData = {
-          ...this.call,
+          requests: this.call.requests.filter((r) => r && r.trim().length > 0),
+          desc: this.call.desc,
+          location: finalLocation,
+          when: this.call.when,
+          urgent: this.call.urgent,
+          workType: this.call.workType,
           userId: this.$route.params.id || null,
           usingMyLocation: this.usingMyLocation,
           locationEnglishName: this.locationEnglishName || null,
           selectedCity: this.selectedCity || null,
+          imageUrls:
+            this.call.imageUrls.length > 0
+              ? this.call.imageUrls
+              : this.call.imagePreviews.length > 0
+              ? this.call.imagePreviews
+              : [],
         };
 
-        if (!this.usingMyLocation) {
-          delete callData.coordinates;
-        } else {
-          if (callData.coordinates) {
-            const lng = callData.coordinates.lng ?? callData.coordinates.lon;
-            const lat = callData.coordinates.lat;
-            if (lng !== undefined && lat !== undefined) {
-              callData.coordinates = { lng: Number(lng), lat: Number(lat) };
-            }
+        // Add coordinates to callData if they exist
+        if (this.selectedMapLocation) {
+          callData.coordinates = {
+            lng: this.selectedMapLocation.lng,
+            lat: this.selectedMapLocation.lat,
+          };
+        } else if (this.usingMyLocation && this.geoCoordinates) {
+          callData.coordinates = { ...this.geoCoordinates };
+        } else if (
+          this.call.coordinates &&
+          this.call.coordinates.lat &&
+          this.call.coordinates.lng
+        ) {
+          // Fallback: use coordinates from call.coordinates if selectedMapLocation is not set
+          callData.coordinates = {
+            lng: this.call.coordinates.lng,
+            lat: this.call.coordinates.lat,
+          };
+        }
+
+        if (this.usingMyLocation && callData.coordinates) {
+          const lng = callData.coordinates.lng ?? callData.coordinates.lon;
+          const lat = callData.coordinates.lat;
+          if (lng !== undefined && lat !== undefined) {
+            callData.coordinates = { lng: Number(lng), lat: Number(lat) };
           }
+        } else if (!this.usingMyLocation) {
+          delete callData.coordinates;
         }
 
-        delete callData.image;
-        if (!callData.imageUrl && callData.imagePreview) {
-          // keep base64
-        } else {
-          delete callData.imagePreview;
-        }
+        // Add subcategoryInfo array to callData
+        callData.subcategoryInfo = this.subcategoryInfoArray;
 
-        const createCallUrl = `${URL}/create-call`;
+        // Send to new endpoint
+        const createCallUrl = `${URL}/create-call-v2`;
+        // Start patience message interval
+        this.requestStartTime = Date.now();
+        this.startPatienceMessageInterval();
+
         const response = await axios.post(createCallUrl, callData, {
           headers: { "Content-Type": "application/json" },
-          timeout: 30000,
+          // No timeout - wait indefinitely
         });
+        // Stop patience message interval
+        this.stopPatienceMessageInterval();
 
-        if (response.data.success) {
-          this.toast.showSuccess("הקריאה נשלחה בהצלחה!");
-          this.$router.push({
-            name: "Dashboard",
-            params: { id: this.$route.params.id },
-          });
+        const scenario = response.data.scenario;
+
+        if (response.data.success && scenario === "all_match") {
+          // Handymen found matching all subcategories - job created
+          this.foundHandymen = response.data.handymen || [];
+          setTimeout(() => {
+            this.isLoading = false;
+            this.toast.showSuccess(
+              `נמצאו ${this.foundHandymen.length} הנדימנים מתאימים. הקריאה נוצרה ומחכה לאישור.`
+            );
+            setTimeout(() => {
+              this.$router.push({
+                name: "Dashboard",
+                params: { id: this.$route.params.id },
+              });
+            }, 3000);
+          }, 2000);
+        } else if (scenario === "no_match") {
+          // No handymen match any subcategories
+          this.isLoading = false;
+          this.toast.showError(
+            response.data.message ||
+              "מצטערים, אין כרגע הנדימנים שמתמחים בתחומים שאתה צריך"
+          );
+        } else if (scenario === "partial_match") {
+          // Some handymen match some subcategories
+          this.isLoading = false;
+          this.partialMatchData = {
+            handymen: response.data.handymen || [],
+            matchedSubcategories: response.data.matchedSubcategories || [],
+            allSubcategories: response.data.allSubcategories || [],
+          };
+          this.showPartialMatchModal = true;
+        } else if (scenario === "split_needed") {
+          // Handymen match at least one but not all - ask to split
+          this.isLoading = false;
+          this.splitNeededData = {
+            handymen: response.data.handymen || [],
+          };
+          this.showSplitCallModal = true;
         } else {
+          // Fallback or error
+          this.isLoading = false;
           const errorMessage = response.data.message || "שגיאה בשליחת הקריאה";
           this.toast.showError(errorMessage);
         }
       } catch (error) {
+        // Stop patience message interval
+        this.stopPatienceMessageInterval();
+
+        this.isLoading = false;
         const errorMessage =
           error.response?.data?.message ||
           error.response?.data?.error ||
@@ -597,6 +1281,257 @@ export default {
         this.toast.showError(`שגיאה בשליחת הקריאה: ${errorMessage}`);
       }
     },
+    handleSplitCall() {
+      this.showSplitCallModal = false;
+      this.toast.showInfo("הקריאה פוצלה. ממתין לאישור הנדימנים.");
+      // TODO: Implement actual split call logic
+      setTimeout(() => {
+        this.$router.push({
+          name: "Dashboard",
+          params: { id: this.$route.params.id },
+        });
+      }, 1000);
+    },
+    handleCancelSplit() {
+      this.showSplitCallModal = false;
+      this.toast.showInfo("הקריאה בוטלה");
+      setTimeout(() => {
+        this.$router.push({
+          name: "Dashboard",
+          params: { id: this.$route.params.id },
+        });
+      }, 1000);
+    },
+    getSubcategoryName(subcat) {
+      return subcat.subcategory || subcat.category || "תחום";
+    },
+    getMatchedSubcategoriesText() {
+      if (!this.partialMatchData.matchedSubcategories) return "";
+      return this.partialMatchData.matchedSubcategories
+        .map((subcat) => this.getSubcategoryName(subcat))
+        .join(", ");
+    },
+    async handlePartialMatchApprove() {
+      // Create job with only matched subcategories
+      this.showPartialMatchModal = false;
+      this.isLoading = true;
+
+      try {
+        // Prepare call data (same as in onSubmitCall)
+        const callData = {
+          userId: this.$route.params.id,
+          desc: this.call.desc || "",
+          workType: this.call.workType || "קלה",
+          when: this.call.when || "asap",
+          urgent: this.call.urgent || false,
+          imageUrls:
+            this.call.imageUrls.length > 0
+              ? this.call.imageUrls
+              : this.call.imagePreviews.length > 0
+              ? this.call.imagePreviews
+              : [],
+          location: this.call.location || "מיקום",
+          locationEnglishName: this.locationEnglishName,
+          selectedCity: this.selectedCity,
+          usingMyLocation: this.usingMyLocation,
+        };
+
+        // Add coordinates
+        if (this.selectedMapLocation) {
+          callData.coordinates = {
+            lng: this.selectedMapLocation.lng,
+            lat: this.selectedMapLocation.lat,
+          };
+        } else if (this.usingMyLocation && this.geoCoordinates) {
+          callData.coordinates = {
+            lng: this.geoCoordinates.lng,
+            lat: this.geoCoordinates.lat,
+          };
+        } else if (
+          this.call.coordinates &&
+          this.call.coordinates.lat &&
+          this.call.coordinates.lng
+        ) {
+          callData.coordinates = {
+            lng: this.call.coordinates.lng,
+            lat: this.call.coordinates.lat,
+          };
+        }
+
+        // Build full subcategoryInfo array from matchedSubcategories
+        // Match each matchedSubcategory with the full data from subcategoryInfoArray
+        const fullMatchedSubcategories = [];
+        if (
+          this.partialMatchData.matchedSubcategories &&
+          Array.isArray(this.partialMatchData.matchedSubcategories) &&
+          this.subcategoryInfoArray &&
+          Array.isArray(this.subcategoryInfoArray)
+        ) {
+          // Create a Set to track which subcategories we've already added (to avoid duplicates)
+          const addedSubcategories = new Set();
+
+          for (const matched of this.partialMatchData.matchedSubcategories) {
+            // Create a unique key for this subcategory
+            const key = `${matched.category || ""}_${
+              matched.subcategory || ""
+            }`;
+
+            // Skip if we've already added this subcategory (to avoid duplicates)
+            if (addedSubcategories.has(key)) {
+              continue;
+            }
+
+            // Find the full subcategory info from subcategoryInfoArray
+            const fullInfo = this.subcategoryInfoArray.find(
+              (subcat) =>
+                subcat.category === matched.category &&
+                subcat.subcategory === matched.subcategory
+            );
+
+            if (fullInfo) {
+              // Add the full info with all fields (category, subcategory, price, workType)
+              const fullSubcatInfo = {
+                category: fullInfo.category,
+                subcategory: fullInfo.subcategory,
+                price: fullInfo.price || null,
+                workType: fullInfo.workType || null,
+              };
+              fullMatchedSubcategories.push(fullSubcatInfo);
+              addedSubcategories.add(key);
+            } else {
+              // If not found in subcategoryInfoArray, use the matched data with null for price/workType
+              const fallbackSubcatInfo = {
+                category: matched.category,
+                subcategory: matched.subcategory,
+                price: null,
+                workType: null,
+              };
+              fullMatchedSubcategories.push(fallbackSubcatInfo);
+              addedSubcategories.add(key);
+            }
+          }
+        } else {
+        }
+
+        // Add handymen and full matched subcategories for server to process
+        callData.handymen = this.partialMatchData.handymen || [];
+        callData.matchedSubcategories = fullMatchedSubcategories;
+
+        const response = await axios.post(`${URL}/split-call-v2`, callData, {
+          headers: { "Content-Type": "application/json" },
+        });
+
+        if (response.data.success) {
+          this.toast.showSuccess("הקריאה פוצלה בהצלחה");
+          setTimeout(() => {
+            this.$router.push({
+              name: "Dashboard",
+              params: { id: this.$route.params.id },
+            });
+          }, 1000);
+        } else {
+          this.toast.showError(response.data.message || "שגיאה בפיצול הקריאה");
+        }
+      } catch (error) {
+        this.toast.showError("שגיאה בפיצול הקריאה. נסה שוב מאוחר יותר.");
+      } finally {
+        this.isLoading = false;
+      }
+    },
+    startPatienceMessageInterval() {
+      // Clear any existing interval
+      this.stopPatienceMessageInterval();
+
+      // Reset message text
+      this.patienceMessageText = "אנחנו מצטערים אך הסבלנות תשתלם";
+
+      // Check time elapsed and update message after 8 seconds
+      const updateMessageTimeout = setTimeout(() => {
+        if (this.isLoading && !this.foundHandymen.length) {
+          this.patienceMessageText = "תנוח אנחנו נעדכן אותך אם מצאנו";
+        }
+      }, 8000);
+
+      // Show message every 2 seconds
+      this.patienceMessageInterval = setInterval(() => {
+        if (this.isLoading && !this.foundHandymen.length) {
+          // Calculate elapsed time
+          const elapsed = Date.now() - this.requestStartTime;
+
+          // Update message text if more than 8 seconds have passed
+          if (elapsed >= 8000) {
+            this.patienceMessageText = "תנוח אנחנו נעדכן אותך אם מצאנו";
+          }
+
+          // Show message with animation
+          this.showPatienceMessage = true;
+
+          // Hide message after 3 seconds
+          setTimeout(() => {
+            this.showPatienceMessage = false;
+          }, 3000);
+        }
+      }, 2000);
+
+      // Store timeout to clear it if needed
+      this.patienceMessageTimeout = updateMessageTimeout;
+    },
+    stopPatienceMessageInterval() {
+      if (this.patienceMessageInterval) {
+        clearInterval(this.patienceMessageInterval);
+        this.patienceMessageInterval = null;
+      }
+      if (this.patienceMessageTimeout) {
+        clearTimeout(this.patienceMessageTimeout);
+        this.patienceMessageTimeout = null;
+      }
+      this.showPatienceMessage = false;
+      this.patienceMessageText = "אנחנו מצטערים אך הסבלנות תשתלם";
+    },
+    async fetchCategoriesFromAI() {
+      // isLoadingCategories is already set in nextStep()
+      this.foundCategories = [];
+      this.subcategoryInfoArray = [];
+
+      try {
+        const validRequests = this.call.requests.filter(
+          (r) => r && r.trim().length > 0
+        );
+
+        const response = await axios.post(
+          `${URL}/Get-categor-ofOpenAI`,
+          { requests: validRequests },
+          {
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+
+        if (response.data.success && response.data.subcategories) {
+          this.subcategoryInfoArray = response.data.subcategories;
+          this.foundCategories = response.data.subcategories;
+        } else {
+          this.toast?.showError(
+            response.data.message || "לא נמצאו תחומים מתאימים"
+          );
+        }
+      } catch (error) {
+        this.toast?.showError("שגיאה בחיפוש התחומים. נסה שוב מאוחר יותר.");
+      } finally {
+        this.isLoadingCategories = false;
+      }
+    },
+    refineCategories() {
+      // Reset categories and go back to step 1
+      this.foundCategories = [];
+      this.subcategoryInfoArray = [];
+      this.isLoadingCategories = false;
+      this.currentStep = 1;
+      // Keep the requests as they were (they're already in call.requests)
+    },
+  },
+  beforeUnmount() {
+    // Clean up interval when component is destroyed
+    this.stopPatienceMessageInterval();
   },
 
   async mounted() {
@@ -609,7 +1544,6 @@ export default {
         }
       },
       (err) => {
-        console.warn("Geolocation error:", err?.message || err);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
@@ -625,6 +1559,7 @@ $text: rgba(255, 255, 255, 0.92);
 $muted: rgba(255, 255, 255, 0.62);
 $orange: #ff6a00;
 $orange2: #ff8a2b;
+$orange3: #ffb36b;
 $danger: #ff3b3b;
 
 .create-call-page {
@@ -633,15 +1568,481 @@ $danger: #ff3b3b;
 }
 
 .shell {
-  max-width: 640px;
+  max-width: 400px;
+  width: 100%;
   margin: 0 auto;
   padding: 14px 14px calc(96px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
 }
 
-/* Topbar — clean, app-like */
+/* Loading Screen */
+.loading-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 16, 22, 0.95);
+  backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.loading-text {
+  color: $text;
+  font-size: 18px;
+  font-weight: 1100;
+  margin-top: 20px;
+}
+
+/* Patience Message */
+.patience-message {
+  margin-top: 30px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.patience-message__content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, rgba($orange, 0.15), rgba($orange2, 0.1));
+  border: 1px solid rgba($orange, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba($orange, 0.2);
+  backdrop-filter: blur(8px);
+}
+
+.patience-message__icon {
+  font-size: 20px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.patience-message__text {
+  color: $orange3;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.3px;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+/* Patience Message Transitions */
+.patience-message-enter-active {
+  animation: slideInUp 0.4s ease-out;
+}
+
+.patience-message-leave-active {
+  animation: slideOutDown 0.4s ease-in;
+}
+
+.patience-message-enter-from {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.patience-message-leave-to {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slideOutDown {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+}
+
+/* Loading Spinner */
+.loadingspinner {
+  --square: 26px;
+  --offset: 30px;
+  --duration: 2.4s;
+  --delay: 0.2s;
+  --timing-function: ease-in-out;
+  --in-duration: 0.4s;
+  --in-delay: 0.1s;
+  --in-timing-function: ease-out;
+  width: calc(3 * var(--offset) + var(--square));
+  height: calc(2 * var(--offset) + var(--square));
+  padding: 0px;
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: 10px;
+  margin-bottom: 30px;
+  position: relative;
+}
+
+.loadingspinner div {
+  display: inline-block;
+  background: darkorange;
+  border: none;
+  border-radius: 2px;
+  width: var(--square);
+  height: var(--square);
+  position: absolute;
+  padding: 0px;
+  margin: 0px;
+  font-size: 6pt;
+  color: black;
+}
+
+.loadingspinner #square1 {
+  left: calc(0 * var(--offset));
+  top: calc(0 * var(--offset));
+  animation: square1 var(--duration) var(--delay) var(--timing-function)
+      infinite,
+    squarefadein var(--in-duration) calc(1 * var(--in-delay))
+      var(--in-timing-function) both;
+}
+
+.loadingspinner #square2 {
+  left: calc(0 * var(--offset));
+  top: calc(1 * var(--offset));
+  animation: square2 var(--duration) var(--delay) var(--timing-function)
+      infinite,
+    squarefadein var(--in-duration) calc(1 * var(--in-delay))
+      var(--in-timing-function) both;
+}
+
+.loadingspinner #square3 {
+  left: calc(1 * var(--offset));
+  top: calc(1 * var(--offset));
+  animation: square3 var(--duration) var(--delay) var(--timing-function)
+      infinite,
+    squarefadein var(--in-duration) calc(2 * var(--in-delay))
+      var(--in-timing-function) both;
+}
+
+.loadingspinner #square4 {
+  left: calc(2 * var(--offset));
+  top: calc(1 * var(--offset));
+  animation: square4 var(--duration) var(--delay) var(--timing-function)
+      infinite,
+    squarefadein var(--in-duration) calc(3 * var(--in-delay))
+      var(--in-timing-function) both;
+}
+
+.loadingspinner #square5 {
+  left: calc(3 * var(--offset));
+  top: calc(1 * var(--offset));
+  animation: square5 var(--duration) var(--delay) var(--timing-function)
+      infinite,
+    squarefadein var(--in-duration) calc(4 * var(--in-delay))
+      var(--in-timing-function) both;
+}
+
+@keyframes square1 {
+  0% {
+    left: calc(0 * var(--offset));
+    top: calc(0 * var(--offset));
+  }
+  8.333% {
+    left: calc(0 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+  100% {
+    left: calc(0 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+}
+
+@keyframes square2 {
+  0% {
+    left: calc(0 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+  8.333% {
+    left: calc(0 * var(--offset));
+    top: calc(2 * var(--offset));
+  }
+  16.67% {
+    left: calc(1 * var(--offset));
+    top: calc(2 * var(--offset));
+  }
+  25.00% {
+    left: calc(1 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+  83.33% {
+    left: calc(1 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+  91.67% {
+    left: calc(1 * var(--offset));
+    top: calc(0 * var(--offset));
+  }
+  100% {
+    left: calc(0 * var(--offset));
+    top: calc(0 * var(--offset));
+  }
+}
+
+@keyframes square3 {
+  0%,
+  100% {
+    left: calc(1 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+  16.67% {
+    left: calc(1 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+  25.00% {
+    left: calc(1 * var(--offset));
+    top: calc(0 * var(--offset));
+  }
+  33.33% {
+    left: calc(2 * var(--offset));
+    top: calc(0 * var(--offset));
+  }
+  41.67% {
+    left: calc(2 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+  66.67% {
+    left: calc(2 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+  75.00% {
+    left: calc(2 * var(--offset));
+    top: calc(2 * var(--offset));
+  }
+  83.33% {
+    left: calc(1 * var(--offset));
+    top: calc(2 * var(--offset));
+  }
+  91.67% {
+    left: calc(1 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+}
+
+@keyframes square4 {
+  0% {
+    left: calc(2 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+  33.33% {
+    left: calc(2 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+  41.67% {
+    left: calc(2 * var(--offset));
+    top: calc(2 * var(--offset));
+  }
+  50.00% {
+    left: calc(3 * var(--offset));
+    top: calc(2 * var(--offset));
+  }
+  58.33% {
+    left: calc(3 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+  100% {
+    left: calc(3 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+}
+
+@keyframes square5 {
+  0% {
+    left: calc(3 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+  50.00% {
+    left: calc(3 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+  58.33% {
+    left: calc(3 * var(--offset));
+    top: calc(0 * var(--offset));
+  }
+  66.67% {
+    left: calc(2 * var(--offset));
+    top: calc(0 * var(--offset));
+  }
+  75.00% {
+    left: calc(2 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+  100% {
+    left: calc(2 * var(--offset));
+    top: calc(1 * var(--offset));
+  }
+}
+
+@keyframes squarefadein {
+  0% {
+    transform: scale(0.75);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Handymen Results Screen */
+.handymen-results-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: $bg;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.handymen-results-header {
+  text-align: center;
+  margin-bottom: 24px;
+  padding-top: 40px;
+}
+
+.handymen-results-header h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: $text;
+  margin: 0 0 8px 0;
+}
+
+.handymen-results-subtitle {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+}
+
+.handymen-list {
+  display: grid;
+  gap: 16px;
+  max-width: 400px;
+  width: 100%;
+  margin: 0 auto;
+  padding-bottom: 40px;
+}
+
+.handyman-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: slideUpFadeIn 0.5s ease-out forwards;
+  transition: all 0.2s;
+}
+
+.handyman-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 159, 28, 0.3);
+  transform: translateY(-2px);
+}
+
+@keyframes slideUpFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.handyman-card__image {
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 159, 28, 0.3);
+}
+
+.handyman-card__image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.handyman-card__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.handyman-card__name {
+  font-size: 18px;
+  font-weight: 700;
+  color: $text;
+  margin: 0 0 8px 0;
+}
+
+.handyman-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.handyman-card__city {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+.handyman-card__rating {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 600;
+}
+
+.handyman-card__rating span:first-child {
+  font-size: 16px;
+}
+
+/* Topbar */
 .topbar {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr;
   align-items: center;
   gap: 10px;
   padding: 10px 0 12px;
@@ -669,34 +2070,250 @@ $danger: #ff3b3b;
   line-height: 1.2;
 }
 
-.topbar__sub {
-  margin-top: 4px;
-  font-size: 12px;
-  font-weight: 800;
-  color: $muted;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.stepPill {
-  display: inline-flex;
+/* Step Indicator */
+.step-indicator {
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 54px;
-  height: 34px;
-  border-radius: 999px;
-  border: 1px solid rgba($orange, 0.35);
-  background: rgba($orange, 0.12);
-  color: rgba(255, 255, 255, 0.88);
-  font-weight: 1100;
-  font-size: 12px;
+  gap: 8px;
+  padding: 20px 0;
+  margin-bottom: 20px;
 }
 
-/* Blocks — minimal, flat */
+.step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-number {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 1100;
+  font-size: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  color: $muted;
+  transition: all 0.3s;
+}
+
+.step-item.active .step-number {
+  border-color: $orange;
+  background: rgba($orange, 0.2);
+  color: $orange;
+}
+
+.step-item.completed .step-number {
+  border-color: $orange;
+  background: linear-gradient(135deg, $orange, $orange2);
+  color: #111;
+}
+
+.step-label {
+  font-size: 12px;
+  font-weight: 900;
+  color: $muted;
+  transition: all 0.3s;
+}
+
+.step-item.active .step-label {
+  color: $text;
+}
+
+.step-line {
+  flex: 1;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 10px;
+  transition: all 0.3s;
+}
+
+.step-line.active {
+  background: linear-gradient(90deg, $orange, $orange2);
+}
+
+/* Content */
 .content {
   display: grid;
   gap: 12px;
+  min-height: 0; /* Allow flex children to shrink */
+}
+
+.step-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: slideIn 0.4s ease-out;
+  min-height: 0; /* Allow flex children to shrink */
+}
+
+.step-content--animated {
+  animation: slideIn 0.4s ease-out;
+}
+
+/* Step Container - wraps all sections in a scrollable card */
+.step-container {
+  border: 1px solid $stroke;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+  max-height: calc(100vh - 250px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* Custom scrollbar for step container */
+.step-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.step-container::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.step-container::-webkit-scrollbar-thumb {
+  background: rgba($orange, 0.5);
+  border-radius: 10px;
+}
+
+.step-container::-webkit-scrollbar-thumb:hover {
+  background: rgba($orange, 0.7);
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Loading Categories */
+.block--loading-categories {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.loading-categories {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.loading-categories__spinner {
+  display: flex;
+  gap: 8px;
+}
+
+.spinner-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: $orange;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.spinner-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.spinner-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+.loading-categories__text {
+  color: $text;
+  font-weight: 1000;
+  font-size: 15px;
+  text-align: center;
+}
+
+/* Found Categories */
+.block--found-categories {
+  background: rgba($orange, 0.1);
+  border-color: rgba($orange, 0.3);
+}
+
+.categories-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.category-card {
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s;
+}
+
+.category-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba($orange, 0.4);
+}
+
+.category-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.category-card__name {
+  color: $text;
+  font-weight: 1100;
+  font-size: 15px;
+  flex: 1;
+}
+
+.category-card__price {
+  color: $orange;
+  font-weight: 1200;
+  font-size: 16px;
+  background: rgba($orange, 0.15);
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+
+.category-card__details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.category-card__category,
+.category-card__work-type {
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 900;
 }
 
 .block {
@@ -704,6 +2321,9 @@ $danger: #ff3b3b;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.03);
   padding: 12px;
+  min-height: 120px; /* Consistent minimum height for all blocks */
+  display: flex;
+  flex-direction: column;
 }
 
 .block--last {
@@ -716,12 +2336,38 @@ $danger: #ff3b3b;
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 10px;
+  flex-wrap: wrap;
 }
 
 .block__label {
   font-size: 13px;
   font-weight: 1100;
   color: $text;
+}
+
+.block__refine-btn {
+  font-size: 11px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.7);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  margin-top: 4px;
+
+  &:hover {
+    color: $orange3;
+    border-color: rgba($orange, 0.3);
+    background: rgba($orange, 0.1);
+  }
+
+  @media (max-width: 450px) {
+    font-size: 10px;
+    padding: 5px 8px;
+  }
 }
 
 .block__req {
@@ -734,79 +2380,62 @@ $danger: #ff3b3b;
   border-radius: 999px;
 }
 
-/* Summary (selected subcategory) */
-.summary {
-  margin-top: 10px;
+/* Additional Requests */
+.additional-request {
+  position: relative;
+  margin-top: 12px;
+}
+
+.remove-request-btn {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba($danger, 0.3);
+  background: rgba($danger, 0.1);
+  color: $danger;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.add-request-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px;
   border-radius: 14px;
-  border: 1px solid rgba($orange, 0.25);
-  background: rgba($orange, 0.08);
-  padding: 10px;
-}
-
-.summary__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.summary__row--meta {
-  margin-top: 8px;
-  justify-content: flex-start;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.summary__name {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.okDot {
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, $orange, $orange2);
-  color: #111;
-  font-weight: 1200;
-  flex: 0 0 auto;
-}
-
-.summary__txt {
-  min-width: 0;
-  font-weight: 1100;
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.03);
   color: $text;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.summary__price {
-  font-weight: 1200;
-  color: $orange2;
-  white-space: nowrap;
-}
-
-.tag {
-  border-radius: 999px;
-  padding: 4px 10px;
   font-weight: 1100;
-  font-size: 11px;
-  border: 1px solid rgba($orange, 0.22);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-request-btn:hover {
+  border-color: rgba($orange, 0.4);
   background: rgba($orange, 0.1);
-  color: $text;
-}
-.tag--ghost {
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.18);
-  color: rgba(255, 255, 255, 0.78);
 }
 
 /* Inputs */
+.input-small {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.22);
+  color: $text;
+  padding: 14px 12px;
+  font-weight: 900;
+  font-size: 16px;
+  min-height: 48px;
+}
+
 .textarea,
 .select {
   width: 100%;
@@ -817,7 +2446,7 @@ $danger: #ff3b3b;
   color: $text;
   padding: 14px 12px;
   font-weight: 900;
-  font-size: 16px; /* prevent iOS zoom */
+  font-size: 16px;
 }
 
 .textarea {
@@ -902,62 +2531,177 @@ $danger: #ff3b3b;
   cursor: pointer;
 }
 
-.thumb {
-  margin-top: 10px;
-  border-radius: 14px;
+.images-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.image-item {
+  position: relative;
+  border-radius: 12px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(0, 0, 0, 0.25);
+  aspect-ratio: 1;
 }
-.thumb img {
+
+.image-item__img {
   width: 100%;
+  height: 100%;
+  object-fit: cover;
   display: block;
-  height: auto;
 }
 
-/* Location layout */
-.locGrid {
+.image-item__remove {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba($danger, 0.3);
+  background: rgba($danger, 0.2);
+  color: $danger;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: all 0.2s;
+}
+
+.image-item__remove:hover {
+  background: rgba($danger, 0.4);
+  border-color: rgba($danger, 0.5);
+  transform: scale(1.1);
+}
+
+.uploadBtn--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Location Block */
+.block--location {
+  min-height: 200px; /* Same height as other blocks */
+}
+
+.location-content {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 
-.locGrid__actions {
+.location-input-wrapper {
+  width: 100%;
+}
+
+.house-number-input {
+  width: 100%;
+}
+
+.house-number-input .input-small {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: $text;
+  font-size: 15px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.house-number-input .input-small:focus {
+  outline: none;
+  border-color: $orange;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.selected-location {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(255, 159, 28, 0.1);
+  border: 1px solid rgba(255, 159, 28, 0.3);
+}
+
+.selected-location__text {
+  color: $text;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.selected-location__change {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: $text;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.selected-location__change:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.location-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+  margin-top: 8px;
 }
 
-/* On wider screens keep it on one row */
-@media (min-width: 560px) {
-  .locGrid {
-    grid-template-columns: 1fr auto;
-    align-items: start;
-  }
-  .locGrid__actions {
-    grid-template-columns: auto auto;
-  }
-}
-
-.ghostBtn,
-.solidBtn {
+.location-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 16px;
   border-radius: 14px;
-  padding: 12px 12px;
   font-weight: 1100;
+  font-size: 15px;
   cursor: pointer;
-  white-space: nowrap;
+  transition: all 0.2s;
+  border: none;
+  min-height: 50px;
 }
 
-.ghostBtn {
+.location-btn--map {
+  background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.18);
   color: rgba(255, 255, 255, 0.9);
 }
 
-.solidBtn {
-  border: none;
+.location-btn--map:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.location-btn--gps {
   background: linear-gradient(135deg, $orange, $orange2);
   color: #111;
+}
+
+.location-btn--gps:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba($orange, 0.4);
+}
+
+.location-btn__icon {
+  font-size: 18px;
+}
+
+.location-btn__text {
+  font-weight: 1100;
 }
 
 /* Two columns selects */
@@ -966,7 +2710,7 @@ $danger: #ff3b3b;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
-@media (max-width: 520px) {
+@media (max-width: 450px) {
   .twoCols {
     grid-template-columns: 1fr;
   }
@@ -988,7 +2732,6 @@ $danger: #ff3b3b;
   color: $text;
   font-weight: 1100;
   cursor: pointer;
-
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1056,89 +2799,551 @@ $danger: #ff3b3b;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Sticky CTA */
-.footer {
+/* Step Actions */
+.step-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.next-btn-animated {
+  --color: 255, 106, 0; /* Orange color */
+  flex: 1;
+  border-radius: 14px;
+  transition: 0.3s;
+  background-color: rgba(var(--color), 0.2);
+  color: rgb(var(--color));
+  fill: rgb(var(--color));
+  font-weight: 1100;
+  font-size: 16px;
+  cursor: pointer;
+  border: 2px solid rgb(var(--color));
+  box-shadow: 0 0 10px rgba(var(--color), 0.4);
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 24px;
+  gap: 8px;
+}
+
+.next-btn-animated:hover {
+  box-shadow: 0 0 0 5px rgba(var(--color), 0.5);
+}
+
+.next-btn-animated span {
+  transform: scale(0.8);
+  transition: 0.3s;
+}
+
+.next-btn-animated:hover span {
+  transform: scale(1);
+}
+
+.next-btn-animated svg {
+  font-size: 0;
+  transform: scale(0.5) translateX(0%) rotate(180deg);
+  transition: 0.3s;
+  width: 1em;
+  height: 1em;
+}
+
+.next-btn-animated:hover svg {
+  font-size: 20px;
+  transform: scale(1) translateX(-20%) rotate(0deg);
+}
+
+.next-btn-animated:active {
+  transition: 0s;
+  box-shadow: 0 0 0 5px rgb(var(--color));
+}
+
+.back-btn,
+.submit-btn {
+  flex: 1;
+  padding: 16px 24px;
+  border-radius: 14px;
+  font-weight: 1100;
+  font-size: 16px;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.submit-btn {
+  background: linear-gradient(135deg, $orange, $orange2);
+  color: #111;
+}
+
+.submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba($orange, 0.4);
+}
+
+.back-btn {
+  background: rgba(255, 255, 255, 0.06);
+  color: $text;
+  border: 1px solid $stroke;
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Map Picker Modal */
+.map-modal {
   position: fixed;
+  top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
-  background: rgba(11, 11, 15, 0.72);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
 }
 
-.cta {
-  max-width: 640px;
-  margin: 0 auto;
+.map-modal__content {
   width: 100%;
-}
-
-/* Animated button style */
-.animated-button {
-  position: relative;
-  display: inline-block;
-  width: 100%;
-  padding: 16px 24px;
-  border: none;
-  font-size: 16px;
-  background-color: rgba(11, 11, 15, 0.95);
-  border-radius: 100px;
-  font-weight: 1200;
-  color: rgba(255, 255, 255, 0.4);
-  box-shadow: 0 0 0 2px rgba(255, 106, 0, 0.2);
-  cursor: pointer;
+  max-width: 600px;
+  max-height: 90vh;
+  background: $bg2;
+  border-radius: 20px;
+  border: 1px solid $stroke;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.animated-button span:last-child {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 20px;
-  height: 20px;
-  background-color: $orange;
-  border-radius: 50%;
-  opacity: 0;
-  transition: all 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+.map-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid $stroke;
 }
 
-.animated-button span:first-child {
+.map-modal__header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 1100;
+  color: $text;
+}
+
+.map-modal__close {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid $stroke;
+  background: rgba(255, 255, 255, 0.04);
+  color: $text;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.map-modal__close:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.map-modal__map {
+  width: 100%;
+  height: 400px;
+  min-height: 300px;
+  flex: 1;
   position: relative;
-  z-index: 1;
 }
 
-.animated-button:hover {
-  box-shadow: 0 0 0 5px rgba(255, 106, 0, 0.38);
-  color: #ffffff;
+.map-modal__footer {
+  display: flex;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid $stroke;
 }
 
-.animated-button:active {
-  scale: 0.95;
+.map-modal__btn {
+  flex: 1;
+  padding: 14px 20px;
+  border-radius: 14px;
+  font-weight: 1100;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
 }
 
-.animated-button:hover span:last-child {
-  width: 150px;
-  height: 150px;
-  opacity: 1;
+.map-modal__btn--cancel {
+  background: rgba(255, 255, 255, 0.06);
+  color: $text;
+  border: 1px solid $stroke;
 }
 
-.spacer {
-  height: 8px;
+.map-modal__btn--cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
-/* Keep your original error classes compatibility */
-.error-message {
-  margin-top: 8px;
-  color: rgba(220, 53, 69, 0.95);
-  font-size: 12px;
-  font-weight: 900;
+.map-modal__btn--confirm {
+  background: linear-gradient(135deg, $orange, $orange2);
+  color: #111;
 }
-.file-label-error {
-  border-color: rgba($danger, 0.55) !important;
-  background: rgba($danger, 0.1) !important;
+
+.map-modal__btn--confirm:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba($orange, 0.3);
+}
+
+/* Responsive adjustments */
+@media (max-width: 450px) {
+  .shell {
+    max-width: 100%;
+    padding: 10px 10px calc(80px + env(safe-area-inset-bottom));
+  }
+
+  .step-container {
+    max-height: calc(100vh - 200px);
+    padding: 10px;
+  }
+
+  .step-indicator {
+    padding: 15px 0;
+    gap: 6px;
+  }
+
+  .step-number {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+  }
+
+  .step-label {
+    font-size: 11px;
+  }
+
+  .block {
+    padding: 10px;
+  }
+
+  .topbar {
+    padding: 8px 0 10px;
+  }
+
+  .topbar__title {
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 600px) {
+  .map-modal {
+    padding: 0;
+  }
+
+  .map-modal__content {
+    max-width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  .map-modal__map {
+    height: 50vh;
+  }
+}
+
+/* Modals (Split Call & Partial Match) */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100001;
+  padding: 20px;
+  animation: fadeIn 0.3s ease;
+
+  @media (max-width: 768px) {
+    padding: 10px;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-content {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.085),
+    rgba(255, 255, 255, 0.06)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55),
+    0 18px 44px rgba(255, 106, 0, 0.18);
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease;
+  direction: rtl;
+
+  @media (max-width: 768px) {
+    max-width: 100%;
+    border-radius: 16px;
+    max-height: 95vh;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+  @media (max-width: 768px) {
+    padding: 16px 18px;
+  }
+
+  h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 1100;
+    color: $orange3;
+    line-height: 1.3;
+    flex: 1;
+
+    @media (max-width: 768px) {
+      font-size: 16px;
+    }
+  }
+}
+
+.modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  margin-right: 12px;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba($orange, 0.3);
+    color: $orange3;
+  }
+
+  @media (max-width: 768px) {
+    width: 28px;
+    height: 28px;
+    font-size: 18px;
+    margin-right: 8px;
+  }
+}
+
+.modal-body {
+  padding: 20px 24px;
+  flex: 1;
+  overflow-y: auto;
+
+  @media (max-width: 768px) {
+    padding: 16px 18px;
+  }
+
+  p {
+    margin: 0 0 16px 0;
+    font-size: 14px;
+    font-weight: 900;
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.5;
+
+    @media (max-width: 768px) {
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+
+    &:last-of-type {
+      margin-bottom: 0;
+    }
+  }
+
+  ul {
+    margin: 12px 0 16px 0;
+    padding-right: 20px;
+    list-style: none;
+
+    @media (max-width: 768px) {
+      margin: 10px 0 12px 0;
+      padding-right: 16px;
+    }
+
+    li {
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: rgba($orange, 0.1);
+      border: 1px solid rgba($orange, 0.2);
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 1000;
+      color: $orange3;
+      position: relative;
+      padding-right: 32px;
+
+      @media (max-width: 768px) {
+        padding: 8px 10px;
+        padding-right: 28px;
+        font-size: 12px;
+        margin-bottom: 6px;
+      }
+
+      &::before {
+        content: "✓";
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: $orange;
+        font-weight: 1200;
+        font-size: 14px;
+
+        @media (max-width: 768px) {
+          right: 8px;
+          font-size: 12px;
+        }
+      }
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+  }
+
+  .matched-subcategories-list {
+    margin: 12px 0 16px 0;
+    padding-right: 0;
+
+    .subcategory-item {
+      margin: 0 0 12px 0;
+      padding: 12px 16px;
+      background: rgba($orange, 0.1);
+      border: 1px solid rgba($orange, 0.2);
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 1000;
+      color: $orange3;
+      line-height: 1.5;
+
+      @media (max-width: 768px) {
+        padding: 10px 12px;
+        font-size: 13px;
+        margin-bottom: 10px;
+      }
+
+      strong {
+        color: $orange3;
+        font-weight: 1100;
+      }
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+  }
+}
+
+.modal-footer {
+  display: flex;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+
+  @media (max-width: 768px) {
+    padding: 16px 18px;
+    gap: 10px;
+    flex-direction: column-reverse;
+  }
+}
+
+.btn {
+  flex: 1;
+  padding: 14px 20px;
+  border-radius: 14px;
+  font-weight: 1100;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  @media (max-width: 768px) {
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  &--primary {
+    background: linear-gradient(135deg, $orange, $orange2);
+    color: #111;
+    box-shadow: 0 6px 20px rgba(255, 106, 0, 0.3);
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(255, 106, 0, 0.4);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+
+  &--secondary {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.9);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+  }
 }
 </style>

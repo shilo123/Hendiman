@@ -67,6 +67,7 @@ export const useMainStore = defineStore("main", {
 
         if (isHendiman) {
           // הפקה של קטגוריות שלימות ותתי-קטגוריות מתוך specialties עם type
+          // Only use full categories (not subcategories)
           const fullCategoriesFromSpecs = Array.isArray(specialties)
             ? specialties.filter(
                 (s) =>
@@ -75,24 +76,10 @@ export const useMainStore = defineStore("main", {
               )
             : [];
 
-          const subCategoriesFromSpecs = Array.isArray(specialties)
-            ? specialties.filter(
-                (s) =>
-                  !s ||
-                  s.type === "subCategory" ||
-                  (!s.type && !s.isFullCategory)
-              )
-            : [];
-
           const mergedFullCategories = [
             ...(Array.isArray(fullCategories) ? fullCategories : []),
             ...fullCategoriesFromSpecs,
           ];
-
-          const mergedSpecialties =
-            subCategoriesFromSpecs.length > 0
-              ? subCategoriesFromSpecs
-              : specialties;
 
           const fullCategoryNames = (mergedFullCategories || [])
             .map((cat) => {
@@ -103,15 +90,8 @@ export const useMainStore = defineStore("main", {
             .filter((name) => name && name.length > 0)
             .map((n) => n.toLowerCase());
 
-          const specialtyNames = (mergedSpecialties || [])
-            .map((spec) => {
-              if (typeof spec === "object" && spec.name)
-                return spec.name.trim();
-              if (typeof spec === "string") return spec.trim();
-              return null;
-            })
-            .filter((name) => name && name.length > 0)
-            .map((n) => n.toLowerCase());
+          // Not using subcategories anymore - set to empty array
+          const specialtyNames = [];
 
           list = state.jobs
             .map((job) => {
@@ -134,45 +114,51 @@ export const useMainStore = defineStore("main", {
               return job;
             })
             .filter((job) => {
-              const jobCategory =
-                job.subcategoryInfo?.category || job.category || "";
-              const jobCategoryLower = jobCategory.trim().toLowerCase();
-              const jobSubcategoryName =
-                job.subcategoryInfo?.name || job.subcategoryName || "";
-              const jobSubLower = jobSubcategoryName.trim().toLowerCase();
-              const jobCategoryFromSub =
-                jobSubLower && subcategoryToCategory.get(jobSubLower);
-              const resolvedJobCategory =
-                jobCategoryLower || jobCategoryFromSub || "";
+              // subcategoryInfo is an array, need to check all items
+              const subcategoryInfoArray = Array.isArray(job.subcategoryInfo)
+                ? job.subcategoryInfo
+                : job.subcategoryInfo
+                ? [job.subcategoryInfo]
+                : [];
 
-              const matchesFullCat =
-                fullCategoryNames.length === 0
-                  ? false
-                  : fullCategoryNames.includes(resolvedJobCategory);
+              // If no subcategoryInfo, check old format
+              if (subcategoryInfoArray.length === 0) {
+                const jobCategory = (job.category || "").trim().toLowerCase();
 
-              const matchesSubCat =
-                specialtyNames.length === 0
-                  ? false
-                  : specialtyNames.some((spec) => {
-                      if (jobSubLower === spec) return true;
-                      if (
-                        jobSubLower.includes(spec) ||
-                        spec.includes(jobSubLower)
-                      )
-                        return true;
-                      const jobWords = jobSubLower.split(/\s+/);
-                      const specWords = spec.split(/\s+/);
-                      return jobWords.some((w) => specWords.includes(w));
-                    });
+                // Only check if handyman has full category match
+                const matchesFullCat =
+                  fullCategoryNames.length === 0
+                    ? false
+                    : fullCategoryNames.includes(jobCategory);
 
-              // OR logic: קטגוריה שלימה או תת-קטגוריה
-              if (
-                fullCategoryNames.length === 0 &&
-                specialtyNames.length === 0
-              ) {
-                return true; // אין סינון
+                // Only return true if matches full category
+                // If no specialties defined, show all jobs
+                if (fullCategoryNames.length === 0) {
+                  return true; // אין סינון - הצג את כל העבודות
+                }
+                return matchesFullCat;
               }
-              return matchesFullCat || matchesSubCat;
+
+              // Check each subcategoryInfo item - ALL categories must match
+              // Only match by full categories (not subcategories)
+              return subcategoryInfoArray.every((subcatInfo) => {
+                const jobCategory = (subcatInfo.category || "")
+                  .trim()
+                  .toLowerCase();
+
+                // Only check if handyman has full category match
+                const matchesFullCat =
+                  fullCategoryNames.length === 0
+                    ? false
+                    : fullCategoryNames.includes(jobCategory);
+
+                // Only return true if matches full category
+                // If no specialties defined, show all jobs
+                if (fullCategoryNames.length === 0) {
+                  return true; // אין סינון - הצג את כל העבודות
+                }
+                return matchesFullCat;
+              });
             });
 
           // סינון לפי סטטוס
@@ -281,7 +267,6 @@ export const useMainStore = defineStore("main", {
 
         return data;
       } catch (error) {
-        console.error("Error fetching dashboard data:", error);
         // אם יש שגיאה (כמו ID לא תקין), החזר null
         return null;
       } finally {
@@ -302,7 +287,7 @@ export const useMainStore = defineStore("main", {
       this.stats.clients = 142;
       this.stats.handymen = 148;
       this.stats.users = 142 + 148;
-      // console.log(this.stats, stats);
+      //
     },
     async fetchFilteredJobsForHandyman({
       status = "all",
@@ -318,40 +303,25 @@ export const useMainStore = defineStore("main", {
           params.push(`lng=${coordinates.lng}`);
           params.push(`lat=${coordinates.lat}`);
         }
+        // Add handymanId to filter by specialties
+        if (this.user && this.user._id) {
+          params.push(`handymanId=${this.user._id}`);
+        }
         const queryString = params.length ? `?${params.join("&")}` : "";
         const url = `${URL}/jobs/filter${queryString}`;
-
-        console.log("🔍 [CLIENT] Fetching jobs with params:", {
-          status,
-          maxKm,
-          coordinates,
-          url,
-        });
 
         const { data } = await axios.get(url);
         if (data.success) {
           this.jobs = data.jobs || [];
-          console.log(`✅ [CLIENT] Received ${this.jobs.length} jobs`);
+
           if (this.jobs.length > 0) {
-            this.jobs.forEach((job) => {
-              console.log(
-                `  - Job ${job._id || job.id}: ${
-                  job.distanceKm !== null ? `${job.distanceKm}km` : "N/A"
-                } away, status: ${job.status}`
-              );
-            });
+            this.jobs.forEach((job) => {});
           } else {
-            console.warn("⚠️ [CLIENT] No jobs received!");
           }
         } else {
-          console.error(
-            "❌ [CLIENT] Failed to fetch filtered jobs:",
-            data.message
-          );
         }
         return data;
       } catch (error) {
-        console.error("Error fetching filtered jobs for handyman:", error);
         throw error;
       } finally {
         this.isLoading = false;
@@ -386,7 +356,6 @@ export const useMainStore = defineStore("main", {
 
         return data;
       } catch (error) {
-        console.error("Error fetching handymen:", error);
         throw error;
       } finally {
         this.isLoading = false;

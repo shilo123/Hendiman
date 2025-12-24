@@ -66,7 +66,6 @@ export default {
         });
 
         if (token) {
-          console.log("FCM token:", token);
           this.isEnabled = true;
           this.toast?.showSuccess("התראות הופעלו בהצלחה!");
 
@@ -76,7 +75,6 @@ export default {
           this.toast?.showError("לא ניתן לקבל token להתראות");
         }
       } catch (error) {
-        console.error("Error enabling push notifications:", error);
         this.toast?.showError("שגיאה בהפעלת התראות: " + error.message);
       } finally {
         this.isRequesting = false;

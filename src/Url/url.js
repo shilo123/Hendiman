@@ -19,10 +19,8 @@ if (process.env.NODE_ENV === "production") {
 }
 
 // Log the URL for debugging (only in development)
-if (process.env.NODE_ENV !== "production") {
-  console.log("API URL configured:", URL);
-  console.log("Hostname:", window.location.hostname);
-}
+// if (process.env.NODE_ENV !== "production") {
+// }
 
 export { URL };
 

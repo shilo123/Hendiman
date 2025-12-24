@@ -13,10 +13,10 @@
 
       <div class="chat__headInfo">
         <div class="chat__title">
-          {{ isHandyman ? clientName : handymanName }}
+          {{ isHandyman ? clientName : getHandymanName() }}
         </div>
         <div class="chat__subtitle">
-          {{ jobInfo?.subcategoryInfo?.name || "עבודה" }}
+          {{ getJobDisplayName(jobInfo) }}
         </div>
       </div>
 
@@ -49,6 +49,25 @@
         </button>
       </div>
     </header>
+
+    <!-- Tabs (if multiple jobs) -->
+    <div v-if="jobs && jobs.length > 1" class="chat__tabs">
+      <button
+        v-for="(jobItem, index) in jobs"
+        :key="jobItem._id || jobItem.id || index"
+        class="chat__tab"
+        :class="{ 'chat__tab--active': currentJobIndex === index }"
+        type="button"
+        @click="switchToJob(index)"
+      >
+        <span class="chat__tabName">
+          {{ isHandyman ? jobItem.clientName : getHandymanNameForJob(jobItem) }}
+        </span>
+        <span v-if="getUnreadCount(jobItem) > 0" class="chat__tabBadge">
+          {{ getUnreadCount(jobItem) }}
+        </span>
+      </button>
+    </div>
 
     <!-- Action bar (one line, scrollable) -->
     <div v-if="showActionBar" class="chat__actions">
@@ -439,7 +458,8 @@ import { useMainStore } from "@/store/index";
 export default {
   name: "JobChatMobileV2",
   props: {
-    job: { type: Object, required: true },
+    job: { type: Object, required: false },
+    jobs: { type: Array, required: false }, // Array of jobs for tabs
     isHandyman: { type: Boolean, default: false },
   },
   emits: [
@@ -461,7 +481,6 @@ export default {
       rating: 0,
       hoverRating: 0,
       reviewText: "",
-      ratingSubmitted: false,
       imageModal: null,
       showTools: false,
       socket: null,
@@ -476,11 +495,23 @@ export default {
       stepsOpen: false,
       showMenu: false,
       showNavModal: false,
+
+      // Tabs state
+      currentJobIndex: 0,
+      unreadCounts: {}, // Track unread messages per job
+      ratingSubmittedJobs: {}, // Track which jobs have been rated
     };
   },
   computed: {
+    // Get current job (from jobs array or single job prop)
+    currentJob() {
+      if (this.jobs && this.jobs.length > 0) {
+        return this.jobs[this.currentJobIndex] || this.jobs[0];
+      }
+      return this.job;
+    },
     jobStatus() {
-      return this.localJobStatus || this.job?.status || "open";
+      return this.localJobStatus || this.currentJob?.status || "open";
     },
     showStatusButtons() {
       return ["assigned", "on_the_way", "in_progress"].includes(this.jobStatus);
@@ -495,25 +526,33 @@ export default {
       );
     },
     clientName() {
-      return this.job?.clientName || "לקוח";
+      return this.currentJob?.clientName || "לקוח";
     },
     handymanName() {
-      return this.job?.handymanName || "הנדימן";
+      // Handle handymanName as array
+      if (
+        Array.isArray(this.currentJob?.handymanName) &&
+        this.currentJob.handymanName.length > 0
+      ) {
+        return this.currentJob.handymanName[0]; // Return first handyman name
+      }
+      return this.currentJob?.handymanName || "הנדימן";
     },
     jobInfo() {
-      return this.job;
+      return this.currentJob;
     },
     jobLocation() {
-      if (this.job?.coordinates && Array.isArray(this.job.coordinates)) {
-        return { lng: this.job.coordinates[0], lat: this.job.coordinates[1] };
+      const job = this.currentJob;
+      if (job?.coordinates && Array.isArray(job.coordinates)) {
+        return { lng: job.coordinates[0], lat: job.coordinates[1] };
       }
       if (
-        this.job?.location?.coordinates &&
-        Array.isArray(this.job.location.coordinates)
+        job?.location?.coordinates &&
+        Array.isArray(job.location.coordinates)
       ) {
         return {
-          lng: this.job.location.coordinates[0],
-          lat: this.job.location.coordinates[1],
+          lng: job.location.coordinates[0],
+          lat: job.location.coordinates[1],
         };
       }
       if (
@@ -569,23 +608,47 @@ export default {
         { status: "done", label: "סיום" },
       ];
     },
+    ratingSubmitted() {
+      const job = this.currentJob;
+      const jobId = String(job?._id || job?.id || "");
+      return this.ratingSubmittedJobs[jobId] || false;
+    },
   },
   created() {
     this.toast = useToast();
-    this.localJobStatus = this.job?.status || null;
+    const job = this.currentJob;
+    this.localJobStatus = job?.status || null;
   },
   async mounted() {
     window.addEventListener("click", this.onOutsideTools);
     this.initWebSocket();
     await this.loadMessages();
     this.scrollToBottom();
+
+    // Initialize unread counts for all jobs
+    if (this.jobs && this.jobs.length > 1) {
+      for (const jobItem of this.jobs) {
+        await this.updateUnreadCount(jobItem);
+      }
+    }
   },
   beforeUnmount() {
     window.removeEventListener("click", this.onOutsideTools);
     this.disconnectWebSocket();
   },
   watch: {
-    "job.status"(newStatus) {
+    currentJobIndex() {
+      // When switching tabs, reload messages and reconnect socket
+      this.localJobStatus = this.currentJob?.status || null;
+      this.messages = [];
+      this.rating = 0;
+      this.reviewText = "";
+      this.disconnectWebSocket();
+      this.initWebSocket();
+      this.loadMessages();
+      this.scrollToBottom();
+    },
+    "currentJob.status"(newStatus) {
       if (newStatus && !this.localJobStatus) this.localJobStatus = newStatus;
     },
     messages: {
@@ -596,13 +659,87 @@ export default {
     },
   },
   methods: {
+    switchToJob(index) {
+      this.currentJobIndex = index;
+    },
+    getUnreadCount(jobItem) {
+      const jobId = String(jobItem._id || jobItem.id || "");
+      return this.unreadCounts[jobId] || 0;
+    },
+    async updateUnreadCount(jobItem) {
+      try {
+        const jobId = jobItem._id || jobItem.id;
+        if (!jobId) return;
+
+        const { data } = await axios.get(`${URL}/jobs/${jobId}/messages`);
+        if (data.success && data.messages) {
+          const userId = this.store?.user?._id;
+          if (!userId) return;
+
+          // Count unread messages (messages not from current user, after last read)
+          const unread = data.messages.filter((msg) => {
+            const isFromHandyman =
+              !!msg.handyman || !!msg.handymanImage || !!msg.handymanLocation;
+            const isFromMe = this.isHandyman ? isFromHandyman : !isFromHandyman;
+            return !isFromMe;
+          }).length;
+
+          const jobIdStr = String(jobId);
+          this.$set(this.unreadCounts, jobIdStr, unread);
+        }
+      } catch (e) {
+        // Silently fail
+      }
+    },
+    getJobDisplayName(job) {
+      if (!job) return "עבודה";
+      // Handle subcategoryInfo as array
+      if (
+        Array.isArray(job.subcategoryInfo) &&
+        job.subcategoryInfo.length > 0
+      ) {
+        if (job.subcategoryInfo.length === 1) {
+          // Single job - show name
+          return (
+            job.subcategoryInfo[0].subcategory ||
+            job.subcategoryInfo[0].category ||
+            "עבודה"
+          );
+        } else {
+          // Multiple jobs - show count
+          return `${job.subcategoryInfo.length} עבודות`;
+        }
+      }
+      // Fallback for old format (object) or no subcategoryInfo
+      return (
+        job.subcategoryInfo?.name || job.subcategoryInfo?.subcategory || "עבודה"
+      );
+    },
+    getHandymanName() {
+      // Handle handymanName as array
+      if (
+        Array.isArray(this.currentJob?.handymanName) &&
+        this.currentJob.handymanName.length > 0
+      ) {
+        return this.currentJob.handymanName[0]; // Return first handyman name
+      }
+      return this.currentJob?.handymanName || "הנדימן";
+    },
+    getHandymanNameForJob(job) {
+      // Handle handymanName as array for a specific job
+      if (Array.isArray(job?.handymanName) && job.handymanName.length > 0) {
+        return job.handymanName[0]; // Return first handyman name
+      }
+      return job?.handymanName || "הנדימן";
+    },
     openCancel() {
       this.showMenu = false;
       this.showCancelConfirmModal = true;
     },
 
     initWebSocket() {
-      if (!this.job?.id && !this.job?._id) return;
+      const job = this.currentJob;
+      if (!job?.id && !job?._id) return;
 
       if (this.socket) {
         this.socket.removeAllListeners();
@@ -610,7 +747,7 @@ export default {
         this.socket = null;
       }
 
-      const jobId = this.job.id || this.job._id;
+      const jobId = job.id || job._id;
 
       this.socket = io(URL, { transports: ["websocket", "polling"] });
 
@@ -632,6 +769,15 @@ export default {
         const currentJobId = String(jobId || "");
         if (receivedJobId === currentJobId && data.message) {
           this.addMessageToUI(data.message);
+        } else if (this.jobs && this.jobs.length > 1) {
+          // If message is for another job, update unread count
+          const jobItem = this.jobs.find(
+            (j) => String(j._id || j.id) === receivedJobId
+          );
+          if (jobItem) {
+            const currentCount = this.getUnreadCount(jobItem);
+            this.$set(this.unreadCounts, receivedJobId, currentCount + 1);
+          }
         }
       });
 
@@ -649,7 +795,8 @@ export default {
 
     disconnectWebSocket() {
       if (this.socket) {
-        const jobId = this.job?.id || this.job?._id;
+        const job = this.currentJob;
+        const jobId = job?.id || job?._id;
         if (jobId) this.socket.emit("leave-job", jobId);
         this.socket.removeAllListeners();
         this.socket.disconnect();
@@ -659,8 +806,13 @@ export default {
 
     async loadMessages() {
       try {
-        const jobId = this.job?.id || this.job?._id;
+        const job = this.currentJob;
+        const jobId = job?.id || job?._id;
         if (!jobId) return;
+
+        // Reset unread count for current job when loading messages
+        const jobIdStr = String(jobId);
+        this.$set(this.unreadCounts, jobIdStr, 0);
 
         const { data } = await axios.get(`${URL}/jobs/${jobId}/messages`);
         if (data.success && data.messages) {
@@ -938,7 +1090,8 @@ export default {
     },
 
     async sendLocationMessage(location) {
-      const jobId = this.job?.id || this.job?._id;
+      const job = this.currentJob;
+      const jobId = job?.id || job?._id;
       if (!jobId) return;
 
       const userId = this.store?.user?._id;
@@ -1027,7 +1180,8 @@ export default {
       const t = this.newMessage.trim();
       if (!t) return;
 
-      const jobId = this.job?.id || this.job?._id;
+      const job = this.currentJob;
+      const jobId = job?.id || job?._id;
       if (!jobId) return;
 
       const userId = this.store?.user?._id;
@@ -1161,7 +1315,8 @@ export default {
     },
 
     async sendImageMessage(imageUrl, text = null) {
-      const jobId = this.job?.id || this.job?._id;
+      const job = this.currentJob;
+      const jobId = job?.id || job?._id;
       if (!jobId) return;
 
       const userId = this.store?.user?._id;
@@ -1188,10 +1343,11 @@ export default {
 
     async updateStatus(newStatus) {
       try {
+        const job = this.currentJob;
         const endpoint = `/jobs/${newStatus.replaceAll("_", "-")}`;
         await axios.post(`${URL}${endpoint}`, {
-          jobId: this.job._id || this.job.id,
-          handymanId: this.job.handymanId,
+          jobId: job._id || job.id,
+          handymanId: job.handymanId,
         });
 
         // Show success message with status info
@@ -1229,26 +1385,28 @@ export default {
         return;
       }
       try {
-        const customerId = this.store?.user?._id || this.job?.clientId;
+        const job = this.currentJob;
+        const customerId = this.store?.user?._id || job?.clientId;
         if (!customerId) {
           this.toast.showError("לא ניתן לזהות את הלקוח");
           return;
         }
 
         await axios.post(`${URL}/jobs/rate`, {
-          jobId: this.job._id || this.job.id,
-          handymanId: this.job.handymanId,
+          jobId: job._id || job.id,
+          handymanId: job.handymanId,
           customerId,
           rating: this.rating,
           review: this.reviewText,
         });
 
         this.toast.showSuccess("הדירוג נשלח");
-        this.ratingSubmitted = true;
-        this.$emit("rating-submitted");
+        const jobIdStr = String(job._id || job.id);
+        this.$set(this.ratingSubmittedJobs, jobIdStr, true);
+        this.$emit("rating-submitted", job);
         const userId = this.store?.user?._id || this.$route.params.id;
         this.$router.push(
-          `/Dashboard/${userId}/job-summary/${this.job._id || this.job.id}`
+          `/Dashboard/${userId}/job-summary/${job._id || job.id}`
         );
       } catch (e) {
         this.toast.showError("שגיאה בשליחת הדירוג");
@@ -1264,7 +1422,8 @@ export default {
 
     async handleCancelJob() {
       try {
-        const jobId = this.job._id || this.job.id;
+        const job = this.currentJob;
+        const jobId = job._id || job.id;
         if (!jobId) return;
 
         const userId = this.store.user?._id || this.store.user?.id;
@@ -1300,7 +1459,7 @@ $orange2: #ff8a2b;
   display: flex;
   flex-direction: column;
   background: $bg;
-  z-index: 1000;
+  z-index: 100002;
   overflow: hidden;
 }
 
@@ -1313,6 +1472,74 @@ $orange2: #ff8a2b;
   padding: 12px 10px;
   background: rgba(255, 255, 255, 0.06);
   border-bottom: 1px solid rgba($orange, 0.14);
+  flex-shrink: 0;
+}
+
+/* Tabs */
+.chat__tabs {
+  display: flex;
+  gap: 0;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid rgba($orange, 0.14);
+  flex-shrink: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chat__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.chat__tab {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 8px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  font-weight: 900;
+  text-align: center;
+  border-bottom: 2px solid transparent;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.chat__tab:hover {
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.chat__tab--active {
+  color: $orange2;
+  border-bottom-color: $orange;
+  background: rgba($orange, 0.08);
+}
+
+.chat__tabName {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.chat__tabBadge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: $orange;
+  color: #0b0c10;
+  font-size: 10px;
+  font-weight: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 

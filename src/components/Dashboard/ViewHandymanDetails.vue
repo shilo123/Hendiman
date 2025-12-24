@@ -11,11 +11,15 @@
         <!-- Profile Section -->
         <div class="profile-section">
           <div class="profile-image-wrapper">
+            <!-- Loading placeholder -->
+            <div v-if="imageLoading" class="profile-image-loading"></div>
             <img
+              v-show="!imageLoading"
               class="profile-image"
               :src="getHandymanImage"
               :alt="handymanDetails.username"
               @error="onImageError"
+              @load="onImageLoad"
             />
             <img
               class="profile-logo"
@@ -318,6 +322,7 @@ export default {
       ratings: [],
       loadingRatings: false,
       showSpecialties: false,
+      imageLoading: true,
     };
   },
   watch: {
@@ -326,6 +331,8 @@ export default {
       handler(newVal) {
         if (newVal && newVal._id) {
           this.loadRatings();
+          // Reset loading state when handyman changes
+          this.imageLoading = true;
         }
       },
     },
@@ -415,7 +422,6 @@ export default {
           this.ratings = [];
         }
       } catch (error) {
-        console.error("Error loading ratings:", error);
         this.ratings = [];
       } finally {
         this.loadingRatings = false;
@@ -475,8 +481,13 @@ export default {
     onBlockHandyman() {
       this.$emit("block", this.handymanDetails);
     },
+    onImageLoad() {
+      // התמונה נטענה בהצלחה - הסר את ה-loading state
+      this.imageLoading = false;
+    },
     onImageError(event) {
       // אם התמונה נכשלה בטעינה, החלף לתמונת ברירת מחדל
+      this.imageLoading = false;
       const defaultImage = "/img/Hendima-logo.png";
       // רק אם זה לא כבר תמונת ברירת המחדל, החלף
       if (
@@ -532,7 +543,7 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: 100001; /* Higher than DashboardTopBar (100000) */
   padding: 20px;
   overflow-y: auto;
 
@@ -626,6 +637,18 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.profile-image-loading {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: #94a3b8; /* bg-slate-400 equivalent */
+
+  @media (max-width: 768px) {
+    width: 70px;
+    height: 70px;
+  }
 }
 
 .profile-image {

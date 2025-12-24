@@ -469,17 +469,10 @@
                 </div>
 
                 <div class="field">
-                  <!-- Mobile selector (up to 400px) -->
-                  <MobileCategorySelectorSimple
+                  <CategoryCheckboxSelector
                     v-model="handymanForm.specialties"
                     label="תחומי התמחות"
-                    placeholder="לחץ לבחירת תחומי התמחות"
                   />
-
-                  <!-- Desktop selector (above 400px) -->
-                  <div class="desktop-category-selector">
-                    <CategorySelector v-model="handymanForm.specialties" />
-                  </div>
                 </div>
                 <div class="field">
                   <label class="label" for="handymanLogo">לוגו (רשות)</label>
@@ -552,14 +545,12 @@ import axios from "axios";
 import { useToast } from "@/composables/useToast";
 import { URL } from "@/Url/url";
 import AddressAutocomplete from "@/components/AddressAutocomplete.vue";
-import MobileCategorySelectorSimple from "@/components/MobileCategorySelectorSimple.vue";
-import CategorySelector from "@/components/CategorySelector.vue";
+import CategoryCheckboxSelector from "@/components/CategoryCheckboxSelector.vue";
 export default {
   name: "RegisterView",
   components: {
     AddressAutocomplete,
-    MobileCategorySelectorSimple,
-    CategorySelector,
+    CategoryCheckboxSelector,
   },
   data() {
     return {
@@ -683,7 +674,7 @@ export default {
                   targetForm.imageUrl = user.picture;
                 }
               } catch (error) {
-                console.warn("Failed to upload Google image to S3:", error);
+
                 // Fallback: use original URL if upload fails
                 targetForm.imageUrl = user.picture;
               }
@@ -879,7 +870,7 @@ export default {
         } else {
           this.toast.showError("שגיאה בהרשמה. אנא נסה שוב.", 6000);
         }
-        console.error("Registration error:", error);
+
       } finally {
         this.isSubmitting = false;
       }
@@ -918,7 +909,7 @@ export default {
               this.handymanForm.addressEnglish = foundCity.english_name;
             }
           } catch (e) {
-            console.error(e);
+
           }
         }
 
@@ -964,63 +955,30 @@ export default {
 
         if (formData.isHandyman) {
           if (formData.specialties && Array.isArray(formData.specialties)) {
+            // Filter and format specialties - only full categories
             formData.specialties = formData.specialties
-              .filter((item) => item && (item.name || item.subcategory))
-              .map((item) => {
-                const isFull =
-                  item.isFullCategory === true || item.type === "category";
-                // const resolvedType = isFull ? "category" : "subCategory";
+              .filter(
+                (item) =>
+                  item &&
+                  item.name &&
+                  (item.isFullCategory === true || item.type === "category")
+              )
+              .map((item) => ({
+                name: item.name,
+                category: "",
+                price: null,
+                typeWork: null,
+                isFullCategory: true,
+                type: "category",
+              }));
 
-                // אם זה קטגוריה שלמה
-                if (isFull && item.name) {
-                  return {
-                    name: String(item.name).trim(),
-                    category: "",
-                    price: null,
-                    typeWork: null,
-                    isFullCategory: true,
-                    type: "category",
-                  };
-                }
-
-                // אם זה תת-קטגוריה
-                if (item.name) {
-                  return {
-                    name: String(item.name).trim(),
-                    category: String(item.category || "").trim(),
-                    price: item.price || null,
-                    typeWork: item.typeWork || null,
-                    isFullCategory: false,
-                    type: "subCategory",
-                  };
-                }
-
-                if (item.subcategory) {
-                  return {
-                    name: String(item.subcategory).trim(),
-                    category: String(item.category || "").trim(),
-                    price: item.price || null,
-                    typeWork: item.workType || item.typeWork || null,
-                    isFullCategory: false,
-                    type: "subCategory",
-                  };
-                }
-
-                if (typeof item === "string") {
-                  return {
-                    name: String(item).trim(),
-                    category: "",
-                    price: null,
-                    typeWork: null,
-                    isFullCategory: false,
-                    type: "subCategory",
-                  };
-                }
-                return null;
-              })
-              .filter((x) => x && x.name);
+            // Also create fullCategories array for easier querying
+            formData.fullCategories = formData.specialties.map(
+              (item) => item.name
+            );
           } else {
             formData.specialties = [];
+            formData.fullCategories = [];
           }
         }
 
@@ -1068,7 +1026,7 @@ export default {
         } else {
           this.toast.showError("שגיאה בהרשמה. אנא נסה שוב.", 6000);
         }
-        console.error("Registration error:", error);
+
       } finally {
         this.isSubmitting = false;
       }
