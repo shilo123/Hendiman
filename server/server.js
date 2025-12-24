@@ -53,6 +53,11 @@ function findAvailablePort(startPort) {
   });
 }
 
+// Health check endpoint for connection quality testing
+app.head("/health-check", (req, res) => {
+  res.status(200).end();
+});
+
 // Start server with available port
 (async () => {
   const PORT = process.env.PORT || (await findAvailablePort(3003));
@@ -1250,21 +1255,6 @@ function findAvailablePort(startPort) {
         query.status = status;
       }
 
-      // Debug: log all jobs before filtering to see what we're working with
-      const allJobsInDb = await collectionJobs.find({}).toArray();
-      console.log(`[FILTER] Total jobs in DB: ${allJobsInDb.length}`);
-      console.log(
-        `[FILTER] All job IDs in DB:`,
-        allJobsInDb
-          .map(
-            (j) =>
-              `${j._id} (status: ${j.status}, category: ${
-                j.subcategoryInfo?.[0]?.category || j.category || "none"
-              })`
-          )
-          .join(", ")
-      );
-
       const userLng = parseFloat(lng);
       const userLat = parseFloat(lat);
       const hasCoords = !isNaN(userLng) && !isNaN(userLat);
@@ -1274,13 +1264,6 @@ function findAvailablePort(startPort) {
       // Jobs filter request received
 
       let jobs = [];
-      console.log(
-        `[FILTER] Starting filter with query:`,
-        JSON.stringify(query, null, 2)
-      );
-      console.log(
-        `[FILTER] handymanId: ${handymanId}, status: ${status}, maxKm: ${maxKm}`
-      );
 
       // Get handyman specialties if handymanId is provided
       let handymanSpecialties = null;
@@ -1294,15 +1277,9 @@ function findAvailablePort(startPort) {
             Array.isArray(handyman.specialties)
           ) {
             handymanSpecialties = handyman.specialties;
-            // Debug: log specialties
-            console.log(
-              "Handyman specialties:",
-              JSON.stringify(handymanSpecialties, null, 2)
-            );
           }
         } catch (error) {
           // Invalid handymanId, continue without filtering
-          console.error("Error fetching handyman:", error);
         }
       }
 
@@ -1323,11 +1300,6 @@ function findAvailablePort(startPort) {
           ];
 
           jobs = await collectionJobs.aggregate(pipeline).toArray();
-          console.log(`[FILTER] Found ${jobs.length} jobs from geoNear query`);
-          console.log(
-            `[FILTER] Job IDs from geoNear:`,
-            jobs.map((j) => j._id).join(", ")
-          );
 
           jobs = jobs.map((job) => {
             const jobLng =
@@ -1352,13 +1324,6 @@ function findAvailablePort(startPort) {
           // GeoNear error on /jobs/filter
 
           jobs = await collectionJobs.find(query).toArray();
-          console.log(
-            `[FILTER] Found ${jobs.length} jobs from find (after geoNear error)`
-          );
-          console.log(
-            `[FILTER] Job IDs from find:`,
-            jobs.map((j) => j._id).join(", ")
-          );
 
           jobs = jobs
             .map((job) => {
@@ -1392,23 +1357,10 @@ function findAvailablePort(startPort) {
         }
       } else {
         jobs = await collectionJobs.find(query).toArray();
-        console.log(
-          `[FILTER] Found ${jobs.length} jobs from database (no coordinates)`
-        );
-        console.log(
-          `[FILTER] Job IDs from find (no coords):`,
-          jobs.map((j) => j._id).join(", ")
-        );
       }
 
-      console.log(
-        `[FILTER] Total jobs before specialty filter: ${jobs.length}`
-      );
       // Filter jobs by handyman specialties if handymanId was provided
       if (handymanSpecialties && handymanSpecialties.length > 0) {
-        console.log(
-          `[FILTER] Filtering by ${handymanSpecialties.length} specialties`
-        );
         // Helper function to check if job matches handyman specialties
         const jobMatchesSpecialties = (job) => {
           // subcategoryInfo is an array, need to check all items
@@ -1428,30 +1380,13 @@ function findAvailablePort(startPort) {
               const isFullCategory =
                 s.type === "category" || s.isFullCategory === true;
               const nameMatches = specialtyName === jobCategory;
-              if (nameMatches && isFullCategory && jobCategory) {
-                console.log(
-                  `[FILTER] ✓ Match found for job ${job._id}: category "${jobCategory}" matches specialty "${specialtyName}"`
-                );
-              }
               return nameMatches && isFullCategory;
             });
-            if (!matches && jobCategory) {
-              console.log(
-                `[FILTER] ✗ No match for job ${job._id}: category "${jobCategory}" - specialties:`,
-                handymanSpecialties.map(
-                  (s) =>
-                    `${s.name} (type: ${s.type}, isFull: ${s.isFullCategory})`
-                )
-              );
-            }
             return matches;
           }
 
           // Check each subcategoryInfo item - ALL categories must match
           // Only match by full categories (not subcategories)
-          console.log(
-            `[FILTER] Checking job ${job._id} with ${subcategoryInfoArray.length} subcategoryInfo items`
-          );
           const allMatch = subcategoryInfoArray.every((subcatInfo, index) => {
             const jobCategory = (subcatInfo.category || "")
               .trim()
@@ -1463,37 +1398,14 @@ function findAvailablePort(startPort) {
               const isFullCategory =
                 s.type === "category" || s.isFullCategory === true;
               const nameMatches = specialtyName === jobCategory;
-              if (nameMatches && isFullCategory && jobCategory) {
-                console.log(
-                  `[FILTER] ✓ Match found for job ${job._id} item ${index}: category "${jobCategory}" matches specialty "${specialtyName}"`
-                );
-              }
               return nameMatches && isFullCategory;
             });
-            if (!matches && jobCategory) {
-              console.log(
-                `[FILTER] ✗ No match in subcategoryInfo for job ${job._id} item ${index}: category "${jobCategory}" - specialties:`,
-                handymanSpecialties.map(
-                  (s) =>
-                    `${s.name} (type: ${s.type}, isFull: ${s.isFullCategory})`
-                )
-              );
-            }
-            console.log(`[FILTER] Item ${index} result: ${matches}`);
             return matches;
           });
-          console.log(`[FILTER] Job ${job._id} final result: ${allMatch}`);
           return allMatch;
         };
 
-        const jobsBeforeSpecialtyFilter = jobs.length;
         jobs = jobs.filter(jobMatchesSpecialties);
-        const jobsAfterSpecialtyFilter = jobs.length;
-        console.log(
-          `[FILTER] After specialty filter: ${jobsBeforeSpecialtyFilter} → ${jobsAfterSpecialtyFilter} (removed ${
-            jobsBeforeSpecialtyFilter - jobsAfterSpecialtyFilter
-          })`
-        );
       }
 
       // If handymanId is provided, only show open jobs (handymanId is null or doesn't exist)
@@ -1507,15 +1419,8 @@ function findAvailablePort(startPort) {
           return false;
         });
         const jobsAfterHandymanFilter = jobs.length;
-        console.log(
-          `[FILTER] After handymanId filter: ${jobsBeforeHandymanFilter} → ${jobsAfterHandymanFilter} (removed ${
-            jobsBeforeHandymanFilter - jobsAfterHandymanFilter
-          })`
-        );
       }
 
-      console.log(`[FILTER] Final jobs count: ${jobs.length}`);
-      console.log(`[FILTER] Final job IDs:`, jobs.map((j) => j._id).join(", "));
       return res.json({ success: true, jobs });
     } catch (error) {
       return res.status(500).json({
@@ -1590,30 +1495,13 @@ function findAvailablePort(startPort) {
               const isFullCategory =
                 s.type === "category" || s.isFullCategory === true;
               const nameMatches = specialtyName === jobCategory;
-              if (nameMatches && isFullCategory && jobCategory) {
-                console.log(
-                  `[FILTER] ✓ Match found for job ${job._id}: category "${jobCategory}" matches specialty "${specialtyName}"`
-                );
-              }
               return nameMatches && isFullCategory;
             });
-            if (!matches && jobCategory) {
-              console.log(
-                `[FILTER] ✗ No match for job ${job._id}: category "${jobCategory}" - specialties:`,
-                handymanSpecialties.map(
-                  (s) =>
-                    `${s.name} (type: ${s.type}, isFull: ${s.isFullCategory})`
-                )
-              );
-            }
             return matches;
           }
 
           // Check each subcategoryInfo item - ALL categories must match
           // Only match by full categories (not subcategories)
-          console.log(
-            `[FILTER] Checking job ${job._id} with ${subcategoryInfoArray.length} subcategoryInfo items`
-          );
           const allMatch = subcategoryInfoArray.every((subcatInfo, index) => {
             const jobCategory = (subcatInfo.category || "")
               .trim()
@@ -1625,26 +1513,10 @@ function findAvailablePort(startPort) {
               const isFullCategory =
                 s.type === "category" || s.isFullCategory === true;
               const nameMatches = specialtyName === jobCategory;
-              if (nameMatches && isFullCategory && jobCategory) {
-                console.log(
-                  `[FILTER] ✓ Match found for job ${job._id} item ${index}: category "${jobCategory}" matches specialty "${specialtyName}"`
-                );
-              }
               return nameMatches && isFullCategory;
             });
-            if (!matches && jobCategory) {
-              console.log(
-                `[FILTER] ✗ No match in subcategoryInfo for job ${job._id} item ${index}: category "${jobCategory}" - specialties:`,
-                handymanSpecialties.map(
-                  (s) =>
-                    `${s.name} (type: ${s.type}, isFull: ${s.isFullCategory})`
-                )
-              );
-            }
-            console.log(`[FILTER] Item ${index} result: ${matches}`);
             return matches;
           });
-          console.log(`[FILTER] Job ${job._id} final result: ${allMatch}`);
           return allMatch;
         };
 
@@ -2190,7 +2062,7 @@ function findAvailablePort(startPort) {
               const pushResult = await sendPushNotification(
                 client.fcmToken,
                 "עבודה שובצה! 🎉",
-                `${handymanName} קיבל את העבודה שלך`,
+                `קבלו את העבודה שלך - ${handymanName}`,
                 {
                   type: "job_accepted",
                   jobId: jobId.toString(),
@@ -2389,6 +2261,44 @@ function findAvailablePort(startPort) {
         });
       }
 
+      // Send Push Notification to client
+      const usersCol = getCollection();
+      const clientId = job?.clientId;
+      if (clientId) {
+        try {
+          const clientObjectId =
+            clientId instanceof ObjectId ? clientId : new ObjectId(clientId);
+          const client = await usersCol.findOne({ _id: clientObjectId });
+
+          if (client?.fcmToken) {
+            const handymanName =
+              Array.isArray(job.handymanName) && job.handymanName.length > 0
+                ? job.handymanName[0]
+                : "ההנדימן";
+
+            const pushResult = await sendPushNotification(
+              client.fcmToken,
+              "עדכון סטטוס",
+              `${handymanName} בדרך אליך`,
+              {
+                type: "status_update",
+                jobId: jobId.toString(),
+                status: "on_the_way",
+              }
+            );
+
+            if (pushResult.shouldRemove) {
+              await usersCol.updateOne(
+                { _id: clientObjectId },
+                { $unset: { fcmToken: "" } }
+              );
+            }
+          }
+        } catch (pushError) {
+          // Don't fail the request if push notification fails
+        }
+      }
+
       return res.json({ success: true });
     } catch (error) {
       return res.status(500).json({
@@ -2431,6 +2341,44 @@ function findAvailablePort(startPort) {
           jobId,
           status: "in_progress",
         });
+      }
+
+      // Send Push Notification to client
+      const usersCol = getCollection();
+      const clientId = job?.clientId;
+      if (clientId) {
+        try {
+          const clientObjectId =
+            clientId instanceof ObjectId ? clientId : new ObjectId(clientId);
+          const client = await usersCol.findOne({ _id: clientObjectId });
+
+          if (client?.fcmToken) {
+            const handymanName =
+              Array.isArray(job.handymanName) && job.handymanName.length > 0
+                ? job.handymanName[0]
+                : "ההנדימן";
+
+            const pushResult = await sendPushNotification(
+              client.fcmToken,
+              "עדכון סטטוס",
+              `${handymanName} הגיע`,
+              {
+                type: "status_update",
+                jobId: jobId.toString(),
+                status: "in_progress",
+              }
+            );
+
+            if (pushResult.shouldRemove) {
+              await usersCol.updateOne(
+                { _id: clientObjectId },
+                { $unset: { fcmToken: "" } }
+              );
+            }
+          }
+        } catch (pushError) {
+          // Don't fail the request if push notification fails
+        }
       }
 
       return res.json({ success: true });
@@ -2480,6 +2428,43 @@ function findAvailablePort(startPort) {
           jobId,
           status: "done",
         });
+      }
+
+      // Send Push Notification to client
+      const clientId = job?.clientId;
+      if (clientId) {
+        try {
+          const clientObjectId =
+            clientId instanceof ObjectId ? clientId : new ObjectId(clientId);
+          const client = await usersCol.findOne({ _id: clientObjectId });
+
+          if (client?.fcmToken) {
+            const handymanName =
+              Array.isArray(job.handymanName) && job.handymanName.length > 0
+                ? job.handymanName[0]
+                : "ההנדימן";
+
+            const pushResult = await sendPushNotification(
+              client.fcmToken,
+              "עדכון סטטוס",
+              `${handymanName} סיים את העבודה`,
+              {
+                type: "status_update",
+                jobId: jobId.toString(),
+                status: "done",
+              }
+            );
+
+            if (pushResult.shouldRemove) {
+              await usersCol.updateOne(
+                { _id: clientObjectId },
+                { $unset: { fcmToken: "" } }
+              );
+            }
+          }
+        } catch (pushError) {
+          // Don't fail the request if push notification fails
+        }
       }
 
       return res.json({ success: true });
@@ -2672,6 +2657,133 @@ function findAvailablePort(startPort) {
         });
       }
 
+      // Send Push Notification to recipient
+      const usersCol = getCollection();
+      try {
+        if (senderIsHandyman) {
+          // Handyman sent message, notify client
+          const clientObjectId =
+            customerId instanceof ObjectId
+              ? customerId
+              : new ObjectId(customerId);
+          const client = await usersCol.findOne({ _id: clientObjectId });
+
+          if (client?.fcmToken) {
+            const handymanName =
+              Array.isArray(job.handymanName) && job.handymanName.length > 0
+                ? job.handymanName[0]
+                : "ההנדימן";
+
+            const messagePreview = text
+              ? text.substring(0, 50) + (text.length > 50 ? "..." : "")
+              : imageUrl
+              ? "📷 תמונה"
+              : location
+              ? "📍 מיקום"
+              : "הודעה חדשה";
+
+            const pushResult = await sendPushNotification(
+              client.fcmToken,
+              handymanName,
+              messagePreview,
+              {
+                type: "new_message",
+                jobId: jobId.toString(),
+                senderId: senderId.toString(),
+              }
+            );
+
+            if (pushResult.shouldRemove) {
+              await usersCol.updateOne(
+                { _id: clientObjectId },
+                { $unset: { fcmToken: "" } }
+              );
+            }
+          }
+        } else {
+          // Client sent message, notify handyman(s)
+          // If handymanId is array, send to all handymen
+          if (Array.isArray(handymanId)) {
+            // Send to all handymen
+            for (const hId of handymanId) {
+              const handymanObjectId =
+                hId instanceof ObjectId ? hId : new ObjectId(hId);
+              const handyman = await usersCol.findOne({
+                _id: handymanObjectId,
+              });
+              if (handyman?.fcmToken) {
+                const clientName = job.clientName || "הלקוח";
+                const messagePreview = text
+                  ? text.substring(0, 50) + (text.length > 50 ? "..." : "")
+                  : imageUrl
+                  ? "📷 תמונה"
+                  : location
+                  ? "📍 מיקום"
+                  : "הודעה חדשה";
+
+                const pushResult = await sendPushNotification(
+                  handyman.fcmToken,
+                  clientName,
+                  messagePreview,
+                  {
+                    type: "new_message",
+                    jobId: jobId.toString(),
+                    senderId: senderId.toString(),
+                  }
+                );
+
+                if (pushResult.shouldRemove) {
+                  await usersCol.updateOne(
+                    { _id: handymanObjectId },
+                    { $unset: { fcmToken: "" } }
+                  );
+                }
+              }
+            }
+          } else if (handymanId) {
+            // Single handyman
+            const handymanObjectId =
+              handymanId instanceof ObjectId
+                ? handymanId
+                : new ObjectId(handymanId);
+            const handyman = await usersCol.findOne({
+              _id: handymanObjectId,
+            });
+
+            if (handyman?.fcmToken) {
+              const clientName = job.clientName || "הלקוח";
+              const messagePreview = text
+                ? text.substring(0, 50) + (text.length > 50 ? "..." : "")
+                : imageUrl
+                ? "📷 תמונה"
+                : location
+                ? "📍 מיקום"
+                : "הודעה חדשה";
+
+              const pushResult = await sendPushNotification(
+                handyman.fcmToken,
+                clientName,
+                messagePreview,
+                {
+                  type: "new_message",
+                  jobId: jobId.toString(),
+                  senderId: senderId.toString(),
+                }
+              );
+
+              if (pushResult.shouldRemove) {
+                await usersCol.updateOne(
+                  { _id: handymanObjectId },
+                  { $unset: { fcmToken: "" } }
+                );
+              }
+            }
+          }
+        }
+      } catch (pushError) {
+        // Don't fail the request if push notification fails
+      }
+
       return res.json({ success: true, message: messageObj });
     } catch (error) {
       return res.status(500).json({
@@ -2746,11 +2858,45 @@ function findAvailablePort(startPort) {
 
       // Emit WebSocket event to handyman that rating was submitted
       // This will trigger navigation to job summary page
-      io.to(`job-${jobId}`).emit("rating-submitted", {
-        jobId: jobId,
-        rating: parseInt(rating),
-        review: review || "",
-      });
+      const io = req.app.get("io");
+      if (io) {
+        io.to(`job-${jobId}`).emit("rating-submitted", {
+          jobId: jobId,
+          rating: parseInt(rating),
+          review: review || "",
+        });
+      }
+
+      // Send Push Notification to handyman about rating
+      try {
+        const handymanObjectId =
+          finalHandymanId instanceof ObjectId
+            ? new ObjectId(finalHandymanId)
+            : new ObjectId(finalHandymanId);
+        const handyman = await usersCol.findOne({ _id: handymanObjectId });
+
+        if (handyman?.fcmToken) {
+          const pushResult = await sendPushNotification(
+            handyman.fcmToken,
+            "דירוג חדש ⭐",
+            "דרגו אותך! לחץ כדי לראות",
+            {
+              type: "rating_received",
+              jobId: jobId.toString(),
+              rating: rating.toString(),
+            }
+          );
+
+          if (pushResult.shouldRemove) {
+            await usersCol.updateOne(
+              { _id: handymanObjectId },
+              { $unset: { fcmToken: "" } }
+            );
+          }
+        }
+      } catch (pushError) {
+        // Don't fail the request if push notification fails
+      }
 
       // Calculate average rating for handyman from all ratings
       const allRatings = await ratingsCol

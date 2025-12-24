@@ -647,7 +647,34 @@ export default {
     this.disconnectWebSocket();
   },
   watch: {
-    // Watch for job prop changes
+    // Watch for job prop changes - reload messages when job changes
+    job: {
+      immediate: false,
+      deep: true,
+      async handler(newJob, oldJob) {
+        // Only reload if job ID actually changed (not just status update)
+        const newJobId = String(newJob?.id || newJob?._id || "");
+        const oldJobId = String(oldJob?.id || oldJob?._id || "");
+
+        if (newJobId && newJobId !== oldJobId) {
+          // Job changed - reload messages and reconnect WebSocket
+          this.messages = []; // Clear old messages
+          this.localJobStatus = newJob?.status || null;
+
+          // Disconnect old WebSocket
+          this.disconnectWebSocket();
+
+          // Reconnect with new job
+          this.initWebSocket();
+          await this.loadMessages();
+          this.scrollToBottom();
+        } else if (newJob?.status !== oldJob?.status) {
+          // Only status changed - update local status
+          this.localJobStatus = newJob?.status || null;
+        }
+      },
+    },
+    // Watch for job status changes
     "job.status"(newStatus) {
       if (newStatus && !this.localJobStatus) {
         this.localJobStatus = newStatus;

@@ -470,8 +470,10 @@
                 v-if="isHendiman && jobDetails.status === 'open'"
                 class="btn-action btn-action--primary"
                 @click="onAccept"
+                :disabled="isAccepting"
               >
-                קבל עבודה
+                <span v-if="isAccepting">מעדכן...</span>
+                <span v-else>קבל עבודה</span>
               </button>
               <button class="btn-action btn-action--ghost" @click="onClose">
                 סגירה
@@ -532,6 +534,10 @@ export default {
       type: Function,
       required: true,
     },
+    acceptingJobId: {
+      type: String,
+      default: null,
+    },
   },
   data() {
     return {
@@ -556,6 +562,11 @@ export default {
     },
   },
   computed: {
+    isAccepting() {
+      if (!this.acceptingJobId || !this.jobDetails) return false;
+      const jobId = this.jobDetails._id || this.jobDetails.id;
+      return String(this.acceptingJobId) === String(jobId);
+    },
     fullStars() {
       if (!this.rating || !this.rating.rating) return 0;
       return Math.floor(this.rating.rating);

@@ -29,7 +29,7 @@
       <!-- Job Chat (when job is assigned) -->
       <component
         :is="isMobile ? 'JobChatMobile' : 'JobChat'"
-        v-if="(currentAssignedJob || activeAssignedJob) && !isChatMinimized"
+        v-if="currentAssignedJob && !isChatMinimized"
         :job="currentAssignedJob"
         :jobs="currentAssignedJobs.length > 1 ? currentAssignedJobs : undefined"
         :isHandyman="isHendiman"
@@ -150,6 +150,7 @@
           :jobDetails="jobDetails"
           :isHendiman="isHendiman"
           :getStatusLabel="getStatusLabel"
+          :acceptingJobId="acceptingJobId"
           @close="onCloseJobDetails"
           @accept="onAcceptJobFromModal"
           @skip="onSkipJobFromModal"
@@ -257,6 +258,7 @@ export default {
       activeStatus: "open", // Default to "open" for handyman
       jobDetails: null,
       showProfileSheet: false,
+      acceptingJobId: null, // Track which job is being accepted for loading state
       profileForm: {
         name: "",
         phone: "",
@@ -580,8 +582,12 @@ export default {
     async onAccept(job) {
       const handymanId = this.store.user?._id || this.me?.id;
       if (!handymanId) return;
+
+      const jobId = job._id || job.id;
+      // Set loading state
+      this.acceptingJobId = jobId;
+
       try {
-        const jobId = job._id || job.id;
         const { data } = await axios.post(`${URL}/jobs/accept`, {
           jobId: jobId,
           handymanId,
@@ -633,8 +639,8 @@ export default {
         };
 
         // Open chat immediately with the updated job - do this FIRST!
-        // Make sure to create a new object to ensure reactivity
-        this.activeAssignedJob = JSON.parse(JSON.stringify(updatedJob));
+        // Create a fresh copy to ensure reactivity
+        this.activeAssignedJob = { ...updatedJob };
         this.isChatMinimized = false;
 
         // Update the job in store immediately so currentAssignedJobs includes it
@@ -643,8 +649,8 @@ export default {
             (j) => String(j._id || j.id) === String(jobId)
           );
           if (jobIndex !== -1) {
-            // Update existing job - use Vue.set to ensure reactivity
-            this.$set(this.store.jobs, jobIndex, updatedJob);
+            // Update existing job - direct assignment works with Vue 3 reactivity
+            this.store.jobs[jobIndex] = updatedJob;
           } else {
             // Add new job if not found
             this.store.jobs.push(updatedJob);
@@ -653,8 +659,9 @@ export default {
           this.store.setJobs([updatedJob]);
         }
 
-        // Force Vue to update the view immediately - no waiting
-        this.$forceUpdate();
+        // Vue reactivity should handle the update automatically
+        // Use nextTick to ensure DOM updates after reactivity
+        await this.$nextTick();
 
         // Refresh dashboard data in the background (don't wait for it)
         // Don't refresh immediately to avoid clearing activeAssignedJob
@@ -672,7 +679,12 @@ export default {
             })
             .catch((error) => {});
         }, 1000);
+
+        // Clear loading state after everything is done
+        this.acceptingJobId = null;
       } catch (error) {
+        // Clear loading state on error
+        this.acceptingJobId = null;
         this.toast?.showError("שגיאה בקבלת העבודה");
       }
     },
@@ -728,7 +740,8 @@ export default {
           updatedJob.handymanId = null;
           updatedJob.handymanName = null;
           updatedJob.status = "open";
-          this.$set(this.store.jobs, jobIndex, updatedJob);
+          // In Vue 3, direct assignment works with reactivity
+          this.store.jobs[jobIndex] = updatedJob;
         }
       }
       // Clear the assigned job to close the chat

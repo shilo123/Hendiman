@@ -82,14 +82,16 @@
       </button>
 
       <!-- Handyman: one smart status button instead of 3 blocks -->
-      <button
-        v-if="isHandyman && nextStatus"
-        class="chip chip--primary"
-        type="button"
-        @click="updateStatus(nextStatus)"
-      >
-        {{ nextStatusLabel }}
-      </button>
+      <div v-if="isHandyman && nextStatus" class="status-update-section">
+        <span class="status-update-label">עדכון סטטוס ללקוח:</span>
+        <button
+          class="chip chip--primary"
+          type="button"
+          @click="updateStatus(nextStatus)"
+        >
+          {{ nextStatusLabel }}
+        </button>
+      </div>
 
       <!-- Client: location -->
       <button
@@ -500,6 +502,9 @@ export default {
       currentJobIndex: 0,
       unreadCounts: {}, // Track unread messages per job
       ratingSubmittedJobs: {}, // Track which jobs have been rated
+      messagesCache: {}, // Cache messages per job to prevent losing them when switching tabs
+      connectionCheckInterval: null, // Interval for checking connection quality
+      isConnectionSlow: false, // Track if connection is slow
     };
   },
   computed: {
@@ -631,22 +636,56 @@ export default {
         await this.updateUnreadCount(jobItem);
       }
     }
+
+    // Start checking connection quality
+    this.startConnectionQualityCheck();
   },
   beforeUnmount() {
     window.removeEventListener("click", this.onOutsideTools);
     this.disconnectWebSocket();
+
+    // Stop connection quality check
+    this.stopConnectionQualityCheck();
   },
   watch: {
-    currentJobIndex() {
-      // When switching tabs, reload messages and reconnect socket
+    currentJobIndex(newIndex, oldIndex) {
+      // When switching tabs, save current messages to cache and load from cache
+      if (oldIndex !== undefined && this.jobs && this.jobs[oldIndex]) {
+        const previousJob = this.jobs[oldIndex];
+        const previousJobId = String(previousJob._id || previousJob.id || "");
+        // Save current messages to cache before switching
+        if (previousJobId && this.messages.length > 0) {
+          this.messagesCache[previousJobId] = [...this.messages];
+        }
+      }
+
+      // Update status for new job
       this.localJobStatus = this.currentJob?.status || null;
-      this.messages = [];
+
+      // Get job ID for new job
+      const newJobId = String(
+        this.currentJob?._id || this.currentJob?.id || ""
+      );
+
+      // Load messages from cache if available, otherwise load from server
+      if (newJobId && this.messagesCache[newJobId]) {
+        // Load from cache immediately
+        this.messages = [...this.messagesCache[newJobId]];
+        this.$nextTick(() => {
+          this.scrollToBottom();
+        });
+      } else {
+        // No cache, clear messages and load from server
+        this.messages = [];
+      }
+
       this.rating = 0;
       this.reviewText = "";
       this.disconnectWebSocket();
       this.initWebSocket();
+
+      // Load messages from server (will update cache)
       this.loadMessages();
-      this.scrollToBottom();
     },
     "currentJob.status"(newStatus) {
       if (newStatus && !this.localJobStatus) this.localJobStatus = newStatus;
@@ -661,6 +700,72 @@ export default {
   methods: {
     switchToJob(index) {
       this.currentJobIndex = index;
+    },
+    async checkConnectionQuality() {
+      // Check if connection is slow by measuring response time
+      const startTime = performance.now();
+      try {
+        // Try to fetch a small resource from the server
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+
+        await fetch(`${URL}/health-check`, {
+          method: "HEAD",
+          signal: controller.signal,
+          cache: "no-cache",
+        });
+
+        clearTimeout(timeoutId);
+        const endTime = performance.now();
+        const responseTime = endTime - startTime;
+
+        // Consider connection slow if response time is more than 2 seconds
+        const wasSlow = this.isConnectionSlow;
+        this.isConnectionSlow = responseTime > 2000;
+
+        // Show warning only if connection just became slow (not if it was already slow)
+        if (this.isConnectionSlow && !wasSlow && !this.isHandyman) {
+          this.toast?.showWarning(
+            "החיבור לאינטרנט איטי. ייתכן שההודעות לא יישלחו במהירות.",
+            5000
+          );
+        }
+      } catch (error) {
+        // If fetch fails, connection might be down or very slow
+        const wasSlow = this.isConnectionSlow;
+        this.isConnectionSlow = true;
+
+        // Show warning only if connection just became slow (not if it was already slow)
+        if (!wasSlow && !this.isHandyman) {
+          this.toast?.showWarning(
+            "החיבור לאינטרנט חלש. ייתכן שההודעות לא יישלחו.",
+            5000
+          );
+        }
+      }
+    },
+    startConnectionQualityCheck() {
+      // Check connection quality every 30 seconds
+      this.connectionCheckInterval = setInterval(() => {
+        this.checkConnectionQuality();
+      }, 30000);
+
+      // Also check immediately on mount
+      this.checkConnectionQuality();
+    },
+    stopConnectionQualityCheck() {
+      if (this.connectionCheckInterval) {
+        clearInterval(this.connectionCheckInterval);
+        this.connectionCheckInterval = null;
+      }
+    },
+    updateMessagesCache() {
+      // Helper function to update messages cache for current job
+      const jobId = this.currentJob?._id || this.currentJob?.id;
+      if (jobId) {
+        const jobIdStr = String(jobId);
+        this.messagesCache[jobIdStr] = [...this.messages];
+      }
     },
     getUnreadCount(jobItem) {
       const jobId = String(jobItem._id || jobItem.id || "");
@@ -846,6 +951,11 @@ export default {
               createdAt,
             };
           });
+
+          // Update messages and cache
+          this.messages = loadedMessages;
+          const jobIdStr = String(jobId);
+          this.messagesCache[jobIdStr] = [...loadedMessages];
         }
       } catch (e) {
         this.toast?.showError("שגיאה בטעינת הודעות");
@@ -1003,6 +1113,7 @@ export default {
           }),
           createdAt,
         });
+        this.updateMessagesCache();
         this.scrollToBottom();
       }
     },
@@ -1111,6 +1222,7 @@ export default {
       };
 
       this.messages.push(tempMessage);
+      this.updateMessagesCache();
       this.scrollToBottom();
 
       try {
@@ -1205,6 +1317,7 @@ export default {
         createdAt: tempCreatedAt,
         tempId, // Mark as temporary
       });
+      this.updateMessagesCache();
 
       this.newMessage = "";
       this.scrollToBottom();
@@ -1289,6 +1402,7 @@ export default {
         createdAt: tempCreatedAt,
         tempId, // Mark as temporary
       });
+      this.updateMessagesCache();
 
       this.cancelImagePreview();
       this.scrollToBottom();
@@ -1371,6 +1485,7 @@ export default {
           isSystem: true,
         };
         this.messages.push(systemMessage);
+        this.updateMessagesCache();
         this.scrollToBottom();
 
         this.$emit("status-updated", newStatus);
@@ -1648,6 +1763,20 @@ $orange2: #ff8a2b;
 }
 
 /* Action chips */
+.status-update-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.status-update-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+  padding: 0 4px;
+}
+
 .chat__actions {
   display: flex;
   gap: 8px;
