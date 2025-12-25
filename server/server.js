@@ -14,7 +14,7 @@ const { createServer } = require("http");
 const { Server } = require("socket.io");
 const { OpenAI } = require("openai");
 const app = express();
-const URL_CLIENT = "https://handiman-98cc6d1f0a79.herokuapp.com/";
+const URL_CLIENT = "https://handiman-98cc6d1f0a79.herokuapp.com";
 //9:48
 // Import configurations and services
 const {
@@ -24,11 +24,14 @@ const {
   getCollectionRatings,
   getCollectionPayments,
   getCollectionChats,
+  getCollectionFinancials,
 } = require("./config/database");
 const setupPassport = require("./config/passport");
 const setupAuthRoutes = require("./routes/auth");
 const setupUploadRoutes = require("./routes/upload");
 const { sendPushNotification } = require("./services/pushNotificationService");
+const { deleteImageFromS3 } = require("./services/uploadService");
+const { trackAIUsage } = require("./services/aiCostTracking");
 
 //מרשמלו
 
@@ -1408,11 +1411,18 @@ app.head("/health-check", (req, res) => {
         jobs = jobs.filter(jobMatchesSpecialties);
       }
 
-      // If handymanId is provided, only show open jobs (handymanId is null or doesn't exist)
+      // If handymanId is provided, filter jobs
       if (handymanId) {
+        const handymanIdString = String(handymanId);
         const jobsBeforeHandymanFilter = jobs.length;
         jobs = jobs.filter((job) => {
-          // Show jobs where handymanId is null, doesn't exist, or is an empty array
+          // Priority 1: Show jobs where handymanIdSpecial matches this handyman
+          if (job.handymanIdSpecial) {
+            return String(job.handymanIdSpecial) === handymanIdString;
+          }
+
+          // Priority 2: Show open jobs (handymanId is null or doesn't exist)
+          // and match handyman specialties (already filtered above)
           if (!job.handymanId) return true;
           if (Array.isArray(job.handymanId) && job.handymanId.length === 0)
             return true;
@@ -1736,6 +1746,34 @@ app.head("/health-check", (req, res) => {
       });
     }
   });
+
+  // Endpoint to get count of registered handymen
+  app.get("/handymen-count", async (req, res) => {
+    try {
+      if (!collection) {
+        return res.status(500).json({
+          success: false,
+          message: "Database not connected",
+        });
+      }
+
+      const count = await collection.countDocuments({
+        isHandyman: true,
+      });
+
+      return res.json({
+        success: true,
+        count: count,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error counting handymen",
+        error: error.message,
+      });
+    }
+  });
+
   app.get("/Gethandyman/:id", async (req, res) => {
     try {
       if (!collection) {
@@ -1816,6 +1854,146 @@ app.head("/health-check", (req, res) => {
       });
     }
   });
+
+  // Route map image with origin and destination
+  app.get("/route-map-image", async (req, res) => {
+    try {
+      const {
+        originLat,
+        originLng,
+        destLat,
+        destLng,
+        width = 800,
+        height = 600,
+      } = req.query;
+
+      if (!originLat || !originLng || !destLat || !destLng) {
+        return res.status(400).json({
+          success: false,
+          message: "originLat, originLng, destLat, and destLng are required",
+        });
+      }
+
+      if (!process.env.MAPBOX_TOKEN) {
+        return res.status(500).json({
+          success: false,
+          message: "Mapbox token not configured",
+        });
+      }
+
+      // Calculate center point between origin and destination
+      const centerLat = (parseFloat(originLat) + parseFloat(destLat)) / 2;
+      const centerLng = (parseFloat(originLng) + parseFloat(destLng)) / 2;
+
+      // Calculate zoom level based on distance (simple approximation)
+      const latDiff = Math.abs(parseFloat(destLat) - parseFloat(originLat));
+      const lngDiff = Math.abs(parseFloat(destLng) - parseFloat(originLng));
+      const maxDiff = Math.max(latDiff, lngDiff);
+      let zoom = 15;
+      if (maxDiff > 0.1) zoom = 11;
+      else if (maxDiff > 0.05) zoom = 12;
+      else if (maxDiff > 0.02) zoom = 13;
+      else if (maxDiff > 0.01) zoom = 14;
+
+      // Use Mapbox Static Images API with two markers and a path overlay
+      // Format: path-{strokeWidth}+{strokeColor}-{strokeOpacity}({encodedPath})
+      const pathColor = "ff6a00"; // Orange color
+      const pathWidth = 4;
+
+      // Create markers: origin (orange) and destination (green)
+      const originMarker = `pin-s+${pathColor}(${originLng},${originLat})`;
+      const destMarker = `pin-s+22c55e(${destLng},${destLat})`; // Green for destination
+      const markers = `${originMarker}|${destMarker}`;
+
+      // Create a path overlay for the route (simplified straight line)
+      const pathOverlay = `path-${pathWidth}+${pathColor}-0.8(${originLng},${originLat};${destLng},${destLat})`;
+
+      const mapboxUrl = `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/${pathOverlay}/${markers}/${centerLng},${centerLat},${zoom},0/${width}x${height}@2x?access_token=${process.env.MAPBOX_TOKEN}`;
+
+      // Redirect to Mapbox image URL
+      return res.redirect(mapboxUrl);
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error generating route map image",
+      });
+    }
+  });
+
+  // Process payment (in production, integrate with payment gateway like Stripe, PayPal, etc.)
+  app.post("/payments/process", async (req, res) => {
+    try {
+      const {
+        userId,
+        jobId,
+        amount,
+        cardLast4,
+        cardHolder,
+        expiryMonth,
+        expiryYear,
+        billingAddress,
+        city,
+        zipCode,
+      } = req.body;
+
+      if (!userId || !amount) {
+        return res.status(400).json({
+          success: false,
+          message: "userId and amount are required",
+        });
+      }
+
+      // In a real application, you would:
+      // 1. Send card details to a payment gateway (Stripe, PayPal, etc.)
+      // 2. Never store full card numbers on your server
+      // 3. Use tokenization to securely handle payments
+      // 4. Handle 3D Secure authentication if required
+
+      // For now, simulate payment processing
+      // TODO: Integrate with actual payment gateway
+      const paymentId = new ObjectId();
+      const paymentRecord = {
+        _id: paymentId,
+        userId: new ObjectId(userId),
+        jobId: jobId ? new ObjectId(jobId) : null,
+        amount: parseFloat(amount),
+        status: "paid", // In real app, this would come from payment gateway
+        cardLast4: cardLast4,
+        cardHolder: cardHolder,
+        expiryMonth: expiryMonth,
+        expiryYear: expiryYear,
+        billingAddress: billingAddress || null,
+        city: city || null,
+        zipCode: zipCode || null,
+        transactionId: `TXN-${Date.now()}-${Math.random()
+          .toString(36)
+          .substr(2, 9)}`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      // Save payment record (in real app, only after successful payment gateway confirmation)
+      const paymentsCol = getCollectionPayments();
+      await paymentsCol.insertOne(paymentRecord);
+
+      // Simulate payment processing delay
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      return res.json({
+        success: true,
+        message: "התשלום בוצע בהצלחה",
+        paymentId: paymentId.toString(),
+        transactionId: paymentRecord.transactionId,
+      });
+    } catch (error) {
+      console.error("Payment processing error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה בעיבוד התשלום",
+      });
+    }
+  });
+
   app.post("/user/update-profile", async (req, res) => {
     try {
       const {
@@ -1840,7 +2018,25 @@ app.head("/health-check", (req, res) => {
       if (email !== undefined) update.email = email;
       if (city !== undefined) update.city = city;
       if (Array.isArray(specialties)) {
-        update.specialties = specialties;
+        // Filter and format specialties - only full categories allowed
+        update.specialties = specialties
+          .filter(
+            (item) =>
+              item &&
+              item.name &&
+              (item.isFullCategory === true || item.type === "category")
+          )
+          .map((item) => ({
+            name: item.name,
+            category: "",
+            price: null,
+            typeWork: null,
+            isFullCategory: true,
+            type: "category",
+          }));
+
+        // Also create fullCategories array for easier querying
+        update.fullCategories = update.specialties.map((item) => item.name);
       }
 
       // אם העיר השתנתה, עדכן גם את הקואורדינטות
@@ -2128,13 +2324,34 @@ app.head("/health-check", (req, res) => {
           .json({ success: false, message: "jobId and handymanId required" });
       }
       const jobsCol = getCollectionJobs();
-      await jobsCol.updateOne(
-        { _id: new ObjectId(jobId) },
-        {
-          $unset: { handymanId: "", handymanName: "" },
-          $set: { status: "open" },
-        }
-      );
+
+      // Get the job to check if this handyman was specially requested
+      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
+
+      // Check if this handyman is the one who was specially requested
+      const handymanIdString = String(handymanId);
+      const isSpecialHandyman =
+        job.handymanIdSpecial &&
+        String(job.handymanIdSpecial) === handymanIdString;
+
+      // Prepare update object
+      const updateObj = {
+        $unset: { handymanId: "", handymanName: "" },
+        $set: { status: "open" },
+      };
+
+      // If this is the special handyman, set handymanIdSpecial to null
+      if (isSpecialHandyman) {
+        updateObj.$set.handymanIdSpecial = null;
+      }
+
+      await jobsCol.updateOne({ _id: new ObjectId(jobId) }, updateObj);
       return res.json({ success: true });
     } catch (error) {
       return res.status(500).json({
@@ -2865,8 +3082,38 @@ app.head("/health-check", (req, res) => {
         }
       );
 
-      // Delete chat from database after rating is submitted (job is completed)
+      // Get chat messages before deletion to extract image URLs
       const chatsCol = getCollectionChats();
+      const chat = await chatsCol.findOne({ jobId: new ObjectId(jobId) });
+
+      // Extract image URLs from chat messages and delete them from S3
+      // Chat images use the same bucket as /upload-image endpoint (hendiman123 or AWS_BUCKET_NAME)
+      const bucketName = process.env.AWS_BUCKET_NAME || "hendiman123";
+      if (chat && chat.content && Array.isArray(chat.content)) {
+        const imageUrls = [];
+        chat.content.forEach((message) => {
+          if (message.handymanImage) {
+            imageUrls.push(message.handymanImage);
+          }
+          if (message.customerImage) {
+            imageUrls.push(message.customerImage);
+          }
+        });
+
+        // Delete all images from S3 (don't fail if deletion fails)
+        for (const imageUrl of imageUrls) {
+          try {
+            if (imageUrl && imageUrl.includes(bucketName)) {
+              await deleteImageFromS3(imageUrl, bucketName);
+            }
+          } catch (deleteError) {
+            // Continue deleting other images even if one fails
+            // Don't log or throw - just continue
+          }
+        }
+      }
+
+      // Delete chat from database after rating is submitted (job is completed)
       let deleteResult = await chatsCol.deleteOne({
         jobId: new ObjectId(jobId),
       });
@@ -3014,6 +3261,22 @@ app.head("/health-check", (req, res) => {
       const jobsCol = getCollectionJobs();
       const usersCol = getCollection();
 
+      // Get handyman data to get jobDone
+      let jobDone = 0;
+      try {
+        const handymanObjectId = new ObjectId(handymanId);
+        const handyman = await usersCol.findOne({ _id: handymanObjectId });
+        if (handyman && handyman.jobDone !== undefined) {
+          jobDone = handyman.jobDone || 0;
+        }
+      } catch (err) {
+        // If ObjectId conversion fails, try as string
+        const handyman = await usersCol.findOne({ _id: handymanId });
+        if (handyman && handyman.jobDone !== undefined) {
+          jobDone = handyman.jobDone || 0;
+        }
+      }
+
       // Get all ratings for this handyman
       const ratings = await ratingsCol
         .find({ handymanId: handymanId })
@@ -3096,6 +3359,7 @@ app.head("/health-check", (req, res) => {
         ratings: ratingsWithDetails,
         totalEarnings: totalEarnings,
         monthlyEarnings: monthlyEarnings,
+        jobDone: jobDone,
       });
     } catch (error) {
       return res.status(500).json({
@@ -3997,10 +4261,7 @@ app.head("/health-check", (req, res) => {
       // Load categories from JSON file
       let categoriesData;
       try {
-        const categoriesPath = path.join(
-          __dirname,
-          "../src/APIS/Categorhs.json"
-        );
+        const categoriesPath = path.join(__dirname, "API", "Categorhs.json");
         const categoriesFile = fs.readFileSync(categoriesPath, "utf8");
         categoriesData = JSON.parse(categoriesFile);
       } catch (error) {
@@ -4062,6 +4323,11 @@ app.head("/health-check", (req, res) => {
             temperature: 0.1,
           });
 
+          // Track AI usage and cost
+          if (spamCheck.usage) {
+            await trackAIUsage(spamCheck.usage);
+          }
+
           const isSpam =
             spamCheck.choices[0]?.message?.content?.trim().toLowerCase() ===
             "true";
@@ -4100,6 +4366,11 @@ ${categoryNames.map((cat, idx) => `${idx + 1}. ${cat}`).join("\n")}
             max_tokens: 50,
             temperature: 0.3,
           });
+
+          // Track AI usage and cost
+          if (completion.usage) {
+            await trackAIUsage(completion.usage);
+          }
 
           const matchedCategory =
             completion.choices[0]?.message?.content?.trim() || null;
@@ -4147,6 +4418,11 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                       max_tokens: 100,
                       temperature: 0.2,
                     });
+
+                  // Track AI usage and cost
+                  if (subcategoryCompletion.usage) {
+                    await trackAIUsage(subcategoryCompletion.usage);
+                  }
 
                   matchedSubcategory =
                     subcategoryCompletion.choices[0]?.message?.content?.trim() ||
@@ -4245,7 +4521,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
   app.post("/create-call-v2", async (req, res) => {
     try {
       // Get subcategoryInfo array from body (already processed by AI in step 1)
-      const { subcategoryInfo } = req.body;
+      const { subcategoryInfo, handymanIdSpecial } = req.body;
 
       if (
         !subcategoryInfo ||
@@ -4496,6 +4772,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           clientName: clientName,
           handymanId: null,
           handymanName: null,
+          handymanIdSpecial: handymanIdSpecial || null,
           subcategoryInfo: subcategoryInfoArray, // Array!
           workType: workType || "קלה",
           desc: desc || "",
@@ -4521,17 +4798,49 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         const savedJobId = result.insertedId;
 
         // Send push notifications to matching handymen (in background, don't wait)
-
+        // If handymanIdSpecial is provided, send only to that handyman
         (async () => {
           try {
-            for (const handyman of handymenMatchingAll) {
+            let handymenToNotify = handymenMatchingAll;
+
+            // If handymanIdSpecial is provided, send only to that specific handyman
+            if (handymanIdSpecial) {
+              const specialHandyman = handymenMatchingAll.find(
+                (h) => String(h._id) === String(handymanIdSpecial)
+              );
+              if (specialHandyman) {
+                handymenToNotify = [specialHandyman];
+              } else {
+                // If special handyman not in matching list, try to find them in database
+                try {
+                  const specialHandymanObjectId = new ObjectId(
+                    handymanIdSpecial
+                  );
+                  const specialHandymanFromDB = await collection.findOne({
+                    _id: specialHandymanObjectId,
+                    isHandyman: true,
+                  });
+                  if (specialHandymanFromDB && specialHandymanFromDB.fcmToken) {
+                    handymenToNotify = [specialHandymanFromDB];
+                  } else {
+                    handymenToNotify = [];
+                  }
+                } catch (error) {
+                  handymenToNotify = [];
+                }
+              }
+            }
+
+            for (const handyman of handymenToNotify) {
               if (handyman.fcmToken) {
                 const subcategoryNames = subcategoryInfoArray
                   .map((s) => s.subcategory || s.category)
                   .join(", ");
                 await sendPushNotification(
                   handyman.fcmToken,
-                  "עבודה חדשה באזור שלך! 🔧",
+                  handymanIdSpecial
+                    ? "הזמנה אישית עבורך! 🔧"
+                    : "עבודה חדשה באזור שלך! 🔧",
                   `${subcategoryNames} - ${location || "מיקום"}`,
                   {
                     type: "new_job",
@@ -4851,6 +5160,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           clientName: clientName,
           handymanId: null,
           handymanName: null,
+          handymanIdSpecial: null,
           subcategoryInfo: subcategoryGroup, // Array of matching subcategories
           workType: workType || "קלה",
           desc: desc || "",
@@ -4929,6 +5239,566 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       });
     }
   });
+
+  // Get categories endpoint
+  app.get("/categories", async (req, res) => {
+    try {
+      const categoriesPath = path.join(__dirname, "API", "Categorhs.json");
+      const categoriesFile = fs.readFileSync(categoriesPath, "utf8");
+      const categoriesData = JSON.parse(categoriesFile);
+      return res.json({
+        success: true,
+        categories: categoriesData.categories || [],
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error loading categories",
+        error: error.message,
+      });
+    }
+  });
+
+  // Helper function to save categories to file
+  function saveCategoriesToFile(categories) {
+    const categoriesPath = path.join(__dirname, "API", "Categorhs.json");
+    const data = { categories };
+    fs.writeFileSync(categoriesPath, JSON.stringify(data, null, 2), "utf8");
+  }
+
+  // Helper function to load categories from file
+  function loadCategoriesFromFile() {
+    const categoriesPath = path.join(__dirname, "API", "Categorhs.json");
+    const categoriesFile = fs.readFileSync(categoriesPath, "utf8");
+    return JSON.parse(categoriesFile);
+  }
+
+  // Add category endpoint
+  app.post("/categories", async (req, res) => {
+    try {
+      const { name, subcategories } = req.body;
+      if (!name) {
+        return res.status(400).json({
+          success: false,
+          message: "Category name is required",
+        });
+      }
+
+      const data = loadCategoriesFromFile();
+      const categories = data.categories || [];
+
+      // Check if category already exists
+      if (categories.some((cat) => cat.name === name)) {
+        return res.status(400).json({
+          success: false,
+          message: "Category already exists",
+        });
+      }
+
+      // Add new category
+      categories.push({
+        name,
+        subcategories: subcategories || [],
+      });
+
+      saveCategoriesToFile(categories);
+
+      return res.json({
+        success: true,
+        message: "Category added successfully",
+        categories,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error adding category",
+        error: error.message,
+      });
+    }
+  });
+
+  // Update category endpoint
+  app.put("/categories/:categoryName", async (req, res) => {
+    try {
+      const { categoryName } = req.params;
+      const { name, subcategories } = req.body;
+
+      const data = loadCategoriesFromFile();
+      const categories = data.categories || [];
+
+      const categoryIndex = categories.findIndex(
+        (cat) => cat.name === categoryName
+      );
+
+      if (categoryIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          message: "Category not found",
+        });
+      }
+
+      // Update category
+      if (name) categories[categoryIndex].name = name;
+      if (subcategories !== undefined)
+        categories[categoryIndex].subcategories = subcategories;
+
+      saveCategoriesToFile(categories);
+
+      return res.json({
+        success: true,
+        message: "Category updated successfully",
+        categories,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error updating category",
+        error: error.message,
+      });
+    }
+  });
+
+  // Delete category endpoint
+  app.delete("/categories/:categoryName", async (req, res) => {
+    try {
+      const { categoryName } = req.params;
+
+      const data = loadCategoriesFromFile();
+      let categories = data.categories || [];
+
+      categories = categories.filter((cat) => cat.name !== categoryName);
+
+      saveCategoriesToFile(categories);
+
+      return res.json({
+        success: true,
+        message: "Category deleted successfully",
+        categories,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error deleting category",
+        error: error.message,
+      });
+    }
+  });
+
+  // Add subcategory endpoint
+  app.post("/categories/:categoryName/subcategories", async (req, res) => {
+    try {
+      const { categoryName } = req.params;
+      const { name, price, workType } = req.body;
+
+      if (!name) {
+        return res.status(400).json({
+          success: false,
+          message: "Subcategory name is required",
+        });
+      }
+
+      const data = loadCategoriesFromFile();
+      const categories = data.categories || [];
+
+      const categoryIndex = categories.findIndex(
+        (cat) => cat.name === categoryName
+      );
+
+      if (categoryIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          message: "Category not found",
+        });
+      }
+
+      // Check if subcategory already exists
+      const category = categories[categoryIndex];
+      if (
+        category.subcategories &&
+        category.subcategories.some((sub) => sub.name === name)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Subcategory already exists",
+        });
+      }
+
+      // Add new subcategory
+      if (!category.subcategories) category.subcategories = [];
+      category.subcategories.push({
+        name,
+        price: price || 0,
+        workType: workType || "קבלנות",
+      });
+
+      saveCategoriesToFile(categories);
+
+      return res.json({
+        success: true,
+        message: "Subcategory added successfully",
+        categories,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error adding subcategory",
+        error: error.message,
+      });
+    }
+  });
+
+  // Update subcategory endpoint
+  app.put(
+    "/categories/:categoryName/subcategories/:subcategoryName",
+    async (req, res) => {
+      try {
+        const { categoryName, subcategoryName } = req.params;
+        const { name, price, workType } = req.body;
+
+        const data = loadCategoriesFromFile();
+        const categories = data.categories || [];
+
+        const categoryIndex = categories.findIndex(
+          (cat) => cat.name === categoryName
+        );
+
+        if (categoryIndex === -1) {
+          return res.status(404).json({
+            success: false,
+            message: "Category not found",
+          });
+        }
+
+        const category = categories[categoryIndex];
+        if (!category.subcategories) {
+          return res.status(404).json({
+            success: false,
+            message: "Subcategory not found",
+          });
+        }
+
+        const subcategoryIndex = category.subcategories.findIndex(
+          (sub) => sub.name === subcategoryName
+        );
+
+        if (subcategoryIndex === -1) {
+          return res.status(404).json({
+            success: false,
+            message: "Subcategory not found",
+          });
+        }
+
+        // Update subcategory
+        if (name) category.subcategories[subcategoryIndex].name = name;
+        if (price !== undefined)
+          category.subcategories[subcategoryIndex].price = price;
+        if (workType !== undefined)
+          category.subcategories[subcategoryIndex].workType = workType;
+
+        saveCategoriesToFile(categories);
+
+        return res.json({
+          success: true,
+          message: "Subcategory updated successfully",
+          categories,
+        });
+      } catch (error) {
+        return res.status(500).json({
+          success: false,
+          message: "Error updating subcategory",
+          error: error.message,
+        });
+      }
+    }
+  );
+
+  // Delete subcategory endpoint
+  app.delete(
+    "/categories/:categoryName/subcategories/:subcategoryName",
+    async (req, res) => {
+      try {
+        const { categoryName, subcategoryName } = req.params;
+
+        const data = loadCategoriesFromFile();
+        const categories = data.categories || [];
+
+        const categoryIndex = categories.findIndex(
+          (cat) => cat.name === categoryName
+        );
+
+        if (categoryIndex === -1) {
+          return res.status(404).json({
+            success: false,
+            message: "Category not found",
+          });
+        }
+
+        const category = categories[categoryIndex];
+        if (!category.subcategories) {
+          return res.status(404).json({
+            success: false,
+            message: "Subcategory not found",
+          });
+        }
+
+        category.subcategories = category.subcategories.filter(
+          (sub) => sub.name !== subcategoryName
+        );
+
+        saveCategoriesToFile(categories);
+
+        return res.json({
+          success: true,
+          message: "Subcategory deleted successfully",
+          categories,
+        });
+      } catch (error) {
+        return res.status(500).json({
+          success: false,
+          message: "Error deleting subcategory",
+          error: error.message,
+        });
+      }
+    }
+  );
+
+  // Admin endpoint - Get all users
+  app.get("/admin/users", async (req, res) => {
+    try {
+      const collection = getCollection();
+      if (!collection) {
+        return res.status(500).json({
+          success: false,
+          message: "Database not connected",
+        });
+      }
+
+      const users = await collection
+        .find({})
+        .project({
+          password: 0, // Exclude password
+          googleId: 0, // Exclude sensitive data
+        })
+        .sort({ createdAt: -1 }) // Sort by newest first
+        .toArray();
+
+      return res.json({
+        success: true,
+        users: users,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching users",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Delete user
+  app.delete("/admin/users/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (!id) {
+        return res
+          .status(400)
+          .json({ success: false, message: "User ID required" });
+      }
+
+      const userId = new ObjectId(id);
+      const usersCol = getCollection();
+      const jobsCol = getCollectionJobs();
+      const ratingsCol = getCollectionRatings();
+      const chatsCol = getCollectionChats();
+
+      // Check if user exists
+      const user = await usersCol.findOne({ _id: userId });
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+
+      // Get all job IDs associated with this user (as client or handyman)
+      const userJobs = await jobsCol
+        .find({
+          $or: [{ clientId: userId }, { handymanId: userId }],
+        })
+        .toArray();
+      const jobIds = userJobs.map((job) => job._id);
+
+      // Delete user's chats (before deleting jobs)
+      if (jobIds.length > 0) {
+        await chatsCol.deleteMany({ jobId: { $in: jobIds } });
+      }
+
+      // Delete user's jobs (both as client and as handyman)
+      await jobsCol.deleteMany({
+        $or: [{ clientId: userId }, { handymanId: userId }],
+      });
+
+      // Delete user's ratings (both as customer and as handyman)
+      await ratingsCol.deleteMany({
+        $or: [{ customerId: userId }, { handymanId: userId }],
+      });
+
+      // Finally, delete the user
+      const result = await usersCol.deleteOne({ _id: userId });
+      if (result.deletedCount === 0) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+
+      return res.json({ success: true, message: "User deleted successfully" });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error deleting user",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Get financials data
+  app.get("/admin/financials", async (req, res) => {
+    try {
+      const financialsCol = getCollectionFinancials();
+      if (!financialsCol) {
+        return res.status(500).json({
+          success: false,
+          message: "Database not connected",
+        });
+      }
+
+      const financials = await financialsCol.findOne({});
+
+      if (!financials) {
+        // Return default structure if no document exists
+        return res.json({
+          success: true,
+          financials: {
+            expenses: {
+              "AI expenses": 0,
+              "DB expenses": 0,
+              "API expenses": 0,
+              "Marketing expenses": 0,
+            },
+            Revenue: {
+              Fees: 0,
+              Drawings: 0,
+              "Urgent call": 0,
+            },
+          },
+        });
+      }
+
+      return res.json({
+        success: true,
+        financials: {
+          expenses: financials.expenses || {
+            "AI expenses": 0,
+            "DB expenses": 0,
+            "API expenses": 0,
+            "Marketing expenses": 0,
+          },
+          Revenue: financials.Revenue || {
+            Fees: 0,
+            Drawings: 0,
+            "Urgent call": 0,
+          },
+        },
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching financials",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Update financials manually
+  app.post("/admin/financials/update", async (req, res) => {
+    try {
+      const { field, amount, operation } = req.body;
+
+      if (!field || amount === undefined || !operation) {
+        return res.status(400).json({
+          success: false,
+          message: "Missing required fields: field, amount, operation",
+        });
+      }
+
+      if (!["add", "subtract"].includes(operation)) {
+        return res.status(400).json({
+          success: false,
+          message: "Operation must be 'add' or 'subtract'",
+        });
+      }
+
+      const financialsCol = getCollectionFinancials();
+      if (!financialsCol) {
+        return res.status(500).json({
+          success: false,
+          message: "Database not connected",
+        });
+      }
+
+      const financials = await financialsCol.findOne({});
+
+      if (!financials) {
+        return res.status(404).json({
+          success: false,
+          message: "Financials document not found",
+        });
+      }
+
+      // Validate field path (must be expenses.XXX or Revenue.XXX)
+      const validFields = [
+        "expenses.AI expenses",
+        "expenses.DB expenses",
+        "expenses.API expenses",
+        "expenses.Marketing expenses",
+        "Revenue.Fees",
+        "Revenue.Drawings",
+        "Revenue.Urgent call",
+      ];
+
+      if (!validFields.includes(field)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid field path",
+        });
+      }
+
+      const updateAmount = operation === "add" ? amount : -amount;
+
+      await financialsCol.updateOne(
+        { _id: financials._id },
+        {
+          $inc: {
+            [field]: updateAmount,
+          },
+          $set: {
+            updatedAt: new Date(),
+          },
+        }
+      );
+
+      return res.json({
+        success: true,
+        message: "Financials updated successfully",
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error updating financials",
+        error: error.message,
+      });
+    }
+  });
+
   app.delete("/users/:id", async (req, res) => {
     try {
       const { id } = req.params;

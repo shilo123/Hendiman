@@ -58,6 +58,10 @@
               <div class="statItem__label">סה״כ ביקורות</div>
               <div class="statItem__value">{{ ratings.length }}</div>
             </div>
+            <div class="statItem">
+              <div class="statItem__label">עבודות שבוצעו</div>
+              <div class="statItem__value">{{ jobDone }}</div>
+            </div>
           </div>
         </div>
 
@@ -135,6 +139,7 @@ export default {
       isLoading: true,
       monthlyEarnings: 0,
       totalEarnings: 0,
+      jobDone: 0,
     };
   },
   computed: {
@@ -167,6 +172,7 @@ export default {
           this.ratings = response.data.ratings || [];
           this.monthlyEarnings = response.data.monthlyEarnings || 0;
           this.totalEarnings = response.data.totalEarnings || 0;
+          this.jobDone = response.data.jobDone || 0;
         }
       } catch (error) {
       } finally {
@@ -267,10 +273,47 @@ $muted: rgba(255, 255, 255, 0.62);
   gap: 20px;
 }
 
+@media (max-width: 400px) {
+  .handymanRatings {
+    padding: 12px;
+  }
+
+  .handymanRatings__title {
+    font-size: 20px;
+  }
+
+  .statsCard,
+  .ratingsList {
+    padding: 16px;
+  }
+
+  .statsCard__grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .statItem__value {
+    font-size: 18px;
+  }
+
+  .statItem__label {
+    font-size: 12px;
+  }
+
+  .ratingItem {
+    padding: 12px;
+  }
+
+  .ratingItem__review {
+    font-size: 14px;
+  }
+}
+
 .statItem {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-top: 8px;
 }
 
 .statItem__label {

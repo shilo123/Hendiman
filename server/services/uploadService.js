@@ -1,4 +1,4 @@
-const { PutObjectCommand } = require("@aws-sdk/client-s3");
+const { PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const s3 = require("../config/s3");
 const axios = require("axios");
 
@@ -168,8 +168,35 @@ async function uploadImageFromUrl(imageUrl, bucketName) {
   }
 }
 
+async function deleteImageFromS3(imageUrl, bucketName) {
+  try {
+    // Extract the key (file name) from the S3 URL
+    // URL format: https://bucket-name.s3.amazonaws.com/file-name
+    const urlParts = imageUrl.split(`${bucketName}.s3.amazonaws.com/`);
+    if (urlParts.length < 2) {
+      return { success: false, error: "Invalid S3 URL format" };
+    }
+    const key = urlParts[1].split("?")[0]; // Remove query parameters if any
+
+    const deleteParams = {
+      Bucket: bucketName,
+      Key: key,
+    };
+
+    await s3.send(new DeleteObjectCommand(deleteParams));
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message || "Unknown S3 delete error",
+      code: error.Code || error.name || "UnknownError",
+    };
+  }
+}
+
 module.exports = {
   uploadImageToS3,
   uploadLogoToS3,
   uploadImageFromUrl,
+  deleteImageFromS3,
 };

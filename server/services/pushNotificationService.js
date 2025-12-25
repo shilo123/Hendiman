@@ -1,5 +1,9 @@
 const admin = require("firebase-admin");
 
+// Get client URL from environment variable (set in server.js or .env)
+// Default to relative path if not set (will resolve to origin)
+const CLIENT_URL = process.env.CLIENT_URL || process.env.URL_CLIENT || "";
+
 // Initialize Firebase Admin (only once)
 let initialized = false;
 
@@ -71,9 +75,10 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
           dir: "rtl", // Right-to-left for Hebrew
           requireInteraction: false,
         },
-        // FCM options for web
+        // FCM options for web - use full URL if available, otherwise relative path
+        // Full URL is recommended for better reliability across different environments
         fcmOptions: {
-          link: "/", // Link to open when notification is clicked
+          link: CLIENT_URL ? `${CLIENT_URL}/` : "/",
         },
         // ⚠️ CRITICAL: Headers for web push delivery - ensures reliable delivery
         headers: {
@@ -163,7 +168,7 @@ async function sendPushNotificationToMultiple(
           requireInteraction: false,
         },
         fcmOptions: {
-          link: "/",
+          link: CLIENT_URL ? `${CLIENT_URL}/` : "/",
         },
         headers: {
           Urgency: "high",

@@ -55,7 +55,7 @@
 </template>
 
 <script>
-import categoriesData from "@/APIS/Categorhs.json";
+import { loadCategories } from "@/utils/categoriesLoader";
 
 export default {
   name: "ProfileSpecialtiesSelector",
@@ -68,7 +68,7 @@ export default {
   emits: ["update:modelValue"],
   data() {
     return {
-      categories: categoriesData.categories || [],
+      categories: [],
       selectedCategoryName: "",
       subQuery: "",
       internalValue: this.normalizeInitial(this.modelValue),
@@ -208,7 +208,10 @@ export default {
       this.emitChange();
     },
   },
-  mounted() {
+  async mounted() {
+    const data = await loadCategories();
+    this.categories = data.categories || [];
+
     if (this.categories.length && !this.selectedCategoryName) {
       this.selectedCategoryName = this.categories[0].name;
     }

@@ -92,7 +92,7 @@
 </template>
 
 <script>
-import categoriesData from "@/APIS/Categorhs.json";
+import { loadCategories } from "@/utils/categoriesLoader";
 import CategoryTitle from "./CategoryTitle.vue";
 export default {
   name: "SingleCategorySelector",
@@ -108,7 +108,7 @@ export default {
   emits: ["update:modelValue"],
   data() {
     return {
-      categories: categoriesData.categories || [],
+      categories: [],
       showDropdown: false,
       hoveredCategory: null,
       tooltipSubcategory: null,
@@ -171,6 +171,10 @@ export default {
         document.removeEventListener("click", this.handleClickOutside);
       }
     },
+  },
+  async mounted() {
+    const data = await loadCategories();
+    this.categories = data.categories || [];
   },
   beforeUnmount() {
     // נקה event listeners לפני unmount

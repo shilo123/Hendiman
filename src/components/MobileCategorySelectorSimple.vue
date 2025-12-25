@@ -83,7 +83,7 @@
 </template>
 
 <script>
-import categoriesData from "@/APIS/Categorhs.json";
+import { loadCategories } from "@/utils/categoriesLoader";
 
 export default {
   name: "MobileCategorySelectorSimple",
@@ -104,7 +104,7 @@ export default {
   emits: ["update:modelValue"],
   data() {
     return {
-      categories: categoriesData.categories || [],
+      categories: [],
       showModal: false,
       selectedCategory: null,
       selectedItems: [],
@@ -154,6 +154,10 @@ export default {
         (sub) => !this.isSelected(sub)
       );
     },
+  },
+  async mounted() {
+    const data = await loadCategories();
+    this.categories = data.categories || [];
   },
   watch: {
     modelValue: {

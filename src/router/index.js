@@ -6,7 +6,10 @@ import Dashboard from "@/views/Dashboard.vue";
 import CreateCall from "@/views/CreateCall.vue";
 import JobSummary from "@/views/JobSummary.vue";
 import HandymanRatings from "@/views/HandymanRatings.vue";
-
+import About from "@/views/About.vue";
+import AdminManager from "@/views/Admin-manager.vue";
+import Payments from "@/views/Payments.vue";
+import PersonalRequestCall from "@/views/PersonalRequestCall.vue";
 const routes = [
   {
     path: "/",
@@ -50,6 +53,28 @@ const routes = [
     path: "/Dashboard/:id/ratings",
     name: "HandymanRatings",
     component: HandymanRatings,
+    props: true,
+  },
+  {
+    path: "/about",
+    name: "About",
+    component: About,
+  },
+  {
+    path: "/admin-manager",
+    name: "AdminManager",
+    component: AdminManager,
+  },
+  {
+    path: "/Dashboard/:id/payments",
+    name: "Payments",
+    component: Payments,
+    props: true,
+  },
+  {
+    path: "/Dashboard/:id/personal-request/:handymanId",
+    name: "PersonalRequestCall",
+    component: PersonalRequestCall,
     props: true,
   },
 ];

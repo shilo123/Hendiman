@@ -1,7 +1,15 @@
 import { defineStore } from "pinia";
 import axios from "axios";
-import categoriesData from "@/APIS/Categorhs.json";
 import { URL } from "@/Url/url";
+import { loadCategories, getCategories } from "@/utils/categoriesLoader";
+
+// Load categories from server
+let categoriesData = { categories: [] };
+
+// Initialize categories (async)
+loadCategories().then((data) => {
+  categoriesData = data;
+});
 
 function haversineKm(lat1, lon1, lat2, lon2) {
   const toRad = (v) => (v * Math.PI) / 180;
@@ -19,10 +27,10 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 }
 
 // מפה מתת־קטגוריה לקטגוריה (להשלמה כששדה category חסר בעבודה)
-const subcategoryToCategory = (() => {
+function buildSubcategoryToCategoryMap(catsData) {
   const map = new Map();
-  if (categoriesData && Array.isArray(categoriesData.categories)) {
-    categoriesData.categories.forEach((cat) => {
+  if (catsData && Array.isArray(catsData.categories)) {
+    catsData.categories.forEach((cat) => {
       if (!cat?.name || !Array.isArray(cat.subcategories)) return;
       const catName = String(cat.name).trim().toLowerCase();
       cat.subcategories.forEach((sub) => {
@@ -34,7 +42,16 @@ const subcategoryToCategory = (() => {
     });
   }
   return map;
-})();
+}
+
+// Build map when categories are loaded
+let subcategoryToCategory = buildSubcategoryToCategoryMap({ categories: [] });
+
+// Update map when categories are loaded
+loadCategories().then((data) => {
+  categoriesData = data;
+  subcategoryToCategory = buildSubcategoryToCategoryMap(data);
+});
 
 export const useMainStore = defineStore("main", {
   state: () => ({

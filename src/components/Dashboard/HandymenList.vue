@@ -20,8 +20,8 @@
           <div class="hcard__meta">
             <div class="hcard__name">{{ h.username }}</div>
             <div
+              v-if="h.rating !== null && h.rating !== undefined && h.rating > 0"
               class="hcard__rating"
-              v-if="h.rating !== null && h.rating !== undefined"
             >
               <div class="hcard__rating-stars">
                 <template v-for="i in 5" :key="i">
@@ -47,6 +47,9 @@
               <span class="hcard__rating-number">{{
                 formatRating(h.rating)
               }}</span>
+            </div>
+            <div v-else class="hcard__rating hcard__rating--no-rating">
+              אין דירוג עדיין
             </div>
             <div class="hcard__sub">
               {{ h.jobDone || 0 }} עבודות
@@ -370,6 +373,19 @@ $text: rgba(255, 255, 255, 0.92);
     &--empty {
       color: rgba(255, 255, 255, 0.3);
       opacity: 1;
+    }
+  }
+
+  &__rating {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    &--no-rating {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 12px;
+      font-weight: 700;
+      font-style: italic;
     }
   }
 

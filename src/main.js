@@ -19,9 +19,15 @@ import {
   faStar,
   faStarHalfStroke,
   faShare,
+  faEdit,
+  faTrash,
+  faPlus,
 } from "@fortawesome/free-solid-svg-icons";
 
 library.add(
+  faEdit,
+  faTrash,
+  faPlus,
   faEye,
   faEyeSlash,
   faUpload,

@@ -84,7 +84,8 @@
       <!-- Handyman: one smart status button instead of 3 blocks -->
       <div v-if="isHandyman && nextStatus" class="status-update-wrapper">
         <button
-          class="chip chip--primary status-update-btn"
+          class="chip status-update-btn"
+          :class="getStatusButtonClass(nextStatus)"
           type="button"
           @click="updateStatus(nextStatus)"
         >
@@ -93,34 +94,30 @@
         </button>
       </div>
 
-      <!-- Client: location -->
-      <button
-        v-if="!isHandyman && showStatusButtons"
-        class="chip chip--primary"
-        type="button"
-        @click="sendLocation"
-      >
-        📍 שלח מיקום
-      </button>
-
-      <!-- Always: steps toggle -->
-      <button
-        class="chip chip--ghost"
-        type="button"
-        @click="stepsOpen = !stepsOpen"
-      >
-        {{ stepsOpen ? "הסתר סטטוס" : "הצג סטטוס" }}
-      </button>
+      <!-- Client: location buttons -->
+      <template v-if="!isHandyman && showStatusButtons">
+        <button class="chip chip--primary" type="button" @click="sendLocation">
+          📍 שלח מיקום
+        </button>
+        <button
+          v-if="lastHandymanLocation"
+          class="chip chip--ghost"
+          type="button"
+          @click="openHandymanLocation"
+        >
+          🗺️ מיקום ההנדימן
+        </button>
+      </template>
     </div>
 
-    <!-- Compact stepper -->
-    <div v-if="stepsOpen" class="chat__stepper">
+    <!-- Compact stepper - always visible -->
+    <div class="chat__stepper">
       <div
         v-for="(step, i) in jobSteps"
         :key="step.status"
         class="step"
         :class="{
-          'is-active': step.status === jobStatus,
+          'is-active': isStepActive(step.status),
           'is-done': isStepCompleted(step.status),
         }"
       >
@@ -447,6 +444,98 @@
         </div>
       </div>
     </div>
+
+    <!-- Handyman Route Modal (for client) -->
+    <div
+      v-if="showHandymanRouteModal"
+      class="modal route-modal"
+      @click.self="closeHandymanRouteModal"
+    >
+      <div class="routeCard">
+        <div class="routeCard__header">
+          <h3 class="routeCard__title">🗺️ מיקום ההנדימן</h3>
+          <button
+            class="routeCard__close"
+            type="button"
+            @click="closeHandymanRouteModal"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div class="routeCard__mapWrapper">
+          <img
+            :src="getRouteMapImage()"
+            class="routeCard__map"
+            alt="מפה עם מסלול"
+            @error="onMapImageError"
+          />
+          <div class="routeCard__legend">
+            <div class="routeCard__legendItem">
+              <span
+                class="routeCard__legendDot routeCard__legendDot--start"
+              ></span>
+              <span class="routeCard__legendText">מיקום ההנדימן</span>
+            </div>
+            <div class="routeCard__legendItem">
+              <span
+                class="routeCard__legendDot routeCard__legendDot--end"
+              ></span>
+              <span class="routeCard__legendText">מיקום העבודה</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="routeCard__body">
+          <div class="routeCard__info">
+            <div class="routeCard__infoRow">
+              <span class="routeCard__infoLabel">מיקום ההנדימן:</span>
+              <span class="routeCard__infoValue">{{
+                formatLocation(lastHandymanLocation)
+              }}</span>
+            </div>
+            <div class="routeCard__infoRow">
+              <span class="routeCard__infoLabel">מיקום העבודה:</span>
+              <span class="routeCard__infoValue">{{
+                formatLocation(jobLocation)
+              }}</span>
+            </div>
+          </div>
+
+          <div class="routeCard__actions">
+            <a
+              :href="getRouteWazeUrl()"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="routeCard__btn routeCard__btn--waze"
+              @click="closeHandymanRouteModal"
+            >
+              <span class="routeCard__btnIcon">📍</span>
+              <span class="routeCard__btnText">פתח בווייז</span>
+            </a>
+
+            <a
+              :href="getRouteGoogleMapsUrl()"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="routeCard__btn routeCard__btn--google"
+              @click="closeHandymanRouteModal"
+            >
+              <span class="routeCard__btnIcon">🗺️</span>
+              <span class="routeCard__btnText">פתח בגוגל מפות</span>
+            </a>
+          </div>
+
+          <button
+            class="routeCard__backBtn"
+            type="button"
+            @click="closeHandymanRouteModal"
+          >
+            ← חזור לצ'אט
+          </button>
+        </div>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -494,9 +583,10 @@ export default {
       locationModal: null,
 
       // new UX state
-      stepsOpen: false,
       showMenu: false,
       showNavModal: false,
+      showHandymanRouteModal: false, // Modal for handyman location with route
+      currentStatusUpdate: null, // Track current status for active button state
 
       // Tabs state
       currentJobIndex: 0,
@@ -618,6 +708,20 @@ export default {
       const jobId = String(job?._id || job?.id || "");
       return this.ratingSubmittedJobs[jobId] || false;
     },
+    lastHandymanLocation() {
+      // Find the last location message from handyman
+      if (this.isHandyman) return null;
+
+      // Search messages in reverse order to find the latest handyman location
+      for (let i = this.messages.length - 1; i >= 0; i--) {
+        const msg = this.messages[i];
+        // Check if message is from handyman (not "me" and has location)
+        if (msg.location && msg.sender !== "me" && msg.sender !== "system") {
+          return msg.location;
+        }
+      }
+      return null;
+    },
   },
   created() {
     this.toast = useToast();
@@ -626,6 +730,24 @@ export default {
   },
   async mounted() {
     window.addEventListener("click", this.onOutsideTools);
+
+    // Load messages from cache first if available for fast display
+    const job = this.currentJob;
+    const jobId = job?.id || job?._id;
+    if (jobId) {
+      const jobIdStr = String(jobId);
+      if (
+        this.messagesCache[jobIdStr] &&
+        this.messagesCache[jobIdStr].length > 0
+      ) {
+        // Load from cache immediately for fast display
+        this.messages = [...this.messagesCache[jobIdStr]];
+        this.$nextTick(() => {
+          this.scrollToBottom();
+        });
+      }
+    }
+
     this.initWebSocket();
     await this.loadMessages();
     this.scrollToBottom();
@@ -659,8 +781,11 @@ export default {
         }
       }
 
-      // Update status for new job
-      this.localJobStatus = this.currentJob?.status || null;
+      // Update status for new job - ensure it's synced
+      const newJobStatus = this.currentJob?.status;
+      if (newJobStatus) {
+        this.localJobStatus = newJobStatus;
+      }
 
       // Get job ID for new job
       const newJobId = String(
@@ -688,7 +813,13 @@ export default {
       this.loadMessages();
     },
     "currentJob.status"(newStatus) {
-      if (newStatus && !this.localJobStatus) this.localJobStatus = newStatus;
+      // Always update localJobStatus when job status changes
+      if (newStatus) {
+        this.localJobStatus = newStatus;
+      } else if (newStatus === null || newStatus === undefined) {
+        // Reset if status is cleared
+        this.localJobStatus = null;
+      }
     },
     messages: {
       deep: true,
@@ -866,6 +997,31 @@ export default {
         if (receivedJobId === currentJobId) {
           this.localJobStatus = data.status;
           this.$emit("status-updated", data.status);
+
+          // Add status message to chat for client (not handyman)
+          if (!this.isHandyman) {
+            const statusMessages = {
+              on_the_way: "ההנדימן יצא לדרך",
+              in_progress: "עדכון סטטוס: ההנדימן הגיע",
+              done: "עדכון סטטוס: ההנדימן סיים את העבודה",
+            };
+            const statusMessage = statusMessages[data.status];
+            if (statusMessage) {
+              const systemMessage = {
+                sender: "system",
+                text: statusMessage,
+                time: new Date().toLocaleTimeString("he-IL", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+                createdAt: new Date(),
+                isSystem: true,
+              };
+              this.messages.push(systemMessage);
+              this.updateMessagesCache();
+              this.scrollToBottom();
+            }
+          }
         }
       });
 
@@ -915,13 +1071,26 @@ export default {
         const jobId = job?.id || job?._id;
         if (!jobId) return;
 
-        // Reset unread count for current job when loading messages
         const jobIdStr = String(jobId);
+
+        // Reset unread count for current job when loading messages
         this.$set(this.unreadCounts, jobIdStr, 0);
+
+        // Check cache first - if exists and we don't have messages, load from cache for fast display
+        if (
+          this.messages.length === 0 &&
+          this.messagesCache[jobIdStr] &&
+          this.messagesCache[jobIdStr].length > 0
+        ) {
+          this.messages = [...this.messagesCache[jobIdStr]];
+          this.$nextTick(() => {
+            this.scrollToBottom();
+          });
+        }
 
         const { data } = await axios.get(`${URL}/jobs/${jobId}/messages`);
         if (data.success && data.messages) {
-          this.messages = data.messages.map((msg) => {
+          const loadedMessages = data.messages.map((msg) => {
             const isFromHandyman =
               !!msg.handyman || !!msg.handymanImage || !!msg.handymanLocation;
             const sender = this.isHandyman
@@ -952,9 +1121,10 @@ export default {
             };
           });
 
-          // Update messages and cache
+          // Always update messages from server - replace existing
           this.messages = loadedMessages;
-          const jobIdStr = String(jobId);
+
+          // Update cache with all messages
           this.messagesCache[jobIdStr] = [...loadedMessages];
         }
       } catch (e) {
@@ -1240,6 +1410,41 @@ export default {
       if (!location) return;
       this.locationModal = location;
     },
+    openHandymanLocation() {
+      if (this.lastHandymanLocation && this.jobLocation) {
+        // Open route modal instead of simple location modal
+        this.showHandymanRouteModal = true;
+      } else if (this.lastHandymanLocation) {
+        // Fallback to simple location if no job location
+        this.openLocationModal(this.lastHandymanLocation);
+      }
+    },
+    closeHandymanRouteModal() {
+      this.showHandymanRouteModal = false;
+    },
+    getRouteMapImage() {
+      // Get route map image from server with both locations
+      if (!this.lastHandymanLocation || !this.jobLocation) return "";
+      const handyman = this.lastHandymanLocation;
+      const job = this.jobLocation;
+      const width = 800;
+      const height = 600;
+      return `${URL}/route-map-image?originLat=${handyman.lat}&originLng=${handyman.lng}&destLat=${job.lat}&destLng=${job.lng}&width=${width}&height=${height}`;
+    },
+    getRouteWazeUrl() {
+      if (!this.lastHandymanLocation || !this.jobLocation) return "#";
+      const handyman = this.lastHandymanLocation;
+      const job = this.jobLocation;
+      // Waze route URL
+      return `https://www.waze.com/ul?ll=${job.lat},${job.lng}&navigate=yes`;
+    },
+    getRouteGoogleMapsUrl() {
+      if (!this.lastHandymanLocation || !this.jobLocation) return "#";
+      const handyman = this.lastHandymanLocation;
+      const job = this.jobLocation;
+      // Google Maps route URL with origin and destination
+      return `https://www.google.com/maps/dir/?api=1&origin=${handyman.lat},${handyman.lng}&destination=${job.lat},${job.lng}&travelmode=driving`;
+    },
 
     getLocationMapImage(location) {
       if (typeof location === "object" && location.lat && location.lng) {
@@ -1285,7 +1490,29 @@ export default {
       };
       const currentOrder = statusOrder[this.jobStatus] || 0;
       const stepOrder = statusOrder[stepStatus] || 0;
+      // A step is completed if its order is strictly less than the current status order
+      // This means when status is "on_the_way" (2), "assigned" (1) is completed
       return stepOrder < currentOrder;
+    },
+    isStepActive(stepStatus) {
+      // A step is active if it matches the current status exactly
+      return stepStatus === this.jobStatus;
+    },
+    getStatusButtonClass(status) {
+      // Base class
+      const baseClass = "chip--primary";
+
+      // If this status is currently being updated, return active class
+      if (this.currentStatusUpdate === status) {
+        const activeClasses = {
+          on_the_way: "chip--status-active chip--status-on-the-way",
+          in_progress: "chip--status-active chip--status-in-progress",
+          done: "chip--status-active chip--status-done",
+        };
+        return `${baseClass} ${activeClasses[status] || ""}`;
+      }
+
+      return baseClass;
     },
 
     async sendMessage() {
@@ -1486,21 +1713,19 @@ export default {
         const statusLabel = statusLabels[newStatus] || newStatus;
         this.toast.showSuccess(`הסטטוס עודכן ללקוח: ${statusLabel}`);
 
-        // Add system message to chat to show status was updated
-        const systemMessage = {
-          sender: "system",
-          text: `הסטטוס עודכן ללקוח: ${statusLabel}`,
-          time: new Date().toLocaleTimeString("he-IL", {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          createdAt: new Date(),
-          isSystem: true,
-        };
-        this.messages.push(systemMessage);
-        this.updateMessagesCache();
-        this.scrollToBottom();
+        // Set current status update for active button state
+        this.currentStatusUpdate = newStatus;
+        // Reset after a short delay
+        setTimeout(() => {
+          if (this.currentStatusUpdate === newStatus) {
+            this.currentStatusUpdate = null;
+          }
+        }, 2000);
 
+        // Update local status immediately (will be synced via WebSocket too)
+        this.localJobStatus = newStatus;
+
+        // Emit event to parent - DO NOT clear messages, they should remain
         this.$emit("status-updated", newStatus);
       } catch (err) {
         this.toast.showError("שגיאה בעדכון הסטטוס");
@@ -1527,7 +1752,7 @@ export default {
           handymanId = handymanId[0];
         }
 
-        await axios.post(`${URL}/jobs/rate`, {
+        const response = await axios.post(`${URL}/jobs/rate`, {
           jobId: job._id || job.id,
           handymanId: handymanId,
           customerId,
@@ -1535,16 +1760,35 @@ export default {
           review: this.reviewText,
         });
 
-        this.toast.showSuccess("הדירוג נשלח");
-        const jobIdStr = String(job._id || job.id);
-        this.$set(this.ratingSubmittedJobs, jobIdStr, true);
-        this.$emit("rating-submitted", job);
-        const userId = this.store?.user?._id || this.$route.params.id;
-        this.$router.push(
-          `/Dashboard/${userId}/job-summary/${job._id || job.id}`
-        );
+        // Check if the response indicates success
+        if (response.data && response.data.success) {
+          this.toast.showSuccess("הדירוג נשלח");
+          const jobIdStr = String(job._id || job.id);
+          this.$set(this.ratingSubmittedJobs, jobIdStr, true);
+          this.$emit("rating-submitted", job);
+          const userId = this.store?.user?._id || this.$route.params.id;
+          this.$router.push(
+            `/Dashboard/${userId}/job-summary/${job._id || job.id}`
+          );
+        } else {
+          // If response doesn't indicate success, show error
+          this.toast.showError("שגיאה בשליחת הדירוג");
+        }
       } catch (e) {
-        this.toast.showError("שגיאה בשליחת הדירוג");
+        // Check if it's actually a successful response that was caught as error
+        if (e.response && e.response.data && e.response.data.success) {
+          // Request succeeded despite error (network issue after response)
+          this.toast.showSuccess("הדירוג נשלח");
+          const jobIdStr = String(job._id || job.id);
+          this.$set(this.ratingSubmittedJobs, jobIdStr, true);
+          this.$emit("rating-submitted", job);
+          const userId = this.store?.user?._id || this.$route.params.id;
+          this.$router.push(
+            `/Dashboard/${userId}/job-summary/${job._id || job.id}`
+          );
+        } else {
+          this.toast.showError("שגיאה בשליחת הדירוג");
+        }
       }
     },
 
@@ -1843,6 +2087,62 @@ $orange2: #ff8a2b;
 
 .chip--ghost {
   border-color: rgba($orange, 0.18);
+}
+
+/* Active status button styles */
+.chip--status-active {
+  animation: pulse 0.5s ease-in-out;
+  transform: scale(1.02);
+}
+
+.chip--status-on-the-way {
+  border-color: rgba($orange2, 0.7);
+  background: linear-gradient(
+    135deg,
+    rgba($orange2, 0.98),
+    rgba(255, 180, 107, 0.95)
+  );
+  box-shadow: 0 0 20px rgba($orange2, 0.4);
+}
+
+.chip--status-in-progress {
+  border-color: rgba(59, 130, 246, 0.7);
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.98),
+    rgba(96, 165, 250, 0.95)
+  );
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+}
+
+.chip--status-done {
+  border-color: rgba(16, 185, 129, 0.7);
+  background: linear-gradient(
+    135deg,
+    rgba(16, 185, 129, 0.98),
+    rgba(52, 211, 153, 0.95)
+  );
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
 }
 
 /* Stepper */

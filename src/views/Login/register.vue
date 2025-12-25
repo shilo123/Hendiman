@@ -291,9 +291,19 @@
               <div class="notice notice--info">
                 <font-awesome-icon :icon="['fas', 'info-circle']" />
                 <div class="notice__text">
-                  <div class="notice__title">הרשמה להנדימן 49.90 ₪</div>
+                  <div class="notice__title">
+                    <template v-if="handymenCount < 100">
+                      100 נרשמים ראשונים חינם
+                    </template>
+                    <template v-else> הרשמה להנדימן 49.90 ₪ </template>
+                  </div>
                   <div class="notice__sub">
-                    אחרי זה תוכל לקבל עבודות דרך האפליקקה
+                    <template v-if="handymenCount < 100">
+                      עד כה נרשמו {{ handymenCount }}\100
+                    </template>
+                    <template v-else>
+                      אחרי זה תוכל לקבל עבודות דרך האפליקקה
+                    </template>
                   </div>
                 </div>
               </div>
@@ -561,6 +571,7 @@ export default {
       isGoogleUser: false,
       googleUserData: null,
       isSubmitting: false,
+      handymenCount: 0,
       clientForm: {
         firstName: "",
         lastName: "",
@@ -599,6 +610,7 @@ export default {
   created() {
     this.toast = useToast();
     this.handleGoogleCallback();
+    this.fetchHandymenCount();
   },
   watch: {
     "$route.query": {
@@ -674,7 +686,6 @@ export default {
                   targetForm.imageUrl = user.picture;
                 }
               } catch (error) {
-
                 // Fallback: use original URL if upload fails
                 targetForm.imageUrl = user.picture;
               }
@@ -870,7 +881,6 @@ export default {
         } else {
           this.toast.showError("שגיאה בהרשמה. אנא נסה שוב.", 6000);
         }
-
       } finally {
         this.isSubmitting = false;
       }
@@ -908,9 +918,7 @@ export default {
               formData.addressEnglish = foundCity.english_name;
               this.handymanForm.addressEnglish = foundCity.english_name;
             }
-          } catch (e) {
-
-          }
+          } catch (e) {}
         }
 
         if (this.isGoogleUser && this.googleUserData) {
@@ -1026,7 +1034,6 @@ export default {
         } else {
           this.toast.showError("שגיאה בהרשמה. אנא נסה שוב.", 6000);
         }
-
       } finally {
         this.isSubmitting = false;
       }
@@ -1037,6 +1044,18 @@ export default {
     },
     ConenectWithFacebook() {
       this.toast.showError("התחברות עם פייסבוק עדיין לא מיושמת");
+    },
+
+    async fetchHandymenCount() {
+      try {
+        const { data } = await axios.get(`${URL}/handymen-count`);
+        if (data && data.success) {
+          this.handymenCount = data.count || 0;
+        }
+      } catch (error) {
+        // Silently fail - default to showing paid registration message
+        this.handymenCount = 100;
+      }
     },
   },
 };

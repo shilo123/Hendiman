@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="jobs__head">
       <div class="jobs__headText">
-        <h2 class="jobs__title">עבודות</h2>
+        <h2 class="jobs__title">עבודות שמתבצעות כרגע</h2>
         <p class="jobs__sub">
           {{
             isHendiman
@@ -105,7 +105,7 @@
 
           <div class="badgeRow">
             <span class="badge"
-              >עד <b>{{ handymanFilters.maxKm }}</b> ק״מ</span
+              >עד <b>{{ displayMaxKm }}</b> ק״מ</span
             >
           </div>
 
@@ -116,7 +116,8 @@
             max="30"
             step="1"
             :value="handymanFilters.maxKm"
-            @input="$emit('change-km', $event.target.value)"
+            @input="localMaxKm = parseInt($event.target.value)"
+            @change="handleKmChange($event.target.value)"
           />
 
           <div class="hint">* סינון תצוגה בלבד (לפי אזור הפעילות בפרופיל).</div>
@@ -265,7 +266,26 @@ export default {
     "prev-jobs-page",
   ],
   data() {
-    return { isStatusDropdownOpen: false };
+    return {
+      isStatusDropdownOpen: false,
+      localMaxKm: null, // Local value for display while dragging
+    };
+  },
+  computed: {
+    displayMaxKm() {
+      // Show local value while dragging, otherwise show the actual value
+      return this.localMaxKm !== null
+        ? this.localMaxKm
+        : this.handymanFilters.maxKm;
+    },
+  },
+  watch: {
+    "handymanFilters.maxKm"(newVal) {
+      // Reset local value when actual value changes
+      if (this.localMaxKm !== null && this.localMaxKm === newVal) {
+        this.localMaxKm = null;
+      }
+    },
   },
   mounted() {
     document.addEventListener("click", this.handleClickOutside);
@@ -359,6 +379,11 @@ export default {
         cancelled: "בוטלה",
       };
       return labels[status] || status;
+    },
+    handleKmChange(value) {
+      // Reset local value and emit the change
+      this.localMaxKm = null;
+      this.$emit("change-km", value);
     },
   },
 };
@@ -496,8 +521,9 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
-  @media (max-width: 380px) {
+  @media (max-width: 400px) {
     grid-template-columns: 1fr;
+    gap: 6px;
   }
 }
 
@@ -511,6 +537,10 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     padding: 8px;
     border-radius: 12px;
   }
+  @media (max-width: 400px) {
+    padding: 6px;
+    border-radius: 10px;
+  }
 }
 
 .panel__label {
@@ -522,6 +552,10 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   @media (max-width: 768px) {
     font-size: 10px;
     margin-bottom: 6px;
+  }
+  @media (max-width: 400px) {
+    font-size: 9px;
+    margin-bottom: 4px;
   }
 }
 
@@ -699,6 +733,11 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   flex-direction: column;
   gap: 10px;
   margin-top: 10px;
+
+  @media (max-width: 400px) {
+    gap: 8px;
+    margin-top: 6px;
+  }
 }
 
 .radio-item {
@@ -711,6 +750,11 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.03);
   transition: all 0.2s ease;
+
+  @media (max-width: 400px) {
+    padding: 8px 10px;
+    gap: 8px;
+  }
 
   &:hover {
     background: rgba(255, 255, 255, 0.06);

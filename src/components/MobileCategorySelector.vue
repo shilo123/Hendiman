@@ -128,7 +128,7 @@
 </template>
 
 <script>
-import categoriesData from "@/APIS/Categorhs.json";
+import { loadCategories } from "@/utils/categoriesLoader";
 
 export default {
   name: "MobileCategorySelector",
@@ -153,7 +153,7 @@ export default {
   emits: ["update:modelValue"],
   data() {
     return {
-      categories: categoriesData.categories || [],
+      categories: [],
       showModal: false,
       selectedCategory: null,
       searchQuery: "",
@@ -242,7 +242,10 @@ export default {
       immediate: true,
     },
   },
-  mounted() {
+  async mounted() {
+    const data = await loadCategories();
+    this.categories = data.categories || [];
+    
     window.addEventListener("resize", this.handleResize);
     document.addEventListener("click", this.handleClickOutside);
   },

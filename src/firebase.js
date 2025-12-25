@@ -31,23 +31,13 @@ if (typeof window !== "undefined") {
   analytics = getAnalytics(app);
 }
 
-// Initialize Firebase Cloud Messaging and get a token
+// Initialize Firebase Cloud Messaging
+// Note: Service worker registration and getToken are handled in Dashboard.vue
+// to ensure proper coordination between registration and token retrieval
 let messaging = null;
 if (typeof window !== "undefined" && "serviceWorker" in navigator) {
   try {
     messaging = getMessaging(app);
-
-    // Register service worker for Firebase Messaging
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .register("/firebase-messaging-sw.js")
-        .then((registration) => {
-          // Service worker registered successfully
-        })
-        .catch((error) => {
-          // Service worker registration failed
-        });
-    }
   } catch (error) {
     // Messaging not supported or already initialized
   }

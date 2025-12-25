@@ -60,6 +60,57 @@
           <span class="return-job-mobile__text">חזור לעבודה שלך</span>
         </button>
 
+        <!-- RIGHT SIDE (moved before jobs for client) -->
+        <aside class="side" v-if="!isHendiman">
+          <!-- CLIENT: Create Call Button (desktop only) -->
+          <section v-if="!isHendiman" class="panel client-actions-panel">
+            <ClientActions
+              @create-call="onCreateCallCta"
+              class="client-actions-desktop"
+            />
+          </section>
+          <!-- CLIENT: handymen in area + action buttons -->
+          <section class="panel">
+            <div class="panel__head">
+              <h2 class="h2">
+                הנדימנים באזורך
+                <span v-if="handymenPagination.total" class="h2__count"
+                  >({{ handymenPagination.total }})</span
+                >
+              </h2>
+              <p class="sub">
+                הנדימנים הזמינים באזור שלך · לחץ על כפתור לפעולה
+              </p>
+            </div>
+
+            <HandymenList
+              :filteredHandymen="filteredHandymen"
+              :pagination="handymenPagination"
+              @view-details="onViewHandymanDetails"
+              @open-chat="onOpenUserChat"
+              @personal-request="onPersonalRequest"
+              @next-page="onNextPage"
+              @prev-page="onPrevPage"
+            />
+          </section>
+        </aside>
+
+        <!-- HANDYMAN: quick profile & notes -->
+        <aside class="side" v-else>
+          <section class="panel">
+            <div class="panel__head">
+              <h2 class="h2">כלים להנדימן</h2>
+              <p class="sub">עבודות מופיעות רק לפי ההתמחויות שבחרת בהרשמה</p>
+            </div>
+
+            <HandymanTools
+              :specialties="me.specialties"
+              @edit-profile="onGoProfile"
+              @open-chat="onOpenHandymenChat"
+            />
+          </section>
+        </aside>
+
         <!-- LEFT ~60% JOBS -->
         <JobsSection
           :isHendiman="isHendiman"
@@ -89,55 +140,6 @@
           @next-jobs-page="onJobsNextPage"
           @prev-jobs-page="onJobsPrevPage"
         />
-
-        <!-- RIGHT SIDE -->
-        <aside class="side">
-          <!-- CLIENT: Create Call Button (desktop only) -->
-          <section v-if="!isHendiman" class="panel client-actions-panel">
-            <ClientActions
-              @create-call="onCreateCallCta"
-              class="client-actions-desktop"
-            />
-          </section>
-          <!-- CLIENT: handymen in area + action buttons -->
-          <section v-if="!isHendiman" class="panel">
-            <div class="panel__head">
-              <h2 class="h2">
-                הנדימנים באזורך
-                <span v-if="handymenPagination.total" class="h2__count"
-                  >({{ handymenPagination.total }})</span
-                >
-              </h2>
-              <p class="sub">
-                הנדימנים הזמינים באזור שלך · לחץ על כפתור לפעולה
-              </p>
-            </div>
-
-            <HandymenList
-              :filteredHandymen="filteredHandymen"
-              :pagination="handymenPagination"
-              @view-details="onViewHandymanDetails"
-              @open-chat="onOpenUserChat"
-              @personal-request="onPersonalRequest"
-              @next-page="onNextPage"
-              @prev-page="onPrevPage"
-            />
-          </section>
-
-          <!-- HANDYMAN: quick profile & notes -->
-          <section v-else class="panel">
-            <div class="panel__head">
-              <h2 class="h2">כלים להנדימן</h2>
-              <p class="sub">עבודות מופיעות רק לפי ההתמחויות שבחרת בהרשמה</p>
-            </div>
-
-            <HandymanTools
-              :specialties="me.specialties"
-              @edit-profile="onGoProfile"
-              @open-chat="onOpenHandymenChat"
-            />
-          </section>
-        </aside>
         <ViewHandymanDetails
           v-if="handymanDetails"
           :handymanDetails="handymanDetails"
@@ -1060,25 +1062,38 @@ export default {
           { updateViaCache: "none" } // Always check for updates
         );
 
-        // Wait for service worker to be ready after registration
+        // Handle service worker updates and ensure it's active
         if (registration.waiting) {
           // If there's a waiting service worker, skip waiting
           registration.waiting.postMessage({ type: "SKIP_WAITING" });
+          // Wait a bit for it to activate
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
 
         if (registration.installing) {
-          // Wait for installation to complete
-          await new Promise((resolve) => {
-            registration.installing.addEventListener(
-              "statechange",
-              function () {
-                if (this.state === "installed") {
-                  resolve();
-                }
+          // Wait for installation and activation to complete
+          await new Promise((resolve, reject) => {
+            const serviceWorker = registration.installing;
+            if (!serviceWorker) {
+              resolve();
+              return;
+            }
+
+            serviceWorker.addEventListener("statechange", function () {
+              if (this.state === "activated") {
+                resolve();
+              } else if (this.state === "redundant") {
+                reject(new Error("Service worker installation failed"));
               }
-            );
+            });
           });
+        } else if (registration.active) {
+          // If service worker is already active, wait a moment to ensure it's ready
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
+
+        // Ensure service worker is ready
+        registration = await navigator.serviceWorker.ready;
 
         // Get FCM token (this will always get the current token, even if it changed)
         if (messaging) {
@@ -1138,7 +1153,14 @@ export default {
 
     onBlockHandyman(id) {},
 
-    onPersonalRequest(id) {},
+    onPersonalRequest(id) {
+      // Navigate to personal request page with handyman ID
+      const userId = this.store.user?._id || this.$route.params.id;
+      this.$router.push({
+        name: "PersonalRequestCall",
+        params: { id: userId, handymanId: id },
+      });
+    },
 
     async onSaveProfile(form) {
       const userId = this.store.user?._id;
@@ -1515,7 +1537,7 @@ $r2: 26px;
 /* GRID */
 .grid {
   display: grid;
-  grid-template-columns: 1.6fr 1fr; /* ~60/40 */
+  grid-template-columns: 1fr 1.6fr; /* ~40/60 - handymen first, then jobs */
   gap: 14px;
   align-items: stretch; // זה יגרום לשני הבלוקים להיות באותו גובה
 

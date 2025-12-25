@@ -119,7 +119,7 @@
           <div v-else class="muted">לא הוגדרו התמחויות</div>
 
           <div v-if="specOpen" class="specEditor">
-            <ProfileSpecialtiesSelector v-model="form.specialties" />
+            <CategoryCheckboxSelector v-model="form.specialties" />
           </div>
         </section>
 
@@ -241,13 +241,13 @@
 
 <script>
 import cities from "@/APIS/AdressFromIsrael.json";
-import ProfileSpecialtiesSelector from "@/components/ProfileSpecialtiesSelector.vue";
+import CategoryCheckboxSelector from "@/components/CategoryCheckboxSelector.vue";
 import axios from "axios";
 import { URL } from "@/Url/url";
 
 export default {
   name: "ProfileSheetV2",
-  components: { ProfileSpecialtiesSelector },
+  components: { CategoryCheckboxSelector },
   props: {
     visible: { type: Boolean, default: false },
     user: { type: Object, default: () => ({}) },

@@ -111,7 +111,7 @@
 </template>
 
 <script>
-import categoriesData from "@/APIS/Categorhs.json";
+import { loadCategories } from "@/utils/categoriesLoader";
 import CategoryTitle from "./CategoryTitle.vue";
 
 export default {
@@ -132,7 +132,7 @@ export default {
   emits: ["update:modelValue"],
   data() {
     return {
-      categories: categoriesData.categories || [],
+      categories: [],
       showDropdown: false,
       hoveredCategory: null,
       tooltipSubcategory: null,
@@ -578,7 +578,11 @@ export default {
       // החיפוש עצמו מתבצע דרך computed property
     },
   },
-  mounted() {
+  async mounted() {
+    // Load categories from server
+    const data = await loadCategories();
+    this.categories = data.categories || [];
+    
     if (this.overlayMode) {
       window.addEventListener("resize", this.updateOverlayPositions);
     }

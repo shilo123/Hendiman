@@ -21,7 +21,7 @@
 </template>
 
 <script>
-import categoriesData from "@/APIS/Categorhs.json";
+import { loadCategories } from "@/utils/categoriesLoader";
 
 export default {
   name: "CategoryCheckboxSelector",
@@ -38,8 +38,12 @@ export default {
   emits: ["update:modelValue"],
   data() {
     return {
-      categories: categoriesData.categories || [],
+      categories: [],
     };
+  },
+  async mounted() {
+    const data = await loadCategories();
+    this.categories = data.categories || [];
   },
   methods: {
     isSelected(categoryName) {

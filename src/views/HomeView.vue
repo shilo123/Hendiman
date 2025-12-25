@@ -86,7 +86,7 @@ export default {
       this.$router.push({ name: "logIn" });
     },
     goToAbout() {
-      // כאן תוכל להוסיף ניווט לדף "אודות" או לפתוח מודל
+      this.$router.push({ name: "About" });
     },
   },
 };
