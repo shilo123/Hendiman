@@ -528,14 +528,6 @@
                   <img src="@/assets/Google.png" alt="Google" />
                   הרשם עם Google
                 </button>
-                <button
-                  class="btn btn--social"
-                  type="button"
-                  @click="ConenectWithFacebook"
-                >
-                  <img src="@/assets/FaceBook.png" alt="Facebook" />
-                  הרשם עם Facebook
-                </button>
               </div>
             </div>
           </Transition>
@@ -1041,9 +1033,6 @@ export default {
 
     ConenectWithGoogle() {
       window.location.href = `${URL}/auth/google?source=register&tab=${this.activeTab}`;
-    },
-    ConenectWithFacebook() {
-      this.toast.showError("התחברות עם פייסבוק עדיין לא מיושמת");
     },
 
     async fetchHandymenCount() {

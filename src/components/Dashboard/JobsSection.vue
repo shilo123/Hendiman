@@ -67,60 +67,142 @@
           </div>
         </div>
 
-        <!-- Location Filter -->
-        <div class="panel">
+        <!-- Advanced Filter Dropdown -->
+        <div class="panel panel--filter">
           <div class="panel__label">סנן לפי:</div>
-          <div class="radio-group">
-            <label class="radio-item">
-              <input
-                type="radio"
-                name="locationFilter"
-                value="myLocation"
-                :checked="handymanFilters.locationType === 'myLocation'"
-                @change="$emit('change-location-type', 'myLocation')"
-              />
-              <span class="radio-label">המיקום שלי</span>
-            </label>
-            <label class="radio-item">
-              <input
-                type="radio"
-                name="locationFilter"
-                value="residence"
-                :checked="handymanFilters.locationType === 'residence'"
-                @change="$emit('change-location-type', 'residence')"
-              />
-              <span class="radio-label">מקום המגורים שלי</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Distance -->
-        <div class="panel">
-          <div class="panel__top">
-            <div class="panel__label">מרחק</div>
-            <button class="link" type="button" @click="$emit('reset-km')">
-              איפוס
-            </button>
-          </div>
-
-          <div class="badgeRow">
-            <span class="badge"
-              >עד <b>{{ displayMaxKm }}</b> ק״מ</span
+          <div class="filter-dropdown">
+            <button
+              class="filter-dropdown__button"
+              type="button"
+              @click="isFilterDropdownOpen = !isFilterDropdownOpen"
             >
+              <span class="filter-dropdown__value">{{
+                getActiveFilterLabel()
+              }}</span>
+              <span class="filter-dropdown__chev">▼</span>
+            </button>
+
+            <div
+              v-if="isFilterDropdownOpen"
+              class="filter-dropdown__menu"
+              @click.stop
+            >
+              <!-- Location Filter -->
+              <div class="filter-menu__section">
+                <div class="filter-menu__title">מיקום</div>
+                <div class="radio-group">
+                  <label class="radio-item">
+                    <input
+                      type="radio"
+                      name="locationFilter"
+                      value="myLocation"
+                      :checked="handymanFilters.locationType === 'myLocation'"
+                      @change="
+                        handleFilterChange('location', 'myLocation');
+                        isFilterDropdownOpen = false;
+                      "
+                    />
+                    <span class="radio-label">המיקום שלי</span>
+                  </label>
+                  <label class="radio-item">
+                    <input
+                      type="radio"
+                      name="locationFilter"
+                      value="residence"
+                      :checked="handymanFilters.locationType === 'residence'"
+                      @change="
+                        handleFilterChange('location', 'residence');
+                        isFilterDropdownOpen = false;
+                      "
+                    />
+                    <span class="radio-label">מקום המגורים שלי</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Distance Filter -->
+              <div class="filter-menu__section">
+                <div class="filter-menu__title">
+                  מרחק
+                  <button
+                    class="link link--small"
+                    type="button"
+                    @click="handleResetKm"
+                  >
+                    איפוס
+                  </button>
+                </div>
+                <div class="badgeRow">
+                  <span class="badge"
+                    >עד <b>{{ displayMaxKm }}</b> ק״מ</span
+                  >
+                </div>
+                <input
+                  class="range"
+                  type="range"
+                  min="1"
+                  max="30"
+                  step="1"
+                  :value="handymanFilters.maxKm"
+                  @input="localMaxKm = parseInt($event.target.value)"
+                  @change="handleKmChange($event.target.value)"
+                />
+                <div class="hint">
+                  * סינון תצוגה בלבד (לפי אזור הפעילות בפרופיל).
+                </div>
+              </div>
+
+              <!-- Work Type Filter -->
+              <div class="filter-menu__section">
+                <div class="filter-menu__title">סוג קריאה</div>
+                <div class="radio-group">
+                  <label class="radio-item">
+                    <input
+                      type="radio"
+                      name="workTypeFilter"
+                      value=""
+                      :checked="
+                        !handymanFilters.workType ||
+                        handymanFilters.workType === ''
+                      "
+                      @change="handleFilterChange('workType', '')"
+                    />
+                    <span class="radio-label">הכל</span>
+                  </label>
+                  <label class="radio-item">
+                    <input
+                      type="radio"
+                      name="workTypeFilter"
+                      value="קלה"
+                      :checked="handymanFilters.workType === 'קלה'"
+                      @change="handleFilterChange('workType', 'קלה')"
+                    />
+                    <span class="radio-label">קלה</span>
+                  </label>
+                  <label class="radio-item">
+                    <input
+                      type="radio"
+                      name="workTypeFilter"
+                      value="מורכבת"
+                      :checked="handymanFilters.workType === 'מורכבת'"
+                      @change="handleFilterChange('workType', 'מורכבת')"
+                    />
+                    <span class="radio-label">מורכבת</span>
+                  </label>
+                  <label class="radio-item">
+                    <input
+                      type="radio"
+                      name="workTypeFilter"
+                      value="קשה"
+                      :checked="handymanFilters.workType === 'קשה'"
+                      @change="handleFilterChange('workType', 'קשה')"
+                    />
+                    <span class="radio-label">קשה</span>
+                  </label>
+                </div>
+              </div>
+            </div>
           </div>
-
-          <input
-            class="range"
-            type="range"
-            min="1"
-            max="30"
-            step="1"
-            :value="handymanFilters.maxKm"
-            @input="localMaxKm = parseInt($event.target.value)"
-            @change="handleKmChange($event.target.value)"
-          />
-
-          <div class="hint">* סינון תצוגה בלבד (לפי אזור הפעילות בפרופיל).</div>
         </div>
       </div>
     </div>
@@ -261,6 +343,8 @@ export default {
     "pick-status",
     "change-km",
     "reset-km",
+    "change-location-type",
+    "change-work-type",
     "view",
     "next-jobs-page",
     "prev-jobs-page",
@@ -268,6 +352,7 @@ export default {
   data() {
     return {
       isStatusDropdownOpen: false,
+      isFilterDropdownOpen: false,
       localMaxKm: null, // Local value for display while dragging
     };
   },
@@ -325,6 +410,32 @@ export default {
       if (this.isStatusDropdownOpen && !e.target.closest(".selectWrap")) {
         this.isStatusDropdownOpen = false;
       }
+      if (this.isFilterDropdownOpen && !e.target.closest(".filter-dropdown")) {
+        this.isFilterDropdownOpen = false;
+      }
+    },
+    getActiveFilterLabel() {
+      const labels = [];
+      if (this.handymanFilters.locationType === "myLocation") {
+        labels.push("מיקום: שלי");
+      } else {
+        labels.push("מיקום: מגורים");
+      }
+      labels.push(`ק״מ: ${this.handymanFilters.maxKm}`);
+      if (this.handymanFilters.workType) {
+        labels.push(`סוג: ${this.handymanFilters.workType}`);
+      }
+      return labels.join(" • ");
+    },
+    handleFilterChange(filterType, value) {
+      if (filterType === "location") {
+        this.$emit("change-location-type", value);
+      } else if (filterType === "workType") {
+        this.$emit("change-work-type", value);
+      }
+    },
+    handleResetKm() {
+      this.$emit("reset-km");
     },
     selectStatus(value) {
       this.$emit("pick-status", value);
@@ -572,6 +683,11 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   color: $orange3;
   font-weight: 1000;
   cursor: pointer;
+
+  &--small {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
 }
 
 /* Desktop tabs */
@@ -793,6 +909,110 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   @media (max-width: 768px) {
     font-size: 9px;
     margin-top: 6px;
+  }
+}
+
+/* Filter Dropdown */
+.panel--filter {
+  position: relative;
+}
+
+.filter-dropdown {
+  position: relative;
+}
+
+.filter-dropdown__button {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba($orange, 0.25);
+  background: rgba($orange, 0.12);
+  color: $text;
+  font-weight: 1000;
+  font-size: 11px;
+  padding: 10px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba($orange, 0.18);
+    border-color: rgba($orange, 0.35);
+  }
+
+  @media (max-width: 768px) {
+    padding: 9px 9px;
+    font-size: 10px;
+  }
+  @media (max-width: 400px) {
+    padding: 8px 8px;
+    font-size: 9px;
+  }
+}
+
+.filter-dropdown__value {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+  direction: rtl;
+}
+
+.filter-dropdown__chev {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.filter-dropdown__menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  z-index: 100;
+  background: rgba(15, 16, 22, 0.98);
+  border: 1px solid rgba($orange, 0.25);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  overflow-y: auto;
+  max-height: 500px;
+  padding: 12px;
+
+  @media (max-width: 400px) {
+    padding: 10px;
+    max-height: 400px;
+  }
+}
+
+.filter-menu__section {
+  margin-bottom: 16px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  @media (max-width: 400px) {
+    margin-bottom: 12px;
+  }
+}
+
+.filter-menu__title {
+  font-size: 12px;
+  font-weight: 1000;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  @media (max-width: 400px) {
+    font-size: 11px;
+    margin-bottom: 8px;
   }
 }
 

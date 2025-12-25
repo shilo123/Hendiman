@@ -12,7 +12,12 @@ function setupPassport(collection) {
   let URL_SERVER = process.env.SERVER_URL;
 
   if (!URL_SERVER) {
-    URL_SERVER = "http://localhost:3003";
+    // In production, use the production URL
+    if (process.env.NODE_ENV === "production") {
+      URL_SERVER = "https://handiman-98cc6d1f0a79.herokuapp.com";
+    } else {
+      URL_SERVER = "http://localhost:3003";
+    }
   }
 
   const callbackURL = `${URL_SERVER}/auth/google/callback`;

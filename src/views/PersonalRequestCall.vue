@@ -678,11 +678,8 @@ export default {
         this.fetchCategoriesFromAI();
         return;
       } else if (this.currentStep === 2) {
-        // Validate categories match handyman specialties
-        if (!this.validateCategoriesMatch()) {
-          this.showMismatchModal = true;
-          return;
-        }
+        // Validation of categories match is done immediately after receiving them from AI
+        // So we don't need to check again here
 
         if (!this.call.desc || this.call.desc.trim().length < 10) {
           this.errors.desc = "התיאור חייב להכיל לפחות 10 תווים";
@@ -1293,6 +1290,18 @@ export default {
         if (response.data.success && response.data.subcategories) {
           this.subcategoryInfoArray = response.data.subcategories;
           this.foundCategories = response.data.subcategories;
+
+          // Check if categories match handyman specialties immediately after receiving them
+          if (!this.validateCategoriesMatch()) {
+            this.toast?.showError(
+              "התחומים שנמצאו לא תואמים להנדימן שבחרת. אנא נסה שוב עם בקשה אחרת."
+            );
+            this.foundCategories = [];
+            this.subcategoryInfoArray = [];
+            this.currentStep = 1;
+            this.isLoadingCategories = false;
+            return;
+          }
         } else {
           this.toast?.showError(
             response.data.message || "לא נמצאו תחומים מתאימים"

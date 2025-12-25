@@ -100,12 +100,11 @@
           📍 שלח מיקום
         </button>
         <button
-          v-if="lastHandymanLocation"
           class="chip chip--ghost"
           type="button"
-          @click="openHandymanLocation"
+          @click="openHandymanRealtimeLocation"
         >
-          🗺️ מיקום ההנדימן
+          🗺️ הנדימן בזמן אמת
         </button>
       </template>
     </div>
@@ -638,21 +637,30 @@ export default {
     },
     jobLocation() {
       const job = this.currentJob;
-      if (job?.coordinates && Array.isArray(job.coordinates)) {
+      // Check if coordinates is an array [lng, lat]
+      if (job?.coordinates && Array.isArray(job.coordinates) && job.coordinates.length >= 2) {
         return { lng: job.coordinates[0], lat: job.coordinates[1] };
       }
+      // Check if coordinates is an object with lng and lat
+      if (job?.coordinates && typeof job.coordinates === 'object' && job.coordinates.lng && job.coordinates.lat) {
+        return { lng: job.coordinates.lng, lat: job.coordinates.lat };
+      }
+      // Check location.coordinates array
       if (
         job?.location?.coordinates &&
-        Array.isArray(job.location.coordinates)
+        Array.isArray(job.location.coordinates) &&
+        job.location.coordinates.length >= 2
       ) {
         return {
           lng: job.location.coordinates[0],
           lat: job.location.coordinates[1],
         };
       }
+      // Check jobInfo coordinates
       if (
         this.jobInfo?.coordinates &&
-        Array.isArray(this.jobInfo.coordinates)
+        Array.isArray(this.jobInfo.coordinates) &&
+        this.jobInfo.coordinates.length >= 2
       ) {
         return {
           lng: this.jobInfo.coordinates[0],
@@ -1076,20 +1084,12 @@ export default {
         // Reset unread count for current job when loading messages
         this.$set(this.unreadCounts, jobIdStr, 0);
 
-        // Check cache first - if exists and we don't have messages, load from cache for fast display
-        if (
-          this.messages.length === 0 &&
-          this.messagesCache[jobIdStr] &&
-          this.messagesCache[jobIdStr].length > 0
-        ) {
-          this.messages = [...this.messagesCache[jobIdStr]];
-          this.$nextTick(() => {
-            this.scrollToBottom();
-          });
-        }
-
+        // Always load from server to ensure we have the latest messages
+        // (cache is only for fast display while switching tabs, not for persistence across refreshes)
         const { data } = await axios.get(`${URL}/jobs/${jobId}/messages`);
-        if (data.success && data.messages) {
+        
+        // Check if data exists and has messages array
+        if (data && data.success && Array.isArray(data.messages)) {
           const loadedMessages = data.messages.map((msg) => {
             const isFromHandyman =
               !!msg.handyman || !!msg.handymanImage || !!msg.handymanLocation;
@@ -1126,9 +1126,23 @@ export default {
 
           // Update cache with all messages
           this.messagesCache[jobIdStr] = [...loadedMessages];
+        } else {
+          // If no messages or invalid response, clear the array
+          this.messages = [];
+          if (jobIdStr) {
+            this.messagesCache[jobIdStr] = [];
+          }
         }
       } catch (e) {
         this.toast?.showError("שגיאה בטעינת הודעות");
+        // On error, try to clear messages to avoid stale data
+        const job = this.currentJob;
+        const jobId = job?.id || job?._id;
+        if (jobId) {
+          const jobIdStr = String(jobId);
+          this.messages = [];
+          this.messagesCache[jobIdStr] = [];
+        }
       }
     },
 
@@ -1419,12 +1433,99 @@ export default {
         this.openLocationModal(this.lastHandymanLocation);
       }
     },
+    async openHandymanRealtimeLocation() {
+      // Try to get handyman location - first from messages, then from profile
+      let handymanLocation = this.lastHandymanLocation;
+
+      // Validate existing location
+      if (
+        handymanLocation &&
+        typeof handymanLocation.lat === 'number' &&
+        typeof handymanLocation.lng === 'number'
+      ) {
+        // Location is valid, use it
+      } else {
+        // If no valid location from messages, try to get from handyman profile
+        handymanLocation = null;
+        try {
+          const job = this.currentJob;
+          let handymanId = job?.handymanId;
+          if (Array.isArray(handymanId) && handymanId.length > 0) {
+            handymanId = handymanId[0];
+          }
+          if (handymanId) {
+            const response = await axios.get(`${URL}/user/${handymanId}`);
+            if (response.data && response.data.user) {
+              const handyman = response.data.user;
+              // Try to get location from profile (coordinates or location)
+              if (
+                handyman.location?.coordinates &&
+                Array.isArray(handyman.location.coordinates) &&
+                handyman.location.coordinates.length >= 2
+              ) {
+                handymanLocation = {
+                  lng: handyman.location.coordinates[0],
+                  lat: handyman.location.coordinates[1],
+                };
+              } else if (
+                handyman.coordinates &&
+                typeof handyman.coordinates === 'object' &&
+                typeof handyman.coordinates.lng === 'number' &&
+                typeof handyman.coordinates.lat === 'number'
+              ) {
+                handymanLocation = {
+                  lng: handyman.coordinates.lng,
+                  lat: handyman.coordinates.lat,
+                };
+              }
+            }
+          }
+        } catch (error) {
+          // Silent fail - will show error below if no location
+        }
+      }
+
+      // Validate job location
+      const jobLocation = this.jobLocation;
+      const hasValidJobLocation =
+        jobLocation &&
+        typeof jobLocation.lat === 'number' &&
+        typeof jobLocation.lng === 'number';
+
+      // Validate handyman location
+      const hasValidHandymanLocation =
+        handymanLocation &&
+        typeof handymanLocation.lat === 'number' &&
+        typeof handymanLocation.lng === 'number';
+
+      // If we have both valid locations, show route modal
+      if (hasValidHandymanLocation && hasValidJobLocation) {
+        // Store the location temporarily for the modal
+        this.lastHandymanLocation = handymanLocation;
+        this.showHandymanRouteModal = true;
+      } else if (hasValidHandymanLocation) {
+        // Show simple location modal if no job location
+        this.openLocationModal(handymanLocation);
+      } else {
+        // No location available
+        this.toast?.showError("מיקום ההנדימן לא זמין כרגע");
+      }
+    },
     closeHandymanRouteModal() {
       this.showHandymanRouteModal = false;
     },
     getRouteMapImage() {
       // Get route map image from server with both locations
-      if (!this.lastHandymanLocation || !this.jobLocation) return "";
+      if (
+        !this.lastHandymanLocation ||
+        !this.jobLocation ||
+        typeof this.lastHandymanLocation?.lat !== 'number' ||
+        typeof this.lastHandymanLocation?.lng !== 'number' ||
+        typeof this.jobLocation?.lat !== 'number' ||
+        typeof this.jobLocation?.lng !== 'number'
+      ) {
+        return "";
+      }
       const handyman = this.lastHandymanLocation;
       const job = this.jobLocation;
       const width = 800;
@@ -1432,14 +1533,29 @@ export default {
       return `${URL}/route-map-image?originLat=${handyman.lat}&originLng=${handyman.lng}&destLat=${job.lat}&destLng=${job.lng}&width=${width}&height=${height}`;
     },
     getRouteWazeUrl() {
-      if (!this.lastHandymanLocation || !this.jobLocation) return "#";
-      const handyman = this.lastHandymanLocation;
+      if (
+        !this.lastHandymanLocation ||
+        !this.jobLocation ||
+        typeof this.jobLocation?.lat !== 'number' ||
+        typeof this.jobLocation?.lng !== 'number'
+      ) {
+        return "#";
+      }
       const job = this.jobLocation;
       // Waze route URL
       return `https://www.waze.com/ul?ll=${job.lat},${job.lng}&navigate=yes`;
     },
     getRouteGoogleMapsUrl() {
-      if (!this.lastHandymanLocation || !this.jobLocation) return "#";
+      if (
+        !this.lastHandymanLocation ||
+        !this.jobLocation ||
+        typeof this.lastHandymanLocation?.lat !== 'number' ||
+        typeof this.lastHandymanLocation?.lng !== 'number' ||
+        typeof this.jobLocation?.lat !== 'number' ||
+        typeof this.jobLocation?.lng !== 'number'
+      ) {
+        return "#";
+      }
       const handyman = this.lastHandymanLocation;
       const job = this.jobLocation;
       // Google Maps route URL with origin and destination

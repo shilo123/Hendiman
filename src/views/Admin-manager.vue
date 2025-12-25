@@ -92,8 +92,13 @@
                     <th v-if="userFilters.userType === 'handyman'">
                       תחומי התמחות
                     </th>
-                    <th>דירוג</th>
-                    <th>עבודות שבוצעו</th>
+                    <th v-if="userFilters.userType === 'handyman'">דירוג</th>
+                    <th v-if="userFilters.userType === 'handyman'">
+                      עבודות שבוצעו
+                    </th>
+                    <th v-if="userFilters.userType === 'client'">
+                      מספר הזמנות
+                    </th>
                     <th>נוצר ב</th>
                     <th>פעולות</th>
                   </tr>
@@ -146,30 +151,66 @@
                       </div>
                       <span v-else class="no-data-small">אין</span>
                     </td>
-                    <td>
+                    <td v-if="userFilters.userType === 'handyman'">
                       <span v-if="user.rating && user.rating > 0">
                         {{ user.rating.toFixed(1) }} ⭐
                       </span>
                       <span v-else class="no-rating">אין דירוג</span>
                     </td>
-                    <td>{{ user.jobDone || 0 }}</td>
-                    <td>
-                      {{ user.createdAt ? formatDate(user.createdAt) : "-" }}
+                    <td v-if="userFilters.userType === 'handyman'">
+                      {{ user.jobDone || 0 }}
+                    </td>
+                    <td v-if="userFilters.userType === 'client'">
+                      {{ user.Ordered || 0 }}
                     </td>
                     <td>
-                      <button
-                        class="delete-user-btn"
-                        type="button"
-                        @click="confirmDeleteUser(user)"
-                        title="מחק משתמש"
-                      >
-                        <font-awesome-icon :icon="['fas', 'trash']" />
-                      </button>
+                      <div class="date-cell">
+                        <div class="date-value">
+                          {{
+                            user.createdAt ? formatDate(user.createdAt) : "-"
+                          }}
+                        </div>
+                        <div
+                          v-if="user.createdAt"
+                          class="date-tooltip"
+                          :title="getTimeAgo(user.createdAt)"
+                        >
+                          {{ getTimeAgo(user.createdAt) }}
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="actions-buttons">
+                        <button
+                          class="edit-user-btn"
+                          type="button"
+                          @click="editUser(user)"
+                          title="ערוך משתמש"
+                        >
+                          <font-awesome-icon :icon="['fas', 'edit']" />
+                        </button>
+                        <button
+                          class="send-message-btn"
+                          type="button"
+                          @click="sendMessage(user)"
+                          title="שלח הודעה"
+                        >
+                          <font-awesome-icon :icon="['fas', 'comment']" />
+                        </button>
+                        <button
+                          class="delete-user-btn"
+                          type="button"
+                          @click="confirmDeleteUser(user)"
+                          title="מחק משתמש"
+                        >
+                          <font-awesome-icon :icon="['fas', 'trash']" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   <tr v-if="filteredUsers.length === 0">
                     <td
-                      :colspan="userFilters.userType === 'handyman' ? 9 : 8"
+                      :colspan="userFilters.userType === 'handyman' ? 9 : 7"
                       class="no-data"
                     >
                       אין משתמשים להצגה
@@ -338,7 +379,15 @@
                     <div
                       class="financial-item__value financial-item__value--expense"
                     >
-                      ${{ formatCurrency(financials.expenses["AI expenses"]) }}
+                      {{ getCurrencySymbol("expenses.AI expenses")
+                      }}{{
+                        formatCurrency(
+                          getDisplayValue(
+                            "expenses.AI expenses",
+                            financials.expenses["AI expenses"]
+                          )
+                        )
+                      }}
                     </div>
                     <div class="financial-item__actions">
                       <button
@@ -359,7 +408,15 @@
                     <div
                       class="financial-item__value financial-item__value--expense"
                     >
-                      ${{ formatCurrency(financials.expenses["DB expenses"]) }}
+                      {{ getCurrencySymbol("expenses.DB expenses")
+                      }}{{
+                        formatCurrency(
+                          getDisplayValue(
+                            "expenses.DB expenses",
+                            financials.expenses["DB expenses"]
+                          )
+                        )
+                      }}
                     </div>
                     <div class="financial-item__actions">
                       <button
@@ -380,7 +437,15 @@
                     <div
                       class="financial-item__value financial-item__value--expense"
                     >
-                      ${{ formatCurrency(financials.expenses["API expenses"]) }}
+                      {{ getCurrencySymbol("expenses.API expenses")
+                      }}{{
+                        formatCurrency(
+                          getDisplayValue(
+                            "expenses.API expenses",
+                            financials.expenses["API expenses"]
+                          )
+                        )
+                      }}
                     </div>
                     <div class="financial-item__actions">
                       <button
@@ -421,6 +486,35 @@
                       </button>
                     </div>
                   </div>
+                  <div class="financial-item">
+                    <div class="financial-item__label">עמלת סליקה</div>
+                    <div
+                      class="financial-item__value financial-item__value--expense"
+                    >
+                      {{ getCurrencySymbol("expenses.clearing fee")
+                      }}{{
+                        formatCurrency(
+                          getDisplayValue(
+                            "expenses.clearing fee",
+                            financials.expenses["clearing fee"]
+                          )
+                        )
+                      }}
+                    </div>
+                    <div class="financial-item__actions">
+                      <button
+                        class="financial-action-btn financial-action-btn--add"
+                        @click="
+                          openEditFinancialModal(
+                            'expenses.clearing fee',
+                            financials.expenses['clearing fee']
+                          )
+                        "
+                      >
+                        ✏️
+                      </button>
+                    </div>
+                  </div>
                   <div class="financial-item financial-item--total">
                     <div class="financial-item__label">סה"כ הוצאות</div>
                     <div
@@ -431,7 +525,8 @@
                           financials.expenses["AI expenses"] +
                             financials.expenses["DB expenses"] +
                             financials.expenses["API expenses"] +
-                            financials.expenses["Marketing expenses"]
+                            financials.expenses["Marketing expenses"] +
+                            financials.expenses["clearing fee"]
                         )
                       }}
                     </div>
@@ -488,7 +583,7 @@
                     </div>
                   </div>
                   <div class="financial-item">
-                    <div class="financial-item__label">שיחת חירום</div>
+                    <div class="financial-item__label">קריאת חירום</div>
                     <div
                       class="financial-item__value financial-item__value--revenue"
                     >
@@ -722,6 +817,106 @@
           </div>
         </div>
       </div>
+
+      <!-- Edit User Modal -->
+      <div
+        v-if="showEditUserModal"
+        class="modal-overlay"
+        @click="closeEditUserModal"
+      >
+        <div class="modal-content" @click.stop>
+          <div class="modal-header">
+            <h3 class="modal-title">עריכת משתמש</h3>
+            <button class="modal-close" @click="closeEditUserModal">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-field">
+              <label class="form-label">שם משתמש</label>
+              <input
+                v-model="userForm.username"
+                type="text"
+                class="form-input"
+                placeholder="שם משתמש"
+              />
+            </div>
+            <div class="form-field">
+              <label class="form-label">אימייל</label>
+              <input
+                v-model="userForm.email"
+                type="email"
+                class="form-input"
+                placeholder="אימייל"
+              />
+            </div>
+            <div class="form-field">
+              <label class="form-label">טלפון</label>
+              <input
+                v-model="userForm.phone"
+                type="text"
+                class="form-input"
+                placeholder="טלפון"
+              />
+            </div>
+            <div class="form-field">
+              <label class="form-label">עיר</label>
+              <input
+                v-model="userForm.city"
+                type="text"
+                class="form-input"
+                placeholder="עיר"
+              />
+            </div>
+            <div class="form-field">
+              <label class="form-label">כתובת</label>
+              <input
+                v-model="userForm.address"
+                type="text"
+                class="form-input"
+                placeholder="כתובת"
+              />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn--ghost" @click="closeEditUserModal">
+              ביטול
+            </button>
+            <button class="btn btn--primary" @click="saveUser">שמור</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Send Message Modal -->
+      <div
+        v-if="showSendMessageModal"
+        class="modal-overlay"
+        @click="closeSendMessageModal"
+      >
+        <div class="modal-content" @click.stop>
+          <div class="modal-header">
+            <h3 class="modal-title">שליחת הודעה</h3>
+            <button class="modal-close" @click="closeSendMessageModal">
+              ×
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="form-field">
+              <label class="form-label">מה יהיה תוכן ההודעה?</label>
+              <textarea
+                v-model="messageText"
+                class="form-input"
+                rows="4"
+                placeholder="הכנס תוכן הודעה..."
+              ></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn--ghost" @click="closeSendMessageModal">
+              ביטול
+            </button>
+            <button class="btn btn--primary" @click="submitMessage">שלח</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -784,6 +979,7 @@ export default {
           "DB expenses": 0,
           "API expenses": 0,
           "Marketing expenses": 0,
+          "clearing fee": 0,
         },
         Revenue: {
           Fees: 0,
@@ -792,11 +988,28 @@ export default {
         },
       },
       isLoadingFinancials: false,
+      // Exchange rate
+      usdToIlsRate: 1, // Default rate, will be fetched
+      isLoadingExchangeRate: false,
       // Edit Financial Modal
       showEditFinancialModal: false,
       editFinancialField: "",
       editFinancialCurrentValue: 0,
       editFinancialAmount: 0,
+      // User Edit Modal
+      showEditUserModal: false,
+      editingUser: null,
+      userForm: {
+        username: "",
+        email: "",
+        phone: "",
+        city: "",
+        address: "",
+      },
+      // Send Message Modal
+      showSendMessageModal: false,
+      messageUser: null,
+      messageText: "",
       toast: null,
     };
   },
@@ -812,7 +1025,9 @@ export default {
       const totalExpenses =
         this.financials.expenses["AI expenses"] +
         this.financials.expenses["DB expenses"] +
-        this.financials.expenses["API expenses"];
+        this.financials.expenses["API expenses"] +
+        this.financials.expenses["Marketing expenses"] +
+        this.financials.expenses["clearing fee"];
       return totalRevenue - totalExpenses;
     },
     handymenCount() {
@@ -827,9 +1042,10 @@ export default {
         "expenses.DB expenses": "הוצאות DB",
         "expenses.API expenses": "הוצאות API",
         "expenses.Marketing expenses": "הוצאות שיווק",
+        "expenses.clearing fee": "עמלת סליקה",
         "Revenue.Fees": "עמלות",
         "Revenue.Drawings": "רישומים",
-        "Revenue.Urgent call": "שיחת חירום",
+        "Revenue.Urgent call": "קריאת חירום",
       };
       return fieldMap[this.editFinancialField] || this.editFinancialField;
     },
@@ -837,6 +1053,7 @@ export default {
   async mounted() {
     await this.loadUsers();
     this.loadCategories();
+    await this.loadExchangeRate();
     if (this.activeTab === "expenses") {
       await this.loadFinancials();
     }
@@ -958,6 +1175,113 @@ export default {
     },
     handleImageError(event) {
       event.target.style.display = "none";
+    },
+    sendMessage(user) {
+      this.messageUser = user;
+      this.messageText = "";
+      this.showSendMessageModal = true;
+    },
+    closeSendMessageModal() {
+      this.showSendMessageModal = false;
+      this.messageUser = null;
+      this.messageText = "";
+    },
+    async submitMessage() {
+      if (!this.toast) {
+        console.error("Toast not initialized");
+        return;
+      }
+
+      if (!this.messageText || !this.messageText.trim()) {
+        this.toast.showError("יש להזין תוכן הודעה");
+        return;
+      }
+
+      if (!this.messageUser || !this.messageUser._id) {
+        this.toast.showError("שגיאה: משתמש לא תקין");
+        return;
+      }
+
+      try {
+        const payload = {
+          userId: this.messageUser._id,
+          message: this.messageText.trim(),
+        };
+
+        const response = await axios.post(`${URL}/admin/send-message`, payload);
+
+        if (response && response.data && response.data.success) {
+          this.toast.showSuccess("הודעה נשלחה בהצלחה");
+          this.closeSendMessageModal();
+        } else {
+          this.toast.showError(
+            response?.data?.message || "שגיאה בשליחת ההודעה"
+          );
+        }
+      } catch (error) {
+        console.error("Error sending message:", error);
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          "שגיאה בשליחת ההודעה";
+        this.toast.showError(errorMessage);
+      }
+    },
+    editUser(user) {
+      this.editingUser = user;
+      this.userForm = {
+        username: user.username || "",
+        email: user.email || "",
+        phone: user.phone || "",
+        city: user.city || "",
+        address: user.address || "",
+      };
+      this.showEditUserModal = true;
+    },
+    closeEditUserModal() {
+      this.showEditUserModal = false;
+      this.editingUser = null;
+      this.userForm = {
+        username: "",
+        email: "",
+        phone: "",
+        city: "",
+        address: "",
+      };
+    },
+    async saveUser() {
+      if (!this.editingUser || !this.editingUser._id) {
+        this.toast?.showError("שגיאה: משתמש לא תקין");
+        return;
+      }
+
+      try {
+        const userId = this.editingUser._id;
+        await axios.put(`${URL}/admin/users/${userId}`, this.userForm);
+
+        this.toast?.showSuccess("משתמש עודכן בהצלחה");
+        await this.loadUsers();
+        this.closeEditUserModal();
+      } catch (error) {
+        console.error("Error updating user:", error);
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה בעדכון המשתמש"
+        );
+      }
+    },
+    async loadExchangeRate() {
+      try {
+        const response = await axios.get(
+          "https://api.frankfurter.app/latest?from=USD&to=ILS"
+        );
+        if (response.data && response.data.rates && response.data.rates.ILS) {
+          this.usdToIlsRate = response.data.rates.ILS;
+        }
+      } catch (error) {
+        console.error("Error loading exchange rate:", error);
+        // Keep default rate of 1 if API fails
+        this.usdToIlsRate = 1;
+      }
     },
     openCategoryModal(category = null) {
       this.editingCategory = category;
@@ -1165,6 +1489,44 @@ export default {
         day: "numeric",
       });
     },
+    getTimeAgo(date) {
+      if (!date) return "";
+      const now = new Date();
+      const past = new Date(date);
+      const diffMs = now - past;
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const diffWeeks = Math.floor(diffDays / 7);
+      const diffMonths = Math.floor(diffDays / 30);
+      const diffYears = Math.floor(diffDays / 365);
+
+      if (diffDays === 0) return "היום";
+      if (diffDays === 1) return "לפני יום אחד";
+      if (diffDays < 7) return `לפני ${diffDays} ימים`;
+      if (diffWeeks === 1) return "לפני שבוע אחד";
+      if (diffWeeks < 4) return `לפני ${diffWeeks} שבועות`;
+      if (diffMonths === 1) return "לפני חודש אחד";
+      if (diffMonths < 12) return `לפני ${diffMonths} חודשים`;
+      if (diffYears === 1) return "לפני שנה אחת";
+      return `לפני ${diffYears} שנים`;
+    },
+    shouldConvertToILS(field) {
+      const fieldsToConvert = [
+        "expenses.AI expenses",
+        "expenses.DB expenses",
+        "expenses.API expenses",
+        "expenses.clearing fee",
+      ];
+      return fieldsToConvert.includes(field);
+    },
+    getDisplayValue(field, value) {
+      if (this.shouldConvertToILS(field)) {
+        return value * this.usdToIlsRate;
+      }
+      return value;
+    },
+    getCurrencySymbol(field) {
+      return this.shouldConvertToILS(field) ? "₪" : "$";
+    },
     async loadFinancials() {
       this.isLoadingFinancials = true;
       try {
@@ -1176,6 +1538,7 @@ export default {
               "DB expenses": 0,
               "API expenses": 0,
               "Marketing expenses": 0,
+              "clearing fee": 0,
             },
             Revenue: {
               Fees: 0,
@@ -1526,6 +1889,70 @@ $muted: rgba(255, 255, 255, 0.62);
   font-size: 12px;
   color: $muted;
   font-style: italic;
+}
+
+.actions-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.date-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.date-value {
+  font-weight: 800;
+}
+
+.date-tooltip {
+  font-size: 11px;
+  color: $muted;
+  font-style: italic;
+  cursor: help;
+}
+
+.edit-user-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba($orange, 0.15);
+  color: $orange2;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba($orange, 0.25);
+    border-color: rgba($orange, 0.5);
+    transform: translateY(-1px);
+  }
+}
+
+.send-message-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba($orange, 0.15);
+  color: $orange2;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba($orange, 0.25);
+    border-color: rgba($orange, 0.5);
+    transform: translateY(-1px);
+  }
 }
 
 .delete-user-btn {
@@ -2259,6 +2686,12 @@ $muted: rgba(255, 255, 255, 0.62);
     outline: none;
     border-color: $orange;
     box-shadow: 0 0 0 3px rgba($orange, 0.2);
+  }
+
+  &[type="textarea"],
+  textarea {
+    resize: vertical;
+    min-height: 80px;
   }
 }
 

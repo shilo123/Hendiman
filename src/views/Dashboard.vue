@@ -95,21 +95,7 @@
           </section>
         </aside>
 
-        <!-- HANDYMAN: quick profile & notes -->
-        <aside class="side" v-else>
-          <section class="panel">
-            <div class="panel__head">
-              <h2 class="h2">כלים להנדימן</h2>
-              <p class="sub">עבודות מופיעות רק לפי ההתמחויות שבחרת בהרשמה</p>
-            </div>
-
-            <HandymanTools
-              :specialties="me.specialties"
-              @edit-profile="onGoProfile"
-              @open-chat="onOpenHandymenChat"
-            />
-          </section>
-        </aside>
+        <!-- HANDYMAN: quick profile & notes (removed from aside, will be at bottom) -->
 
         <!-- LEFT ~60% JOBS -->
         <JobsSection
@@ -134,12 +120,30 @@
           @change-km="onChangeKm"
           @reset-km="onResetKm"
           @change-location-type="onChangeLocationType"
+          @change-work-type="onChangeWorkType"
           @skip="onSkip"
           @accept="onAccept"
           @view="onView"
           @next-jobs-page="onJobsNextPage"
           @prev-jobs-page="onJobsPrevPage"
         />
+
+        <!-- HANDYMAN: Tools section at the bottom -->
+        <aside v-if="isHendiman" class="side side--bottom">
+          <section class="panel">
+            <div class="panel__head">
+              <h2 class="h2">כלים להנדימן</h2>
+              <p class="sub">עבודות מופיעות רק לפי ההתמחויות שבחרת בהרשמה</p>
+            </div>
+
+            <HandymanTools
+              :specialties="me.specialties"
+              @edit-profile="onGoProfile"
+              @open-chat="onOpenHandymenChat"
+            />
+          </section>
+        </aside>
+
         <ViewHandymanDetails
           v-if="handymanDetails"
           :handymanDetails="handymanDetails"
@@ -270,7 +274,7 @@ export default {
         specialties: [],
       },
       socket: null,
-      handymanFilters: { maxKm: 25, locationType: "residence" }, // "myLocation" or "residence"
+      handymanFilters: { maxKm: 25, locationType: "residence", workType: "" }, // "myLocation" or "residence", workType: "", "קלה", "מורכבת", "קשה"
       geoCoordinates: null, // For "myLocation" option
       handymanDetails: null,
       dirFilters: { q: "", minRating: 0, minJobs: 0 },
@@ -474,6 +478,7 @@ export default {
           status: this.activeStatus,
           maxKm: this.handymanFilters.maxKm,
           coordinates: coordinates,
+          workType: this.handymanFilters.workType || null,
         });
         // אחרי טעינת העבודות, בדוק אם יש עבודה משובצת
         this.$nextTick(() => {
@@ -534,6 +539,14 @@ export default {
 
     onChangeLocationType(locationType) {
       this.handymanFilters.locationType = locationType;
+      this.jobsPage = 1;
+      if (this.isHendiman) {
+        this.fetchHandymanJobs();
+      }
+    },
+
+    onChangeWorkType(workType) {
+      this.handymanFilters.workType = workType;
       this.jobsPage = 1;
       if (this.isHendiman) {
         this.fetchHandymanJobs();
@@ -1538,11 +1551,13 @@ $r2: 26px;
 .grid {
   display: grid;
   grid-template-columns: 1fr 1.6fr; /* ~40/60 - handymen first, then jobs */
+  grid-template-rows: 1fr auto; /* Jobs section takes available space, tools at bottom */
   gap: 14px;
   align-items: stretch; // זה יגרום לשני הבלוקים להיות באותו גובה
 
   @media (max-width: 980px) {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto; /* Stack items vertically on smaller screens */
   }
 
   @media (max-width: 768px) {
@@ -2860,6 +2875,13 @@ $r2: 26px;
   gap: 14px;
   width: 100%;
   box-sizing: border-box;
+
+  &--bottom {
+    grid-column: 1 / -1; /* Span all columns on desktop */
+    @media (max-width: 980px) {
+      grid-column: 1; /* Single column on mobile */
+    }
+  }
 }
 
 /* Loading Overlay */

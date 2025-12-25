@@ -324,6 +324,10 @@ export const useMainStore = defineStore("main", {
         if (this.user && this.user._id) {
           params.push(`handymanId=${this.user._id}`);
         }
+        // Add workType filter if specified
+        if (workType && workType !== "") {
+          params.push(`workType=${encodeURIComponent(workType)}`);
+        }
         const queryString = params.length ? `?${params.join("&")}` : "";
         const url = `${URL}/jobs/filter${queryString}`;
 

@@ -56,11 +56,6 @@ function findAvailablePort(startPort) {
   });
 }
 
-// Health check endpoint for connection quality testing
-app.head("/health-check", (req, res) => {
-  res.status(200).end();
-});
-
 // Start server with available port
 (async () => {
   const PORT = process.env.PORT || (await findAvailablePort(3003));
@@ -146,6 +141,19 @@ app.head("/health-check", (req, res) => {
   }
   app.use(bodyParser.json({ limit: "10mb" }));
   app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
+
+  // Health check endpoint for connection quality testing (after CORS middleware)
+  app.head("/health-check", (req, res) => {
+    res.status(200).end();
+  });
+
+  app.get("/health-check", (req, res) => {
+    res.status(200).json({ status: "ok" });
+  });
+
+  app.options("/health-check", (req, res) => {
+    res.status(200).end();
+  });
 
   // Log all POST requests for debugging
   app.use((req, res, next) => {
@@ -1252,10 +1260,13 @@ app.head("/health-check", (req, res) => {
         });
       }
 
-      const { status, maxKm, lng, lat, handymanId } = req.query;
+      const { status, maxKm, lng, lat, handymanId, workType } = req.query;
       const query = {};
       if (status && status !== "all") {
         query.status = status;
+      }
+      if (workType && workType !== "") {
+        query.workType = workType;
       }
 
       const userLng = parseFloat(lng);
@@ -1803,6 +1814,46 @@ app.head("/health-check", (req, res) => {
       });
     }
   });
+
+  // Get user by ID (handyman or client)
+  app.get("/user/:id", async (req, res) => {
+    try {
+      const collection = getCollection();
+      if (!collection) {
+        return res.status(500).json({
+          success: false,
+          message: "Database not connected",
+        });
+      }
+
+      const { id } = req.params;
+      const user = await collection.findOne({
+        _id: new ObjectId(id),
+      });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Exclude sensitive data
+      const { password, googleId, fcmToken, ...userData } = user;
+
+      return res.json({
+        success: true,
+        user: userData,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching user",
+        error: error.message,
+      });
+    }
+  });
+
   app.get("/getAddress", async (req, res) => {
     try {
       const { lat, lon } = req.query;
@@ -5595,6 +5646,121 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
     }
   });
 
+  // Admin endpoint - Update user
+  app.put("/admin/users/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updateData = req.body;
+
+      if (!id) {
+        return res
+          .status(400)
+          .json({ success: false, message: "User ID required" });
+      }
+
+      // Remove sensitive fields that shouldn't be updated this way
+      delete updateData.password;
+      delete updateData._id;
+      delete updateData.fcmToken;
+      delete updateData.googleId;
+
+      const userId = new ObjectId(id);
+      const usersCol = getCollection();
+
+      // Check if user exists
+      const user = await usersCol.findOne({ _id: userId });
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+
+      // Update user
+      await usersCol.updateOne(
+        { _id: userId },
+        {
+          $set: {
+            ...updateData,
+            updatedAt: new Date(),
+          },
+        }
+      );
+
+      return res.json({
+        success: true,
+        message: "User updated successfully",
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error updating user",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Send message to user
+  app.post("/admin/send-message", async (req, res) => {
+    try {
+      const { userId, message } = req.body;
+
+      if (!userId || !message || !message.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "User ID and message are required",
+        });
+      }
+
+      const usersCol = getCollection();
+      const userObjectId = new ObjectId(userId);
+
+      // Get user to check if they have FCM token
+      const user = await usersCol.findOne({ _id: userObjectId });
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+
+      if (!user.fcmToken) {
+        return res.status(400).json({
+          success: false,
+          message: "המשתמש לא אישר התראות",
+        });
+      }
+
+      // Send push notification
+      const pushResult = await sendPushNotification(
+        user.fcmToken,
+        "הודעה מהמנהל",
+        message.trim(),
+        {
+          type: "admin_message",
+          userId: userId,
+        }
+      );
+
+      if (!pushResult.success) {
+        return res.status(500).json({
+          success: false,
+          message: "שגיאה בשליחת ההודעה",
+          error: pushResult.error,
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "הודעה נשלחה בהצלחה",
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error sending message",
+        error: error.message,
+      });
+    }
+  });
+
   // Admin endpoint - Delete user
   app.delete("/admin/users/:id", async (req, res) => {
     try {
@@ -5683,6 +5849,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
               "DB expenses": 0,
               "API expenses": 0,
               "Marketing expenses": 0,
+              "clearing fee": 0,
             },
             Revenue: {
               Fees: 0,
@@ -5696,11 +5863,13 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       return res.json({
         success: true,
         financials: {
-          expenses: financials.expenses || {
-            "AI expenses": 0,
-            "DB expenses": 0,
-            "API expenses": 0,
-            "Marketing expenses": 0,
+          expenses: {
+            "AI expenses": financials.expenses?.["AI expenses"] || 0,
+            "DB expenses": financials.expenses?.["DB expenses"] || 0,
+            "API expenses": financials.expenses?.["API expenses"] || 0,
+            "Marketing expenses":
+              financials.expenses?.["Marketing expenses"] || 0,
+            "clearing fee": financials.expenses?.["clearing fee"] || 0,
           },
           Revenue: financials.Revenue || {
             Fees: 0,
@@ -5760,6 +5929,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         "expenses.DB expenses",
         "expenses.API expenses",
         "expenses.Marketing expenses",
+        "expenses.clearing fee",
         "Revenue.Fees",
         "Revenue.Drawings",
         "Revenue.Urgent call",
