@@ -110,6 +110,37 @@
           </div>
         </div>
 
+        <!-- Earnings Chart -->
+        <div class="earningsChart">
+          <h2 class="earningsChart__title">גרף הכנסות</h2>
+          <div class="chart-period-selector">
+            <button
+              class="period-btn"
+              :class="{ 'period-btn--active': chartPeriod === 'daily' }"
+              @click="loadChartData('daily')"
+            >
+              יומי
+            </button>
+            <button
+              class="period-btn"
+              :class="{ 'period-btn--active': chartPeriod === 'weekly' }"
+              @click="loadChartData('weekly')"
+            >
+              שבועי
+            </button>
+            <button
+              class="period-btn"
+              :class="{ 'period-btn--active': chartPeriod === 'monthly' }"
+              @click="loadChartData('monthly')"
+            >
+              חודשי
+            </button>
+          </div>
+          <div class="chart-container">
+            <canvas ref="chartCanvas"></canvas>
+          </div>
+        </div>
+
         <!-- Back Button at Bottom -->
         <div class="handymanRatings__footer">
           <button
@@ -129,6 +160,9 @@
 import axios from "axios";
 import { URL } from "@/Url/url";
 import { useMainStore } from "@/store/index";
+import { Chart, registerables } from "chart.js";
+
+Chart.register(...registerables);
 
 export default {
   name: "HandymanRatings",
@@ -140,6 +174,9 @@ export default {
       monthlyEarnings: 0,
       totalEarnings: 0,
       jobDone: 0,
+      chart: null,
+      chartPeriod: "daily",
+      chartData: [],
     };
   },
   computed: {
@@ -161,6 +198,13 @@ export default {
   async mounted() {
     this.store = useMainStore();
     await this.loadRatings();
+    await this.loadChartData("daily");
+  },
+  beforeUnmount() {
+    if (this.chart) {
+      this.chart.destroy();
+      this.chart = null;
+    }
   },
   methods: {
     async loadRatings() {
@@ -186,6 +230,144 @@ export default {
         year: "numeric",
         month: "long",
         day: "numeric",
+      });
+    },
+    async loadChartData(period = "daily") {
+      this.chartPeriod = period;
+      try {
+        const response = await axios.get(
+          `${URL}/handyman/${this.userId}/earnings/chart?period=${period}`
+        );
+        if (response.data.success) {
+          this.chartData = response.data.chartData || [];
+          this.renderChart();
+        }
+      } catch (error) {
+        console.error("Error loading chart data:", error);
+      }
+    },
+    renderChart() {
+      if (!this.$refs.chartCanvas) return;
+
+      // Destroy existing chart if exists
+      if (this.chart) {
+        this.chart.destroy();
+      }
+
+      const ctx = this.$refs.chartCanvas.getContext("2d");
+
+      // Format labels based on period
+      const labels = this.chartData.map((item) => {
+        const date = new Date(item.date);
+        switch (this.chartPeriod) {
+          case "weekly":
+            return `שבוע ${item.dateLabel.split("-")[1]}, ${
+              item.dateLabel.split("-")[0]
+            }`;
+          case "monthly":
+            const monthNames = [
+              "ינואר",
+              "פברואר",
+              "מרץ",
+              "אפריל",
+              "מאי",
+              "יוני",
+              "יולי",
+              "אוגוסט",
+              "ספטמבר",
+              "אוקטובר",
+              "נובמבר",
+              "דצמבר",
+            ];
+            const [year, month] = item.dateLabel.split("-");
+            return `${monthNames[parseInt(month) - 1]} ${year}`;
+          default: // daily
+            return date.toLocaleDateString("he-IL", {
+              day: "numeric",
+              month: "short",
+            });
+        }
+      });
+
+      this.chart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: labels.reverse(), // Reverse for RTL
+          datasets: [
+            {
+              label: "הכנסות",
+              data: this.chartData.map((item) => item.earnings).reverse(),
+              borderColor: "#ff8a2b",
+              backgroundColor: "rgba(255, 138, 43, 0.1)",
+              tension: 0.4,
+              fill: true,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: true,
+              position: "top",
+              labels: {
+                color: "rgba(255, 255, 255, 0.92)",
+                font: {
+                  family: "Heebo",
+                  size: 12,
+                  weight: "bold",
+                },
+                padding: 15,
+              },
+            },
+            tooltip: {
+              backgroundColor: "rgba(11, 11, 15, 0.95)",
+              borderColor: "rgba(255, 138, 43, 0.3)",
+              borderWidth: 1,
+              titleColor: "#ff8a2b",
+              bodyColor: "rgba(255, 255, 255, 0.92)",
+              padding: 12,
+              displayColors: true,
+              callbacks: {
+                label: function (context) {
+                  return `הכנסות: ${context.parsed.y.toFixed(2)} ₪`;
+                },
+              },
+            },
+          },
+          scales: {
+            x: {
+              grid: {
+                color: "rgba(255, 255, 255, 0.1)",
+              },
+              ticks: {
+                color: "rgba(255, 255, 255, 0.62)",
+                font: {
+                  family: "Heebo",
+                  size: 11,
+                  weight: "bold",
+                },
+              },
+            },
+            y: {
+              grid: {
+                color: "rgba(255, 255, 255, 0.1)",
+              },
+              ticks: {
+                color: "rgba(255, 255, 255, 0.62)",
+                font: {
+                  family: "Heebo",
+                  size: 11,
+                  weight: "bold",
+                },
+                callback: function (value) {
+                  return value.toFixed(0) + " ₪";
+                },
+              },
+            },
+          },
+        },
       });
     },
   },
@@ -466,5 +648,61 @@ $muted: rgba(255, 255, 255, 0.62);
   background: rgba($orange, 0.1);
   border-color: rgba($orange, 0.5);
   transform: translateY(-1px);
+}
+
+/* Earnings Chart */
+.earningsChart {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba($orange, 0.2);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.earningsChart__title {
+  font-size: 18px;
+  font-weight: 1000;
+  color: $orange2;
+  margin-bottom: 20px;
+}
+
+.chart-period-selector {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.period-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+  color: $muted;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: $font-family;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba($orange, 0.5);
+  }
+
+  &--active {
+    background: rgba($orange, 0.15);
+    color: $orange2;
+    border-color: rgba($orange, 0.5);
+  }
+}
+
+.chart-container {
+  position: relative;
+  height: 300px;
+  width: 100%;
+
+  @media (max-width: 400px) {
+    height: 250px;
+  }
 }
 </style>

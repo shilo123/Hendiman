@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "779398614816",
+    "project_id": "handiman-243d8",
+    "storage_bucket": "handiman-243d8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:779398614816:android:cbb735379a797c5a7fd145",
+        "android_client_info": {
+          "package_name": "hendiman.com"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCZ1YBFEyfS1I08Y1lmiy2PIRBzmIUXd6E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

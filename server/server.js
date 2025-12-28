@@ -1260,10 +1260,22 @@ function findAvailablePort(startPort) {
         });
       }
 
-      const { status, maxKm, lng, lat, handymanId, workType } = req.query;
+      const {
+        status,
+        maxKm,
+        lng,
+        lat,
+        handymanId,
+        workType,
+        minPrice,
+        maxPrice,
+      } = req.query;
       const query = {};
       if (status && status !== "all") {
         query.status = status;
+      } else if ((!status || status === "all") && handymanId) {
+        // For handyman, exclude "done" jobs when status is "all" or not specified
+        query.status = { $ne: "done" };
       }
       if (workType && workType !== "") {
         query.workType = workType;
@@ -1427,6 +1439,11 @@ function findAvailablePort(startPort) {
         const handymanIdString = String(handymanId);
         const jobsBeforeHandymanFilter = jobs.length;
         jobs = jobs.filter((job) => {
+          // Exclude "done" jobs for handyman (unless specifically requested)
+          if (job.status === "done" && (!status || status === "all")) {
+            return false;
+          }
+
           // Priority 1: Show jobs where handymanIdSpecial matches this handyman
           if (job.handymanIdSpecial) {
             return String(job.handymanIdSpecial) === handymanIdString;
@@ -1440,6 +1457,81 @@ function findAvailablePort(startPort) {
           return false;
         });
         const jobsAfterHandymanFilter = jobs.length;
+      }
+
+      // Filter by price range if provided
+      if (minPrice !== undefined && minPrice !== null && minPrice !== "") {
+        const minPriceNum = parseFloat(minPrice);
+        if (!isNaN(minPriceNum)) {
+          jobs = jobs.filter((job) => {
+            // Get price from subcategoryInfo array or job.price
+            let jobPrice = null;
+            if (
+              job.subcategoryInfo &&
+              Array.isArray(job.subcategoryInfo) &&
+              job.subcategoryInfo.length > 0
+            ) {
+              // Sum all prices from subcategoryInfo array
+              jobPrice = job.subcategoryInfo.reduce((sum, subcat) => {
+                const price = subcat?.price || 0;
+                return (
+                  sum +
+                  (typeof price === "number" ? price : parseFloat(price) || 0)
+                );
+              }, 0);
+            } else if (job.subcategoryInfo?.price) {
+              jobPrice =
+                typeof job.subcategoryInfo.price === "number"
+                  ? job.subcategoryInfo.price
+                  : parseFloat(job.subcategoryInfo.price) || null;
+            } else if (job.price) {
+              jobPrice =
+                typeof job.price === "number"
+                  ? job.price
+                  : parseFloat(job.price) || null;
+            }
+            // If no price found, include the job (don't filter it out)
+            if (jobPrice === null) return true;
+            return jobPrice >= minPriceNum;
+          });
+        }
+      }
+
+      if (maxPrice !== undefined && maxPrice !== null && maxPrice !== "") {
+        const maxPriceNum = parseFloat(maxPrice);
+        if (!isNaN(maxPriceNum)) {
+          jobs = jobs.filter((job) => {
+            // Get price from subcategoryInfo array or job.price
+            let jobPrice = null;
+            if (
+              job.subcategoryInfo &&
+              Array.isArray(job.subcategoryInfo) &&
+              job.subcategoryInfo.length > 0
+            ) {
+              // Sum all prices from subcategoryInfo array
+              jobPrice = job.subcategoryInfo.reduce((sum, subcat) => {
+                const price = subcat?.price || 0;
+                return (
+                  sum +
+                  (typeof price === "number" ? price : parseFloat(price) || 0)
+                );
+              }, 0);
+            } else if (job.subcategoryInfo?.price) {
+              jobPrice =
+                typeof job.subcategoryInfo.price === "number"
+                  ? job.subcategoryInfo.price
+                  : parseFloat(job.subcategoryInfo.price) || null;
+            } else if (job.price) {
+              jobPrice =
+                typeof job.price === "number"
+                  ? job.price
+                  : parseFloat(job.price) || null;
+            }
+            // If no price found, include the job (don't filter it out)
+            if (jobPrice === null) return true;
+            return jobPrice <= maxPriceNum;
+          });
+        }
       }
 
       return res.json({ success: true, jobs });
@@ -1486,7 +1578,54 @@ function findAvailablePort(startPort) {
         });
       }
 
-      let Jobs = collectionJobs ? await collectionJobs.find({}).toArray() : [];
+      // Optimize: Only fetch necessary fields and limit if possible
+      // For handyman, we'll filter by specialties anyway, so we can optimize the query
+      // For client, exclude "done" jobs that have been rated (ratingSubmitted = true)
+      // We'll filter done jobs later based on clientId
+      let Jobs = collectionJobs
+        ? await collectionJobs
+            .find(
+              {},
+              {
+                projection: {
+                  _id: 1,
+                  status: 1,
+                  category: 1,
+                  subcategoryInfo: 1,
+                  clientId: 1,
+                  clientName: 1,
+                  handymanId: 1,
+                  handymanName: 1,
+                  coordinates: 1,
+                  location: 1,
+                  locationText: 1,
+                  when: 1,
+                  whenLabel: 1,
+                  imageUrl: 1,
+                  desc: 1,
+                  workType: 1,
+                  urgent: 1,
+                  createdAt: 1,
+                  updatedAt: 1,
+                  ratingSubmitted: 1,
+                  // Add other fields that might be needed
+                },
+              }
+            )
+            .toArray()
+        : [];
+
+      // Filter out "done" jobs with ratingSubmitted for clients
+      // Keep "done" jobs without ratingSubmitted so client can rate them
+      if (!User.isHandyman) {
+        Jobs = Jobs.filter((job) => {
+          // If job is done and rating was submitted, exclude it
+          if (job.status === "done" && job.ratingSubmitted === true) {
+            return false;
+          }
+          return true;
+        });
+      }
 
       // Filter jobs by handyman specialties if user is a handyman
       if (
@@ -1542,6 +1681,19 @@ function findAvailablePort(startPort) {
         };
 
         Jobs = Jobs.filter(jobMatchesSpecialties);
+      }
+
+      // Filter out "done" jobs for clients - they shouldn't see completed jobs in the main dashboard
+      // Clients can only see active jobs (assigned, on_the_way, in_progress, or open)
+      // Done jobs are only accessible through specific routes (like rating)
+      if (!User.isHandyman) {
+        Jobs = Jobs.filter((job) => {
+          // Exclude all "done" jobs from the main dashboard view
+          if (job.status === "done") {
+            return false;
+          }
+          return true;
+        });
       }
 
       let handymenCount = await collection.countDocuments({
@@ -1971,6 +2123,103 @@ function findAvailablePort(startPort) {
     }
   });
 
+  // Get Mapbox token (public token, safe to expose to client)
+  app.get("/mapbox-token", (req, res) => {
+    if (!process.env.MAPBOX_TOKEN) {
+      return res.status(500).json({
+        success: false,
+        message: "Mapbox token not configured",
+      });
+    }
+    return res.json({
+      success: true,
+      token: process.env.MAPBOX_TOKEN,
+    });
+  });
+
+  // Get route data with travel time for interactive map
+  app.get("/route-data", async (req, res) => {
+    try {
+      const { originLat, originLng, destLat, destLng } = req.query;
+
+      if (!originLat || !originLng || !destLat || !destLng) {
+        return res.status(400).json({
+          success: false,
+          message: "originLat, originLng, destLat, and destLng are required",
+        });
+      }
+
+      if (!process.env.MAPBOX_TOKEN) {
+        return res.status(500).json({
+          success: false,
+          message: "Mapbox token not configured",
+        });
+      }
+
+      try {
+        // Use Mapbox Directions API to get route geometry and duration
+        const directionsUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${originLng},${originLat};${destLng},${destLat}?access_token=${process.env.MAPBOX_TOKEN}&geometries=geojson&steps=false&overview=full`;
+
+        const directionsResponse = await axios.get(directionsUrl);
+
+        if (
+          directionsResponse.data &&
+          directionsResponse.data.routes &&
+          directionsResponse.data.routes.length > 0
+        ) {
+          const route = directionsResponse.data.routes[0];
+          const geometry = route.geometry;
+          const durationSeconds = route.duration;
+          const distanceMeters = route.distance;
+
+          // Calculate center point for map view
+          const centerLat = (parseFloat(originLat) + parseFloat(destLat)) / 2;
+          const centerLng = (parseFloat(originLng) + parseFloat(destLng)) / 2;
+
+          return res.json({
+            success: true,
+            route: {
+              geometry,
+              duration: Math.round(durationSeconds), // in seconds
+              durationMinutes: Math.round(durationSeconds / 60), // in minutes
+              distance: Math.round(distanceMeters), // in meters
+              distanceKm: (distanceMeters / 1000).toFixed(1), // in km
+            },
+            origin: {
+              lat: parseFloat(originLat),
+              lng: parseFloat(originLng),
+            },
+            destination: {
+              lat: parseFloat(destLat),
+              lng: parseFloat(destLng),
+            },
+            center: {
+              lat: centerLat,
+              lng: centerLng,
+            },
+          });
+        } else {
+          return res.status(500).json({
+            success: false,
+            message: "No route found",
+          });
+        }
+      } catch (mapboxError) {
+        return res.status(500).json({
+          success: false,
+          message: "Error fetching route from Mapbox",
+          error: mapboxError.response?.data?.message || mapboxError.message,
+        });
+      }
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error getting route data",
+        error: error.message,
+      });
+    }
+  });
+
   // Process payment (in production, integrate with payment gateway like Stripe, PayPal, etc.)
   app.post("/payments/process", async (req, res) => {
     try {
@@ -2037,7 +2286,6 @@ function findAvailablePort(startPort) {
         transactionId: paymentRecord.transactionId,
       });
     } catch (error) {
-      console.error("Payment processing error:", error);
       return res.status(500).json({
         success: false,
         message: "שגיאה בעיבוד התשלום",
@@ -2946,6 +3194,18 @@ function findAvailablePort(startPort) {
           jobId,
           message: messageObj,
         });
+
+        // If handyman sent location, emit real-time location update
+        if (senderIsHandyman && location) {
+          io.to(`job-${jobId}`).emit("handyman-location-updated", {
+            jobId,
+            location: {
+              lat: location.lat,
+              lng: location.lng,
+            },
+            timestamp: new Date().toISOString(),
+          });
+        }
       }
 
       // Send Push Notification to recipient - CRITICAL: Send on EVERY message
@@ -3192,10 +3452,8 @@ function findAvailablePort(startPort) {
 
       // Send Push Notification to handyman about rating
       try {
-        const handymanObjectId =
-          finalHandymanId instanceof ObjectId
-            ? new ObjectId(finalHandymanId)
-            : new ObjectId(finalHandymanId);
+        // finalHandymanId is already a string (from line 3302: handymanId?.toString() || handymanId)
+        const handymanObjectId = new ObjectId(finalHandymanId);
         const handyman = await usersCol.findOne({ _id: handymanObjectId });
 
         if (handyman?.fcmToken) {
@@ -3219,45 +3477,102 @@ function findAvailablePort(startPort) {
         }
       } catch (pushError) {
         // Don't fail the request if push notification fails
+        console.error(
+          "Error sending push notification for rating:",
+          pushError.message
+        );
       }
 
       // Update jobDone for handyman when rating is submitted
       try {
-        const handymanObjectId =
-          finalHandymanId instanceof ObjectId
-            ? new ObjectId(finalHandymanId)
-            : new ObjectId(finalHandymanId);
+        // finalHandymanId is already a string
+        const handymanObjectId = new ObjectId(finalHandymanId);
         await usersCol.updateOne(
           { _id: handymanObjectId },
           { $inc: { jobDone: 1 } }
         );
       } catch (jobDoneError) {
         // Don't fail the request if jobDone update fails
+        console.error("Error updating jobDone:", jobDoneError.message);
       }
 
       // Calculate average rating for handyman from all ratings
-      const allRatings = await ratingsCol
-        .find({ handymanId: finalHandymanId })
-        .toArray();
+      try {
+        const handymanObjectId = new ObjectId(finalHandymanId);
 
-      if (allRatings.length > 0) {
-        const totalRating = allRatings.reduce(
-          (sum, r) => sum + (r.rating || 0),
-          0
-        );
-        const averageRating = totalRating / allRatings.length;
-        const roundedRating = Math.round(averageRating * 10) / 10;
+        // Use $or to find ALL ratings (handymanId might be stored as string or ObjectId in different ratings)
+        // Start with $or to ensure we get all ratings regardless of format
+        let allRatings = [];
+        try {
+          allRatings = await ratingsCol
+            .find({
+              $or: [
+                { handymanId: finalHandymanId },
+                { handymanId: handymanObjectId.toString() },
+                { handymanId: handymanObjectId },
+              ],
+            })
+            .toArray();
+        } catch (orError) {
+          // If $or fails, try direct string match as fallback
+          try {
+            allRatings = await ratingsCol
+              .find({ handymanId: finalHandymanId })
+              .toArray();
+          } catch (directError) {
+            console.error("Error finding ratings:", directError.message);
+          }
+        }
 
-        await usersCol.updateOne(
-          { _id: new ObjectId(finalHandymanId) },
-          { $set: { rating: roundedRating } }
-        );
-      } else {
-        // If no ratings yet, set the first rating
-        await usersCol.updateOne(
-          { _id: new ObjectId(finalHandymanId) },
-          { $set: { rating: parseInt(rating) } }
-        );
+        // If still no ratings found after insertOne, wait a bit and retry (eventual consistency)
+        if (allRatings.length === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          try {
+            allRatings = await ratingsCol
+              .find({
+                $or: [
+                  { handymanId: finalHandymanId },
+                  { handymanId: handymanObjectId.toString() },
+                ],
+              })
+              .toArray();
+          } catch (retryError) {
+            // Final fallback to direct match
+            try {
+              allRatings = await ratingsCol
+                .find({ handymanId: finalHandymanId })
+                .toArray();
+            } catch (fallbackError) {
+              console.error(
+                "Error finding ratings on final retry:",
+                fallbackError.message
+              );
+            }
+          }
+        }
+
+        if (allRatings.length > 0) {
+          const totalRating = allRatings.reduce(
+            (sum, r) => sum + (r.rating || 0),
+            0
+          );
+          const averageRating = totalRating / allRatings.length;
+          const roundedRating = Math.round(averageRating * 10) / 10;
+
+          await usersCol.updateOne(
+            { _id: handymanObjectId },
+            { $set: { rating: roundedRating } }
+          );
+        } else {
+          // If no ratings found, set the first rating (current one)
+          await usersCol.updateOne(
+            { _id: handymanObjectId },
+            { $set: { rating: parseInt(rating) } }
+          );
+        }
+      } catch (ratingError) {
+        // Don't fail the request if rating calculation fails
+        console.error("Error calculating average rating:", ratingError.message);
       }
 
       return res.json({ success: true });
@@ -3420,6 +3735,110 @@ function findAvailablePort(startPort) {
       });
     }
   });
+
+  // Get handyman earnings chart data
+  app.get("/handyman/:handymanId/earnings/chart", async (req, res) => {
+    try {
+      const { handymanId } = req.params;
+      const { period = "daily" } = req.query; // daily, weekly, monthly
+
+      const ratingsCol = getCollectionRatings();
+      const jobsCol = getCollectionJobs();
+
+      // Get all ratings for this handyman
+      const ratings = await ratingsCol
+        .find({ handymanId: handymanId })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      if (ratings.length === 0) {
+        return res.json({
+          success: true,
+          chartData: [],
+        });
+      }
+
+      // Get jobs for these ratings
+      const jobIds = ratings.map((r) => r.jobId);
+      const jobs = await jobsCol.find({ _id: { $in: jobIds } }).toArray();
+
+      // Group by date and calculate earnings
+      const earningsMap = new Map();
+
+      ratings.forEach((rating) => {
+        const job = jobs.find(
+          (j) => j._id.toString() === rating.jobId.toString()
+        );
+        if (!job) return;
+
+        const price = job?.price || 0;
+        const commission = Math.round(price * 0.1);
+        const earned = price - commission;
+
+        const date = new Date(rating.createdAt);
+        let dateKey;
+
+        switch (period) {
+          case "weekly":
+            const week = getWeekNumber(date);
+            dateKey = `${date.getFullYear()}-${String(week).padStart(2, "0")}`;
+            break;
+          case "monthly":
+            dateKey = `${date.getFullYear()}-${String(
+              date.getMonth() + 1
+            ).padStart(2, "0")}`;
+            break;
+          default: // daily
+            dateKey = `${date.getFullYear()}-${String(
+              date.getMonth() + 1
+            ).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+        }
+
+        if (!earningsMap.has(dateKey)) {
+          earningsMap.set(dateKey, {
+            date: date,
+            dateLabel: dateKey,
+            earnings: 0,
+          });
+        }
+
+        const entry = earningsMap.get(dateKey);
+        entry.earnings += earned;
+      });
+
+      // Convert to array and sort by date
+      const chartData = Array.from(earningsMap.values())
+        .map((item) => ({
+          date: item.date,
+          dateLabel: item.dateLabel,
+          earnings: item.earnings,
+        }))
+        .sort((a, b) => a.date - b.date);
+
+      return res.json({
+        success: true,
+        chartData: chartData,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching handyman earnings chart",
+        error: error.message,
+      });
+    }
+  });
+
+  // Helper function to get week number
+  function getWeekNumber(date) {
+    const d = new Date(
+      Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
+    );
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+  }
+
   app.get("/ratings/:handymanId", async (req, res) => {
     try {
       const { handymanId } = req.params;
@@ -5277,6 +5696,20 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         }
       }
 
+      // Update user's Ordered count (+1) - only once, even if multiple jobs were created
+      if (userId && createdJobs.length > 0) {
+        try {
+          const clientObjectId = new ObjectId(userId);
+          await collection.updateOne(
+            { _id: clientObjectId },
+            { $inc: { Ordered: 1 } }
+          );
+        } catch (error) {
+          // Silent fail - Ordered update is not critical
+          console.error("Error updating Ordered count:", error.message);
+        }
+      }
+
       return res.json({
         success: true,
         message: `נוצרו ${createdJobs.length} עבודות בהצלחה`,
@@ -5827,6 +6260,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
   });
 
   // Admin endpoint - Get financials data
+  // Aggregates all financial documents and sums them up
   app.get("/admin/financials", async (req, res) => {
     try {
       const financialsCol = getCollectionFinancials();
@@ -5837,44 +6271,57 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         });
       }
 
-      const financials = await financialsCol.findOne({});
-
-      if (!financials) {
-        // Return default structure if no document exists
-        return res.json({
-          success: true,
-          financials: {
-            expenses: {
-              "AI expenses": 0,
-              "DB expenses": 0,
-              "API expenses": 0,
-              "Marketing expenses": 0,
-              "clearing fee": 0,
-            },
-            Revenue: {
-              Fees: 0,
-              Drawings: 0,
-              "Urgent call": 0,
+      // Aggregate all documents and sum up expenses and revenue
+      const aggregated = await financialsCol
+        .aggregate([
+          {
+            $group: {
+              _id: null,
+              totalAIExpenses: {
+                $sum: { $ifNull: ["$expenses.AI expenses", 0] },
+              },
+              totalDBExpenses: {
+                $sum: { $ifNull: ["$expenses.DB expenses", 0] },
+              },
+              totalAPIExpenses: {
+                $sum: { $ifNull: ["$expenses.API expenses", 0] },
+              },
+              totalMarketingExpenses: {
+                $sum: { $ifNull: ["$expenses.Marketing expenses", 0] },
+              },
+              totalClearingFee: {
+                $sum: { $ifNull: ["$expenses.clearing fee", 0] },
+              },
+              totalFees: {
+                $sum: { $ifNull: ["$Revenue.Fees", 0] },
+              },
+              totalDrawings: {
+                $sum: { $ifNull: ["$Revenue.Drawings", 0] },
+              },
+              totalUrgentCall: {
+                $sum: { $ifNull: ["$Revenue.Urgent call", 0] },
+              },
             },
           },
-        });
-      }
+        ])
+        .toArray();
+
+      const totals = aggregated[0] || {};
 
       return res.json({
         success: true,
         financials: {
           expenses: {
-            "AI expenses": financials.expenses?.["AI expenses"] || 0,
-            "DB expenses": financials.expenses?.["DB expenses"] || 0,
-            "API expenses": financials.expenses?.["API expenses"] || 0,
-            "Marketing expenses":
-              financials.expenses?.["Marketing expenses"] || 0,
-            "clearing fee": financials.expenses?.["clearing fee"] || 0,
+            "AI expenses": totals.totalAIExpenses || 0,
+            "DB expenses": totals.totalDBExpenses || 0,
+            "API expenses": totals.totalAPIExpenses || 0,
+            "Marketing expenses": totals.totalMarketingExpenses || 0,
+            "clearing fee": totals.totalClearingFee || 0,
           },
-          Revenue: financials.Revenue || {
-            Fees: 0,
-            Drawings: 0,
-            "Urgent call": 0,
+          Revenue: {
+            Fees: totals.totalFees || 0,
+            Drawings: totals.totalDrawings || 0,
+            "Urgent call": totals.totalUrgentCall || 0,
           },
         },
       });
@@ -5887,7 +6334,108 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
     }
   });
 
+  // Admin endpoint - Get financials chart data (grouped by date)
+  app.get("/admin/financials/chart", async (req, res) => {
+    try {
+      const financialsCol = getCollectionFinancials();
+      if (!financialsCol) {
+        return res.status(500).json({
+          success: false,
+          message: "Database not connected",
+        });
+      }
+
+      const { period = "daily" } = req.query; // daily, weekly, monthly
+
+      // Group documents by date and sum expenses/revenue
+      let dateFormat;
+      switch (period) {
+        case "weekly":
+          dateFormat = {
+            $dateToString: {
+              format: "%Y-%W", // Year-Week
+              date: "$createdAt",
+            },
+          };
+          break;
+        case "monthly":
+          dateFormat = {
+            $dateToString: {
+              format: "%Y-%m", // Year-Month
+              date: "$createdAt",
+            },
+          };
+          break;
+        default: // daily
+          dateFormat = {
+            $dateToString: {
+              format: "%Y-%m-%d", // Year-Month-Day
+              date: "$createdAt",
+            },
+          };
+      }
+
+      const chartData = await financialsCol
+        .aggregate([
+          {
+            $group: {
+              _id: dateFormat,
+              date: { $first: "$createdAt" },
+              totalExpenses: {
+                $sum: {
+                  $add: [
+                    { $ifNull: ["$expenses.AI expenses", 0] },
+                    { $ifNull: ["$expenses.DB expenses", 0] },
+                    { $ifNull: ["$expenses.API expenses", 0] },
+                    { $ifNull: ["$expenses.Marketing expenses", 0] },
+                    { $ifNull: ["$expenses.clearing fee", 0] },
+                  ],
+                },
+              },
+              totalRevenue: {
+                $sum: {
+                  $add: [
+                    { $ifNull: ["$Revenue.Fees", 0] },
+                    { $ifNull: ["$Revenue.Drawings", 0] },
+                    { $ifNull: ["$Revenue.Urgent call", 0] },
+                  ],
+                },
+              },
+            },
+          },
+          {
+            $sort: { date: 1 },
+          },
+          {
+            $project: {
+              _id: 0,
+              date: 1,
+              dateLabel: "$_id",
+              expenses: "$totalExpenses",
+              revenue: "$totalRevenue",
+              profit: {
+                $subtract: ["$totalRevenue", "$totalExpenses"],
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      return res.json({
+        success: true,
+        chartData,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching chart data",
+        error: error.message,
+      });
+    }
+  });
+
   // Admin endpoint - Update financials manually
+  // Creates a new document for each update with createdAt
   app.post("/admin/financials/update", async (req, res) => {
     try {
       const { field, amount, operation } = req.body;
@@ -5914,15 +6462,6 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         });
       }
 
-      const financials = await financialsCol.findOne({});
-
-      if (!financials) {
-        return res.status(404).json({
-          success: false,
-          message: "Financials document not found",
-        });
-      }
-
       // Validate field path (must be expenses.XXX or Revenue.XXX)
       const validFields = [
         "expenses.AI expenses",
@@ -5944,17 +6483,25 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
       const updateAmount = operation === "add" ? amount : -amount;
 
-      await financialsCol.updateOne(
-        { _id: financials._id },
-        {
-          $inc: {
-            [field]: updateAmount,
-          },
-          $set: {
-            updatedAt: new Date(),
-          },
-        }
-      );
+      // Create new document for each update
+      const newDoc = {
+        createdAt: new Date(),
+      };
+
+      // Set the field based on whether it's expenses or Revenue
+      if (field.startsWith("expenses.")) {
+        const expenseField = field.replace("expenses.", "");
+        newDoc.expenses = {
+          [expenseField]: updateAmount,
+        };
+      } else if (field.startsWith("Revenue.")) {
+        const revenueField = field.replace("Revenue.", "");
+        newDoc.Revenue = {
+          [revenueField]: updateAmount,
+        };
+      }
+
+      await financialsCol.insertOne(newDoc);
 
       return res.json({
         success: true,
@@ -5964,6 +6511,230 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       return res.status(500).json({
         success: false,
         message: "Error updating financials",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Get system status statistics
+  app.get("/admin/status", async (req, res) => {
+    try {
+      const usersCol = getCollection();
+      const paymentsCol = getCollectionPayments();
+      const jobsCol = getCollectionJobs();
+
+      if (!usersCol || !paymentsCol || !jobsCol) {
+        return res.status(500).json({
+          success: false,
+          message: "Database not connected",
+        });
+      }
+
+      // Count handymen
+      const handymenCount = await usersCol.countDocuments({
+        isHandyman: true,
+      });
+
+      // Count clients (users who are not handymen)
+      const clientsCount = await usersCol.countDocuments({
+        $or: [{ isHandyman: false }, { isHandyman: { $exists: false } }],
+      });
+
+      // Count total users
+      const totalUsersCount = await usersCol.countDocuments({});
+
+      // Get total amount of completed transactions (payments with status "paid")
+      const paymentsResult = await paymentsCol
+        .aggregate([
+          {
+            $match: {
+              status: "paid",
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              totalAmount: { $sum: { $ifNull: ["$amount", 0] } },
+            },
+          },
+        ])
+        .toArray();
+
+      const totalTransactionsAmount =
+        paymentsResult.length > 0 ? paymentsResult[0].totalAmount : 0;
+
+      // Count all jobs (transactions)
+      const completedTransactionsCount = await jobsCol.countDocuments({});
+
+      // Get howDidYouHear statistics
+      const howDidYouHearResult = await usersCol
+        .aggregate([
+          {
+            $match: {
+              howDidYouHear: { $exists: true, $ne: null, $ne: "" },
+            },
+          },
+          {
+            $group: {
+              _id: "$howDidYouHear",
+              count: { $sum: 1 },
+            },
+          },
+        ])
+        .toArray();
+
+      // Create a map of howDidYouHear counts
+      const howDidYouHearStats = {
+        אינסטגרם: 0,
+        פייסבוק: 0,
+        חבר: 0,
+        גוגל: 0,
+        אחר: 0,
+      };
+
+      // Fill in the counts from database results
+      howDidYouHearResult.forEach((item) => {
+        const key = item._id?.trim();
+        if (!key) return;
+
+        // Try to match exact key first
+        if (howDidYouHearStats.hasOwnProperty(key)) {
+          howDidYouHearStats[key] = item.count;
+        } else {
+          // If it's not one of the known values, add to "אחר"
+          howDidYouHearStats.אחר += item.count;
+        }
+      });
+
+      return res.json({
+        success: true,
+        status: {
+          handymenCount,
+          clientsCount,
+          totalUsersCount,
+          totalTransactionsAmount,
+          completedTransactionsCount,
+          howDidYouHearStats,
+        },
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching status",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Get users chart data (grouped by date)
+  app.get("/admin/status/users-chart", async (req, res) => {
+    try {
+      const usersCol = getCollection();
+
+      if (!usersCol) {
+        return res.status(500).json({
+          success: false,
+          message: "Database not connected",
+        });
+      }
+
+      // Get users grouped by creation date
+      const usersChartData = await usersCol
+        .aggregate([
+          {
+            $match: {
+              createdAt: { $exists: true },
+            },
+          },
+          {
+            $group: {
+              _id: {
+                $dateToString: {
+                  format: "%Y-%m-%d",
+                  date: "$createdAt",
+                },
+              },
+              count: { $sum: 1 },
+            },
+          },
+          {
+            $sort: { _id: 1 },
+          },
+          {
+            $project: {
+              _id: 0,
+              date: "$_id",
+              count: 1,
+            },
+          },
+        ])
+        .toArray();
+
+      return res.json({
+        success: true,
+        chartData: usersChartData,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching users chart data",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Get transactions chart data (grouped by date)
+  app.get("/admin/status/transactions-chart", async (req, res) => {
+    try {
+      const jobsCol = getCollectionJobs();
+
+      if (!jobsCol) {
+        return res.status(500).json({
+          success: false,
+          message: "Database not connected",
+        });
+      }
+
+      // Get jobs grouped by creation date
+      const transactionsChartData = await jobsCol
+        .aggregate([
+          {
+            $match: {
+              createdAt: { $exists: true },
+            },
+          },
+          {
+            $group: {
+              _id: {
+                $dateToString: {
+                  format: "%Y-%m-%d",
+                  date: "$createdAt",
+                },
+              },
+              count: { $sum: 1 },
+            },
+          },
+          {
+            $sort: { _id: 1 },
+          },
+          {
+            $project: {
+              _id: 0,
+              date: "$_id",
+              count: 1,
+            },
+          },
+        ])
+        .toArray();
+
+      return res.json({
+        success: true,
+        chartData: transactionsChartData,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching transactions chart data",
         error: error.message,
       });
     }
@@ -6077,6 +6848,73 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
     // Leave room for a specific job
     socket.on("leave-job", (jobId) => {
       socket.leave(`job-${jobId}`);
+    });
+
+    // Handle handyman location updates
+    socket.on("handyman-location-update", (data) => {
+      const { jobId, location } = data;
+      if (
+        jobId &&
+        location &&
+        typeof location.lat === "number" &&
+        typeof location.lng === "number"
+      ) {
+        // Emit location update to all clients in the job room (except sender)
+        socket.to(`job-${jobId}`).emit("handyman-location-updated", {
+          jobId,
+          location: {
+            lat: location.lat,
+            lng: location.lng,
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
+    });
+
+    // Handle client request for handyman location
+    socket.on("request-handyman-location", async (data) => {
+      const { jobId } = data;
+      if (jobId) {
+        try {
+          // Get job to find handyman ID
+          const jobsCol = getCollectionJobs();
+          const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+          if (job && job.handymanId) {
+            // Get handyman ID (handle array)
+            let handymanId = job.handymanId;
+            if (Array.isArray(handymanId) && handymanId.length > 0) {
+              handymanId = handymanId[0];
+            }
+            const handymanIdStr = String(handymanId);
+
+            // Forward the request to all clients in job room
+            // The handyman will identify himself and show the modal
+            io.to(`job-${jobId}`).emit("location-request-received", {
+              jobId,
+              handymanId: handymanIdStr,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } catch (error) {
+          console.error("Error handling location request:", error.message);
+        }
+      }
+    });
+
+    // Handle handyman response to location request
+    socket.on("handyman-location-request-response", (data) => {
+      const { jobId, approved, location } = data;
+      if (jobId && approved && location) {
+        // Send location to client if approved
+        socket.to(`job-${jobId}`).emit("handyman-location-updated", {
+          jobId,
+          location: {
+            lat: location.lat,
+            lng: location.lng,
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
     });
   });
 

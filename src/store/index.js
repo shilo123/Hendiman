@@ -310,6 +310,9 @@ export const useMainStore = defineStore("main", {
       status = "all",
       maxKm = null,
       coordinates = null,
+      workType = null,
+      minPrice = null,
+      maxPrice = null,
     }) {
       try {
         this.isLoading = true;
@@ -327,6 +330,13 @@ export const useMainStore = defineStore("main", {
         // Add workType filter if specified
         if (workType && workType !== "") {
           params.push(`workType=${encodeURIComponent(workType)}`);
+        }
+        // Add price filters if specified
+        if (minPrice !== null && minPrice !== undefined) {
+          params.push(`minPrice=${minPrice}`);
+        }
+        if (maxPrice !== null && maxPrice !== undefined) {
+          params.push(`maxPrice=${maxPrice}`);
         }
         const queryString = params.length ? `?${params.join("&")}` : "";
         const url = `${URL}/jobs/filter${queryString}`;

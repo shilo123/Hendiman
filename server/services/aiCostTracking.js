@@ -32,6 +32,7 @@ function calculateAICost(usage) {
 
 /**
  * Update financials collection with AI expenses
+ * Creates a new document for each AI expense with createdAt
  * @param {Number} costUSD - Cost in USD to add
  * @param {Number} inputTokens - Number of input tokens used
  * @param {Number} outputTokens - Number of output tokens used
@@ -44,40 +45,18 @@ async function trackAICost(costUSD, inputTokens = 0, outputTokens = 0) {
       return;
     }
 
-    // Find or create financials document (assuming single document for now)
-    const financials = await financialsCol.findOne({});
-
-    if (financials) {
-      // Update existing document
-      await financialsCol.updateOne(
-        { _id: financials._id },
-        {
-          $inc: {
-            "expenses.AI expenses": costUSD,
-          },
-          $set: {
-            updatedAt: new Date(),
-          },
-        }
-      );
-    } else {
-      // Create new document if doesn't exist
-      await financialsCol.insertOne({
-        expenses: {
-          "AI expenses": costUSD,
-          "DB expenses": 0,
-          "API expenses": 0,
-          "Marketing expenses": 0,
-        },
-        Revenue: {
-          Fees: 0,
-          Drawings: 0,
-          "Urgent call": 0,
-        },
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-    }
+    // Create new document for each AI expense
+    await financialsCol.insertOne({
+      expenses: {
+        "AI expenses": costUSD,
+      },
+      createdAt: new Date(),
+      // Store token info if needed for analytics
+      metadata: {
+        inputTokens,
+        outputTokens,
+      },
+    });
   } catch (error) {
     console.error("Error tracking AI cost:", error);
     // Don't throw - we don't want to break the API call if tracking fails

@@ -100,7 +100,15 @@
           :class="{ active: currentStep >= 3, completed: currentStep > 3 }"
         >
           <div class="step-number">3</div>
-          <div class="step-label">סיום</div>
+          <div class="step-label">תמונות</div>
+        </div>
+        <div class="step-line" :class="{ active: currentStep > 3 }"></div>
+        <div
+          class="step-item"
+          :class="{ active: currentStep >= 4, completed: currentStep > 4 }"
+        >
+          <div class="step-number">4</div>
+          <div class="step-label">אשראי</div>
         </div>
       </div>
 
@@ -112,9 +120,16 @@
           class="step-content step-content--animated"
         >
           <div class="step-container">
-            <section class="block">
+            <section class="block block--requests">
               <div class="block__head">
                 <div class="block__label">תאר בקצרה מה צריך שנעשה?</div>
+                <button
+                  type="button"
+                  class="manual-select-btn"
+                  @click="openManualCategorySelector"
+                >
+                  ✋ בחר ידנית
+                </button>
               </div>
 
               <input
@@ -377,7 +392,7 @@
                   accept="image/*"
                   @change="handleCallImageUpload"
                   class="file-input"
-                  :disabled="call.imageUrls.length >= 4"
+                  :disabled="call.imageUrls.length >= 4 || isUploadingImage"
                 />
 
                 <label
@@ -386,13 +401,21 @@
                   :class="{
                     'uploadBtn--done': call.imageUrls.length > 0,
                     'uploadBtn--err': errors.image,
-                    'uploadBtn--disabled': call.imageUrls.length >= 4,
+                    'uploadBtn--disabled':
+                      call.imageUrls.length >= 4 || isUploadingImage,
+                    'uploadBtn--loading': isUploadingImage,
                   }"
                 >
-                  <span class="uploadBtn__icon">📷</span>
+                  <span
+                    v-if="isUploadingImage"
+                    class="uploadBtn__spinner"
+                  ></span>
+                  <span v-else class="uploadBtn__icon">📷</span>
                   <span class="uploadBtn__txt">
                     {{
-                      call.imageUrls.length === 0
+                      isUploadingImage
+                        ? "מעלה תמונה..."
+                        : call.imageUrls.length === 0
                         ? "בחר תמונה"
                         : call.imageUrls.length >= 4
                         ? "הגעת למקסימום (4 תמונות)"
@@ -401,6 +424,8 @@
                   </span>
                 </label>
               </div>
+
+              <div class="upload-hint">אפשר להעלות עד 4 תמונות</div>
 
               <!-- Images Grid -->
               <div
@@ -488,6 +513,118 @@
             <button class="back-btn" type="button" @click="prevStep">
               חזרה
             </button>
+            <button class="next-btn-animated" type="button" @click="nextStep">
+              <svg
+                viewBox="0 0 320 512"
+                height="1em"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M310.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-192 192c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L242.7 256 73.4 86.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l192 192z"
+                ></path>
+              </svg>
+              <span>שלב הבא</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- STEP 4: Credit Card Details -->
+        <div
+          v-if="currentStep === 4"
+          class="step-content step-content--animated"
+        >
+          <div class="step-container">
+            <section class="block block--credit">
+              <div class="block__head">
+                <div class="block__label">פרטי אשראי</div>
+                <div class="block__req">חובה</div>
+              </div>
+
+              <div class="credit-info">
+                <p class="credit-info__text">
+                  הכסף מגיע להנדימן רק אחרי העבודה
+                </p>
+              </div>
+
+              <div class="credit-form">
+                <div class="field">
+                  <label class="field__label" for="cardNumber"
+                    >מספר כרטיס אשראי</label
+                  >
+                  <input
+                    id="cardNumber"
+                    v-model="creditCard.cardNumber"
+                    type="text"
+                    class="input-small"
+                    placeholder="1234 5678 9012 3456"
+                    maxlength="19"
+                    @input="formatCardNumber"
+                  />
+                  <div v-if="errors.cardNumber" class="msg msg--err">
+                    {{ errors.cardNumber }}
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label class="field__label" for="cardName"
+                    >שם על הכרטיס</label
+                  >
+                  <input
+                    id="cardName"
+                    v-model="creditCard.cardName"
+                    type="text"
+                    class="input-small"
+                    placeholder="יוסף כהן"
+                    @input="clearError('cardName')"
+                  />
+                  <div v-if="errors.cardName" class="msg msg--err">
+                    {{ errors.cardName }}
+                  </div>
+                </div>
+
+                <div class="twoCols">
+                  <div class="field">
+                    <label class="field__label" for="expiryDate"
+                      >תאריך תפוגה</label
+                    >
+                    <input
+                      id="expiryDate"
+                      v-model="creditCard.expiryDate"
+                      type="text"
+                      class="input-small"
+                      placeholder="MM/YY"
+                      maxlength="5"
+                      @input="formatExpiryDate"
+                    />
+                    <div v-if="errors.expiryDate" class="msg msg--err">
+                      {{ errors.expiryDate }}
+                    </div>
+                  </div>
+
+                  <div class="field">
+                    <label class="field__label" for="cvv">CVV</label>
+                    <input
+                      id="cvv"
+                      v-model="creditCard.cvv"
+                      type="text"
+                      class="input-small"
+                      placeholder="123"
+                      maxlength="4"
+                      @input="formatCVV"
+                    />
+                    <div v-if="errors.cvv" class="msg msg--err">
+                      {{ errors.cvv }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="step-actions">
+            <button class="back-btn" type="button" @click="prevStep">
+              חזרה
+            </button>
             <button class="submit-btn" type="button" @click="onSubmitCall">
               שלח קריאה
             </button>
@@ -549,6 +686,67 @@
       </div>
     </div>
 
+    <!-- Manual Category Selector Modal -->
+    <div
+      v-if="showManualCategorySelector"
+      class="modal-overlay"
+      @click.self="showManualCategorySelector = false"
+    >
+      <div class="modal-content modal-content--large">
+        <div class="modal-header">
+          <h3>בחר תת-קטגוריות ידנית</h3>
+          <button
+            class="modal-close"
+            @click="showManualCategorySelector = false"
+          >
+            ×
+          </button>
+        </div>
+        <div class="modal-body modal-body--scrollable">
+          <div
+            v-for="category in allCategories"
+            :key="category.name"
+            class="category-section"
+          >
+            <h4 class="category-section__title">{{ category.name }}</h4>
+            <div class="subcategories-grid">
+              <label
+                v-for="subcategory in category.subcategories || []"
+                :key="subcategory.name"
+                class="subcategory-checkbox-label"
+              >
+                <input
+                  type="checkbox"
+                  class="subcategory-checkbox"
+                  :checked="
+                    isSubcategorySelected(category.name, subcategory.name)
+                  "
+                  @change="toggleSubcategory(category.name, subcategory)"
+                />
+                <div class="subcategory-info">
+                  <span class="subcategory-name">{{ subcategory.name }}</span>
+                  <span v-if="subcategory.price" class="subcategory-price">
+                    {{ subcategory.price }} ₪
+                  </span>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button
+            class="btn btn--secondary"
+            @click="showManualCategorySelector = false"
+          >
+            ביטול
+          </button>
+          <button class="btn btn--primary" @click="confirmManualSelection">
+            אישור
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Partial Match Modal -->
     <div
       v-if="showPartialMatchModal"
@@ -572,7 +770,9 @@
             >
               <span v-if="index === 0">מצאנו הנדימן לתחום: </span>
               <span v-else>והנדימן לתחום: </span>
-              <strong>{{ getSubcategoryName(subcat) }}</strong>
+              <strong class="subcategory-name-badge">{{
+                getSubcategoryName(subcat)
+              }}</strong>
             </p>
           </div>
           <p style="margin-top: 20px; font-weight: 600">
@@ -601,7 +801,9 @@ import { URL } from "@/Url/url";
 import axios from "axios";
 import { useToast } from "@/composables/useToast";
 import { useMainStore } from "@/store/index";
+import { getCurrentLocation } from "@/utils/geolocation";
 import citiesData from "@/APIS/AdressFromIsrael.json";
+import { loadCategories } from "@/utils/categoriesLoader";
 
 export default {
   name: "CreateCall",
@@ -659,6 +861,16 @@ export default {
       isLoadingCategories: false,
       foundCategories: [],
       subcategoryInfoArray: [],
+      showManualCategorySelector: false,
+      allCategories: [],
+      manuallySelectedSubcategories: [],
+      creditCard: {
+        cardNumber: "",
+        cardName: "",
+        expiryDate: "",
+        cvv: "",
+      },
+      isUploadingImage: false,
     };
   },
   created() {
@@ -689,6 +901,9 @@ export default {
   },
 
   methods: {
+    async getCurrentLocation() {
+      return await getCurrentLocation();
+    },
     addRequest() {
       this.call.requests.push("");
     },
@@ -710,12 +925,19 @@ export default {
         }
         this.clearError("requests");
 
-        // Move to step 2 immediately
-        this.currentStep = 2;
-
-        // Start loading and call AI endpoint in background
-        this.isLoadingCategories = true;
-        this.fetchCategoriesFromAI();
+        // Move to step 2 immediately only if no manual selection
+        if (this.manuallySelectedSubcategories.length === 0) {
+          this.currentStep = 2;
+          // Start loading and call AI endpoint in background
+          this.isLoadingCategories = true;
+          this.fetchCategoriesFromAI();
+        } else {
+          // Manual selection was used, skip AI
+          this.currentStep = 2;
+          this.foundCategories = this.manuallySelectedSubcategories;
+          this.subcategoryInfoArray = this.manuallySelectedSubcategories;
+          this.isLoadingCategories = false;
+        }
 
         return; // Don't continue to the rest of the function
       } else if (this.currentStep === 2) {
@@ -742,9 +964,26 @@ export default {
         }
         this.clearError("desc");
         this.clearError("location");
+      } else if (this.currentStep === 3) {
+        // Validate images
+        if (
+          this.call.imageUrls.length === 0 &&
+          this.call.imagePreviews.length === 0 &&
+          this.call.images.length === 0
+        ) {
+          this.errors.image = "יש להעלות לפחות תמונה אחת";
+          this.toast?.showError("יש להעלות לפחות תמונה אחת");
+          return;
+        }
+        this.clearError("image");
+      } else if (this.currentStep === 4) {
+        // Validate credit card
+        if (!this.validateCreditCard()) {
+          return;
+        }
       }
 
-      if (this.currentStep < 3) {
+      if (this.currentStep < 4) {
         this.currentStep++;
       }
     },
@@ -752,6 +991,124 @@ export default {
       if (this.currentStep > 1) {
         this.currentStep--;
       }
+    },
+    async openManualCategorySelector() {
+      // Load categories if not already loaded
+      if (this.allCategories.length === 0) {
+        try {
+          const data = await loadCategories();
+          this.allCategories = data.categories || [];
+        } catch (error) {
+          this.toast?.showError("שגיאה בטעינת הקטגוריות");
+          return;
+        }
+      }
+      this.showManualCategorySelector = true;
+    },
+    isSubcategorySelected(categoryName, subcategoryName) {
+      return this.manuallySelectedSubcategories.some(
+        (sub) =>
+          sub.category === categoryName && sub.subcategory === subcategoryName
+      );
+    },
+    toggleSubcategory(categoryName, subcategory) {
+      const index = this.manuallySelectedSubcategories.findIndex(
+        (sub) =>
+          sub.category === categoryName && sub.subcategory === subcategory.name
+      );
+
+      if (index >= 0) {
+        // Remove if already selected
+        this.manuallySelectedSubcategories.splice(index, 1);
+      } else {
+        // Add if not selected
+        this.manuallySelectedSubcategories.push({
+          category: categoryName,
+          subcategory: subcategory.name,
+          price: subcategory.price || null,
+          workType: subcategory.workType || null,
+        });
+      }
+    },
+    confirmManualSelection() {
+      if (this.manuallySelectedSubcategories.length === 0) {
+        this.toast?.showError("אנא בחר לפחות תת-קטגוריה אחת");
+        return;
+      }
+      this.showManualCategorySelector = false;
+      // Move to step 2
+      this.currentStep = 2;
+      this.foundCategories = this.manuallySelectedSubcategories;
+      this.subcategoryInfoArray = this.manuallySelectedSubcategories;
+      this.isLoadingCategories = false;
+      this.toast?.showSuccess(
+        `נבחרו ${this.manuallySelectedSubcategories.length} תת-קטגוריות`
+      );
+    },
+    formatCardNumber(event) {
+      let value = event.target.value.replace(/\s/g, "");
+      value = value.replace(/\D/g, "");
+      let formattedValue = value.match(/.{1,4}/g)?.join(" ") || value;
+      if (formattedValue.length > 19) {
+        formattedValue = formattedValue.substring(0, 19);
+      }
+      this.creditCard.cardNumber = formattedValue;
+      this.clearError("cardNumber");
+    },
+    formatExpiryDate(event) {
+      let value = event.target.value.replace(/\D/g, "");
+      if (value.length >= 2) {
+        value = value.substring(0, 2) + "/" + value.substring(2, 4);
+      }
+      this.creditCard.expiryDate = value;
+      this.clearError("expiryDate");
+    },
+    formatCVV(event) {
+      let value = event.target.value.replace(/\D/g, "");
+      if (value.length > 4) {
+        value = value.substring(0, 4);
+      }
+      this.creditCard.cvv = value;
+      this.clearError("cvv");
+    },
+    validateCreditCard() {
+      this.errors = {};
+      let isValid = true;
+
+      // Validate card number (should be 16 digits)
+      const cardNumberDigits = this.creditCard.cardNumber.replace(/\s/g, "");
+      if (cardNumberDigits.length < 13 || cardNumberDigits.length > 19) {
+        this.errors.cardNumber = "מספר כרטיס לא תקין";
+        isValid = false;
+      }
+
+      // Validate card name
+      if (
+        !this.creditCard.cardName ||
+        this.creditCard.cardName.trim().length < 2
+      ) {
+        this.errors.cardName = "שם על הכרטיס חובה";
+        isValid = false;
+      }
+
+      // Validate expiry date (MM/YY format)
+      const expiryRegex = /^(0[1-9]|1[0-2])\/\d{2}$/;
+      if (!expiryRegex.test(this.creditCard.expiryDate)) {
+        this.errors.expiryDate = "תאריך תפוגה לא תקין (MM/YY)";
+        isValid = false;
+      }
+
+      // Validate CVV (3-4 digits)
+      if (this.creditCard.cvv.length < 3 || this.creditCard.cvv.length > 4) {
+        this.errors.cvv = "CVV לא תקין";
+        isValid = false;
+      }
+
+      if (!isValid) {
+        this.toast?.showError("אנא מלא את כל פרטי האשראי");
+      }
+
+      return isValid;
     },
     setMyLocation() {
       this.call.location = "המיקום שלי";
@@ -853,6 +1210,7 @@ export default {
       }
 
       this.clearError("image");
+      this.isUploadingImage = true;
 
       // Create preview immediately
       const reader = new FileReader();
@@ -909,6 +1267,8 @@ export default {
           this.errors.image = errorMessage;
           this.toast.showError(`שגיאה בהעלאת התמונה: ${errorMessage}`);
         }
+      } finally {
+        this.isUploadingImage = false;
       }
 
       // Reset input
@@ -1423,6 +1783,10 @@ export default {
 
         if (response.data.success) {
           this.toast.showSuccess("הקריאה פוצלה בהצלחה");
+          // Clear store jobs to force fresh data load in Dashboard
+          if (this.store) {
+            this.store.jobs = [];
+          }
           setTimeout(() => {
             this.$router.push({
               name: "Dashboard",
@@ -1535,18 +1899,15 @@ export default {
   },
 
   async mounted() {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        this.geoCoordinates = { lat: latitude, lon: longitude };
-        if (this.usingMyLocation) {
-          this.call.coordinates = { ...this.geoCoordinates };
-        }
-      },
-      (err) => {
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+    try {
+      const loc = await this.getCurrentLocation();
+      this.geoCoordinates = { lat: loc.lat, lon: loc.lon };
+      if (this.usingMyLocation) {
+        this.call.coordinates = { ...this.geoCoordinates };
+      }
+    } catch (err) {
+      // Silent fail - location is optional
+    }
   },
 };
 </script>
@@ -2332,11 +2693,16 @@ $danger: #ff3b3b;
 
 .block__head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 10px;
   flex-wrap: wrap;
+  position: relative;
+}
+
+.block--requests .block__head {
+  align-items: flex-start;
 }
 
 .block__label {
@@ -2420,6 +2786,28 @@ $danger: #ff3b3b;
 .add-request-btn:hover {
   border-color: rgba($orange, 0.4);
   background: rgba($orange, 0.1);
+}
+
+/* Manual Select Button */
+.manual-select-btn {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba($orange, 0.4);
+  background: rgba($orange, 0.1);
+  color: $orange3;
+  font-weight: 900;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.manual-select-btn:hover {
+  border-color: rgba($orange, 0.6);
+  background: rgba($orange, 0.2);
+  transform: translateY(-1px);
 }
 
 /* Inputs */
@@ -2583,6 +2971,39 @@ $danger: #ff3b3b;
   opacity: 0.5;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+.uploadBtn--loading {
+  cursor: wait;
+  position: relative;
+}
+
+.uploadBtn--loading .uploadBtn__icon {
+  display: none;
+}
+
+.uploadBtn__spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.upload-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 900;
+  text-align: center;
 }
 
 /* Location Block */
@@ -3262,24 +3683,38 @@ $danger: #ff3b3b;
 
     .subcategory-item {
       margin: 0 0 12px 0;
-      padding: 12px 16px;
-      background: rgba($orange, 0.1);
-      border: 1px solid rgba($orange, 0.2);
-      border-radius: 10px;
+      padding: 0;
+      background: transparent;
+      border: none;
       font-size: 14px;
-      font-weight: 1000;
-      color: $orange3;
+      font-weight: 900;
+      color: rgba(255, 255, 255, 0.9);
       line-height: 1.5;
 
       @media (max-width: 768px) {
-        padding: 10px 12px;
         font-size: 13px;
         margin-bottom: 10px;
       }
 
-      strong {
+      span {
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      .subcategory-name-badge {
+        display: inline-block;
+        padding: 8px 12px;
+        background: rgba($orange, 0.1);
+        border: 1px solid rgba($orange, 0.2);
+        border-radius: 8px;
         color: $orange3;
         font-weight: 1100;
+        margin-right: 6px;
+
+        @media (max-width: 768px) {
+          padding: 6px 10px;
+          font-size: 13px;
+          margin-right: 4px;
+        }
       }
 
       &:last-child {
@@ -3287,6 +3722,178 @@ $danger: #ff3b3b;
       }
     }
   }
+}
+
+/* Credit Card Form */
+.block--credit {
+  min-height: auto;
+
+  @media (max-width: 768px) {
+    .credit-form {
+      max-width: 370px;
+      margin: 0 auto;
+    }
+  }
+}
+
+.credit-info {
+  margin-bottom: 20px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba($orange, 0.1);
+  border: 1px solid rgba($orange, 0.3);
+}
+
+.credit-info__text {
+  margin: 0;
+  color: $orange3;
+  font-weight: 1100;
+  font-size: 14px;
+  text-align: center;
+}
+
+.credit-form {
+  display: grid;
+  gap: 16px;
+}
+
+/* Manual Category Selector Modal */
+.modal-content--large {
+  max-width: 600px;
+  max-height: 85vh;
+
+  @media (max-width: 768px) {
+    max-width: 100%;
+    max-height: 95vh;
+  }
+}
+
+.modal-body--scrollable {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 20px 24px;
+
+  @media (max-width: 768px) {
+    max-height: 65vh;
+    padding: 16px 18px;
+  }
+}
+
+.category-section {
+  margin-bottom: 24px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.category-section__title {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  font-weight: 1100;
+  color: $orange3;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba($orange, 0.3);
+
+  @media (max-width: 768px) {
+    font-size: 16px;
+  }
+}
+
+.subcategories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+
+  @media (max-width: 600px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.subcategory-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba($orange, 0.1);
+    border-color: rgba($orange, 0.3);
+  }
+
+  @media (max-width: 768px) {
+    padding: 10px;
+  }
+}
+
+.subcategory-checkbox {
+  width: 20px;
+  height: 20px;
+  border: 2px solid $orange;
+  border-radius: 5px;
+  background-color: transparent;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+  appearance: none;
+  position: relative;
+
+  &:hover {
+    border-color: $orange2;
+    box-shadow: 0 0 8px rgba($orange, 0.4);
+  }
+
+  &:checked {
+    border-color: $orange2;
+    background-color: rgba($orange, 0.2);
+    box-shadow: 0 0 12px rgba($orange, 0.5);
+
+    &::before {
+      content: "✓";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: $orange;
+      font-weight: bold;
+      font-size: 14px;
+    }
+  }
+}
+
+.subcategory-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.subcategory-name {
+  font-size: 14px;
+  font-weight: 1100;
+  color: $text;
+
+  @media (max-width: 768px) {
+    font-size: 13px;
+  }
+}
+
+.subcategory-price {
+  font-size: 12px;
+  font-weight: 900;
+  color: $orange3;
+}
+
+.subcategory-checkbox-label:has(.subcategory-checkbox:checked) {
+  background: rgba($orange, 0.15);
+  border-color: rgba($orange, 0.4);
+  box-shadow: 0 0 8px rgba($orange, 0.3);
 }
 
 .modal-footer {

@@ -516,6 +516,7 @@ import { io } from "socket.io-client";
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
 import { useMainStore } from "@/store/index";
+import { getCurrentLocation } from "@/utils/geolocation";
 
 export default {
   name: "JobChatLux",
@@ -980,7 +981,9 @@ export default {
       };
       return h[s] || "";
     },
-
+    async getCurrentLocation() {
+      return await getCurrentLocation();
+    },
     isStepCompleted(stepStatus) {
       const statusOrder = {
         assigned: 1,
@@ -1017,41 +1020,30 @@ export default {
     async sendLocation() {
       this.showTools = false;
 
-      if (!navigator.geolocation) {
-        this.toast?.showError("הדפדפן שלך לא תומך במיקום");
-        return;
-      }
-
       // Show loading
       this.toast?.showSuccess("מאתר את המיקום שלך...");
 
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const location = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-          };
-
-          await this.sendLocationMessage(location);
-        },
-        (error) => {
-          let errorMessage = "שגיאה בקבלת המיקום";
-          if (error.code === 1) {
-            errorMessage = "הגישה למיקום נדחתה";
-          } else if (error.code === 2) {
-            errorMessage = "המיקום לא זמין";
-          } else if (error.code === 3) {
-            errorMessage = "פג הזמן לקבלת המיקום";
-          }
-          this.toast?.showError(errorMessage);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
+      try {
+        const loc = await this.getCurrentLocation();
+        const location = {
+          lat: loc.lat,
+          lng: loc.lon,
+          accuracy: loc.accuracy,
+        };
+        await this.sendLocationMessage(location);
+      } catch (error) {
+        let errorMessage = "שגיאה בקבלת המיקום";
+        if (error.code === 1) {
+          errorMessage = "הגישה למיקום נדחתה";
+        } else if (error.code === 2) {
+          errorMessage = "המיקום לא זמין";
+        } else if (error.code === 3) {
+          errorMessage = "פג הזמן לקבלת המיקום";
+        } else if (error.message === "Geolocation not supported") {
+          errorMessage = "הדפדפן שלך לא תומך במיקום";
         }
-      );
+        this.toast?.showError(errorMessage);
+      }
     },
 
     async sendLocationMessage(location) {
@@ -1371,7 +1363,6 @@ export default {
           jobId: this.job._id || this.job.id,
           handymanId: this.job.handymanId,
         });
-        this.toast.showSuccess("הסטטוס עודכן");
         this.$emit("status-updated", newStatus);
       } catch (err) {
         this.toast.showError("שגיאה בעדכון הסטטוס");

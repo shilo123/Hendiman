@@ -3,11 +3,11 @@
     <!-- Header -->
     <div class="jobs__head">
       <div class="jobs__headText">
-        <h2 class="jobs__title">עבודות שמתבצעות כרגע</h2>
+        <h2 class="jobs__title">עבודות</h2>
         <p class="jobs__sub">
           {{
             isHendiman
-              ? "עבודות לפי ההתמחויות שלך · סינון לפי מצב ומרחק"
+              ? "עבודות לפי ההתמחויות שלך · סינון לפי סטטוס ומרחק"
               : "כל הקריאות  · צפייה וסטטוסים"
           }}
         </p>
@@ -21,188 +21,330 @@
     <!-- Filters (handyman only) -->
     <div v-if="isHendiman" class="filters">
       <div class="filters__grid">
-        <!-- Status -->
-        <div class="panel">
-          <div class="panel__label">מצב קריאה</div>
+        <!-- Desktop Filters (visible only on desktop) -->
+        <div class="panel panel--filter-desktop">
+          <div class="panel__label">מיקום</div>
+          <div class="radio-group radio-group--horizontal">
+            <label class="radio-item radio-item--inline">
+              <input
+                type="radio"
+                name="locationFilterDesktop"
+                value="myLocation"
+                :checked="handymanFilters.locationType === 'myLocation'"
+                @change="$emit('change-location-type', 'myLocation')"
+              />
+              <span class="radio-label">המיקום שלי</span>
+            </label>
+            <label class="radio-item radio-item--inline">
+              <input
+                type="radio"
+                name="locationFilterDesktop"
+                value="residence"
+                :checked="handymanFilters.locationType === 'residence'"
+                @change="$emit('change-location-type', 'residence')"
+              />
+              <span class="radio-label">מקום המגורים שלי</span>
+            </label>
+          </div>
+        </div>
 
-          <!-- Desktop tabs -->
-          <div class="tabs">
+        <div class="panel panel--filter-desktop">
+          <div class="panel__label">
+            מרחק (ק"מ)
             <button
-              v-for="t in statusTabsWithCounts"
-              :key="t.value"
-              class="tab"
-              :class="{ 'tab--active': activeStatus === t.value }"
+              class="link link--small"
               type="button"
-              @click="$emit('pick-status', t.value)"
+              @click="$emit('reset-km')"
             >
-              <span class="tab__txt">{{ t.label }}</span>
-              <span class="tab__count">{{ t.count }}</span>
+              איפוס
             </button>
           </div>
+          <div class="range-display">
+            <span class="range-value">עד {{ displayMaxKm }} ק״מ</span>
+          </div>
+          <input
+            class="range-input"
+            type="range"
+            min="1"
+            max="50"
+            step="1"
+            :value="handymanFilters.maxKm"
+            @input="handleKmChange($event.target.value)"
+          />
+        </div>
 
-          <!-- Mobile dropdown -->
-          <div class="selectWrap">
+        <div class="panel panel--filter-desktop">
+          <div class="panel__label">
+            מחיר (₪)
             <button
-              class="select"
+              class="link link--small"
               type="button"
-              @click="isStatusDropdownOpen = !isStatusDropdownOpen"
+              @click="
+                $emit('change-price-range', { minPrice: null, maxPrice: null })
+              "
             >
-              <span class="select__value">{{ getSelectedStatusLabel() }}</span>
-              <span class="select__chev">▼</span>
+              איפוס
             </button>
-
-            <div v-if="isStatusDropdownOpen" class="menu" @click.stop>
-              <button
-                v-for="t in statusTabsWithCounts"
-                :key="t.value"
-                class="menu__item"
-                :class="{ 'menu__item--active': activeStatus === t.value }"
-                type="button"
-                @click="selectStatus(t.value)"
-              >
-                <span class="menu__label">{{ t.label }}</span>
-                <span class="menu__count">{{ t.count }}</span>
-              </button>
+          </div>
+          <div class="price-range price-range--horizontal">
+            <div class="price-input-group">
+              <label class="price-label">מינימום:</label>
+              <input
+                class="price-input"
+                type="number"
+                min="0"
+                :value="handymanFilters.minPrice"
+                @input="
+                  $emit('change-price-range', {
+                    minPrice: $event.target.value
+                      ? Number($event.target.value)
+                      : null,
+                    maxPrice: handymanFilters.maxPrice,
+                  })
+                "
+                placeholder="0"
+              />
+            </div>
+            <div class="price-input-group">
+              <label class="price-label">מקסימום:</label>
+              <input
+                class="price-input"
+                type="number"
+                min="0"
+                :value="handymanFilters.maxPrice"
+                @input="
+                  $emit('change-price-range', {
+                    minPrice: handymanFilters.minPrice,
+                    maxPrice: $event.target.value
+                      ? Number($event.target.value)
+                      : null,
+                  })
+                "
+                placeholder="ללא הגבלה"
+              />
             </div>
           </div>
         </div>
 
-        <!-- Advanced Filter Dropdown -->
-        <div class="panel panel--filter">
-          <div class="panel__label">סנן לפי:</div>
-          <div class="filter-dropdown">
-            <button
-              class="filter-dropdown__button"
-              type="button"
-              @click="isFilterDropdownOpen = !isFilterDropdownOpen"
-            >
-              <span class="filter-dropdown__value">{{
-                getActiveFilterLabel()
-              }}</span>
-              <span class="filter-dropdown__chev">▼</span>
-            </button>
+        <div class="panel panel--filter-desktop">
+          <div class="panel__label">סוג קריאה</div>
+          <div class="radio-group radio-group--horizontal">
+            <label class="radio-item radio-item--inline">
+              <input
+                type="radio"
+                name="workTypeFilterDesktop"
+                value=""
+                :checked="handymanFilters.workType === ''"
+                @change="$emit('change-work-type', '')"
+              />
+              <span class="radio-label">הכל</span>
+            </label>
+            <label class="radio-item radio-item--inline">
+              <input
+                type="radio"
+                name="workTypeFilterDesktop"
+                value="קלה"
+                :checked="handymanFilters.workType === 'קלה'"
+                @change="$emit('change-work-type', 'קלה')"
+              />
+              <span class="radio-label">קלה</span>
+            </label>
+            <label class="radio-item radio-item--inline">
+              <input
+                type="radio"
+                name="workTypeFilterDesktop"
+                value="מורכבת"
+                :checked="handymanFilters.workType === 'מורכבת'"
+                @change="$emit('change-work-type', 'מורכבת')"
+              />
+              <span class="radio-label">מורכבת</span>
+            </label>
+            <label class="radio-item radio-item--inline">
+              <input
+                type="radio"
+                name="workTypeFilterDesktop"
+                value="קשה"
+                :checked="handymanFilters.workType === 'קשה'"
+                @change="$emit('change-work-type', 'קשה')"
+              />
+              <span class="radio-label">קשה</span>
+            </label>
+          </div>
+        </div>
 
-            <div
-              v-if="isFilterDropdownOpen"
-              class="filter-dropdown__menu"
-              @click.stop
-            >
-              <!-- Location Filter -->
-              <div class="filter-menu__section">
-                <div class="filter-menu__title">מיקום</div>
-                <div class="radio-group">
-                  <label class="radio-item">
-                    <input
-                      type="radio"
-                      name="locationFilter"
-                      value="myLocation"
-                      :checked="handymanFilters.locationType === 'myLocation'"
-                      @change="
-                        handleFilterChange('location', 'myLocation');
-                        isFilterDropdownOpen = false;
-                      "
-                    />
-                    <span class="radio-label">המיקום שלי</span>
-                  </label>
-                  <label class="radio-item">
-                    <input
-                      type="radio"
-                      name="locationFilter"
-                      value="residence"
-                      :checked="handymanFilters.locationType === 'residence'"
-                      @change="
-                        handleFilterChange('location', 'residence');
-                        isFilterDropdownOpen = false;
-                      "
-                    />
-                    <span class="radio-label">מקום המגורים שלי</span>
-                  </label>
-                </div>
-              </div>
+        <!-- Filter Button (visible only on mobile) -->
+        <div class="panel panel--filter panel--filter-mobile">
+          <button class="filter-btn" type="button" @click="openFilterModal">
+            <span>🔍 סנן</span>
+          </button>
+        </div>
+      </div>
+    </div>
 
-              <!-- Distance Filter -->
-              <div class="filter-menu__section">
-                <div class="filter-menu__title">
-                  מרחק
-                  <button
-                    class="link link--small"
-                    type="button"
-                    @click="handleResetKm"
-                  >
-                    איפוס
-                  </button>
-                </div>
-                <div class="badgeRow">
-                  <span class="badge"
-                    >עד <b>{{ displayMaxKm }}</b> ק״מ</span
-                  >
-                </div>
+    <!-- Filter Modal -->
+    <div
+      v-if="showFilterModal"
+      class="filter-modal-overlay"
+      @click="closeFilterModal"
+    >
+      <div class="filter-modal" @click.stop>
+        <div class="filter-modal__header">
+          <h3 class="filter-modal__title">סנן עבודות</h3>
+          <button class="filter-modal__close" @click="closeFilterModal">
+            ×
+          </button>
+        </div>
+
+        <div class="filter-modal__body">
+          <!-- Location Filter -->
+          <div class="filter-section">
+            <div class="filter-section__title">מיקום</div>
+            <div class="radio-group">
+              <label class="radio-item">
                 <input
-                  class="range"
-                  type="range"
-                  min="1"
-                  max="30"
-                  step="1"
-                  :value="handymanFilters.maxKm"
-                  @input="localMaxKm = parseInt($event.target.value)"
-                  @change="handleKmChange($event.target.value)"
+                  type="radio"
+                  name="locationFilter"
+                  value="myLocation"
+                  :checked="localFilters.locationType === 'myLocation'"
+                  @change="localFilters.locationType = 'myLocation'"
                 />
-                <div class="hint">
-                  * סינון תצוגה בלבד (לפי אזור הפעילות בפרופיל).
-                </div>
-              </div>
+                <span class="radio-label">המיקום שלי</span>
+              </label>
+              <label class="radio-item">
+                <input
+                  type="radio"
+                  name="locationFilter"
+                  value="residence"
+                  :checked="localFilters.locationType === 'residence'"
+                  @change="localFilters.locationType = 'residence'"
+                />
+                <span class="radio-label">מקום המגורים שלי</span>
+              </label>
+            </div>
+          </div>
 
-              <!-- Work Type Filter -->
-              <div class="filter-menu__section">
-                <div class="filter-menu__title">סוג קריאה</div>
-                <div class="radio-group">
-                  <label class="radio-item">
-                    <input
-                      type="radio"
-                      name="workTypeFilter"
-                      value=""
-                      :checked="
-                        !handymanFilters.workType ||
-                        handymanFilters.workType === ''
-                      "
-                      @change="handleFilterChange('workType', '')"
-                    />
-                    <span class="radio-label">הכל</span>
-                  </label>
-                  <label class="radio-item">
-                    <input
-                      type="radio"
-                      name="workTypeFilter"
-                      value="קלה"
-                      :checked="handymanFilters.workType === 'קלה'"
-                      @change="handleFilterChange('workType', 'קלה')"
-                    />
-                    <span class="radio-label">קלה</span>
-                  </label>
-                  <label class="radio-item">
-                    <input
-                      type="radio"
-                      name="workTypeFilter"
-                      value="מורכבת"
-                      :checked="handymanFilters.workType === 'מורכבת'"
-                      @change="handleFilterChange('workType', 'מורכבת')"
-                    />
-                    <span class="radio-label">מורכבת</span>
-                  </label>
-                  <label class="radio-item">
-                    <input
-                      type="radio"
-                      name="workTypeFilter"
-                      value="קשה"
-                      :checked="handymanFilters.workType === 'קשה'"
-                      @change="handleFilterChange('workType', 'קשה')"
-                    />
-                    <span class="radio-label">קשה</span>
-                  </label>
-                </div>
+          <!-- Distance Filter -->
+          <div class="filter-section">
+            <div class="filter-section__title">
+              מרחק (ק"מ)
+              <button
+                class="link link--small"
+                type="button"
+                @click="resetKmRange"
+              >
+                איפוס
+              </button>
+            </div>
+            <div class="range-display">
+              <span class="range-value">עד {{ localFilters.maxKm }} ק״מ</span>
+            </div>
+            <input
+              class="range-input"
+              type="range"
+              min="1"
+              max="50"
+              step="1"
+              v-model.number="localFilters.maxKm"
+            />
+          </div>
+
+          <!-- Price Filter -->
+          <div class="filter-section">
+            <div class="filter-section__title">
+              מחיר (₪)
+              <button
+                class="link link--small"
+                type="button"
+                @click="resetPriceRange"
+              >
+                איפוס
+              </button>
+            </div>
+            <div class="price-range">
+              <div class="price-input-group">
+                <label class="price-label">מינימום:</label>
+                <input
+                  class="price-input"
+                  type="number"
+                  min="0"
+                  v-model.number="localFilters.minPrice"
+                  placeholder="0"
+                />
+              </div>
+              <div class="price-input-group">
+                <label class="price-label">מקסימום:</label>
+                <input
+                  class="price-input"
+                  type="number"
+                  min="0"
+                  v-model.number="localFilters.maxPrice"
+                  placeholder="ללא הגבלה"
+                />
               </div>
             </div>
           </div>
+
+          <!-- Work Type Filter -->
+          <div class="filter-section">
+            <div class="filter-section__title">סוג קריאה</div>
+            <div class="radio-group">
+              <label class="radio-item">
+                <input
+                  type="radio"
+                  name="workTypeFilter"
+                  value=""
+                  :checked="localFilters.workType === ''"
+                  @change="localFilters.workType = ''"
+                />
+                <span class="radio-label">הכל</span>
+              </label>
+              <label class="radio-item">
+                <input
+                  type="radio"
+                  name="workTypeFilter"
+                  value="קלה"
+                  :checked="localFilters.workType === 'קלה'"
+                  @change="localFilters.workType = 'קלה'"
+                />
+                <span class="radio-label">קלה</span>
+              </label>
+              <label class="radio-item">
+                <input
+                  type="radio"
+                  name="workTypeFilter"
+                  value="מורכבת"
+                  :checked="localFilters.workType === 'מורכבת'"
+                  @change="localFilters.workType = 'מורכבת'"
+                />
+                <span class="radio-label">מורכבת</span>
+              </label>
+              <label class="radio-item">
+                <input
+                  type="radio"
+                  name="workTypeFilter"
+                  value="קשה"
+                  :checked="localFilters.workType === 'קשה'"
+                  @change="localFilters.workType = 'קשה'"
+                />
+                <span class="radio-label">קשה</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-modal__footer">
+          <button
+            class="filter-modal__btn filter-modal__btn--cancel"
+            @click="closeFilterModal"
+          >
+            ביטול
+          </button>
+          <button
+            class="filter-modal__btn filter-modal__btn--apply"
+            @click="applyFilters"
+          >
+            סנן
+          </button>
         </div>
       </div>
     </div>
@@ -345,6 +487,7 @@ export default {
     "reset-km",
     "change-location-type",
     "change-work-type",
+    "change-price-range",
     "view",
     "next-jobs-page",
     "prev-jobs-page",
@@ -354,6 +497,15 @@ export default {
       isStatusDropdownOpen: false,
       isFilterDropdownOpen: false,
       localMaxKm: null, // Local value for display while dragging
+      showFilterModal: false,
+      localFilters: {
+        status: "all",
+        locationType: "residence",
+        maxKm: 25,
+        minPrice: null,
+        maxPrice: null,
+        workType: "",
+      },
     };
   },
   computed: {
@@ -374,6 +526,7 @@ export default {
   },
   mounted() {
     document.addEventListener("click", this.handleClickOutside);
+    this.initializeLocalFilters();
   },
   beforeUnmount() {
     document.removeEventListener("click", this.handleClickOutside);
@@ -495,6 +648,42 @@ export default {
       // Reset local value and emit the change
       this.localMaxKm = null;
       this.$emit("change-km", value);
+    },
+    initializeLocalFilters() {
+      this.localFilters = {
+        status: this.activeStatus || "all",
+        locationType: this.handymanFilters.locationType || "residence",
+        maxKm: this.handymanFilters.maxKm || 25,
+        minPrice: this.handymanFilters.minPrice || null,
+        maxPrice: this.handymanFilters.maxPrice || null,
+        workType: this.handymanFilters.workType || "",
+      };
+    },
+    openFilterModal() {
+      this.initializeLocalFilters();
+      this.showFilterModal = true;
+    },
+    closeFilterModal() {
+      this.showFilterModal = false;
+    },
+    resetKmRange() {
+      this.localFilters.maxKm = 25;
+    },
+    resetPriceRange() {
+      this.localFilters.minPrice = null;
+      this.localFilters.maxPrice = null;
+    },
+    applyFilters() {
+      // Emit all filter changes
+      this.$emit("pick-status", this.localFilters.status);
+      this.$emit("change-location-type", this.localFilters.locationType);
+      this.$emit("change-km", this.localFilters.maxKm);
+      this.$emit("change-work-type", this.localFilters.workType);
+      this.$emit("change-price-range", {
+        minPrice: this.localFilters.minPrice,
+        maxPrice: this.localFilters.maxPrice,
+      });
+      this.closeFilterModal();
     },
   },
 };
@@ -628,6 +817,11 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   grid-template-columns: 1.2fr 0.8fr;
   gap: 10px;
 
+  @media (min-width: 769px) {
+    grid-template-columns: 1fr; /* On desktop, all filters in single column */
+    gap: 12px;
+  }
+
   @media (max-width: 768px) {
     grid-template-columns: 1fr 1fr;
     gap: 8px;
@@ -732,13 +926,10 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   }
 }
 
-/* Mobile select */
+/* Mobile select - Hidden on mobile as requested */
 .selectWrap {
   position: relative;
   display: none;
-  @media (max-width: 768px) {
-    display: block;
-  }
 }
 .select {
   width: 100%;
@@ -1325,6 +1516,385 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     padding: 7px 10px;
     font-size: 11px;
     border-radius: 10px;
+  }
+}
+
+/* Filter Button - Mobile Only */
+.panel--filter-mobile {
+  display: none;
+
+  @media (max-width: 768px) {
+    display: block;
+  }
+}
+
+.filter-btn {
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba($orange, 0.15);
+  color: $orange2;
+  font-weight: 1000;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  &:hover {
+    background: rgba($orange, 0.25);
+    border-color: rgba($orange, 0.5);
+  }
+
+  @media (max-width: 400px) {
+    padding: 9px 12px;
+    font-size: 13px;
+  }
+}
+
+/* Desktop Filters - Hidden on mobile */
+.panel--filter-desktop {
+  display: none;
+
+  @media (min-width: 769px) {
+    display: block;
+  }
+}
+
+.radio-group--horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.radio-item--inline {
+  flex: 1;
+  min-width: 120px;
+}
+
+.price-range--horizontal {
+  flex-direction: row;
+  gap: 16px;
+
+  .price-input-group {
+    flex: 1;
+  }
+}
+
+/* Filter Modal - Mobile Only */
+.filter-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+  direction: rtl;
+
+  @media (min-width: 769px) {
+    display: none;
+  }
+}
+
+.filter-modal {
+  background: $bg;
+  border-radius: 16px;
+  border: 1px solid rgba($orange, 0.2);
+  max-width: 450px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+
+  @media (max-width: 450px) {
+    max-width: 400px;
+    border-radius: 14px;
+  }
+}
+
+.filter-modal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid rgba($orange, 0.2);
+
+  @media (max-width: 450px) {
+    padding: 16px;
+  }
+}
+
+.filter-modal__title {
+  font-size: 20px;
+  font-weight: 1000;
+  color: $orange2;
+  margin: 0;
+
+  @media (max-width: 450px) {
+    font-size: 18px;
+  }
+}
+
+.filter-modal__close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: $text;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+}
+
+.filter-modal__body {
+  padding: 20px;
+  flex: 1;
+  overflow-y: auto;
+
+  @media (max-width: 450px) {
+    padding: 16px;
+  }
+}
+
+.filter-section {
+  margin-bottom: 24px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.filter-section__title {
+  font-size: 14px;
+  font-weight: 1000;
+  color: $text;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  @media (max-width: 450px) {
+    font-size: 13px;
+    margin-bottom: 10px;
+  }
+}
+
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.radio-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba($orange, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba($orange, 0.3);
+  }
+
+  input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: $orange;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+  }
+
+  input[type="radio"]:checked + .radio-label {
+    color: $orange2;
+    font-weight: 1000;
+  }
+}
+
+.radio-label {
+  font-size: 14px;
+  font-weight: 900;
+  color: $text;
+  flex: 1;
+
+  @media (max-width: 450px) {
+    font-size: 13px;
+  }
+}
+
+.range-display {
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.range-value {
+  font-size: 16px;
+  font-weight: 1000;
+  color: $orange2;
+  padding: 8px 16px;
+  background: rgba($orange, 0.15);
+  border-radius: 8px;
+  display: inline-block;
+}
+
+.range-input {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: $orange2;
+    cursor: pointer;
+    border: 2px solid $bg;
+    box-shadow: 0 2px 8px rgba($orange, 0.4);
+  }
+
+  &::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: $orange2;
+    cursor: pointer;
+    border: 2px solid $bg;
+    box-shadow: 0 2px 8px rgba($orange, 0.4);
+  }
+}
+
+.price-range {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.price-input-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.price-label {
+  font-size: 14px;
+  font-weight: 900;
+  color: $text;
+  min-width: 80px;
+
+  @media (max-width: 450px) {
+    font-size: 13px;
+    min-width: 70px;
+  }
+}
+
+.price-input {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+  color: $text;
+  font-size: 14px;
+  font-weight: 900;
+  font-family: inherit;
+
+  &:focus {
+    outline: none;
+    border-color: $orange;
+    box-shadow: 0 0 0 3px rgba($orange, 0.2);
+  }
+
+  &::placeholder {
+    color: $muted;
+  }
+
+  @media (max-width: 450px) {
+    padding: 9px 10px;
+    font-size: 13px;
+  }
+}
+
+.filter-modal__footer {
+  display: flex;
+  gap: 12px;
+  padding: 20px;
+  border-top: 1px solid rgba($orange, 0.2);
+  background: rgba(0, 0, 0, 0.3);
+
+  @media (max-width: 450px) {
+    padding: 16px;
+    gap: 10px;
+  }
+}
+
+.filter-modal__btn {
+  flex: 1;
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 1000;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  font-family: inherit;
+
+  @media (max-width: 450px) {
+    padding: 11px 16px;
+    font-size: 13px;
+  }
+
+  &--cancel {
+    background: rgba(255, 255, 255, 0.06);
+    color: $text;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+  }
+
+  &--apply {
+    background: linear-gradient(135deg, $orange, $orange2);
+    color: #111;
+    box-shadow: $shadowO;
+
+    &:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 20px 50px rgba($orange, 0.25);
+    }
   }
 }
 </style>

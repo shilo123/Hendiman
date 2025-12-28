@@ -4,7 +4,23 @@
     <button class="me" type="button" @click="$emit('open-profile')">
       <div class="me__avatar-wrapper">
         <div class="me__avatar-container">
-          <img class="me__avatar" :src="me.avatarUrl" alt="avatar" />
+          <!-- Loading skeleton for profile image -->
+          <div
+            v-if="!imageLoaded && me.avatarUrl"
+            class="me__avatar-skeleton"
+          ></div>
+          <img
+            v-if="me.avatarUrl"
+            class="me__avatar"
+            :class="{ 'me__avatar--loading': !imageLoaded }"
+            :src="me.avatarUrl"
+            alt="avatar"
+            @load="imageLoaded = true"
+            @error="imageLoaded = true"
+          />
+          <div v-else class="me__avatar me__avatar--placeholder">
+            <span class="me__avatar-placeholder-icon">👤</span>
+          </div>
           <div class="me__edit-overlay">
             <span class="me__edit-text">ערוך פרופיל</span>
           </div>
@@ -73,41 +89,6 @@
           <div class="kpi__label">משתמשים</div>
         </div>
       </div>
-
-      <!-- Mobile: Stats Dropdown -->
-      <div v-if="isMobile" class="stats-dropdown-mobile">
-        <button
-          class="stats-dropdown-mobile__trigger"
-          type="button"
-          @click="isStatsDropdownOpen = !isStatsDropdownOpen"
-        >
-          <span class="stats-dropdown-mobile__text">סטטוסים</span>
-          <span class="stats-dropdown-mobile__icon">▼</span>
-        </button>
-        <div
-          v-if="isStatsDropdownOpen"
-          class="stats-dropdown-mobile__menu"
-          @click.stop
-        >
-          <div class="stats-dropdown-mobile__item">
-            <span class="stats-dropdown-mobile__item-label"
-              >{{ stats.clients }} לקוחות</span
-            >
-          </div>
-          <div class="stats-dropdown-mobile__item">
-            <span class="stats-dropdown-mobile__item-label"
-              >{{ stats.handymen }} הנדימנים</span
-            >
-          </div>
-          <div
-            class="stats-dropdown-mobile__item stats-dropdown-mobile__item--hot"
-          >
-            <span class="stats-dropdown-mobile__item-label"
-              >{{ stats.users }} משתמשים</span
-            >
-          </div>
-        </div>
-      </div>
     </div>
   </header>
 </template>
@@ -132,29 +113,27 @@ export default {
   ],
   data() {
     return {
-      isStatsDropdownOpen: false,
       isMobile: window.innerWidth <= 768,
+      imageLoaded: false, // Track if profile image has loaded
     };
+  },
+  watch: {
+    "me.avatarUrl"(newUrl) {
+      // Reset loading state when avatar URL changes
+      if (newUrl) {
+        this.imageLoaded = false;
+      }
+    },
   },
   mounted() {
     window.addEventListener("resize", this.handleResize);
-    document.addEventListener("click", this.handleClickOutside);
   },
   beforeUnmount() {
     window.removeEventListener("resize", this.handleResize);
-    document.removeEventListener("click", this.handleClickOutside);
   },
   methods: {
     handleResize() {
       this.isMobile = window.innerWidth <= 768;
-    },
-    handleClickOutside(event) {
-      if (
-        this.isStatsDropdownOpen &&
-        !event.target.closest(".stats-dropdown-mobile")
-      ) {
-        this.isStatsDropdownOpen = false;
-      }
     },
   },
 };
@@ -262,11 +241,70 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     object-fit: cover;
     border: 2px solid rgba($orange, 0.35);
     display: block;
+    transition: opacity 0.3s ease;
 
     @media (max-width: 768px) {
       width: 30px;
       height: 30px;
       border-width: 1.5px;
+    }
+
+    &--loading {
+      opacity: 0;
+    }
+
+    &--placeholder {
+      background: linear-gradient(
+        135deg,
+        rgba($orange, 0.2),
+        rgba($orange2, 0.15)
+      );
+      border-color: rgba($orange, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  }
+
+  &__avatar-placeholder-icon {
+    font-size: 20px;
+    opacity: 0.7;
+
+    @media (max-width: 768px) {
+      font-size: 16px;
+    }
+  }
+
+  &__avatar-skeleton {
+    position: absolute;
+    inset: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.1) 0%,
+      rgba(255, 255, 255, 0.2) 50%,
+      rgba(255, 255, 255, 0.1) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s ease-in-out infinite;
+    border: 2px solid rgba($orange, 0.35);
+    z-index: 1;
+
+    @media (max-width: 768px) {
+      width: 30px;
+      height: 30px;
+      border-width: 1.5px;
+    }
+  }
+
+  @keyframes skeleton-loading {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
     }
   }
 
@@ -326,8 +364,8 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     min-width: 0;
 
     @media (max-width: 768px) {
-      // במובייל — אין מקום לטקסט, אז לא מציגים
-      display: none;
+      // במובייל — מציגים את השם והתפקיד
+      gap: 2px;
     }
   }
 
@@ -337,6 +375,11 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+
+    @media (max-width: 768px) {
+      font-size: 12px;
+      font-weight: 900;
+    }
   }
 
   &__role {
@@ -346,6 +389,12 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+
+    @media (max-width: 768px) {
+      font-size: 9px;
+      font-weight: 800;
+      color: rgba(255, 255, 255, 0.5);
+    }
   }
 
   &__chev {
@@ -563,117 +612,6 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 @media (max-width: 360px) {
   .kpi__label {
     display: none;
-  }
-}
-
-/* Mobile Stats Dropdown */
-.stats-dropdown-mobile {
-  position: relative;
-  flex: 0 0 auto;
-  z-index: 100000;
-
-  &__trigger {
-    padding: 6px 10px;
-    border-radius: 10px;
-    border: 1px solid rgba($orange, 0.25);
-    background: rgba($orange, 0.12);
-    color: $text;
-    font-weight: 1000;
-    font-size: 10px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-
-    &:hover {
-      background: rgba($orange, 0.18);
-      border-color: rgba($orange, 0.35);
-    }
-
-    &:focus {
-      @include focusRing;
-    }
-  }
-
-  &__text {
-    font-size: 10px;
-  }
-
-  &__icon {
-    font-size: 8px;
-    color: rgba(255, 255, 255, 0.6);
-    transition: transform 0.2s ease;
-  }
-
-  &__trigger:focus &__icon,
-  &__menu:not([style*="display: none"]) ~ &__trigger &__icon {
-    transform: rotate(180deg);
-  }
-
-  &__menu {
-    position: absolute;
-    top: calc(100% + 6px);
-    left: -10px;
-    z-index: 100000;
-    background: rgba(15, 16, 22, 0.98);
-    border: 1px solid rgba($orange, 0.25);
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-    overflow: hidden;
-    backdrop-filter: blur(10px);
-    min-width: 140px;
-    margin-top: 4px;
-    margin-right: 0;
-    margin-left: 8px;
-  }
-
-  &__item {
-    padding: 10px 12px;
-    background: transparent;
-    color: $text;
-    font-weight: 1000;
-    font-size: 11px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    text-align: right;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    margin: 0 4px;
-
-    &:first-child {
-      margin-top: 4px;
-    }
-
-    &:last-child {
-      border-bottom: none;
-      margin-bottom: 4px;
-    }
-
-    &--hot {
-      .stats-dropdown-mobile__item-count {
-        color: $orange3;
-      }
-    }
-  }
-
-  &__item-label {
-    flex: 1;
-    text-align: right;
-  }
-
-  &__item-count {
-    font-size: 12px;
-    font-weight: 1000;
-    white-space: nowrap;
-    padding: 3px 8px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    background: rgba(0, 0, 0, 0.25);
-    min-width: 30px;
-    text-align: center;
   }
 }
 </style>

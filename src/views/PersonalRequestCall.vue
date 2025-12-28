@@ -550,6 +550,7 @@ import { URL } from "@/Url/url";
 import axios from "axios";
 import { useToast } from "@/composables/useToast";
 import { useMainStore } from "@/store/index";
+import { getCurrentLocation } from "@/utils/geolocation";
 import citiesData from "@/APIS/AdressFromIsrael.json";
 
 export default {
@@ -653,6 +654,9 @@ export default {
   },
 
   methods: {
+    async getCurrentLocation() {
+      return await getCurrentLocation();
+    },
     addRequest() {
       this.call.requests.push("");
     },
@@ -1325,17 +1329,15 @@ export default {
   },
 
   async mounted() {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        this.geoCoordinates = { lat: latitude, lon: longitude };
-        if (this.usingMyLocation) {
-          this.call.coordinates = { ...this.geoCoordinates };
-        }
-      },
-      (err) => {},
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+    try {
+      const loc = await this.getCurrentLocation();
+      this.geoCoordinates = { lat: loc.lat, lon: loc.lon };
+      if (this.usingMyLocation) {
+        this.call.coordinates = { ...this.geoCoordinates };
+      }
+    } catch (err) {
+      // Silent fail - location is optional
+    }
   },
 };
 </script>

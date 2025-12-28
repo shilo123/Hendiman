@@ -99,18 +99,20 @@
         <button class="chip chip--primary" type="button" @click="sendLocation">
           📍 שלח מיקום
         </button>
+        <!-- Show "Handyman in real-time" only when handyman is on the way or in progress -->
         <button
+          v-if="jobStatus === 'on_the_way' || jobStatus === 'in_progress'"
           class="chip chip--ghost"
           type="button"
-          @click="openHandymanRealtimeLocation"
+          @click.stop="openHandymanRealtimeLocation"
         >
           🗺️ הנדימן בזמן אמת
         </button>
       </template>
     </div>
 
-    <!-- Compact stepper - always visible -->
-    <div class="chat__stepper">
+    <!-- Compact stepper - hidden on mobile -->
+    <div class="chat__stepper chat__stepper--desktop">
       <div
         v-for="(step, i) in jobSteps"
         :key="step.status"
@@ -463,12 +465,8 @@
         </div>
 
         <div class="routeCard__mapWrapper">
-          <img
-            :src="getRouteMapImage()"
-            class="routeCard__map"
-            alt="מפה עם מסלול"
-            @error="onMapImageError"
-          />
+          <div ref="routeMapContainer" class="routeCard__map"></div>
+          <div v-if="routeLoading" class="routeCard__loading">טוען מפה...</div>
           <div class="routeCard__legend">
             <div class="routeCard__legendItem">
               <span
@@ -490,7 +488,9 @@
             <div class="routeCard__infoRow">
               <span class="routeCard__infoLabel">מיקום ההנדימן:</span>
               <span class="routeCard__infoValue">{{
-                formatLocation(lastHandymanLocation)
+                formatLocation(
+                  cachedLastHandymanLocation || lastHandymanLocation
+                )
               }}</span>
             </div>
             <div class="routeCard__infoRow">
@@ -499,20 +499,18 @@
                 formatLocation(jobLocation)
               }}</span>
             </div>
+            <div
+              v-if="travelTimeMinutes !== null"
+              class="routeCard__infoRow routeCard__infoRow--highlight"
+            >
+              <span class="routeCard__infoLabel">⏱️ זמן נסיעה משוער:</span>
+              <span class="routeCard__infoValue routeCard__infoValue--time">
+                {{ travelTimeMinutes }} דקות
+              </span>
+            </div>
           </div>
 
           <div class="routeCard__actions">
-            <a
-              :href="getRouteWazeUrl()"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="routeCard__btn routeCard__btn--waze"
-              @click="closeHandymanRouteModal"
-            >
-              <span class="routeCard__btnIcon">📍</span>
-              <span class="routeCard__btnText">פתח בווייז</span>
-            </a>
-
             <a
               :href="getRouteGoogleMapsUrl()"
               target="_blank"
@@ -544,6 +542,8 @@ import { io } from "socket.io-client";
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
 import { useMainStore } from "@/store/index";
+import mapboxgl from "mapbox-gl";
+import { getCurrentLocation } from "@/utils/geolocation";
 
 export default {
   name: "JobChatMobileV2",
@@ -594,6 +594,13 @@ export default {
       messagesCache: {}, // Cache messages per job to prevent losing them when switching tabs
       connectionCheckInterval: null, // Interval for checking connection quality
       isConnectionSlow: false, // Track if connection is slow
+      cachedLastHandymanLocation: null, // Cache for last handyman CURRENT/REAL-TIME location (NOT residence from DB)
+      handymanStartingLocation: null, // Location where handyman started (when status changed to "on_the_way") - FIXED point
+      routeMap: null, // Mapbox map instance
+      routeData: null, // Route data from server
+      routeLoading: false, // Loading state for route
+      travelTimeMinutes: null, // Travel time in minutes
+      handymanMarker: null, // Mapbox marker for handyman location
     };
   },
   computed: {
@@ -638,11 +645,20 @@ export default {
     jobLocation() {
       const job = this.currentJob;
       // Check if coordinates is an array [lng, lat]
-      if (job?.coordinates && Array.isArray(job.coordinates) && job.coordinates.length >= 2) {
+      if (
+        job?.coordinates &&
+        Array.isArray(job.coordinates) &&
+        job.coordinates.length >= 2
+      ) {
         return { lng: job.coordinates[0], lat: job.coordinates[1] };
       }
       // Check if coordinates is an object with lng and lat
-      if (job?.coordinates && typeof job.coordinates === 'object' && job.coordinates.lng && job.coordinates.lat) {
+      if (
+        job?.coordinates &&
+        typeof job.coordinates === "object" &&
+        job.coordinates.lng &&
+        job.coordinates.lat
+      ) {
         return { lng: job.coordinates.lng, lat: job.coordinates.lat };
       }
       // Check location.coordinates array
@@ -723,8 +739,9 @@ export default {
       // Search messages in reverse order to find the latest handyman location
       for (let i = this.messages.length - 1; i >= 0; i--) {
         const msg = this.messages[i];
-        // Check if message is from handyman (not "me" and has location)
-        if (msg.location && msg.sender !== "me" && msg.sender !== "system") {
+        // Check if message is from handyman (sender === "other" for client, and has location)
+        // When !isHandyman (client), handyman messages have sender === "other"
+        if (msg.location && msg.sender === "other") {
           return msg.location;
         }
       }
@@ -738,18 +755,31 @@ export default {
   },
   async mounted() {
     window.addEventListener("click", this.onOutsideTools);
+    window.addEventListener("visibilitychange", this.handleVisibilityChange);
+    window.addEventListener("beforeunload", this.saveMessagesBeforeUnload);
 
-    // Load messages from cache first if available for fast display
+    // Load messages from sessionStorage first if available for fast display
     const job = this.currentJob;
     const jobId = job?.id || job?._id;
+    let hasCachedMessages = false;
     if (jobId) {
       const jobIdStr = String(jobId);
-      if (
+      // Try sessionStorage first
+      const storedMessages = this.loadMessagesFromStorage();
+      if (storedMessages && storedMessages.length > 0) {
+        this.messages = storedMessages;
+        this.messagesCache[jobIdStr] = [...storedMessages];
+        hasCachedMessages = true;
+        this.$nextTick(() => {
+          this.scrollToBottom();
+        });
+      } else if (
         this.messagesCache[jobIdStr] &&
         this.messagesCache[jobIdStr].length > 0
       ) {
-        // Load from cache immediately for fast display
+        // Fallback to in-memory cache
         this.messages = [...this.messagesCache[jobIdStr]];
+        hasCachedMessages = true;
         this.$nextTick(() => {
           this.scrollToBottom();
         });
@@ -757,8 +787,16 @@ export default {
     }
 
     this.initWebSocket();
-    await this.loadMessages();
-    this.scrollToBottom();
+    // Only load from server if we don't have cached messages
+    if (!hasCachedMessages) {
+      await this.loadMessages();
+      this.scrollToBottom();
+    } else {
+      // We have cached messages, sync from server in background without clearing UI
+      this.loadMessages().catch(() => {
+        // Silent fail - we already have messages from cache
+      });
+    }
 
     // Initialize unread counts for all jobs
     if (this.jobs && this.jobs.length > 1) {
@@ -772,13 +810,27 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener("click", this.onOutsideTools);
+    window.removeEventListener("visibilitychange", this.handleVisibilityChange);
+    window.removeEventListener("beforeunload", this.saveMessagesBeforeUnload);
     this.disconnectWebSocket();
 
     // Stop connection quality check
     this.stopConnectionQualityCheck();
+
+    // Save messages before unmount
+    this.saveMessagesBeforeUnload();
   },
   watch: {
-    currentJobIndex(newIndex, oldIndex) {
+    async showHandymanRouteModal(newVal) {
+      if (newVal) {
+        // Modal opened - initialize map
+        await this.$nextTick();
+        await this.initializeRouteMap();
+      } else {
+        // Modal closed - clean up is handled in closeHandymanRouteModal
+      }
+    },
+    async currentJobIndex(newIndex, oldIndex) {
       // When switching tabs, save current messages to cache and load from cache
       if (oldIndex !== undefined && this.jobs && this.jobs[oldIndex]) {
         const previousJob = this.jobs[oldIndex];
@@ -818,7 +870,15 @@ export default {
       this.initWebSocket();
 
       // Load messages from server (will update cache)
-      this.loadMessages();
+      // Only load if we don't have cached messages, otherwise sync in background
+      if (this.messages.length === 0) {
+        await this.loadMessages();
+      } else {
+        // Sync in background without clearing current messages
+        this.loadMessages().catch(() => {
+          // Silent fail - we already have messages displayed
+        });
+      }
     },
     "currentJob.status"(newStatus) {
       // Always update localJobStatus when job status changes
@@ -837,6 +897,9 @@ export default {
     },
   },
   methods: {
+    async getCurrentLocation() {
+      return await getCurrentLocation();
+    },
     switchToJob(index) {
       this.currentJobIndex = index;
     },
@@ -904,7 +967,42 @@ export default {
       if (jobId) {
         const jobIdStr = String(jobId);
         this.messagesCache[jobIdStr] = [...this.messages];
+        // Also save to sessionStorage for persistence across page refreshes
+        try {
+          const storageKey = `chat_messages_${jobIdStr}`;
+          const messagesToStore = this.messages.map((msg) => ({
+            ...msg,
+            createdAt: msg.createdAt
+              ? msg.createdAt.toISOString()
+              : new Date().toISOString(),
+          }));
+          sessionStorage.setItem(storageKey, JSON.stringify(messagesToStore));
+        } catch (e) {
+          // Silently fail if sessionStorage is not available
+        }
       }
+    },
+    loadMessagesFromStorage() {
+      // Load messages from sessionStorage on mount
+      const job = this.currentJob;
+      const jobId = job?.id || job?._id;
+      if (!jobId) return null;
+
+      const jobIdStr = String(jobId);
+      try {
+        const storageKey = `chat_messages_${jobIdStr}`;
+        const stored = sessionStorage.getItem(storageKey);
+        if (stored) {
+          const messages = JSON.parse(stored).map((msg) => ({
+            ...msg,
+            createdAt: msg.createdAt ? new Date(msg.createdAt) : new Date(),
+          }));
+          return messages;
+        }
+      } catch (e) {
+        // Silently fail if sessionStorage is not available or data is corrupted
+      }
+      return null;
     },
     getUnreadCount(jobItem) {
       const jobId = String(jobItem._id || jobItem.id || "");
@@ -929,7 +1027,7 @@ export default {
           }).length;
 
           const jobIdStr = String(jobId);
-          this.$set(this.unreadCounts, jobIdStr, unread);
+          this.unreadCounts[jobIdStr] = unread;
         }
       } catch (e) {
         // Silently fail
@@ -1003,8 +1101,22 @@ export default {
         const receivedJobId = String(data.jobId || "");
         const currentJobId = String(jobId || "");
         if (receivedJobId === currentJobId) {
+          const previousStatus = this.localJobStatus;
           this.localJobStatus = data.status;
           this.$emit("status-updated", data.status);
+
+          // When handyman status changes to "on_the_way", save the starting location
+          // This is the FIXED point where handyman started the journey
+          if (data.status === "on_the_way" && previousStatus !== "on_the_way") {
+            // Get the location from the last handyman location message (when they sent "on_the_way")
+            const lastLocation = this.lastHandymanLocation;
+            if (lastLocation) {
+              this.handymanStartingLocation = {
+                lat: lastLocation.lat,
+                lng: lastLocation.lng,
+              };
+            }
+          }
 
           // Add status message to chat for client (not handyman)
           if (!this.isHandyman) {
@@ -1045,7 +1157,7 @@ export default {
           );
           if (jobItem) {
             const currentCount = this.getUnreadCount(jobItem);
-            this.$set(this.unreadCounts, receivedJobId, currentCount + 1);
+            this.unreadCounts[receivedJobId] = currentCount + 1;
           }
         }
       });
@@ -1058,6 +1170,38 @@ export default {
           this.$router.push(
             `/Dashboard/${userId}/job-summary/${receivedJobId}`
           );
+        }
+      });
+
+      // Listen for real-time handyman CURRENT location updates (NOT residence from DB)
+      // This location is the handyman's CURRENT GPS position, sent when they update status or approve location request
+      this.socket.on("handyman-location-updated", (data) => {
+        const receivedJobId = String(data.jobId || "");
+        const currentJobId = String(jobId || "");
+        if (receivedJobId === currentJobId && data.location) {
+          // Update cached CURRENT location (GPS position, NOT residence)
+          this.cachedLastHandymanLocation = {
+            lat: data.location.lat,
+            lng: data.location.lng,
+          };
+
+          // If status just changed to "on_the_way" and we don't have starting location yet,
+          // save this as the starting location (FIXED point)
+          if (
+            !this.isHandyman &&
+            this.jobStatus === "on_the_way" &&
+            !this.handymanStartingLocation
+          ) {
+            this.handymanStartingLocation = {
+              lat: data.location.lat,
+              lng: data.location.lng,
+            };
+          }
+
+          // Update marker on map if route modal is open (marker is dynamic, route line stays fixed)
+          if (this.showHandymanRouteModal && this.routeMap) {
+            this.updateHandymanMarkerOnMap(data.location);
+          }
         }
       });
     },
@@ -1082,12 +1226,15 @@ export default {
         const jobIdStr = String(jobId);
 
         // Reset unread count for current job when loading messages
-        this.$set(this.unreadCounts, jobIdStr, 0);
+        this.unreadCounts[jobIdStr] = 0;
+
+        // Save current messages as fallback in case of error
+        const currentMessages = [...this.messages];
 
         // Always load from server to ensure we have the latest messages
         // (cache is only for fast display while switching tabs, not for persistence across refreshes)
         const { data } = await axios.get(`${URL}/jobs/${jobId}/messages`);
-        
+
         // Check if data exists and has messages array
         if (data && data.success && Array.isArray(data.messages)) {
           const loadedMessages = data.messages.map((msg) => {
@@ -1126,23 +1273,65 @@ export default {
 
           // Update cache with all messages
           this.messagesCache[jobIdStr] = [...loadedMessages];
-        } else {
-          // If no messages or invalid response, clear the array
-          this.messages = [];
-          if (jobIdStr) {
-            this.messagesCache[jobIdStr] = [];
+
+          // If status is "on_the_way" or "in_progress" and we don't have starting location yet,
+          // try to find the location from the first handyman location message after status changed
+          if (
+            (this.jobStatus === "on_the_way" ||
+              this.jobStatus === "in_progress") &&
+            !this.handymanStartingLocation &&
+            !this.isHandyman
+          ) {
+            // Find the first handyman location message (this should be when they started the journey)
+            for (const msg of loadedMessages) {
+              const isFromHandyman = msg.sender === "other"; // For client, handyman messages have sender "other"
+              if (isFromHandyman && msg.location) {
+                this.handymanStartingLocation = {
+                  lat: msg.location.lat,
+                  lng: msg.location.lng,
+                };
+                break; // Use the first location message from handyman
+              }
+            }
           }
+        } else {
+          // If no messages or invalid response, only clear if we don't have cached messages
+          if (
+            currentMessages.length === 0 &&
+            (!this.messagesCache[jobIdStr] ||
+              this.messagesCache[jobIdStr].length === 0)
+          ) {
+            this.messages = [];
+            if (jobIdStr) {
+              this.messagesCache[jobIdStr] = [];
+            }
+          }
+          // If we have current messages, keep them (don't clear)
         }
       } catch (e) {
-        this.toast?.showError("שגיאה בטעינת הודעות");
-        // On error, try to clear messages to avoid stale data
-        const job = this.currentJob;
-        const jobId = job?.id || job?._id;
-        if (jobId) {
-          const jobIdStr = String(jobId);
-          this.messages = [];
-          this.messagesCache[jobIdStr] = [];
+        // On error, don't clear messages - keep what we have
+        // Only show error if we don't have any messages at all
+        if (this.messages.length === 0) {
+          this.toast?.showError("שגיאה בטעינת הודעות");
+          // Try to load from cache as last resort
+          const job = this.currentJob;
+          const jobId = job?.id || job?._id;
+          if (jobId) {
+            const jobIdStr = String(jobId);
+            const cachedMessages = this.messagesCache[jobIdStr];
+            if (cachedMessages && cachedMessages.length > 0) {
+              this.messages = [...cachedMessages];
+            } else {
+              // Try sessionStorage
+              const storedMessages = this.loadMessagesFromStorage();
+              if (storedMessages && storedMessages.length > 0) {
+                this.messages = storedMessages;
+                this.messagesCache[jobIdStr] = [...storedMessages];
+              }
+            }
+          }
         }
+        // If we already have messages, silently fail (don't clear them)
       }
     },
 
@@ -1172,7 +1361,7 @@ export default {
         // Find optimistic message with same text and recent time (within 5 seconds)
         const optimisticIndex = this.messages.findIndex((m) => {
           if (m.sender !== "me") return false;
-          if (m.tempId) {
+          if (m.tempId || m._tempId) {
             // For text messages
             if (
               text &&
@@ -1207,8 +1396,17 @@ export default {
                 (text && m.text && text.trim() === m.text.trim());
               return textMatch && timeDiff < 5000;
             }
-            // For location messages
+            // For location messages - match by tempId first
             if (location && m.location) {
+              // If temp message has tempId, match by it (more reliable)
+              if (m._tempId && m._tempId.startsWith("temp-loc-")) {
+                // This is a temp location message, allow WebSocket to update it
+                const timeDiff = Math.abs(
+                  createdAt.getTime() - (m.createdAt?.getTime() || 0)
+                );
+                return timeDiff < 10000; // Allow 10 seconds window
+              }
+              // Otherwise match by coordinates (same location within tolerance)
               const latMatch =
                 Math.abs((m.location.lat || 0) - (location.lat || 0)) < 0.0001;
               const lngMatch =
@@ -1243,7 +1441,7 @@ export default {
       // Check if message already exists to prevent duplicates
       const exists = this.messages.some((m) => {
         // Skip optimistic messages (they're handled above)
-        if (m.tempId || m.uploading) return false;
+        if (m.tempId || m._tempId || m.uploading) return false;
         if (m.sender !== sender) return false;
 
         // Exact match on image URL
@@ -1259,19 +1457,32 @@ export default {
 
         // Exact match on location
         if (location && m.location) {
+          // Skip temp messages - they should be updated, not blocked as duplicates
+          if (m._tempId && m._tempId.startsWith("temp-loc-")) {
+            return false; // Don't block temp messages
+          }
           // Compare coordinates with tolerance for floating point precision
           const latMatch =
             Math.abs((m.location.lat || 0) - (location.lat || 0)) < 0.0001;
           const lngMatch =
             Math.abs((m.location.lng || 0) - (location.lng || 0)) < 0.0001;
           if (!latMatch || !lngMatch) {
-            return false;
+            return false; // Different location, allow both
           }
-          // If both have text, must match exactly
-          if (text && m.text) {
-            return text.trim() === m.text.trim();
+          // Same coordinates - check time to allow same location sent multiple times
+          const timeDiff = Math.abs(
+            createdAt.getTime() - (m.createdAt?.getTime() || 0)
+          );
+          // Only block if same location and within 2 seconds (likely duplicate)
+          if (timeDiff < 2000) {
+            // If both have text, must match exactly
+            if (text && m.text) {
+              return text.trim() === m.text.trim();
+            }
+            return !text && !m.text;
           }
-          return !text && !m.text;
+          // Same location but different time - allow (user sent location again)
+          return false;
         }
 
         // Text-only messages - check by text and time (within 2 seconds)
@@ -1348,40 +1559,30 @@ export default {
     async sendLocation() {
       this.showTools = false;
 
-      if (!navigator.geolocation) {
-        this.toast?.showError("הדפדפן שלך לא תומך במיקום");
-        return;
-      }
-
       this.toast?.showSuccess("מאתר את המיקום שלך...");
 
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const location = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-          };
-          await this.sendLocationMessage(location);
-        },
-        (error) => {
-          let errorMessage = "שגיאה בקבלת המיקום";
-          if (error.code === 1) {
-            errorMessage =
-              "הגישה למיקום נדחתה. אנא אפשר גישה למיקום בהגדרות הדפדפן.";
-          } else if (error.code === 2) {
-            errorMessage = "המיקום לא זמין";
-          } else if (error.code === 3) {
-            errorMessage = "פג הזמן לקבלת המיקום";
-          }
-          this.toast?.showError(errorMessage);
-        },
-        {
-          enableHighAccuracy: false, // Changed to false for better compatibility
-          timeout: 15000, // Increased timeout
-          maximumAge: 60000, // Allow cached location up to 1 minute
+      try {
+        const loc = await this.getCurrentLocation();
+        const location = {
+          lat: loc.lat,
+          lng: loc.lon,
+          accuracy: loc.accuracy,
+        };
+        await this.sendLocationMessage(location);
+      } catch (error) {
+        let errorMessage = "שגיאה בקבלת המיקום";
+        if (error.code === 1) {
+          errorMessage =
+            "הגישה למיקום נדחתה. אנא אפשר גישה למיקום בהגדרות הדפדפן.";
+        } else if (error.code === 2) {
+          errorMessage = "המיקום לא זמין";
+        } else if (error.code === 3) {
+          errorMessage = "פג הזמן לקבלת המיקום";
+        } else if (error.message === "Geolocation not supported") {
+          errorMessage = "הדפדפן שלך לא תומך במיקום";
         }
-      );
+        this.toast?.showError(errorMessage);
+      }
     },
 
     async sendLocationMessage(location) {
@@ -1395,6 +1596,10 @@ export default {
         return;
       }
 
+      // Create unique message ID
+      const messageId = `temp-loc-${Date.now()}-${Math.random()}`;
+
+      // Show optimistic message
       const tempMessage = {
         sender: "me",
         location,
@@ -1403,6 +1608,8 @@ export default {
           minute: "2-digit",
         }),
         createdAt: new Date(),
+        uploading: true,
+        _tempId: messageId,
       };
 
       this.messages.push(tempMessage);
@@ -1415,7 +1622,27 @@ export default {
           senderId: userId,
           isHandyman: this.isHandyman,
         });
+
+        // Mark as no longer uploading - WebSocket will update it with server data
+        const tempIndex = this.messages.findIndex(
+          (m) => m._tempId === messageId && m.uploading && m.sender === "me"
+        );
+        if (tempIndex !== -1) {
+          this.messages[tempIndex] = {
+            ...this.messages[tempIndex],
+            uploading: false,
+            _tempId: messageId, // Keep tempId for WebSocket matching
+          };
+        }
       } catch (e) {
+        // Remove optimistic message on error
+        const tempIndex = this.messages.findIndex(
+          (m) => m._tempId === messageId && m.uploading && m.sender === "me"
+        );
+        if (tempIndex !== -1) {
+          this.messages.splice(tempIndex, 1);
+          this.updateMessagesCache();
+        }
         this.toast?.showError("שגיאה בשליחת המיקום");
       }
     },
@@ -1434,99 +1661,314 @@ export default {
       }
     },
     async openHandymanRealtimeLocation() {
-      // Try to get handyman location - first from messages, then from profile
-      let handymanLocation = this.lastHandymanLocation;
+      // Get current handyman location (dynamic - latest from messages/WebSocket)
+      // This is the CURRENT location that will be displayed as the handyman marker
+      let currentHandymanLocation =
+        this.cachedLastHandymanLocation || this.lastHandymanLocation;
 
-      // Validate existing location
-      if (
-        handymanLocation &&
-        typeof handymanLocation.lat === 'number' &&
-        typeof handymanLocation.lng === 'number'
-      ) {
-        // Location is valid, use it
-      } else {
-        // If no valid location from messages, try to get from handyman profile
-        handymanLocation = null;
-        try {
-          const job = this.currentJob;
-          let handymanId = job?.handymanId;
-          if (Array.isArray(handymanId) && handymanId.length > 0) {
-            handymanId = handymanId[0];
-          }
-          if (handymanId) {
-            const response = await axios.get(`${URL}/user/${handymanId}`);
-            if (response.data && response.data.user) {
-              const handyman = response.data.user;
-              // Try to get location from profile (coordinates or location)
-              if (
-                handyman.location?.coordinates &&
-                Array.isArray(handyman.location.coordinates) &&
-                handyman.location.coordinates.length >= 2
-              ) {
-                handymanLocation = {
-                  lng: handyman.location.coordinates[0],
-                  lat: handyman.location.coordinates[1],
-                };
-              } else if (
-                handyman.coordinates &&
-                typeof handyman.coordinates === 'object' &&
-                typeof handyman.coordinates.lng === 'number' &&
-                typeof handyman.coordinates.lat === 'number'
-              ) {
-                handymanLocation = {
-                  lng: handyman.coordinates.lng,
-                  lat: handyman.coordinates.lat,
-                };
-              }
-            }
-          }
-        } catch (error) {
-          // Silent fail - will show error below if no location
-        }
-      }
+      // Get starting location (fixed - where handyman started the journey)
+      // This is the origin point for the route line
+      const startingLocation = this.handymanStartingLocation;
 
       // Validate job location
       const jobLocation = this.jobLocation;
       const hasValidJobLocation =
         jobLocation &&
-        typeof jobLocation.lat === 'number' &&
-        typeof jobLocation.lng === 'number';
+        typeof jobLocation.lat === "number" &&
+        typeof jobLocation.lng === "number";
 
-      // Validate handyman location
-      const hasValidHandymanLocation =
-        handymanLocation &&
-        typeof handymanLocation.lat === 'number' &&
-        typeof handymanLocation.lng === 'number';
+      // We need starting location (where handyman started) and job location to draw the route
+      // The current handyman location is shown as a marker (dynamic)
+      const hasValidStartingLocation =
+        startingLocation &&
+        typeof startingLocation.lat === "number" &&
+        typeof startingLocation.lng === "number";
 
-      // If we have both valid locations, show route modal
-      if (hasValidHandymanLocation && hasValidJobLocation) {
-        // Store the location temporarily for the modal
-        this.lastHandymanLocation = handymanLocation;
+      if (hasValidStartingLocation && hasValidJobLocation) {
+        // We have starting location and job location - show route modal
+        // The route line goes from starting location to job location
+        // The handyman marker shows current location (if available)
         this.showHandymanRouteModal = true;
-      } else if (hasValidHandymanLocation) {
-        // Show simple location modal if no job location
-        this.openLocationModal(handymanLocation);
       } else {
-        // No location available
-        this.toast?.showError("מיקום ההנדימן לא זמין כרגע");
+        this.toast?.showError(
+          "מיקום יציאת הדרך של ההנדימן לא זמין. ההנדימן צריך לעדכן סטטוס 'יצא לדרך' כדי לאפשר מעקב."
+        );
       }
     },
     closeHandymanRouteModal() {
       this.showHandymanRouteModal = false;
+      // Clean up map when closing
+      if (this.routeMap) {
+        this.routeMap.remove();
+        this.routeMap = null;
+      }
+      if (this.handymanMarker) {
+        this.handymanMarker.remove();
+        this.handymanMarker = null;
+      }
+      this.routeData = null;
+      this.travelTimeMinutes = null;
+    },
+    updateHandymanMarkerOnMap(newLocation) {
+      if (!this.routeMap || !this.handymanMarker || !newLocation) return;
+
+      // Update marker position - Mapbox expects [lng, lat]
+      this.handymanMarker.setLngLat([newLocation.lng, newLocation.lat]);
+
+      // Update cached location
+      this.cachedLastHandymanLocation = {
+        lat: newLocation.lat,
+        lng: newLocation.lng,
+      };
+    },
+    async updateRouteOnMap(newHandymanLocation) {
+      if (!this.routeMap || !newHandymanLocation || !this.jobLocation) return;
+
+      try {
+        // Fetch updated route
+        const routeResponse = await axios.get(`${URL}/route-data`, {
+          params: {
+            originLat: newHandymanLocation.lat,
+            originLng: newHandymanLocation.lng,
+            destLat: this.jobLocation.lat,
+            destLng: this.jobLocation.lng,
+          },
+        });
+
+        if (!routeResponse.data.success || !routeResponse.data.route) return;
+
+        // Update route source
+        const source = this.routeMap.getSource("route");
+        if (source) {
+          source.setData({
+            type: "Feature",
+            properties: {},
+            geometry: routeResponse.data.route.geometry,
+          });
+        }
+
+        // Update travel time
+        this.travelTimeMinutes = routeResponse.data.route.durationMinutes;
+        this.routeData = routeResponse.data;
+
+        // Update marker position - Mapbox expects [lng, lat]
+        if (this.handymanMarker) {
+          this.handymanMarker.setLngLat([
+            newHandymanLocation.lng,
+            newHandymanLocation.lat,
+          ]);
+        }
+
+        // Fit map to updated route bounds
+        const coordinates = routeResponse.data.route.geometry.coordinates;
+        if (coordinates && coordinates.length > 0) {
+          const bounds = coordinates.reduce((bounds, coord) => {
+            return bounds.extend(coord);
+          }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
+
+          this.routeMap.fitBounds(bounds, {
+            padding: { top: 50, bottom: 50, left: 50, right: 50 },
+            maxZoom: 15,
+            duration: 1000, // Smooth transition
+          });
+        }
+      } catch (error) {
+        // Silent fail - marker still updated
+      }
+    },
+    async initializeRouteMap() {
+      try {
+        // Get Mapbox token from server
+        const tokenResponse = await axios.get(`${URL}/mapbox-token`);
+        if (!tokenResponse.data.success || !tokenResponse.data.token) {
+          this.toast?.showError("לא ניתן לטעון את המפה");
+          return;
+        }
+
+        mapboxgl.accessToken = tokenResponse.data.token;
+
+        // Get starting location (fixed - where handyman started) and job location
+        // Route line goes from starting location to job location
+        const startingLoc = this.handymanStartingLocation;
+        if (
+          !startingLoc ||
+          !this.jobLocation ||
+          typeof startingLoc?.lat !== "number" ||
+          typeof startingLoc?.lng !== "number" ||
+          typeof this.jobLocation?.lat !== "number" ||
+          typeof this.jobLocation?.lng !== "number"
+        ) {
+          this.toast?.showError("מיקומים לא תקינים");
+          return;
+        }
+
+        this.routeLoading = true;
+
+        // Fetch route data from server - route from starting location to job location
+        const routeResponse = await axios.get(`${URL}/route-data`, {
+          params: {
+            originLat: startingLoc.lat,
+            originLng: startingLoc.lng,
+            destLat: this.jobLocation.lat,
+            destLng: this.jobLocation.lng,
+          },
+        });
+
+        if (!routeResponse.data.success) {
+          this.toast?.showError("לא ניתן לטעון מסלול");
+          this.routeLoading = false;
+          return;
+        }
+
+        this.routeData = routeResponse.data;
+        this.travelTimeMinutes = routeResponse.data.route.durationMinutes;
+
+        // Wait for DOM to be ready
+        await this.$nextTick();
+
+        const mapContainer = this.$refs.routeMapContainer;
+        if (!mapContainer) {
+          this.routeLoading = false;
+          return;
+        }
+
+        // Initialize map - Mapbox expects [lng, lat]
+        this.routeMap = new mapboxgl.Map({
+          container: mapContainer,
+          style: "mapbox://styles/mapbox/streets-v12",
+          center: [
+            routeResponse.data.center.lng,
+            routeResponse.data.center.lat,
+          ],
+          zoom: 13,
+        });
+
+        // Wait for map to load
+        this.routeMap.on("load", () => {
+          // Add route layer
+          if (
+            this.routeMap.getSource("route") &&
+            this.routeMap.getLayer("route")
+          ) {
+            this.routeMap.removeLayer("route");
+            this.routeMap.removeSource("route");
+          }
+
+          this.routeMap.addSource("route", {
+            type: "geojson",
+            data: {
+              type: "Feature",
+              properties: {},
+              geometry: routeResponse.data.route.geometry,
+            },
+          });
+
+          this.routeMap.addLayer({
+            id: "route",
+            type: "line",
+            source: "route",
+            layout: {
+              "line-join": "round",
+              "line-cap": "round",
+            },
+            paint: {
+              "line-color": "#ff6a00",
+              "line-width": 5,
+              "line-opacity": 0.9,
+            },
+          });
+
+          // Add handyman marker (CURRENT location - dynamic)
+          // The marker shows the handyman's current position, not the starting point
+          if (this.handymanMarker) {
+            this.handymanMarker.remove();
+          }
+
+          // Get current handyman location (dynamic) - if available, use it for marker
+          const currentHandymanLoc =
+            this.cachedLastHandymanLocation || this.lastHandymanLocation;
+          const handymanMarkerLocation = currentHandymanLoc || startingLoc; // Fallback to starting location if no current location
+
+          // Create custom marker element for better visibility
+          const handymanMarkerEl = document.createElement("div");
+          handymanMarkerEl.className = "handyman-marker";
+          handymanMarkerEl.style.width = "20px";
+          handymanMarkerEl.style.height = "20px";
+          handymanMarkerEl.style.borderRadius = "50%";
+          handymanMarkerEl.style.backgroundColor = "#ff6a00";
+          handymanMarkerEl.style.border = "3px solid white";
+          handymanMarkerEl.style.boxShadow = "0 2px 4px rgba(0,0,0,0.3)";
+          handymanMarkerEl.style.cursor = "pointer";
+
+          this.handymanMarker = new mapboxgl.Marker({
+            element: handymanMarkerEl,
+            anchor: "center",
+          })
+            .setLngLat([handymanMarkerLocation.lng, handymanMarkerLocation.lat])
+            .addTo(this.routeMap);
+
+          // Add destination marker (job) - Mapbox expects [lng, lat]
+          const jobMarkerEl = document.createElement("div");
+          jobMarkerEl.className = "job-marker";
+          jobMarkerEl.style.width = "20px";
+          jobMarkerEl.style.height = "20px";
+          jobMarkerEl.style.borderRadius = "50%";
+          jobMarkerEl.style.backgroundColor = "#22c55e";
+          jobMarkerEl.style.border = "3px solid white";
+          jobMarkerEl.style.boxShadow = "0 2px 4px rgba(0,0,0,0.3)";
+          jobMarkerEl.style.cursor = "pointer";
+
+          new mapboxgl.Marker({
+            element: jobMarkerEl,
+            anchor: "center",
+          })
+            .setLngLat([
+              routeResponse.data.destination.lng,
+              routeResponse.data.destination.lat,
+            ])
+            .addTo(this.routeMap);
+
+          // Fit map to route bounds
+          const coordinates = routeResponse.data.route.geometry.coordinates;
+          if (coordinates && coordinates.length > 0) {
+            const bounds = coordinates.reduce((bounds, coord) => {
+              return bounds.extend(coord);
+            }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
+
+            this.routeMap.fitBounds(bounds, {
+              padding: { top: 50, bottom: 50, left: 50, right: 50 },
+              maxZoom: 15,
+            });
+          }
+
+          this.routeLoading = false;
+        });
+
+        this.routeMap.on("error", () => {
+          this.routeLoading = false;
+          this.toast?.showError("שגיאה בטעינת המפה");
+        });
+      } catch (error) {
+        this.routeLoading = false;
+        this.toast?.showError("שגיאה בטעינת המפה");
+      }
     },
     getRouteMapImage() {
       // Get route map image from server with both locations
+      // Use cached location if available, otherwise use computed
+      const handymanLoc =
+        this.cachedLastHandymanLocation || this.lastHandymanLocation;
       if (
-        !this.lastHandymanLocation ||
+        !handymanLoc ||
         !this.jobLocation ||
-        typeof this.lastHandymanLocation?.lat !== 'number' ||
-        typeof this.lastHandymanLocation?.lng !== 'number' ||
-        typeof this.jobLocation?.lat !== 'number' ||
-        typeof this.jobLocation?.lng !== 'number'
+        typeof handymanLoc?.lat !== "number" ||
+        typeof handymanLoc?.lng !== "number" ||
+        typeof this.jobLocation?.lat !== "number" ||
+        typeof this.jobLocation?.lng !== "number"
       ) {
         return "";
       }
-      const handyman = this.lastHandymanLocation;
+      const handyman = handymanLoc;
       const job = this.jobLocation;
       const width = 800;
       const height = 600;
@@ -1534,10 +1976,9 @@ export default {
     },
     getRouteWazeUrl() {
       if (
-        !this.lastHandymanLocation ||
         !this.jobLocation ||
-        typeof this.jobLocation?.lat !== 'number' ||
-        typeof this.jobLocation?.lng !== 'number'
+        typeof this.jobLocation?.lat !== "number" ||
+        typeof this.jobLocation?.lng !== "number"
       ) {
         return "#";
       }
@@ -1546,17 +1987,20 @@ export default {
       return `https://www.waze.com/ul?ll=${job.lat},${job.lng}&navigate=yes`;
     },
     getRouteGoogleMapsUrl() {
+      // Use cached location if available, otherwise use computed
+      const handymanLoc =
+        this.cachedLastHandymanLocation || this.lastHandymanLocation;
       if (
-        !this.lastHandymanLocation ||
+        !handymanLoc ||
         !this.jobLocation ||
-        typeof this.lastHandymanLocation?.lat !== 'number' ||
-        typeof this.lastHandymanLocation?.lng !== 'number' ||
-        typeof this.jobLocation?.lat !== 'number' ||
-        typeof this.jobLocation?.lng !== 'number'
+        typeof handymanLoc?.lat !== "number" ||
+        typeof handymanLoc?.lng !== "number" ||
+        typeof this.jobLocation?.lat !== "number" ||
+        typeof this.jobLocation?.lng !== "number"
       ) {
         return "#";
       }
-      const handyman = this.lastHandymanLocation;
+      const handyman = handymanLoc;
       const job = this.jobLocation;
       // Google Maps route URL with origin and destination
       return `https://www.google.com/maps/dir/?api=1&origin=${handyman.lat},${handyman.lng}&destination=${job.lat},${job.lng}&travelmode=driving`;
@@ -1591,7 +2035,12 @@ export default {
     },
 
     formatLocation(location) {
-      if (typeof location === "object" && location.lat && location.lng) {
+      if (
+        location &&
+        typeof location === "object" &&
+        typeof location.lat === "number" &&
+        typeof location.lng === "number"
+      ) {
         return `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`;
       }
       return "";
@@ -1815,19 +2264,42 @@ export default {
           handymanId = foundHandyman || handymanId[0];
         }
 
+        // Send status update IMMEDIATELY - don't wait for location
         await axios.post(`${URL}${endpoint}`, {
           jobId: job._id || job.id,
           handymanId: handymanId,
         });
 
-        // Show success message with status info
-        const statusLabels = {
-          on_the_way: "בדרך",
-          in_progress: "הגעתי",
-          done: "סיימתי",
-        };
-        const statusLabel = statusLabels[newStatus] || newStatus;
-        this.toast.showSuccess(`הסטטוס עודכן ללקוח: ${statusLabel}`);
+        // Send handyman location in the background (don't await - let it happen async)
+        // This way status update is sent immediately to client
+        if (this.isHandyman) {
+          // Fire and forget - send location in background
+          this.getCurrentLocation()
+            .then((loc) => {
+              const location = {
+                lat: loc.lat,
+                lng: loc.lon,
+                accuracy: loc.accuracy,
+              };
+              // Send location message to customer
+              const jobId = job._id || job.id;
+              const userId = this.store?.user?._id;
+              if (jobId && userId) {
+                axios
+                  .post(`${URL}/jobs/${jobId}/messages`, {
+                    location,
+                    senderId: userId,
+                    isHandyman: true,
+                  })
+                  .catch(() => {
+                    // Silent fail - location sending is optional
+                  });
+              }
+            })
+            .catch(() => {
+              // Silent fail if location is not available
+            });
+        }
 
         // Set current status update for active button state
         this.currentStatusUpdate = newStatus;
@@ -1880,7 +2352,7 @@ export default {
         if (response.data && response.data.success) {
           this.toast.showSuccess("הדירוג נשלח");
           const jobIdStr = String(job._id || job.id);
-          this.$set(this.ratingSubmittedJobs, jobIdStr, true);
+          this.ratingSubmittedJobs[jobIdStr] = true;
           this.$emit("rating-submitted", job);
           const userId = this.store?.user?._id || this.$route.params.id;
           this.$router.push(
@@ -1896,7 +2368,7 @@ export default {
           // Request succeeded despite error (network issue after response)
           this.toast.showSuccess("הדירוג נשלח");
           const jobIdStr = String(job._id || job.id);
-          this.$set(this.ratingSubmittedJobs, jobIdStr, true);
+          this.ratingSubmittedJobs[jobIdStr] = true;
           this.$emit("rating-submitted", job);
           const userId = this.store?.user?._id || this.$route.params.id;
           this.$router.push(
@@ -1935,6 +2407,34 @@ export default {
       } catch (e) {
         this.toast.showError("שגיאה בביטול העבודה");
         this.showCancelConfirmModal = false;
+      }
+    },
+    handleVisibilityChange() {
+      // Save messages when page becomes hidden (minimized, tab switch, etc.)
+      if (document.hidden) {
+        this.saveMessagesBeforeUnload();
+      }
+    },
+    saveMessagesBeforeUnload() {
+      // Save all messages to sessionStorage
+      const job = this.currentJob;
+      const jobId = job?.id || job?._id;
+      if (!jobId || !this.messages.length) return;
+
+      const jobIdStr = String(jobId);
+      try {
+        const storageKey = `chat_messages_${jobIdStr}`;
+        const messagesToStore = this.messages.map((msg) => ({
+          ...msg,
+          createdAt: msg.createdAt
+            ? msg.createdAt.toISOString()
+            : new Date().toISOString(),
+        }));
+        sessionStorage.setItem(storageKey, JSON.stringify(messagesToStore));
+        // Also update in-memory cache
+        this.messagesCache[jobIdStr] = [...this.messages];
+      } catch (e) {
+        // Silently fail if sessionStorage is not available
       }
     },
   },
@@ -2189,6 +2689,15 @@ $orange2: #ff8a2b;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.2s ease;
+
+  &:active {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
 }
 
 .chip--primary {
@@ -2270,6 +2779,12 @@ $orange2: #ff8a2b;
   border-bottom: 1px solid rgba($orange, 0.1);
   background: rgba(0, 0, 0, 0.18);
   flex-shrink: 0;
+}
+
+.chat__stepper--desktop {
+  @media (max-width: 480px) {
+    display: none;
+  }
 }
 .chat__stepper::-webkit-scrollbar {
   display: none;
@@ -2866,5 +3381,221 @@ $orange2: #ff8a2b;
   background: rgba(66, 133, 244, 0.15);
   border-color: rgba(66, 133, 244, 0.4);
   color: #4285f4;
+}
+
+/* Route Card Modal */
+.route-modal {
+  z-index: 10100;
+}
+
+.routeCard {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: $bg;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.routeCard__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.routeCard__title {
+  font-size: 18px;
+  font-weight: 1000;
+  color: $orange2;
+  margin: 0;
+}
+
+.routeCard__close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-weight: 1000;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.routeCard__mapWrapper {
+  position: relative;
+  width: 100%;
+  height: 300px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.routeCard__map {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.routeCard__loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: $text;
+  font-weight: 900;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 12px 20px;
+  border-radius: 12px;
+}
+
+.routeCard__legend {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 10px;
+  border-radius: 12px;
+  z-index: 10;
+}
+
+.routeCard__legendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.routeCard__legendDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.routeCard__legendDot--start {
+  background: #ff6a00;
+}
+
+.routeCard__legendDot--end {
+  background: #22c55e;
+}
+
+.routeCard__legendText {
+  font-size: 12px;
+  font-weight: 900;
+  color: $text;
+  white-space: nowrap;
+}
+
+.routeCard__body {
+  padding: 16px;
+}
+
+.routeCard__info {
+  margin-bottom: 16px;
+}
+
+.routeCard__infoRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.routeCard__infoRow--highlight {
+  background: rgba($orange, 0.1);
+  padding: 12px;
+  border-radius: 12px;
+  border-bottom: none;
+  margin-top: 8px;
+}
+
+.routeCard__infoLabel {
+  font-size: 13px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.routeCard__infoValue {
+  font-size: 13px;
+  font-weight: 1000;
+  color: $text;
+  font-family: monospace;
+}
+
+.routeCard__infoValue--time {
+  color: $orange2;
+  font-size: 16px;
+  font-weight: 1100;
+}
+
+.routeCard__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.routeCard__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 900;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  border: 1px solid;
+}
+
+.routeCard__btn--google {
+  background: rgba(66, 133, 244, 0.15);
+  border-color: rgba(66, 133, 244, 0.4);
+  color: #4285f4;
+}
+
+.routeCard__btn--google:hover {
+  background: rgba(66, 133, 244, 0.25);
+  border-color: rgba(66, 133, 244, 0.6);
+}
+
+.routeCard__btnIcon {
+  font-size: 18px;
+}
+
+.routeCard__btnText {
+  font-weight: 900;
+}
+
+.routeCard__backBtn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: $text;
+  font-weight: 1000;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.routeCard__backBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.routeCard__backBtn:active {
+  transform: scale(0.98);
 }
 </style>

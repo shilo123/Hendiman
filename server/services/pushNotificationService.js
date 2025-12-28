@@ -6,9 +6,18 @@ const CLIENT_URL = process.env.CLIENT_URL || process.env.URL_CLIENT || "";
 
 // Initialize Firebase Admin (only once)
 let initialized = false;
+let initializationError = null;
 
 function initializeFirebaseAdmin() {
-  if (initialized) return;
+  // If already initialized successfully, return
+  if (initialized && admin.apps.length > 0) {
+    return;
+  }
+
+  // If initialization failed before, throw the error
+  if (initialized && initializationError) {
+    throw initializationError;
+  }
 
   // Check if Firebase Admin is already initialized
   if (admin.apps.length === 0) {
@@ -21,13 +30,46 @@ function initializeFirebaseAdmin() {
 
     // Option 2: Use environment variables (recommended for Heroku/cloud)
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-      });
+      try {
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        // Ensure projectId is set (from service account or env variable)
+        const projectId =
+          serviceAccount.project_id || process.env.FIREBASE_PROJECT_ID;
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount),
+          projectId: projectId,
+        });
+      } catch (error) {
+        initializationError = new Error(
+          `Firebase initialization failed: ${error.message}`
+        );
+        initialized = true;
+        throw initializationError;
+      }
     } else {
       // Option 3: Use default credentials (for local development with gcloud)
-      admin.initializeApp();
+      // Note: This requires Google Cloud credentials to be configured
+      try {
+        // Try to get project ID from environment or service account
+        const projectId =
+          process.env.FIREBASE_PROJECT_ID ||
+          process.env.GOOGLE_CLOUD_PROJECT ||
+          process.env.GCLOUD_PROJECT;
+
+        const initOptions = {};
+        if (projectId) {
+          initOptions.projectId = projectId;
+        }
+
+        admin.initializeApp(initOptions);
+      } catch (error) {
+        // Don't throw error - allow app to continue without push notifications
+        initializationError = new Error(
+          `Firebase לא מוגדר. יש להגדיר FIREBASE_SERVICE_ACCOUNT או FIREBASE_PROJECT_ID.`
+        );
+        initialized = true;
+        // Don't throw - allow app to continue
+      }
     }
   }
 
@@ -44,7 +86,51 @@ function initializeFirebaseAdmin() {
  */
 async function sendPushNotification(fcmToken, title, body, data = {}) {
   try {
-    initializeFirebaseAdmin();
+    console.log("[sendPushNotification] Starting push notification");
+    console.log(
+      "[sendPushNotification] FCM Token:",
+      fcmToken ? `${fcmToken.substring(0, 20)}...` : "MISSING"
+    );
+    console.log("[sendPushNotification] Title:", title);
+    console.log("[sendPushNotification] Body:", body);
+
+    try {
+      initializeFirebaseAdmin();
+    } catch (initError) {
+      console.error(
+        "[sendPushNotification] Firebase initialization failed:",
+        initError.message
+      );
+      // Don't fail the request - just log and return silently
+      // This allows the app to work even if Firebase is not configured
+      return { success: false, error: initError.message, silent: true };
+    }
+
+    // Check if Firebase is actually initialized and has project ID
+    if (!admin.apps.length || admin.apps.length === 0) {
+      console.warn(
+        "[sendPushNotification] Firebase not initialized, skipping notification"
+      );
+      return {
+        success: false,
+        error: "Firebase not initialized",
+        silent: true,
+      };
+    }
+
+    // Check if project ID is available (needed for messaging)
+    const app = admin.app();
+    const projectId = app?.options?.projectId;
+    if (!projectId) {
+      console.warn(
+        "[sendPushNotification] Firebase project ID not available, skipping notification. Set FIREBASE_PROJECT_ID or use FIREBASE_SERVICE_ACCOUNT with project_id."
+      );
+      return {
+        success: false,
+        error: "Firebase project ID not configured",
+        silent: true,
+      };
+    }
 
     // ⚠️ CRITICAL for Web Push: Payload structure
     const message = {
@@ -104,14 +190,29 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
       },
     };
 
+    console.log("[sendPushNotification] Sending message via Firebase Admin...");
     const response = await admin.messaging().send(message);
+    console.log(
+      "[sendPushNotification] SUCCESS: Message sent, messageId:",
+      response
+    );
     return { success: true, messageId: response };
   } catch (error) {
+    console.error(
+      "[sendPushNotification] ERROR: Failed to send push notification"
+    );
+    console.error("[sendPushNotification] Error code:", error.code);
+    console.error("[sendPushNotification] Error message:", error.message);
+    console.error("[sendPushNotification] Full error:", error);
+
     // Handle invalid token error
     if (
       error.code === "messaging/invalid-registration-token" ||
       error.code === "messaging/registration-token-not-registered"
     ) {
+      console.log(
+        "[sendPushNotification] Token is invalid, marking for removal"
+      );
       // Token is invalid, should be removed from database
       return { success: false, error: "invalid_token", shouldRemove: true };
     }

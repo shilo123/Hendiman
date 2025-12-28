@@ -289,7 +289,9 @@
               </div>
               <div class="detail-content">
                 <span class="detail-label">לקוח</span>
-                <span class="detail-value">{{ jobDetails.clientName }}</span>
+                <span class="detail-value">{{
+                  jobDetails.clientName || "ללא שם"
+                }}</span>
               </div>
             </div>
 
@@ -336,7 +338,9 @@
               </div>
               <div class="detail-content">
                 <span class="detail-label">מיקום</span>
-                <span class="detail-value">{{ jobDetails.locationText }}</span>
+                <span class="detail-value">{{
+                  jobDetails.locationText || "לא צוין"
+                }}</span>
                 <button
                   v-if="isHendiman && jobCoordinates"
                   class="btn-link"
@@ -357,7 +361,7 @@
                 <span class="detail-value">{{
                   jobDetails.when === "asap"
                     ? "כמה שיותר מהר"
-                    : jobDetails.whenLabel || jobDetails.when
+                    : jobDetails.whenLabel || jobDetails.when || "לא צוין"
                 }}</span>
               </div>
             </div>
