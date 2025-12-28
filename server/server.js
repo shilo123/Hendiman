@@ -32,6 +32,19 @@ const setupUploadRoutes = require("./routes/upload");
 const { sendPushNotification } = require("./services/pushNotificationService");
 const { deleteImageFromS3 } = require("./services/uploadService");
 const { trackAIUsage } = require("./services/aiCostTracking");
+const {
+  createPaymentIntent,
+  capturePaymentIntent,
+  getPaymentIntent,
+  getOrCreateConnectedAccount,
+  createOnboardingLink,
+  createEscrowPaymentIntent,
+  captureEscrow,
+  cancelEscrow,
+  refundPayment,
+  PLATFORM_FEE_PERCENT,
+} = require("./services/stripeService");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 //מרשמלו
 
@@ -2220,75 +2233,363 @@ function findAvailablePort(startPort) {
     }
   });
 
-  // Process payment (in production, integrate with payment gateway like Stripe, PayPal, etc.)
+  // DEPRECATED: Use /api/payments/create-intent instead
+  // This endpoint is kept for backward compatibility but should not be used for new payments
+  // The new flow uses Stripe Connect with Escrow:
+  // 1. Call /api/payments/create-intent to get clientSecret
+  // 2. Client confirms payment with Stripe (no card details sent to server)
+  // 3. After confirmation, payment is in requires_capture state (Escrow)
+  // 4. Call /api/payments/capture when job is completed
   app.post("/payments/process", async (req, res) => {
     try {
-      const {
-        userId,
-        jobId,
-        amount,
-        cardLast4,
-        cardHolder,
-        expiryMonth,
-        expiryYear,
-        billingAddress,
-        city,
-        zipCode,
-      } = req.body;
+      const { userId, jobId } = req.body;
 
-      if (!userId || !amount) {
+      if (!userId || !jobId) {
         return res.status(400).json({
           success: false,
-          message: "userId and amount are required",
+          message:
+            "userId and jobId are required. Please use /api/payments/create-intent for new payments.",
         });
       }
 
-      // In a real application, you would:
-      // 1. Send card details to a payment gateway (Stripe, PayPal, etc.)
-      // 2. Never store full card numbers on your server
-      // 3. Use tokenization to securely handle payments
-      // 4. Handle 3D Secure authentication if required
-
-      // For now, simulate payment processing
-      // TODO: Integrate with actual payment gateway
-      const paymentId = new ObjectId();
-      const paymentRecord = {
-        _id: paymentId,
-        userId: new ObjectId(userId),
-        jobId: jobId ? new ObjectId(jobId) : null,
-        amount: parseFloat(amount),
-        status: "paid", // In real app, this would come from payment gateway
-        cardLast4: cardLast4,
-        cardHolder: cardHolder,
-        expiryMonth: expiryMonth,
-        expiryYear: expiryYear,
-        billingAddress: billingAddress || null,
-        city: city || null,
-        zipCode: zipCode || null,
-        transactionId: `TXN-${Date.now()}-${Math.random()
-          .toString(36)
-          .substr(2, 9)}`,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      // Save payment record (in real app, only after successful payment gateway confirmation)
-      const paymentsCol = getCollectionPayments();
-      await paymentsCol.insertOne(paymentRecord);
-
-      // Simulate payment processing delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      return res.json({
-        success: true,
-        message: "התשלום בוצע בהצלחה",
-        paymentId: paymentId.toString(),
-        transactionId: paymentRecord.transactionId,
+      // Redirect to new payment flow
+      return res.status(400).json({
+        success: false,
+        message:
+          "This endpoint is deprecated. Please use /api/payments/create-intent for Stripe Connect payments.",
+        deprecated: true,
+        newEndpoint: "/api/payments/create-intent",
       });
     } catch (error) {
       return res.status(500).json({
         success: false,
         message: "שגיאה בעיבוד התשלום",
+      });
+    }
+  });
+
+  // Stripe Connect: Create onboarding link for handyman
+  app.post("/api/handyman/stripe/onboarding-link", async (req, res) => {
+    try {
+      const { handymanId } = req.body;
+      if (!handymanId) {
+        return res.status(400).json({
+          success: false,
+          message: "handymanId required",
+        });
+      }
+
+      const usersCol = getCollection();
+      const handyman = await usersCol.findOne({
+        _id: new ObjectId(handymanId),
+      });
+
+      if (!handyman) {
+        return res.status(404).json({
+          success: false,
+          message: "Handyman not found",
+        });
+      }
+
+      // Get or create Stripe Connect account
+      const accountId = await getOrCreateConnectedAccount(handyman, usersCol);
+
+      // Create onboarding link
+      const returnUrl = `${URL_CLIENT}/stripe/success`;
+      const refreshUrl = `${URL_CLIENT}/stripe/refresh`;
+      const onboardingUrl = await createOnboardingLink(
+        accountId,
+        returnUrl,
+        refreshUrl
+      );
+
+      return res.json({
+        success: true,
+        url: onboardingUrl,
+      });
+    } catch (error) {
+      console.error("Error creating onboarding link:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה ביצירת קישור הרשמה",
+        error: error.message,
+      });
+    }
+  });
+
+  // Stripe Connect: Create Escrow Payment Intent
+  app.post("/api/payments/create-intent", async (req, res) => {
+    try {
+      const { jobId } = req.body;
+      if (!jobId) {
+        return res.status(400).json({
+          success: false,
+          message: "jobId required",
+        });
+      }
+
+      const jobsCol = getCollectionJobs();
+      const usersCol = getCollection();
+      const paymentsCol = getCollectionPayments();
+
+      // Get job details
+      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
+
+      // Get handyman (support both single handyman and array)
+      const handymanId =
+        Array.isArray(job.handymanId) && job.handymanId.length > 0
+          ? job.handymanId[0]
+          : job.handymanId;
+
+      if (!handymanId) {
+        return res.status(400).json({
+          success: false,
+          message: "Job has no assigned handyman",
+        });
+      }
+
+      const handyman = await usersCol.findOne({
+        _id: new ObjectId(handymanId),
+      });
+
+      if (!handyman) {
+        return res.status(404).json({
+          success: false,
+          message: "Handyman not found",
+        });
+      }
+
+      // Get or create Stripe Connect account for handyman
+      const handymanAccountId = await getOrCreateConnectedAccount(
+        handyman,
+        usersCol
+      );
+
+      // Check if handyman has completed onboarding (charges_enabled and payouts_enabled)
+      try {
+        const account = await stripe.accounts.retrieve(handymanAccountId);
+        if (!account.charges_enabled || !account.payouts_enabled) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Handyman must complete Stripe onboarding before accepting payments",
+            needsOnboarding: true,
+            onboardingUrl: null, // Client should call onboarding-link endpoint
+          });
+        }
+      } catch (stripeError) {
+        console.error("Error checking Stripe account status:", stripeError);
+        // Continue anyway - we'll let Stripe handle the error
+      }
+
+      // Calculate amounts
+      const amountAgorot = Math.round((job.price || 0) * 100);
+      const platformFeeAgorot = Math.round(
+        (amountAgorot * PLATFORM_FEE_PERCENT) / 100
+      );
+
+      if (amountAgorot <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid job price",
+        });
+      }
+
+      // Create Escrow Payment Intent
+      const { clientSecret, paymentIntentId, status } =
+        await createEscrowPaymentIntent({
+          amountAgorot,
+          currency: "ils",
+          handymanAccountId,
+          platformFeeAgorot,
+          metadata: {
+            jobId: jobId,
+            clientId: job.clientId?.toString() || "",
+            handymanId: handymanId.toString(),
+          },
+        });
+
+      // Save payment record
+      const paymentRecord = {
+        _id: new ObjectId(),
+        jobId: new ObjectId(jobId),
+        clientId: new ObjectId(job.clientId),
+        handymanId: new ObjectId(handymanId),
+        paymentIntentId: paymentIntentId,
+        amount: amountAgorot / 100, // Convert to ILS
+        platformFee: platformFeeAgorot / 100,
+        currency: "ils",
+        status: status, // Usually "requires_payment_method" or "requires_confirmation"
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await paymentsCol.insertOne(paymentRecord);
+
+      // Update job with payment intent ID
+      await jobsCol.updateOne(
+        { _id: new ObjectId(jobId) },
+        {
+          $set: {
+            paymentIntentId: paymentIntentId,
+            paymentStatus: "pending",
+          },
+        }
+      );
+
+      return res.json({
+        success: true,
+        clientSecret: clientSecret,
+        paymentIntentId: paymentIntentId,
+      });
+    } catch (error) {
+      console.error("Error creating payment intent:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה ביצירת כוונת תשלום",
+        error: error.message,
+      });
+    }
+  });
+
+  // Stripe Connect: Capture Escrow payment
+  app.post("/api/payments/capture", async (req, res) => {
+    try {
+      const { jobId, paymentIntentId } = req.body;
+      if (!jobId || !paymentIntentId) {
+        return res.status(400).json({
+          success: false,
+          message: "jobId and paymentIntentId required",
+        });
+      }
+
+      const jobsCol = getCollectionJobs();
+      const paymentsCol = getCollectionPayments();
+
+      // Get job and verify ownership/status
+      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
+
+      // Verify job status allows capture (completed or client approved)
+      if (
+        job.status !== "completed" &&
+        job.status !== "clientApproved" &&
+        job.status !== "done"
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Job must be completed before capturing payment",
+        });
+      }
+
+      // Capture the payment
+      const capturedPayment = await captureEscrow(paymentIntentId);
+
+      // Update payment record
+      await paymentsCol.updateOne(
+        { paymentIntentId: paymentIntentId },
+        {
+          $set: {
+            status: "captured",
+            updatedAt: new Date(),
+          },
+        }
+      );
+
+      // Update job payment status
+      await jobsCol.updateOne(
+        { _id: new ObjectId(jobId) },
+        {
+          $set: {
+            paymentStatus: "paid",
+          },
+        }
+      );
+
+      return res.json({
+        success: true,
+        status: capturedPayment.status,
+        message: "התשלום שוחרר בהצלחה",
+      });
+    } catch (error) {
+      console.error("Error capturing payment:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה בשחרור התשלום",
+        error: error.message,
+      });
+    }
+  });
+
+  // Stripe Connect: Cancel Escrow payment
+  app.post("/api/payments/cancel", async (req, res) => {
+    try {
+      const { jobId, paymentIntentId } = req.body;
+      if (!jobId || !paymentIntentId) {
+        return res.status(400).json({
+          success: false,
+          message: "jobId and paymentIntentId required",
+        });
+      }
+
+      const jobsCol = getCollectionJobs();
+      const paymentsCol = getCollectionPayments();
+
+      // Get job
+      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
+
+      // Cancel the payment intent
+      const cancelledPayment = await cancelEscrow(paymentIntentId);
+
+      // Update payment record
+      await paymentsCol.updateOne(
+        { paymentIntentId: paymentIntentId },
+        {
+          $set: {
+            status: "cancelled",
+            updatedAt: new Date(),
+          },
+        }
+      );
+
+      // Update job payment status
+      await jobsCol.updateOne(
+        { _id: new ObjectId(jobId) },
+        {
+          $set: {
+            paymentStatus: "cancelled",
+          },
+        }
+      );
+
+      return res.json({
+        success: true,
+        status: cancelledPayment.status,
+        message: "התשלום בוטל בהצלחה",
+      });
+    } catch (error) {
+      console.error("Error cancelling payment:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה בביטול התשלום",
+        error: error.message,
       });
     }
   });
@@ -2476,7 +2777,36 @@ function findAvailablePort(startPort) {
       const handyman = await usersCol.findOne({
         _id: new ObjectId(handymanId),
       });
+
+      if (!handyman) {
+        return res.status(404).json({
+          success: false,
+          message: "Handyman not found",
+        });
+      }
+
       const handymanName = handyman?.username || null;
+
+      // Create Stripe Connect account if it doesn't exist
+      // This happens when handyman accepts their first job
+      if (!handyman.stripeAccountId) {
+        try {
+          await getOrCreateConnectedAccount(handyman, usersCol);
+          // Reload handyman to get updated stripeAccountId
+          const updatedHandyman = await usersCol.findOne({
+            _id: new ObjectId(handymanId),
+          });
+          if (updatedHandyman) {
+            Object.assign(handyman, updatedHandyman);
+          }
+        } catch (stripeError) {
+          console.error(
+            "Error creating Stripe account for handyman:",
+            stripeError
+          );
+          // Don't fail the job acceptance - Stripe account can be created later
+        }
+      }
 
       // Get current job to check if handymanId/handymanName are already arrays
       const currentJob = await jobsCol.findOne({ _id: new ObjectId(jobId) });
@@ -2743,6 +3073,231 @@ function findAvailablePort(startPort) {
       });
     }
   });
+  // Delete job endpoint (client only)
+  app.delete("/jobs/:jobId", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const { userId } = req.body;
+
+      if (!jobId || !userId) {
+        return res.status(400).json({
+          success: false,
+          message: "Job ID and User ID are required",
+        });
+      }
+
+      const jobsCol = getCollectionJobs();
+      const chatsCol = getCollectionChats();
+      const usersCol = getCollection();
+      const io = req.app.get("io");
+
+      // Find the job
+      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
+
+      // Verify that the user is the client who created the job
+      const userIdStr = String(userId);
+      const jobClientIdStr = String(job.clientId);
+      if (jobClientIdStr !== userIdStr) {
+        return res.status(403).json({
+          success: false,
+          message: "You are not authorized to delete this job",
+        });
+      }
+
+      // If job has a handyman assigned, notify them
+      if (job.handymanId) {
+        const handymanIds = Array.isArray(job.handymanId)
+          ? job.handymanId
+          : [job.handymanId];
+
+        for (const handymanId of handymanIds) {
+          try {
+            const handymanIdStr = String(handymanId);
+            const handyman = await usersCol.findOne({
+              _id: new ObjectId(handymanIdStr),
+            });
+
+            if (handyman?.fcmToken) {
+              await sendPushNotification(
+                handyman.fcmToken,
+                "עבודה בוטלה",
+                "מצטערים, אך המשתמש ביטל את העבודה הזו"
+              );
+            }
+
+            // Emit WebSocket event to notify handyman
+            if (io) {
+              io.to(`user-${handymanIdStr}`).emit("job-cancelled", {
+                jobId: jobId,
+                message: "מצטערים, אך המשתמש ביטל את העבודה הזו",
+              });
+            }
+          } catch (error) {
+            // Continue even if notification fails
+            console.error("Error notifying handyman:", error.message);
+          }
+        }
+      }
+
+      // Delete associated chat
+      try {
+        await chatsCol.deleteMany({ jobId: new ObjectId(jobId) });
+      } catch (error) {
+        // Continue even if chat deletion fails
+        console.error("Error deleting chat:", error.message);
+      }
+
+      // Delete the job
+      const deleteResult = await jobsCol.deleteOne({
+        _id: new ObjectId(jobId),
+      });
+
+      if (deleteResult.deletedCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
+
+      // Emit WebSocket event to notify all connected clients
+      if (io) {
+        io.to(`job-${jobId}`).emit("job-deleted", {
+          jobId: jobId,
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Job deleted successfully",
+      });
+    } catch (error) {
+      console.error("Error deleting job:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error deleting job",
+        error: error.message,
+      });
+    }
+  });
+
+  // Update job endpoint (client only)
+  app.put("/jobs/:jobId", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const {
+        userId,
+        subcategoryInfo,
+        desc,
+        locationText,
+        houseNumber,
+        locationEnglishName,
+        coordinates,
+        when,
+        workType,
+        urgent,
+        imageUrl,
+      } = req.body;
+
+      if (!jobId || !userId) {
+        return res.status(400).json({
+          success: false,
+          message: "Job ID and User ID are required",
+        });
+      }
+
+      const jobsCol = getCollectionJobs();
+
+      // Find the job
+      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
+
+      // Verify that the user is the client who created the job
+      const userIdStr = String(userId);
+      const jobClientIdStr = String(job.clientId);
+      if (jobClientIdStr !== userIdStr) {
+        return res.status(403).json({
+          success: false,
+          message: "You are not authorized to update this job",
+        });
+      }
+
+      // Only allow editing if job is still "open" (not assigned)
+      if (job.status !== "open") {
+        return res.status(400).json({
+          success: false,
+          message: "Cannot edit job that has been assigned to a handyman",
+        });
+      }
+
+      // Build update object with only provided fields
+      const updateObj = {
+        updatedAt: new Date(),
+      };
+
+      if (subcategoryInfo !== undefined) {
+        updateObj.subcategoryInfo = Array.isArray(subcategoryInfo)
+          ? subcategoryInfo
+          : subcategoryInfo
+          ? [subcategoryInfo]
+          : [];
+      }
+      if (desc !== undefined) updateObj.desc = desc;
+      if (locationText !== undefined) updateObj.locationText = locationText;
+      if (houseNumber !== undefined) updateObj.houseNumber = houseNumber;
+      if (locationEnglishName !== undefined)
+        updateObj.locationEnglishName = locationEnglishName;
+      if (coordinates !== undefined) updateObj.coordinates = coordinates;
+      if (when !== undefined) updateObj.when = when;
+      if (workType !== undefined) updateObj.workType = workType;
+      if (urgent !== undefined) updateObj.urgent = urgent;
+      if (imageUrl !== undefined) {
+        updateObj.imageUrl = Array.isArray(imageUrl)
+          ? imageUrl
+          : imageUrl
+          ? [imageUrl]
+          : [];
+      }
+
+      // Update the job
+      await jobsCol.updateOne(
+        { _id: new ObjectId(jobId) },
+        { $set: updateObj }
+      );
+
+      // Emit WebSocket event to notify all connected clients
+      const io = req.app.get("io");
+      if (io) {
+        io.to(`job-${jobId}`).emit("job-updated", {
+          jobId: jobId,
+          updates: updateObj,
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Job updated successfully",
+      });
+    } catch (error) {
+      console.error("Error updating job:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error updating job",
+        error: error.message,
+      });
+    }
+  });
+
   app.post("/jobs/on-the-way", async (req, res) => {
     try {
       const { jobId, handymanId } = req.body;
@@ -3003,6 +3558,262 @@ function findAvailablePort(startPort) {
           }
         } catch (pushError) {
           // Don't fail the request if push notification fails
+        }
+      }
+
+      // Process payment release (Escrow capture) - supports both old and new payment flows
+      if (job.paymentIntentId) {
+        try {
+          const paymentsCol = getCollectionPayments();
+
+          // Check if payment was already captured/transferred
+          const existingPayment = await paymentsCol.findOne({
+            paymentIntentId: job.paymentIntentId,
+          });
+
+          // Skip if already captured/transferred
+          if (
+            existingPayment &&
+            (existingPayment.status === "captured" ||
+              existingPayment.status === "transferred" ||
+              existingPayment.status === "succeeded")
+          ) {
+            console.log(
+              `[Payment] Payment already processed for jobId: ${jobId}, paymentIntentId: ${job.paymentIntentId}`
+            );
+            // Payment already processed, continue to return success at the end
+          } else {
+            // Get Payment Intent from Stripe
+            let paymentIntent;
+            try {
+              paymentIntent = await getPaymentIntent(job.paymentIntentId);
+              console.log(
+                `[Stripe] Retrieved Payment Intent ${job.paymentIntentId} in /jobs/done, status: ${paymentIntent.status}, jobId: ${jobId}`
+              );
+            } catch (stripeError) {
+              console.error(
+                `[Stripe Error] Failed to get Payment Intent ${job.paymentIntentId} in /jobs/done:`,
+                {
+                  error: stripeError.message,
+                  type: stripeError.type,
+                  code: stripeError.code,
+                  jobId: jobId,
+                }
+              );
+              // Don't throw - payment can be retried later, continue to end
+              paymentIntent = null; // Set to null so we skip processing
+            }
+
+            // Only process if we successfully got the payment intent
+            if (paymentIntent) {
+              // Check if this is a Stripe Connect payment (has transfer_data)
+              const isConnectPayment =
+                paymentIntent.transfer_data &&
+                paymentIntent.transfer_data.destination;
+
+              // Only process if payment is ready to be captured
+              if (paymentIntent.status === "requires_capture") {
+                console.log(
+                  `[Payment Capture] Processing ${
+                    isConnectPayment ? "Stripe Connect" : "legacy"
+                  } payment for jobId: ${jobId}, paymentIntent status: ${
+                    paymentIntent.status
+                  }`
+                );
+
+                // Capture the payment (this will automatically split with Connect)
+                let capturedPayment;
+                try {
+                  capturedPayment = await captureEscrow(job.paymentIntentId);
+                  console.log(
+                    `[Stripe] Successfully captured Payment Intent ${job.paymentIntentId} in /jobs/done for jobId: ${jobId}`
+                  );
+                } catch (captureError) {
+                  console.error(
+                    `[Stripe Error] Failed to capture Payment Intent ${job.paymentIntentId} in /jobs/done:`,
+                    {
+                      error: captureError.message,
+                      type: captureError.type,
+                      code: captureError.code,
+                      jobId: jobId,
+                    }
+                  );
+                  // Don't throw - payment can be retried later, skip processing
+                  capturedPayment = null;
+                }
+
+                // Only continue if capture was successful
+                if (capturedPayment) {
+                  // Calculate amounts
+                  const totalAmount = capturedPayment.amount / 100; // Convert from agorot to ILS
+                  const urgentFee = job.urgent ? 10 : 0;
+
+                  // Get handyman ID
+                  const handymanIdForPayment =
+                    job.handymanId?.toString() || job.handymanId;
+                  const clientIdForPayment =
+                    job.clientId?.toString() || job.clientId;
+
+                  if (isConnectPayment) {
+                    // Stripe Connect payment - Stripe handles the split automatically
+                    // application_fee_amount goes to platform, rest goes to handyman
+                    const platformFee =
+                      (capturedPayment.application_fee_amount || 0) / 100;
+                    const handymanRevenue = totalAmount - platformFee;
+
+                    // Update existing payment record or create new one
+                    const paymentData = {
+                      jobId: new ObjectId(jobId),
+                      handymanId: handymanIdForPayment,
+                      clientId: clientIdForPayment,
+                      paymentIntentId: job.paymentIntentId,
+                      amount: totalAmount,
+                      platformFee: platformFee,
+                      handymanRevenue: handymanRevenue,
+                      currency: "ils",
+                      status: "captured",
+                      createdAt: existingPayment?.createdAt || new Date(),
+                      updatedAt: new Date(),
+                    };
+
+                    if (existingPayment) {
+                      await paymentsCol.updateOne(
+                        { paymentIntentId: job.paymentIntentId },
+                        { $set: paymentData }
+                      );
+                    } else {
+                      await paymentsCol.insertOne(paymentData);
+                    }
+
+                    // Update job payment status
+                    await jobsCol.updateOne(
+                      { _id: new ObjectId(jobId) },
+                      { $set: { paymentStatus: "paid" } }
+                    );
+
+                    // Update managers_financials
+                    const financialsCol = getCollectionFinancials();
+                    const clearingFeeRate = 0.029; // 2.9%
+                    const clearingFeeFixed = 0.3; // 0.3 ILS
+                    const clearingFee =
+                      Math.round(
+                        (totalAmount * clearingFeeRate + clearingFeeFixed) * 100
+                      ) / 100;
+
+                    const financialsDoc = {
+                      createdAt: new Date(),
+                      Revenue: {
+                        Fees: platformFee,
+                        "Urgent call": urgentFee,
+                      },
+                      expenses: {
+                        "clearing fee": clearingFee,
+                      },
+                    };
+                    await financialsCol.insertOne(financialsDoc);
+
+                    console.log(
+                      `[Payment Capture] Successfully processed Stripe Connect payment for jobId: ${jobId}`
+                    );
+                  } else {
+                    // Legacy payment flow (no Connect) - manual calculation and transfer
+                    const commissionRate = 0.1; // 10%
+                    const commission =
+                      Math.round(totalAmount * commissionRate * 100) / 100;
+                    const systemRevenue = commission + urgentFee;
+                    const handymanRevenue =
+                      totalAmount - commission - urgentFee;
+
+                    // Create payment record
+                    const paymentData = {
+                      jobId: new ObjectId(jobId),
+                      handymanId: handymanIdForPayment,
+                      clientId: clientIdForPayment,
+                      paymentIntentId: job.paymentIntentId,
+                      totalAmount: totalAmount,
+                      spacious_H: handymanRevenue,
+                      spacious_M: systemRevenue,
+                      status: "transferred",
+                      createdAt: new Date(),
+                      transferredAt: new Date(),
+                    };
+
+                    await paymentsCol.insertOne(paymentData);
+
+                    // Calculate clearing fee
+                    const clearingFeeRate = 0.029; // 2.9%
+                    const clearingFeeFixed = 0.3; // 0.3 ILS
+                    const clearingFee =
+                      Math.round(
+                        (totalAmount * clearingFeeRate + clearingFeeFixed) * 100
+                      ) / 100;
+
+                    // Update managers_financials
+                    const financialsCol = getCollectionFinancials();
+                    const financialsDoc = {
+                      createdAt: new Date(),
+                      Revenue: {
+                        Fees: commission,
+                        "Urgent call": urgentFee,
+                      },
+                      expenses: {
+                        "clearing fee": clearingFee,
+                      },
+                    };
+                    await financialsCol.insertOne(financialsDoc);
+
+                    console.log(
+                      `[Payment Capture] Successfully processed legacy payment for jobId: ${jobId}`
+                    );
+                  }
+                }
+              } else if (paymentIntent.status === "succeeded") {
+                // Payment already succeeded - just update records if needed
+                console.log(
+                  `[Payment] Payment already succeeded for jobId: ${jobId}, paymentIntentId: ${job.paymentIntentId}`
+                );
+                if (!existingPayment) {
+                  const totalAmount = paymentIntent.amount / 100;
+                  const isConnectPayment =
+                    paymentIntent.transfer_data &&
+                    paymentIntent.transfer_data.destination;
+
+                  if (isConnectPayment) {
+                    const platformFee =
+                      (paymentIntent.application_fee_amount || 0) / 100;
+                    const handymanRevenue = totalAmount - platformFee;
+
+                    await paymentsCol.insertOne({
+                      jobId: new ObjectId(jobId),
+                      handymanId: handymanIdForPayment,
+                      clientId: clientIdForPayment,
+                      paymentIntentId: job.paymentIntentId,
+                      amount: totalAmount,
+                      platformFee: platformFee,
+                      handymanRevenue: handymanRevenue,
+                      currency: "ils",
+                      status: "captured",
+                      createdAt: new Date(),
+                      updatedAt: new Date(),
+                    });
+                  }
+                }
+              }
+            }
+          }
+        } catch (paymentError) {
+          // Log error but don't fail the request - payment can be retried later
+          console.error(
+            `[Payment Error] Failed to process payment in /jobs/done for jobId: ${jobId}:`,
+            {
+              error: paymentError.message,
+              stack: paymentError.stack,
+              type: paymentError.type,
+              code: paymentError.code,
+              jobId: jobId,
+              paymentIntentId: job.paymentIntentId,
+            }
+          );
         }
       }
 
@@ -3496,6 +4307,38 @@ function findAvailablePort(startPort) {
         console.error("Error updating jobDone:", jobDoneError.message);
       }
 
+      // Transfer payment to handyman after rating is submitted
+      try {
+        // Check if job has paymentIntentId
+        if (job.paymentIntentId) {
+          // Call payment transfer endpoint internally
+          const transferResponse = await axios
+            .post(
+              `${req.protocol}://${req.get("host")}/payment/transfer`,
+              { jobId: jobId },
+              {
+                headers: {
+                  "Content-Type": "application/json",
+                },
+              }
+            )
+            .catch((err) => {
+              console.error("Error calling payment transfer:", err.message);
+              return { data: { success: false } };
+            });
+
+          if (!transferResponse.data.success) {
+            console.error(
+              "Error transferring payment:",
+              transferResponse.data.message
+            );
+          }
+        }
+      } catch (paymentError) {
+        // Don't fail the rating request if payment transfer fails
+        console.error("Error transferring payment after rating:", paymentError);
+      }
+
       // Calculate average rating for handyman from all ratings
       try {
         const handymanObjectId = new ObjectId(finalHandymanId);
@@ -3624,6 +4467,7 @@ function findAvailablePort(startPort) {
     try {
       const { handymanId } = req.params;
       const ratingsCol = getCollectionRatings();
+      const paymentsCol = getCollectionPayments();
       const jobsCol = getCollectionJobs();
       const usersCol = getCollection();
 
@@ -3649,30 +4493,46 @@ function findAvailablePort(startPort) {
         .sort({ createdAt: -1 })
         .toArray();
 
-      // Get jobs for these ratings to calculate earnings
-      const jobIds = ratings.map((r) => r.jobId);
-      const jobs = await jobsCol.find({ _id: { $in: jobIds } }).toArray();
+      // Get payments for this handyman to calculate earnings
+      const payments = await paymentsCol
+        .find({
+          handymanId: handymanId,
+          status: "transferred",
+        })
+        .toArray();
 
-      // Calculate earnings
+      // Create a map of jobId -> payment for quick lookup
+      const paymentMap = new Map();
+      payments.forEach((payment) => {
+        const jobIdStr = payment.jobId?.toString();
+        if (jobIdStr) {
+          paymentMap.set(jobIdStr, payment);
+        }
+      });
+
+      // Calculate earnings from payments
       let totalEarnings = 0;
       let monthlyEarnings = 0;
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
+      payments.forEach((payment) => {
+        const earned = payment.spacious_H || 0;
+        totalEarnings += earned;
+        if (
+          payment.transferredAt &&
+          new Date(payment.transferredAt) >= startOfMonth
+        ) {
+          monthlyEarnings += earned;
+        }
+      });
+
+      // Get jobs for ratings details
+      const jobIds = ratings.map((r) => r.jobId);
+      const jobs = await jobsCol.find({ _id: { $in: jobIds } }).toArray();
+
       const ratingsWithDetails = await Promise.all(
         ratings.map(async (rating) => {
-          const job = jobs.find(
-            (j) => j._id.toString() === rating.jobId.toString()
-          );
-          const price = job?.price || 0;
-          const commission = Math.round(price * 0.1);
-          const earned = price - commission;
-
-          totalEarnings += earned;
-          if (rating.createdAt >= startOfMonth) {
-            monthlyEarnings += earned;
-          }
-
           // Get customer name
           let customerName = null;
           if (rating.customerId) {
@@ -3687,6 +4547,9 @@ function findAvailablePort(startPort) {
           }
 
           // Get job name
+          const job = jobs.find(
+            (j) => j._id.toString() === rating.jobId.toString()
+          );
           let jobName = null;
           if (job) {
             // Handle subcategoryInfo as array
@@ -3728,6 +4591,13 @@ function findAvailablePort(startPort) {
         jobDone: jobDone,
       });
     } catch (error) {
+      console.error(
+        `[Error] Failed to fetch handyman ratings for handymanId: ${req.params.handymanId}:`,
+        {
+          error: error.message,
+          stack: error.stack,
+        }
+      );
       return res.status(500).json({
         success: false,
         message: "Error fetching handyman ratings",
@@ -3742,40 +4612,34 @@ function findAvailablePort(startPort) {
       const { handymanId } = req.params;
       const { period = "daily" } = req.query; // daily, weekly, monthly
 
-      const ratingsCol = getCollectionRatings();
-      const jobsCol = getCollectionJobs();
+      const paymentsCol = getCollectionPayments();
 
-      // Get all ratings for this handyman
-      const ratings = await ratingsCol
-        .find({ handymanId: handymanId })
-        .sort({ createdAt: -1 })
+      // Get all payments for this handyman
+      const payments = await paymentsCol
+        .find({
+          handymanId: handymanId,
+          status: "transferred",
+        })
+        .sort({ transferredAt: -1 })
         .toArray();
 
-      if (ratings.length === 0) {
+      if (payments.length === 0) {
         return res.json({
           success: true,
           chartData: [],
         });
       }
 
-      // Get jobs for these ratings
-      const jobIds = ratings.map((r) => r.jobId);
-      const jobs = await jobsCol.find({ _id: { $in: jobIds } }).toArray();
-
       // Group by date and calculate earnings
       const earningsMap = new Map();
 
-      ratings.forEach((rating) => {
-        const job = jobs.find(
-          (j) => j._id.toString() === rating.jobId.toString()
-        );
-        if (!job) return;
+      payments.forEach((payment) => {
+        const earned = payment.spacious_H || 0;
+        if (earned === 0) return;
 
-        const price = job?.price || 0;
-        const commission = Math.round(price * 0.1);
-        const earned = price - commission;
+        const date = new Date(payment.transferredAt || payment.createdAt);
+        if (isNaN(date.getTime())) return; // Skip invalid dates
 
-        const date = new Date(rating.createdAt);
         let dateKey;
 
         switch (period) {
@@ -4988,8 +5852,99 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
     }
   });
 
+  // Reverse geocoding endpoint - convert coordinates to address
+  app.get("/reverse-geocode", async (req, res) => {
+    try {
+      const { lat, lng } = req.query;
+
+      if (!lat || !lng) {
+        return res.status(400).json({
+          success: false,
+          message: "נדרש לספק lat ו-lng",
+        });
+      }
+
+      const parsedLat = parseFloat(lat);
+      const parsedLng = parseFloat(lng);
+
+      if (isNaN(parsedLat) || isNaN(parsedLng)) {
+        return res.status(400).json({
+          success: false,
+          message: "קואורדינטות לא תקינות",
+        });
+      }
+
+      // Use Mapbox Geocoding API for reverse geocoding
+      if (process.env.MAPBOX_TOKEN) {
+        try {
+          const mapboxUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${parsedLng},${parsedLat}.json?country=il&language=he&access_token=${process.env.MAPBOX_TOKEN}`;
+          const response = await axios.get(mapboxUrl, { timeout: 10000 });
+
+          if (
+            response.data &&
+            response.data.features &&
+            response.data.features.length > 0
+          ) {
+            const feature = response.data.features[0];
+            const address = feature.properties || {};
+            const context = feature.context || [];
+
+            // Extract city name from context
+            let cityName = null;
+            for (const item of context) {
+              if (item.id && item.id.startsWith("place.")) {
+                cityName = item.text;
+                break;
+              }
+            }
+
+            // If no city found, try locality or neighborhood
+            if (!cityName) {
+              for (const item of context) {
+                if (
+                  item.id &&
+                  (item.id.startsWith("locality.") ||
+                    item.id.startsWith("neighborhood."))
+                ) {
+                  cityName = item.text;
+                  break;
+                }
+              }
+            }
+
+            return res.json({
+              success: true,
+              address: address.name || feature.place_name || "מיקום שנבחר במפה",
+              city: cityName || address.name || null,
+              fullAddress: feature.place_name || null,
+            });
+          }
+        } catch (mapboxError) {
+          console.error("Mapbox reverse geocoding error:", mapboxError.message);
+          // Fall through to fallback
+        }
+      }
+
+      // Fallback: return coordinates if geocoding fails
+      return res.json({
+        success: true,
+        address: "מיקום שנבחר במפה",
+        city: null,
+        fullAddress: null,
+      });
+    } catch (error) {
+      console.error("Reverse geocoding error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה בקבלת כתובת",
+        error: error.message,
+      });
+    }
+  });
+
   app.post("/create-call-v2", async (req, res) => {
     try {
+      const collection = getCollection();
       // Get subcategoryInfo array from body (already processed by AI in step 1)
       const { subcategoryInfo, handymanIdSpecial } = req.body;
 
@@ -5251,6 +6206,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           when: when || "asap",
           urgent: urgent || false,
           status: "open",
+          paymentIntentId: req.body.paymentIntentId || null, // Stripe Payment Intent ID
           createdAt: new Date(),
           updatedAt: new Date(),
           location: {
@@ -5266,6 +6222,26 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         const jobsCollection = getCollectionJobs();
         const result = await jobsCollection.insertOne(jobData);
         const savedJobId = result.insertedId;
+
+        // Update Payment Intent metadata with actual jobId if paymentIntentId exists
+        if (jobData.paymentIntentId) {
+          try {
+            const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+            await stripe.paymentIntents.update(jobData.paymentIntentId, {
+              metadata: {
+                jobId: savedJobId.toString(),
+                clientId: userId || "",
+                urgent: urgent ? "true" : "false",
+              },
+            });
+          } catch (updateError) {
+            console.error(
+              "Error updating Payment Intent metadata:",
+              updateError
+            );
+            // Don't fail the request if metadata update fails
+          }
+        }
 
         // Send push notifications to matching handymen (in background, don't wait)
         // If handymanIdSpecial is provided, send only to that handyman
@@ -6045,6 +7021,370 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       }
     }
   );
+
+  // Payment endpoint - Create Payment Intent
+  app.post("/payment/create-intent", async (req, res) => {
+    try {
+      const { jobId, clientId, amount, urgent } = req.body;
+
+      if (!jobId || !clientId || !amount) {
+        return res.status(400).json({
+          success: false,
+          message: "jobId, clientId, and amount are required",
+        });
+      }
+
+      // Convert amount from ILS to agorot (smallest unit)
+      const amountInAgorot = Math.round(amount * 100);
+
+      let paymentIntent;
+      try {
+        paymentIntent = await createPaymentIntent(
+          amountInAgorot,
+          jobId,
+          clientId,
+          {
+            urgent: urgent ? "true" : "false",
+          }
+        );
+        console.log(
+          `[Stripe] Successfully created Payment Intent ${paymentIntent.id} for jobId: ${jobId}, amount: ${amount} ILS (${amountInAgorot} agorot)`
+        );
+      } catch (stripeError) {
+        console.error(
+          `[Stripe Error] Failed to create Payment Intent for jobId: ${jobId}:`,
+          {
+            error: stripeError.message,
+            type: stripeError.type,
+            code: stripeError.code,
+            amount: amount,
+            amountInAgorot: amountInAgorot,
+            jobId: jobId,
+            clientId: clientId,
+          }
+        );
+        throw stripeError;
+      }
+
+      return res.json({
+        success: true,
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+      });
+    } catch (error) {
+      console.error("Error creating Payment Intent:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error creating Payment Intent",
+        error: error.message,
+      });
+    }
+  });
+
+  // Payment endpoint - Transfer payment to handyman after job completion
+  app.post("/payment/transfer", async (req, res) => {
+    try {
+      const { jobId } = req.body;
+
+      if (!jobId) {
+        return res.status(400).json({
+          success: false,
+          message: "jobId is required",
+        });
+      }
+
+      const jobsCol = getCollectionJobs();
+      const paymentsCol = getCollectionPayments();
+      const usersCol = getCollection();
+
+      // Get job details
+      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
+
+      if (!job.paymentIntentId) {
+        return res.status(400).json({
+          success: false,
+          message: "Job has no Payment Intent",
+        });
+      }
+
+      // Check if payment was already transferred
+      const existingPayment = await paymentsCol.findOne({
+        jobId: new ObjectId(jobId),
+      });
+      if (existingPayment && existingPayment.status === "transferred") {
+        return res.status(400).json({
+          success: false,
+          message: "Payment already transferred",
+        });
+      }
+
+      // Get Payment Intent from Stripe
+      let paymentIntent;
+      try {
+        paymentIntent = await getPaymentIntent(job.paymentIntentId);
+        console.log(
+          `[Stripe] Retrieved Payment Intent ${job.paymentIntentId}, status: ${paymentIntent.status}`
+        );
+      } catch (stripeError) {
+        console.error(
+          `[Stripe Error] Failed to get Payment Intent ${job.paymentIntentId}:`,
+          {
+            error: stripeError.message,
+            type: stripeError.type,
+            code: stripeError.code,
+            jobId: jobId,
+          }
+        );
+        throw stripeError;
+      }
+
+      // Payment Intent can be in different states:
+      // - "requires_capture": Payment authorized, ready to capture (expected state after user confirms payment)
+      // - "succeeded": Payment already captured (shouldn't happen, but handle it)
+      // - "requires_payment_method": Payment not yet authorized (shouldn't happen at this point)
+      // - "requires_confirmation": Payment needs confirmation (shouldn't happen at this point)
+      if (
+        paymentIntent.status !== "requires_capture" &&
+        paymentIntent.status !== "succeeded"
+      ) {
+        console.error(
+          `[Stripe Error] Invalid Payment Intent status: ${paymentIntent.status} for Payment Intent ${job.paymentIntentId}, jobId: ${jobId}`
+        );
+        return res.status(400).json({
+          success: false,
+          message: `Payment Intent status is ${paymentIntent.status}, expected requires_capture or succeeded`,
+        });
+      }
+
+      // Capture the payment (only if status is requires_capture)
+      let capturedPayment = paymentIntent;
+      if (paymentIntent.status === "requires_capture") {
+        try {
+          capturedPayment = await capturePaymentIntent(job.paymentIntentId);
+          console.log(
+            `[Stripe] Successfully captured Payment Intent ${job.paymentIntentId} for jobId: ${jobId}`
+          );
+        } catch (captureError) {
+          console.error(
+            `[Stripe Error] Failed to capture Payment Intent ${job.paymentIntentId}:`,
+            {
+              error: captureError.message,
+              type: captureError.type,
+              code: captureError.code,
+              jobId: jobId,
+            }
+          );
+          throw captureError;
+        }
+      }
+
+      // Calculate amounts
+      const totalAmount = capturedPayment.amount / 100; // Convert from agorot to ILS (basePrice + urgentFee if any)
+      const urgentFee = job.urgent ? 10 : 0;
+      const commissionRate = 0.1; // 10%
+      const commission = Math.round(totalAmount * commissionRate * 100) / 100; // Commission calculated on total amount (including urgent fee)
+      const systemRevenue = commission + urgentFee; // System gets commission + urgent fee
+      const handymanRevenue = totalAmount - commission - urgentFee; // Handyman gets total amount minus commission minus urgent fee
+
+      // Get handyman ID
+      const handymanId = job.handymanId?.toString() || job.handymanId;
+      const clientId = job.clientId?.toString() || job.clientId;
+
+      // Create payment record
+      const paymentData = {
+        jobId: new ObjectId(jobId),
+        handymanId: handymanId,
+        clientId: clientId,
+        paymentIntentId: job.paymentIntentId,
+        totalAmount: totalAmount,
+        spacious_H: handymanRevenue,
+        spacious_M: systemRevenue,
+        status: "transferred",
+        createdAt: new Date(),
+        transferredAt: new Date(),
+      };
+
+      const insertResult = await paymentsCol.insertOne(paymentData);
+      console.log(
+        `[Payment Transfer] Successfully inserted payment record to 'payment' collection via /payment/transfer for jobId: ${jobId}, insertedId: ${insertResult.insertedId}`
+      );
+
+      // Calculate clearing fee (2.9% + 0.3 ILS)
+      const clearingFeeRate = 0.029; // 2.9%
+      const clearingFeeFixed = 0.3; // 0.3 ILS
+      const clearingFee =
+        Math.round((totalAmount * clearingFeeRate + clearingFeeFixed) * 100) /
+        100;
+
+      // Update managers_financials with revenue tracking and expenses
+      const financialsCol = getCollectionFinancials();
+      const financialsDoc = {
+        createdAt: new Date(),
+        Revenue: {
+          Fees: commission,
+          "Urgent call": urgentFee,
+        },
+        expenses: {
+          "clearing fee": clearingFee,
+        },
+      };
+      await financialsCol.insertOne(financialsDoc);
+
+      return res.json({
+        success: true,
+        message: "Payment transferred successfully",
+        payment: paymentData,
+      });
+    } catch (error) {
+      console.error(
+        `[Payment Transfer Error] Failed to transfer payment for jobId: ${req.body.jobId}:`,
+        {
+          error: error.message,
+          stack: error.stack,
+          type: error.type,
+          code: error.code,
+          jobId: req.body.jobId,
+        }
+      );
+      return res.status(500).json({
+        success: false,
+        message: "Error transferring payment",
+        error: error.message,
+      });
+    }
+  });
+
+  // Get payment info for a specific job
+  app.get("/payment/:jobId", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const paymentsCol = getCollectionPayments();
+
+      const payment = await paymentsCol.findOne({
+        jobId: new ObjectId(jobId),
+      });
+
+      if (!payment) {
+        return res.json({
+          success: true,
+          payment: null,
+        });
+      }
+
+      return res.json({
+        success: true,
+        payment: payment,
+      });
+    } catch (error) {
+      console.error(
+        `[Error] Failed to fetch payment for jobId: ${req.params.jobId}:`,
+        {
+          error: error.message,
+          stack: error.stack,
+        }
+      );
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching payment",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Get all payments
+  app.get("/admin/payments", async (req, res) => {
+    try {
+      const paymentsCol = getCollectionPayments();
+      const jobsCol = getCollectionJobs();
+      const usersCol = getCollection();
+
+      const payments = await paymentsCol
+        .find({})
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      // Enrich payments with job and user details
+      const enrichedPayments = await Promise.all(
+        payments.map(async (payment) => {
+          let job = null;
+          let handyman = null;
+          let client = null;
+
+          try {
+            if (payment.jobId) {
+              job = await jobsCol.findOne({
+                _id: new ObjectId(payment.jobId),
+              });
+            }
+          } catch (err) {
+            // Job not found or invalid ID
+          }
+
+          try {
+            if (payment.handymanId) {
+              handyman = await usersCol.findOne({
+                _id: new ObjectId(payment.handymanId),
+              });
+            }
+          } catch (err) {
+            // Handyman not found or invalid ID
+          }
+
+          try {
+            if (payment.clientId) {
+              client = await usersCol.findOne({
+                _id: new ObjectId(payment.clientId),
+              });
+            }
+          } catch (err) {
+            // Client not found or invalid ID
+          }
+
+          return {
+            ...payment,
+            job: job
+              ? {
+                  _id: job._id,
+                  desc: job.desc,
+                  locationText: job.locationText,
+                }
+              : null,
+            handyman: handyman
+              ? {
+                  _id: handyman._id,
+                  username: handyman.username,
+                  email: handyman.email,
+                }
+              : null,
+            client: client
+              ? {
+                  _id: client._id,
+                  username: client.username,
+                  email: client.email,
+                }
+              : null,
+          };
+        })
+      );
+
+      return res.json({
+        success: true,
+        payments: enrichedPayments,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching payments",
+        error: error.message,
+      });
+    }
+  });
 
   // Admin endpoint - Get all users
   app.get("/admin/users", async (req, res) => {

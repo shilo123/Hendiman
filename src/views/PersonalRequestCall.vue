@@ -91,7 +91,15 @@
           :class="{ active: currentStep >= 3, completed: currentStep > 3 }"
         >
           <div class="step-number">3</div>
-          <div class="step-label">סיום</div>
+          <div class="step-label">תמונות</div>
+        </div>
+        <div class="step-line" :class="{ active: currentStep > 3 }"></div>
+        <div
+          class="step-item"
+          :class="{ active: currentStep >= 4, completed: currentStep > 4 }"
+        >
+          <div class="step-number">4</div>
+          <div class="step-label">אשראי</div>
         </div>
       </div>
 
@@ -479,6 +487,118 @@
             <button class="back-btn" type="button" @click="prevStep">
               חזרה
             </button>
+            <button class="next-btn-animated" type="button" @click="nextStep">
+              <svg
+                viewBox="0 0 320 512"
+                height="1em"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M310.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-192 192c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L242.7 256 73.4 86.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l192 192z"
+                ></path>
+              </svg>
+              <span>שלב הבא</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- STEP 4: Credit Card Details -->
+        <div
+          v-if="currentStep === 4"
+          class="step-content step-content--animated"
+        >
+          <div class="step-container">
+            <section class="block block--credit">
+              <div class="block__head">
+                <div class="block__label">פרטי אשראי</div>
+                <div class="block__req">חובה</div>
+              </div>
+
+              <div class="credit-info">
+                <p class="credit-info__text">
+                  הכסף מגיע להנדימן רק אחרי העבודה
+                </p>
+              </div>
+
+              <div class="credit-form">
+                <div class="field">
+                  <label class="field__label" for="prc-cardNumber"
+                    >מספר כרטיס אשראי</label
+                  >
+                  <input
+                    id="prc-cardNumber"
+                    v-model="creditCard.cardNumber"
+                    type="text"
+                    class="input-small"
+                    placeholder="1234 5678 9012 3456"
+                    maxlength="19"
+                    @input="formatCardNumber"
+                  />
+                  <div v-if="errors.cardNumber" class="msg msg--err">
+                    {{ errors.cardNumber }}
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label class="field__label" for="prc-cardName"
+                    >שם על הכרטיס</label
+                  >
+                  <input
+                    id="prc-cardName"
+                    v-model="creditCard.cardName"
+                    type="text"
+                    class="input-small"
+                    placeholder="יוסף כהן"
+                    @input="clearError('cardName')"
+                  />
+                  <div v-if="errors.cardName" class="msg msg--err">
+                    {{ errors.cardName }}
+                  </div>
+                </div>
+
+                <div class="twoCols">
+                  <div class="field">
+                    <label class="field__label" for="prc-expiryDate"
+                      >תאריך תפוגה</label
+                    >
+                    <input
+                      id="prc-expiryDate"
+                      v-model="creditCard.expiryDate"
+                      type="text"
+                      class="input-small"
+                      placeholder="MM/YY"
+                      maxlength="5"
+                      @input="formatExpiryDate"
+                    />
+                    <div v-if="errors.expiryDate" class="msg msg--err">
+                      {{ errors.expiryDate }}
+                    </div>
+                  </div>
+
+                  <div class="field">
+                    <label class="field__label" for="prc-cvv">CVV</label>
+                    <input
+                      id="prc-cvv"
+                      v-model="creditCard.cvv"
+                      type="text"
+                      class="input-small"
+                      placeholder="123"
+                      maxlength="4"
+                      @input="formatCVV"
+                    />
+                    <div v-if="errors.cvv" class="msg msg--err">
+                      {{ errors.cvv }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="step-actions">
+            <button class="back-btn" type="button" @click="prevStep">
+              חזרה
+            </button>
             <button class="submit-btn" type="button" @click="onSubmitCall">
               שלח קריאה
             </button>
@@ -603,7 +723,37 @@ export default {
       foundCategories: [],
       subcategoryInfoArray: [],
       showMismatchModal: false,
+      creditCard: {
+        cardNumber: "",
+        cardName: "",
+        expiryDate: "",
+        cvv: "",
+      },
+      paymentIntentId: null,
+      clientSecret: null,
     };
+  },
+  computed: {
+    totalPrice() {
+      // Calculate total price from all subcategories
+      let total = 0;
+      if (
+        this.subcategoryInfoArray &&
+        Array.isArray(this.subcategoryInfoArray)
+      ) {
+        total = this.subcategoryInfoArray.reduce((sum, subcat) => {
+          const price = subcat?.price || 0;
+          return (
+            sum + (typeof price === "number" ? price : parseFloat(price) || 0)
+          );
+        }, 0);
+      }
+      // Add urgent fee (10 ILS) if urgent is selected
+      if (this.call.urgent) {
+        total += 10;
+      }
+      return total;
+    },
   },
   async created() {
     this.toast = useToast();
@@ -707,9 +857,26 @@ export default {
         }
         this.clearError("desc");
         this.clearError("location");
+      } else if (this.currentStep === 3) {
+        // Validate images
+        if (
+          this.call.imageUrls.length === 0 &&
+          this.call.imagePreviews.length === 0 &&
+          this.call.images.length === 0
+        ) {
+          this.errors.image = "יש להעלות לפחות תמונה אחת";
+          this.toast?.showError("יש להעלות לפחות תמונה אחת");
+          return;
+        }
+        this.clearError("image");
+      } else if (this.currentStep === 4) {
+        // Validate credit card
+        if (!this.validateCreditCard()) {
+          return;
+        }
       }
 
-      if (this.currentStep < 3) {
+      if (this.currentStep < 4) {
         this.currentStep++;
       }
     },
@@ -923,6 +1090,71 @@ export default {
     clearError(field) {
       if (this.errors[field]) delete this.errors[field];
     },
+    formatCardNumber(event) {
+      let value = event.target.value.replace(/\s/g, "");
+      value = value.replace(/\D/g, "");
+      let formattedValue = value.match(/.{1,4}/g)?.join(" ") || value;
+      if (formattedValue.length > 19) {
+        formattedValue = formattedValue.substring(0, 19);
+      }
+      this.creditCard.cardNumber = formattedValue;
+      this.clearError("cardNumber");
+    },
+    formatExpiryDate(event) {
+      let value = event.target.value.replace(/\D/g, "");
+      if (value.length >= 2) {
+        value = value.substring(0, 2) + "/" + value.substring(2, 4);
+      }
+      this.creditCard.expiryDate = value;
+      this.clearError("expiryDate");
+    },
+    formatCVV(event) {
+      let value = event.target.value.replace(/\D/g, "");
+      if (value.length > 4) {
+        value = value.substring(0, 4);
+      }
+      this.creditCard.cvv = value;
+      this.clearError("cvv");
+    },
+    validateCreditCard() {
+      this.errors = {};
+      let isValid = true;
+
+      // Validate card number (should be 13-19 digits)
+      const cardNumberDigits = this.creditCard.cardNumber.replace(/\s/g, "");
+      if (cardNumberDigits.length < 13 || cardNumberDigits.length > 19) {
+        this.errors.cardNumber = "מספר כרטיס לא תקין";
+        isValid = false;
+      }
+
+      // Validate card name
+      if (
+        !this.creditCard.cardName ||
+        this.creditCard.cardName.trim().length < 2
+      ) {
+        this.errors.cardName = "יש למלא שם על הכרטיס";
+        isValid = false;
+      }
+
+      // Validate expiry date (MM/YY format)
+      const expiryRegex = /^(0[1-9]|1[0-2])\/\d{2}$/;
+      if (!expiryRegex.test(this.creditCard.expiryDate)) {
+        this.errors.expiryDate = "תאריך תפוגה לא תקין";
+        isValid = false;
+      }
+
+      // Validate CVV (should be 3-4 digits)
+      if (!this.creditCard.cvv || this.creditCard.cvv.length < 3) {
+        this.errors.cvv = "CVV לא תקין";
+        isValid = false;
+      }
+
+      if (!isValid) {
+        this.toast?.showError("יש לתקן את פרטי הכרטיס");
+      }
+
+      return isValid;
+    },
     openMapPicker() {
       this.showMapPicker = true;
       this.$nextTick(() => {
@@ -1062,32 +1294,15 @@ export default {
       const { lat, lng } = this.selectedMapLocation;
 
       try {
-        const response = await axios.get(
-          `https://nominatim.openstreetmap.org/reverse`,
-          {
-            params: {
-              format: "json",
-              lat: lat,
-              lon: lng,
-              zoom: 14,
-              addressdetails: 1,
-              "accept-language": "he",
-            },
-            headers: {
-              "User-Agent": "hendiman-app",
-            },
-          }
-        );
+        const response = await axios.get(`${URL}/reverse-geocode`, {
+          params: {
+            lat: lat,
+            lng: lng,
+          },
+        });
 
-        if (response.data) {
-          const address = response.data.address || {};
-          const cityName =
-            address.city ||
-            address.town ||
-            address.village ||
-            address.suburb ||
-            address.region ||
-            "";
+        if (response.data && response.data.success) {
+          const cityName = response.data.city || response.data.address || null;
 
           this.call.location = cityName || "מיקום שנבחר במפה";
           this.locationEnglishName = cityName || null;
@@ -1202,6 +1417,34 @@ export default {
         }
 
         callData.subcategoryInfo = this.subcategoryInfoArray;
+
+        // Create Payment Intent before creating the job
+        let paymentIntentId = null;
+        try {
+          const totalAmount = this.totalPrice;
+          if (totalAmount > 0) {
+            // Create a temporary jobId (we'll update it after job creation)
+            const tempJobId = "temp-" + Date.now();
+            const paymentIntentResponse = await axios.post(
+              `${URL}/payment/create-intent`,
+              {
+                jobId: tempJobId,
+                clientId: this.$route.params.id || null,
+                amount: totalAmount,
+                urgent: this.call.urgent || false,
+              }
+            );
+
+            if (paymentIntentResponse.data.success) {
+              paymentIntentId = paymentIntentResponse.data.paymentIntentId;
+              callData.paymentIntentId = paymentIntentId;
+            }
+          }
+        } catch (paymentError) {
+          console.error("Error creating Payment Intent:", paymentError);
+          // Don't fail the call creation if payment intent creation fails
+          // Just continue without paymentIntentId
+        }
 
         const createCallUrl = `${URL}/create-call-v2`;
         this.requestStartTime = Date.now();
@@ -2043,6 +2286,38 @@ $danger: #ff3b3b;
 
 .block--last {
   padding-bottom: 14px;
+}
+
+.block--credit {
+  min-height: auto;
+
+  @media (max-width: 768px) {
+    .credit-form {
+      max-width: 370px;
+      margin: 0 auto;
+    }
+  }
+}
+
+.credit-info {
+  margin-bottom: 20px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba($orange, 0.1);
+  border: 1px solid rgba($orange, 0.3);
+}
+
+.credit-info__text {
+  margin: 0;
+  color: $orange3;
+  font-weight: 1100;
+  font-size: 14px;
+  text-align: center;
+}
+
+.credit-form {
+  display: grid;
+  gap: 16px;
 }
 
 .block__head {

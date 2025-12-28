@@ -115,6 +115,9 @@
           :statusTabsWithCounts="statusTabsWithCounts"
           :activeStatus="activeStatus"
           :handymanFilters="handymanFilters"
+          :currentUserId="
+            store.user?._id?.toString() || me?._id?.toString() || null
+          "
           @refresh="onRefresh"
           @pick-status="onPickStatus"
           @change-km="onChangeKm"
@@ -125,6 +128,8 @@
           @skip="onSkip"
           @accept="onAccept"
           @view="onView"
+          @edit-job="onEditJob"
+          @delete-job="onDeleteJob"
           @next-jobs-page="onJobsNextPage"
           @prev-jobs-page="onJobsPrevPage"
         />
@@ -201,6 +206,334 @@
 
     <!-- Mobile Bottom Navigation & CTA -->
     <!-- Removed: Create Call button moved to top -->
+
+    <!-- Delete Job Confirmation Modal -->
+    <div
+      v-if="showDeleteJobModal"
+      class="modal-overlay"
+      @click.self="showDeleteJobModal = false"
+    >
+      <div class="modal modal--delete">
+        <div class="modal__header">
+          <h2 class="modal__title">מחיקת עבודה</h2>
+          <button
+            class="modal__close"
+            type="button"
+            @click="showDeleteJobModal = false"
+            aria-label="סגור"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="modal__body">
+          <p class="modal__text">האם אתה בטוח שברצונך למחוק את העבודה הזו?</p>
+          <p class="modal__warning">
+            אם יש הנדימן ששובץ לעבודה הזו, הוא יקבל הודעה שהעבודה בוטלה.
+          </p>
+        </div>
+        <div class="modal__footer">
+          <button
+            class="modal__btn modal__btn--cancel"
+            type="button"
+            @click="showDeleteJobModal = false"
+          >
+            ביטול
+          </button>
+          <button
+            class="modal__btn modal__btn--delete"
+            type="button"
+            @click="confirmDeleteJob"
+            :disabled="isDeletingJob"
+          >
+            {{ isDeletingJob ? "מוחק..." : "מחק" }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Job Modal -->
+    <div
+      v-if="showEditJobModal"
+      class="modal-overlay"
+      @click.self="showEditJobModal = false"
+    >
+      <div class="modal modal--edit">
+        <div class="modal__header">
+          <h2 class="modal__title">עריכת עבודה</h2>
+          <button
+            class="modal__close"
+            type="button"
+            @click="closeEditJobModal"
+            aria-label="סגור"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="modal__body modal__body--edit">
+          <div v-if="isSavingJob" class="modal__loading">
+            <div class="spinner"></div>
+            <p>שומר שינויים...</p>
+          </div>
+
+          <form v-else @submit.prevent="saveJobChanges" class="edit-job-form">
+            <!-- Subcategories Section -->
+            <div class="form-section">
+              <div class="form-section__header">
+                <h3 class="form-section__title">תחומים</h3>
+                <button
+                  type="button"
+                  class="btn-small btn-small--secondary"
+                  @click="openEditSubcategories"
+                >
+                  ✏️ ערוך תחומים
+                </button>
+              </div>
+              <div class="subcategories-list">
+                <div
+                  v-for="(subcat, index) in editJobForm.subcategoryInfo"
+                  :key="index"
+                  class="subcategory-item"
+                >
+                  <span class="subcategory-name">{{
+                    subcat.subcategory || subcat.category
+                  }}</span>
+                  <span v-if="subcat.price" class="subcategory-price"
+                    >{{ subcat.price }} ₪</span
+                  >
+                </div>
+                <div
+                  v-if="editJobForm.subcategoryInfo.length === 0"
+                  class="empty-state"
+                >
+                  אין תחומים
+                </div>
+              </div>
+            </div>
+
+            <!-- Description -->
+            <div class="form-section">
+              <label class="form-label">תיאור</label>
+              <textarea
+                v-model="editJobForm.desc"
+                class="form-textarea"
+                rows="4"
+                placeholder="תאר את העבודה..."
+              ></textarea>
+            </div>
+
+            <!-- Location -->
+            <div class="form-section">
+              <label class="form-label">מיקום</label>
+              <div
+                v-if="
+                  !editJobForm.selectedMapLocation &&
+                  !editJobForm.usingMyLocation
+                "
+                class="location-input-wrapper"
+              >
+                <AddressAutocomplete
+                  v-model="editJobForm.locationText"
+                  input-id="edit-job-location"
+                  placeholder="הכנס שם ישוב"
+                  :required="
+                    !editJobForm.usingMyLocation &&
+                    !editJobForm.selectedMapLocation
+                  "
+                  @update:modelValue="onEditLocationChange"
+                  @update:englishName="onEditEnglishNameUpdate"
+                  @update:selectedCity="onEditCitySelected"
+                />
+                <div
+                  v-if="
+                    editJobForm.locationText &&
+                    editJobForm.locationText !== 'המיקום שלי'
+                  "
+                  class="house-number-input"
+                >
+                  <input
+                    type="text"
+                    v-model="editJobForm.houseNumber"
+                    placeholder="מספר בית\בלוק"
+                    class="form-input"
+                  />
+                </div>
+                <div class="location-buttons">
+                  <button
+                    class="btn-small btn-small--secondary"
+                    type="button"
+                    @click="openEditMapPicker"
+                  >
+                    🗺️ דקור במפה
+                  </button>
+                  <button
+                    class="btn-small btn-small--secondary"
+                    type="button"
+                    @click="setEditMyLocation"
+                  >
+                    📍 לפי מיקום
+                  </button>
+                </div>
+              </div>
+              <div
+                v-else-if="editJobForm.selectedMapLocation"
+                class="location-selected"
+              >
+                <span>📍 מיקום נבחר במפה</span>
+                <button
+                  type="button"
+                  class="btn-small btn-small--secondary"
+                  @click="clearEditMapLocation"
+                >
+                  שנה מיקום
+                </button>
+              </div>
+              <div
+                v-else-if="editJobForm.usingMyLocation"
+                class="location-selected"
+              >
+                <span>📍 המיקום שלי</span>
+                <button
+                  type="button"
+                  class="btn-small btn-small--secondary"
+                  @click="clearEditMyLocation"
+                >
+                  שנה מיקום
+                </button>
+              </div>
+              <div v-if="editJobForm.locationError" class="form-error">
+                {{ editJobForm.locationError }}
+              </div>
+            </div>
+
+            <!-- When -->
+            <div class="form-section">
+              <label class="form-label">מתי</label>
+              <select v-model="editJobForm.when" class="form-select">
+                <option value="asap">כמה שיותר מהר</option>
+                <option value="today">היום</option>
+                <option value="other">זמן אחר</option>
+              </select>
+            </div>
+
+            <!-- Work Type -->
+            <div class="form-section">
+              <label class="form-label">סוג עבודה</label>
+              <select v-model="editJobForm.workType" class="form-select">
+                <option value="קלה">קלה</option>
+                <option value="מורכבת">מורכבת</option>
+                <option value="קשה">קשה</option>
+              </select>
+            </div>
+
+            <!-- Urgent -->
+            <div class="form-section">
+              <label class="form-checkbox">
+                <input
+                  v-model="editJobForm.urgent"
+                  type="checkbox"
+                  class="form-checkbox__input"
+                />
+                <span class="form-checkbox__label">דחוף (+10 ₪)</span>
+              </label>
+            </div>
+
+            <!-- Images -->
+            <div class="form-section">
+              <label class="form-label">תמונות</label>
+              <div class="images-preview">
+                <div
+                  v-for="(imageUrl, index) in editJobForm.imageUrl"
+                  :key="index"
+                  class="image-preview-item"
+                >
+                  <img :src="imageUrl" :alt="`תמונה ${index + 1}`" />
+                  <button
+                    type="button"
+                    class="image-remove-btn"
+                    @click="removeEditImage(index)"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              <input
+                ref="editImageInput"
+                type="file"
+                accept="image/*"
+                multiple
+                style="display: none"
+                @change="handleEditImageUpload"
+              />
+              <button
+                type="button"
+                class="btn-small btn-small--secondary"
+                @click="$refs.editImageInput?.click()"
+                :disabled="editJobForm.imageUrl.length >= 4"
+              >
+                + הוסף תמונה
+              </button>
+              <p class="form-hint">אפשר להעלות עד 4 תמונות</p>
+            </div>
+          </form>
+        </div>
+        <div class="modal__footer" v-if="!isSavingJob">
+          <button
+            class="modal__btn modal__btn--cancel"
+            type="button"
+            @click="closeEditJobModal"
+          >
+            ביטול
+          </button>
+          <button
+            class="modal__btn modal__btn--save"
+            type="button"
+            @click="saveJobChanges"
+          >
+            שמור שינויים
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Map Picker Modal -->
+    <div
+      v-if="showEditMapPicker"
+      class="modal-overlay"
+      @click.self="closeEditMapPicker"
+    >
+      <div class="modal modal--map">
+        <div class="modal__header">
+          <h2 class="modal__title">בחר מיקום במפה</h2>
+          <button
+            class="modal__close"
+            type="button"
+            @click="closeEditMapPicker"
+            aria-label="סגור"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="modal__body modal__body--map">
+          <div id="editMapPicker" class="map-picker"></div>
+        </div>
+        <div class="modal__footer">
+          <button
+            class="modal__btn modal__btn--cancel"
+            type="button"
+            @click="closeEditMapPicker"
+          >
+            ביטול
+          </button>
+          <button
+            class="modal__btn modal__btn--save"
+            type="button"
+            @click="confirmEditMapLocation"
+          >
+            אישור
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -222,6 +555,8 @@ import { useToast } from "@/composables/useToast";
 import { getCurrentLocation } from "@/utils/geolocation";
 import { io } from "socket.io-client";
 import { messaging, VAPID_KEY, getToken, onMessage } from "@/firebase";
+import AddressAutocomplete from "@/components/AddressAutocomplete.vue";
+import citiesData from "@/APIS/AdressFromIsrael.json";
 
 export default {
   name: "DashboardView",
@@ -236,6 +571,7 @@ export default {
     ProfileSheet,
     JobChat,
     JobChatMobile,
+    AddressAutocomplete,
   },
   data() {
     return {
@@ -291,6 +627,32 @@ export default {
       showJobCancelledModal: false,
       cancelledBy: "handyman", // Track who cancelled: "handyman" or "client"
       isMobile: window.innerWidth <= 768,
+      jobToEdit: null,
+      showEditJobModal: false,
+      jobToDelete: null,
+      showDeleteJobModal: false,
+      isDeletingJob: false,
+      editJobForm: {
+        subcategoryInfo: [],
+        desc: "",
+        locationText: "",
+        houseNumber: "",
+        when: "asap",
+        workType: "קלה",
+        urgent: false,
+        imageUrl: [],
+        selectedMapLocation: null,
+        usingMyLocation: false,
+        locationEnglishName: null,
+        selectedCity: null,
+        locationError: null,
+      },
+      isSavingJob: false,
+      showEditSubcategoriesModal: false,
+      showEditMapPicker: false,
+      editMapPicker: null,
+      editMapMarker: null,
+      cities: [],
     };
   },
 
@@ -300,6 +662,13 @@ export default {
   },
   created() {
     this.toast = useToast();
+    this.cities = Array.isArray(citiesData)
+      ? citiesData.filter((city) => {
+          if (city.name === "שם_ישוב" || city.שם_ישוב === "שם_ישוב")
+            return false;
+          return true;
+        })
+      : [];
   },
   computed: {
     jobs() {
@@ -350,9 +719,30 @@ export default {
       );
     },
     pagedJobs() {
+      let jobsToPage = this.filteredJobs;
+
+      // For clients, sort jobs so client's own jobs appear first
+      if (!this.isHendiman) {
+        const userId = this.store.user?._id || this.me?._id;
+        if (userId) {
+          const userIdStr = String(userId);
+          jobsToPage = [...this.filteredJobs].sort((a, b) => {
+            const aIsClientJob = a.clientId && String(a.clientId) === userIdStr;
+            const bIsClientJob = b.clientId && String(b.clientId) === userIdStr;
+
+            // Client's jobs first
+            if (aIsClientJob && !bIsClientJob) return -1;
+            if (!aIsClientJob && bIsClientJob) return 1;
+
+            // Otherwise maintain original order
+            return 0;
+          });
+        }
+      }
+
       const start = (this.jobsPagination.page - 1) * this.jobsPageSize;
       const end = start + this.jobsPageSize;
-      return this.filteredJobs.slice(start, end);
+      return jobsToPage.slice(start, end);
     },
 
     filteredHandymen() {
@@ -748,6 +1138,497 @@ export default {
 
     onView(job) {
       this.jobDetails = job;
+    },
+    onEditJob(job) {
+      // Set the job to edit and initialize form
+      this.jobToEdit = job;
+      this.initializeEditForm(job);
+      this.showEditJobModal = true;
+    },
+    initializeEditForm(job) {
+      // Initialize edit form with job data
+      this.editJobForm = {
+        subcategoryInfo: Array.isArray(job.subcategoryInfo)
+          ? [...job.subcategoryInfo]
+          : job.subcategoryInfo
+          ? [job.subcategoryInfo]
+          : [],
+        desc: job.desc || "",
+        locationText: job.locationText || "",
+        houseNumber: job.houseNumber || "",
+        when:
+          job.when === "asap"
+            ? "asap"
+            : job.when === "today"
+            ? "today"
+            : "other",
+        workType: job.workType || "קלה",
+        urgent: job.urgent || false,
+        imageUrl: Array.isArray(job.imageUrl)
+          ? [...job.imageUrl]
+          : job.imageUrl
+          ? [job.imageUrl]
+          : [],
+        selectedMapLocation: job.coordinates
+          ? { lat: job.coordinates.lat, lng: job.coordinates.lng }
+          : null,
+        usingMyLocation: job.locationText === "המיקום שלי",
+        locationEnglishName: job.locationEnglishName || null,
+        selectedCity: null,
+        locationError: null,
+      };
+    },
+    closeEditJobModal() {
+      this.showEditJobModal = false;
+      this.jobToEdit = null;
+      this.editJobForm = {
+        subcategoryInfo: [],
+        desc: "",
+        locationText: "",
+        houseNumber: "",
+        when: "asap",
+        workType: "קלה",
+        urgent: false,
+        imageUrl: [],
+        selectedMapLocation: null,
+        usingMyLocation: false,
+        locationEnglishName: null,
+        selectedCity: null,
+        locationError: null,
+      };
+    },
+    async saveJobChanges() {
+      if (!this.jobToEdit) return;
+
+      // Validate location
+      if (
+        !this.editJobForm.selectedMapLocation &&
+        this.editJobForm.locationText &&
+        !this.isValidCity(this.editJobForm.locationText) &&
+        this.editJobForm.locationText !== "המיקום שלי"
+      ) {
+        this.editJobForm.locationError =
+          "ישוב זה לא נמצא במאגר. בחר ישוב מהרשימה או לחץ על 'לפי מיקום'";
+        this.toast?.showError(this.editJobForm.locationError);
+        return;
+      }
+
+      this.isSavingJob = true;
+      try {
+        const jobId = this.jobToEdit._id || this.jobToEdit.id;
+        // Combine location with house number if exists
+        let finalLocationText = this.editJobForm.locationText;
+        if (
+          this.editJobForm.houseNumber &&
+          this.editJobForm.houseNumber.trim() &&
+          this.editJobForm.locationText !== "המיקום שלי"
+        ) {
+          finalLocationText = `${
+            this.editJobForm.locationText
+          } ${this.editJobForm.houseNumber.trim()}`;
+        }
+
+        const updateData = {
+          subcategoryInfo: this.editJobForm.subcategoryInfo,
+          desc: this.editJobForm.desc,
+          locationText: finalLocationText,
+          houseNumber: this.editJobForm.houseNumber || "",
+          when: this.editJobForm.when,
+          workType: this.editJobForm.workType,
+          urgent: this.editJobForm.urgent,
+          imageUrl: this.editJobForm.imageUrl,
+        };
+
+        // Add locationEnglishName if available
+        if (this.editJobForm.locationEnglishName) {
+          updateData.locationEnglishName = this.editJobForm.locationEnglishName;
+        }
+
+        // Add coordinates if map location was selected or if coordinates exist
+        if (this.editJobForm.selectedMapLocation) {
+          updateData.coordinates = {
+            lng: this.editJobForm.selectedMapLocation.lng,
+            lat: this.editJobForm.selectedMapLocation.lat,
+          };
+        } else if (this.editJobForm.coordinates) {
+          updateData.coordinates = this.editJobForm.coordinates;
+        }
+
+        const response = await axios.put(
+          `${URL}/jobs/${jobId}`,
+          {
+            ...updateData,
+            userId: this.store.user?._id || this.me?._id,
+          },
+          {
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+
+        if (response.data.success) {
+          this.toast?.showSuccess("העבודה עודכנה בהצלחה");
+          this.closeEditJobModal();
+          // Refresh jobs list
+          await this.onRefresh();
+        } else {
+          this.toast?.showError(response.data.message || "שגיאה בעדכון העבודה");
+        }
+      } catch (error) {
+        console.error("Error updating job:", error);
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה בעדכון העבודה"
+        );
+      } finally {
+        this.isSavingJob = false;
+      }
+    },
+    removeEditImage(index) {
+      this.editJobForm.imageUrl.splice(index, 1);
+    },
+    async handleEditImageUpload(event) {
+      const files = Array.from(event.target.files || []);
+      if (files.length === 0) return;
+
+      const remainingSlots = 4 - this.editJobForm.imageUrl.length;
+      const filesToUpload = files.slice(0, remainingSlots);
+
+      for (const file of filesToUpload) {
+        try {
+          const formData = new FormData();
+          formData.append("image", file);
+
+          const { data } = await axios.post(`${URL}/upload-image`, formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+
+          if (data.imageUrl) {
+            this.editJobForm.imageUrl.push(data.imageUrl);
+          }
+        } catch (error) {
+          this.toast?.showError("שגיאה בהעלאת תמונה");
+        }
+      }
+
+      // Reset input
+      if (event.target) {
+        event.target.value = "";
+      }
+    },
+    openEditSubcategories() {
+      // TODO: Implement subcategories editor (similar to CreateCall manual selector)
+      this.toast?.showInfo("עריכת תחומים - יישום בהמשך");
+    },
+    isValidCity(cityName) {
+      if (!cityName || cityName.trim() === "" || cityName === "המיקום שלי") {
+        return true;
+      }
+
+      const searchValue = cityName.trim();
+      const normalizedSearch = searchValue.replace(/\s+/g, " ");
+
+      return this.cities.some((city) => {
+        const cityNameField = (city.name || city.שם_ישוב || "").trim();
+        if (!cityNameField) return false;
+
+        const normalizedCityName = cityNameField.replace(/\s+/g, " ");
+
+        if (normalizedCityName === normalizedSearch) return true;
+        if (normalizedCityName.toLowerCase() === normalizedSearch.toLowerCase())
+          return true;
+
+        const cleanCity = normalizedCityName.replace(/['"()]/g, "").trim();
+        const cleanSearch = normalizedSearch.replace(/['"()]/g, "").trim();
+        if (cleanCity === cleanSearch) return true;
+
+        return false;
+      });
+    },
+    onEditLocationChange(value) {
+      this.editJobForm.locationText = value;
+      this.editJobForm.locationError = null;
+      // Clear house number if location text changes (user is typing new location)
+      if (
+        !this.editJobForm.selectedMapLocation &&
+        value &&
+        value.trim() !== ""
+      ) {
+        if (!this.isValidCity(value) && value !== "המיקום שלי") {
+          this.editJobForm.locationError =
+            "ישוב זה לא נמצא במאגר. בחר ישוב מהרשימה או לחץ על 'לפי מיקום'";
+        }
+      }
+      // If location is "המיקום שלי", clear house number
+      if (value === "המיקום שלי") {
+        this.editJobForm.houseNumber = "";
+        this.editJobForm.usingMyLocation = true;
+      } else {
+        this.editJobForm.usingMyLocation = false;
+      }
+    },
+    onEditEnglishNameUpdate(value) {
+      this.editJobForm.locationEnglishName = value;
+    },
+    onEditCitySelected(city) {
+      if (city) {
+        this.editJobForm.locationText = city.name || city.שם_ישוב || "";
+        this.editJobForm.locationEnglishName =
+          city.english_name || city.שם_ישוב_לועזי || null;
+        if (city.coordinates) {
+          this.editJobForm.coordinates = {
+            lat: city.coordinates.lat || city.coordinates[1],
+            lng: city.coordinates.lng || city.coordinates[0],
+          };
+        }
+        this.editJobForm.locationError = null;
+      }
+    },
+    clearEditMapLocation() {
+      this.editJobForm.selectedMapLocation = null;
+      this.editJobForm.locationText = "";
+      this.editJobForm.houseNumber = "";
+      this.editJobForm.locationEnglishName = null;
+      this.editJobForm.coordinates = null;
+      this.editJobForm.usingMyLocation = false;
+      this.editJobForm.locationError = null;
+    },
+    setEditMyLocation() {
+      this.editJobForm.locationText = "המיקום שלי";
+      this.editJobForm.houseNumber = "";
+      this.editJobForm.usingMyLocation = true;
+      this.editJobForm.selectedMapLocation = null;
+      this.editJobForm.locationEnglishName = null;
+      this.editJobForm.locationError = null;
+      if (this.geoCoordinates) {
+        this.editJobForm.coordinates = {
+          lat: this.geoCoordinates.lat,
+          lng: this.geoCoordinates.lon,
+        };
+      }
+    },
+    clearEditMyLocation() {
+      this.editJobForm.locationText = "";
+      this.editJobForm.houseNumber = "";
+      this.editJobForm.usingMyLocation = false;
+      this.editJobForm.locationEnglishName = null;
+      this.editJobForm.coordinates = null;
+      this.editJobForm.locationError = null;
+    },
+    openEditMapPicker() {
+      this.showEditMapPicker = true;
+      this.$nextTick(() => {
+        this.initEditMapPicker();
+      });
+    },
+    closeEditMapPicker() {
+      this.showEditMapPicker = false;
+      if (this.editMapPicker) {
+        this.editMapPicker.remove();
+        this.editMapPicker = null;
+        this.editMapMarker = null;
+      }
+    },
+    initEditMapPicker() {
+      const loadLeaflet = () => {
+        if (typeof window.L !== "undefined") {
+          this.createEditMap();
+          return;
+        }
+
+        if (!document.querySelector('link[href*="leaflet"]')) {
+          const link = document.createElement("link");
+          link.rel = "stylesheet";
+          link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+          link.crossOrigin = "";
+          document.head.appendChild(link);
+        }
+
+        if (!document.querySelector('script[src*="leaflet"]')) {
+          const script = document.createElement("script");
+          script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+          script.crossOrigin = "";
+          script.onload = () => {
+            setTimeout(() => {
+              if (typeof window.L !== "undefined") {
+                this.createEditMap();
+              } else {
+                this.toast?.showError("שגיאה בטעינת המפה. נסה שוב.");
+              }
+            }, 100);
+          };
+          script.onerror = () => {
+            this.toast?.showError("שגיאה בטעינת המפה. נסה שוב.");
+          };
+          document.body.appendChild(script);
+        } else {
+          const checkInterval = setInterval(() => {
+            if (typeof window.L !== "undefined") {
+              clearInterval(checkInterval);
+              this.createEditMap();
+            }
+          }, 100);
+
+          setTimeout(() => {
+            clearInterval(checkInterval);
+            if (typeof window.L === "undefined") {
+              this.toast?.showError("שגיאה בטעינת המפה. נסה שוב.");
+            }
+          }, 5000);
+        }
+      };
+
+      loadLeaflet();
+    },
+    createEditMap() {
+      if (typeof window.L === "undefined") {
+        this.toast?.showError("שגיאה בטעינת המפה. נסה שוב.");
+        return;
+      }
+
+      const mapContainer = document.getElementById("editMapPicker");
+      if (!mapContainer) {
+        return;
+      }
+
+      if (this.editMapPicker) {
+        this.editMapPicker.remove();
+        this.editMapPicker = null;
+        this.editMapMarker = null;
+      }
+
+      // Use existing job location or default to Tel Aviv
+      const defaultLat =
+        this.editJobForm.coordinates?.lat ||
+        this.editJobForm.selectedMapLocation?.lat ||
+        32.0853;
+      const defaultLng =
+        this.editJobForm.coordinates?.lng ||
+        this.editJobForm.selectedMapLocation?.lng ||
+        34.7818;
+
+      try {
+        this.editMapPicker = window.L.map("editMapPicker", {
+          center: [defaultLat, defaultLng],
+          zoom: 13,
+          zoomControl: true,
+        });
+
+        window.L.tileLayer(
+          "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          {
+            attribution:
+              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19,
+          }
+        ).addTo(this.editMapPicker);
+
+        this.editMapMarker = window.L.marker([defaultLat, defaultLng], {
+          draggable: true,
+        }).addTo(this.editMapPicker);
+
+        this.editMapMarker.on("dragend", () => {
+          const position = this.editMapMarker.getLatLng();
+          this.editJobForm.selectedMapLocation = {
+            lat: position.lat,
+            lng: position.lng,
+          };
+        });
+
+        this.editMapPicker.on("click", (e) => {
+          const { lat, lng } = e.latlng;
+          this.editJobForm.selectedMapLocation = { lat, lng };
+          if (this.editMapMarker) {
+            this.editMapMarker.setLatLng([lat, lng]);
+          }
+        });
+      } catch (error) {
+        console.error("Error creating map:", error);
+        this.toast?.showError("שגיאה ביצירת המפה. נסה שוב.");
+      }
+    },
+    async confirmEditMapLocation() {
+      if (!this.editJobForm.selectedMapLocation) {
+        this.toast?.showError("נא לבחור מיקום במפה");
+        return;
+      }
+
+      try {
+        // Reverse geocode to get address
+        const { lat, lng } = this.editJobForm.selectedMapLocation;
+        const response = await axios.get(`${URL}/reverse-geocode`, {
+          params: {
+            lat: lat,
+            lng: lng,
+          },
+        });
+
+        if (response.data && response.data.success) {
+          this.editJobForm.locationText =
+            response.data.fullAddress ||
+            response.data.address ||
+            response.data.city ||
+            "מיקום שנבחר במפה";
+          this.editJobForm.locationEnglishName =
+            response.data.fullAddress || response.data.city || null;
+        }
+
+        this.editJobForm.coordinates = {
+          lat: lat,
+          lng: lng,
+        };
+
+        // Clear house number and usingMyLocation when map location is selected
+        this.editJobForm.houseNumber = "";
+        this.editJobForm.usingMyLocation = false;
+        this.editJobForm.locationError = null;
+        this.closeEditMapPicker();
+      } catch (error) {
+        console.error("Error reverse geocoding:", error);
+        // Even if reverse geocoding fails, use coordinates
+        this.editJobForm.coordinates = {
+          lat: this.editJobForm.selectedMapLocation.lat,
+          lng: this.editJobForm.selectedMapLocation.lng,
+        };
+        // Clear house number and usingMyLocation when map location is selected
+        this.editJobForm.houseNumber = "";
+        this.editJobForm.usingMyLocation = false;
+        this.editJobForm.locationError = null;
+        this.closeEditMapPicker();
+      }
+    },
+    onDeleteJob(job) {
+      // Set the job to delete and open delete confirmation modal
+      this.jobToDelete = job;
+      this.showDeleteJobModal = true;
+    },
+    async confirmDeleteJob() {
+      if (!this.jobToDelete) return;
+
+      this.isDeletingJob = true;
+      try {
+        const jobId = this.jobToDelete._id || this.jobToDelete.id;
+        const response = await axios.delete(`${URL}/jobs/${jobId}`, {
+          data: {
+            userId: this.store.user?._id || this.me?._id,
+          },
+        });
+
+        if (response.data.success) {
+          this.toast?.showSuccess("העבודה נמחקה בהצלחה");
+          this.showDeleteJobModal = false;
+          this.jobToDelete = null;
+          // Refresh jobs list
+          await this.onRefresh();
+        } else {
+          this.toast?.showError(response.data.message || "שגיאה במחיקת העבודה");
+        }
+      } catch (error) {
+        console.error("Error deleting job:", error);
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה במחיקת העבודה"
+        );
+      } finally {
+        this.isDeletingJob = false;
+      }
     },
     onJobsNextPage() {
       if (this.jobsPagination.hasNext) {
@@ -3339,5 +4220,571 @@ $r2: 26px;
 
 .jobCancelledModal__btn:active {
   transform: translateY(0);
+}
+
+/* Delete/Edit Job Modals */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100001;
+  padding: 20px;
+  font-family: $font-family;
+
+  @media (max-width: 768px) {
+    padding: 10px;
+    align-items: flex-start;
+  }
+}
+
+.modal {
+  background: linear-gradient(180deg, $card2, $card);
+  border: 1px solid $stroke;
+  border-radius: 16px;
+  box-shadow: $shadow;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  color: $text;
+  direction: rtl;
+  text-align: right;
+  overflow: hidden;
+
+  @media (max-width: 768px) {
+    max-width: 100%;
+    border-radius: 14px;
+    max-height: calc(100vh - 20px);
+  }
+}
+
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid $stroke;
+
+  @media (max-width: 768px) {
+    padding: 16px 20px;
+  }
+}
+
+.modal__title {
+  font-size: 20px;
+  font-weight: 1000;
+  color: $text;
+  margin: 0;
+
+  @media (max-width: 768px) {
+    font-size: 18px;
+  }
+}
+
+.modal__close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: $muted;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    color: $text;
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  @media (max-width: 768px) {
+    font-size: 20px;
+    width: 28px;
+    height: 28px;
+  }
+}
+
+.modal__body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+
+  @media (max-width: 768px) {
+    padding: 20px;
+  }
+}
+
+.modal__text {
+  font-size: 15px;
+  color: $text;
+  margin: 0 0 16px 0;
+  line-height: 1.6;
+
+  @media (max-width: 768px) {
+    font-size: 14px;
+  }
+}
+
+.modal__warning {
+  font-size: 13px;
+  color: $orange3;
+  margin: 0;
+  padding: 12px;
+  background: rgba($orange, 0.1);
+  border: 1px solid rgba($orange, 0.2);
+  border-radius: 8px;
+  line-height: 1.5;
+
+  @media (max-width: 768px) {
+    font-size: 12px;
+    padding: 10px;
+  }
+}
+
+.modal__footer {
+  display: flex;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid $stroke;
+  justify-content: flex-end;
+
+  @media (max-width: 768px) {
+    padding: 16px 20px;
+    flex-direction: column-reverse;
+  }
+}
+
+.modal__btn {
+  padding: 12px 24px;
+  border-radius: 12px;
+  border: none;
+  font-weight: 900;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: $font-family;
+  min-width: 100px;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    padding: 10px 20px;
+    font-size: 13px;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &--cancel {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid $stroke;
+    color: $text;
+
+    &:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.1);
+    }
+  }
+
+  &--delete {
+    background: linear-gradient(135deg, $danger, #ff5252);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba($danger, 0.3);
+
+    &:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba($danger, 0.4);
+    }
+  }
+
+  &--save {
+    background: linear-gradient(135deg, $orange, $orange2);
+    color: #111;
+    box-shadow: $shadowO;
+
+    &:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: $shadowO, 0 8px 20px rgba($orange, 0.3);
+    }
+  }
+}
+
+/* Edit Job Modal Styles */
+.modal--edit {
+  max-width: 600px;
+
+  @media (max-width: 768px) {
+    max-width: 100%;
+  }
+}
+
+.modal__body--edit {
+  max-height: calc(90vh - 160px);
+  overflow-y: auto;
+
+  @media (max-width: 768px) {
+    max-height: calc(100vh - 180px);
+  }
+}
+
+.edit-job-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.form-section__title {
+  font-size: 16px;
+  font-weight: 900;
+  color: $text;
+  margin: 0;
+}
+
+.form-label {
+  font-size: 14px;
+  font-weight: 800;
+  color: $text;
+}
+
+.form-input,
+.form-textarea,
+.form-select {
+  width: 100%;
+  max-width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba($orange, 0.25);
+  background: rgba(255, 255, 255, 0.05);
+  color: $text;
+  font-size: 14px;
+  font-family: $font-family;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+    border-color: rgba($orange, 0.5);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  @media (max-width: 768px) {
+    padding: 10px;
+    font-size: 13px;
+  }
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.form-select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ff6a00' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 12px center;
+  padding-right: 12px;
+  padding-left: 36px;
+  background-color: rgba(255, 255, 255, 0.05);
+
+  option {
+    background: rgba(15, 16, 22, 0.98);
+    color: $text;
+    padding: 10px;
+  }
+
+  &:hover {
+    border-color: rgba($orange, 0.4);
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+
+  &:focus {
+    border-color: rgba($orange, 0.5);
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.form-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.form-checkbox__input {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: $orange;
+}
+
+.form-checkbox__label {
+  font-size: 14px;
+  font-weight: 800;
+  color: $text;
+}
+
+.subcategories-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subcategory-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba($orange, 0.1);
+  border: 1px solid rgba($orange, 0.2);
+}
+
+.subcategory-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: $text;
+}
+
+.subcategory-price {
+  font-size: 14px;
+  font-weight: 900;
+  color: $orange3;
+}
+
+.images-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.image-preview-item {
+  position: relative;
+  width: 100%;
+  padding-top: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba($orange, 0.2);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.image-preview-item img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-remove-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba($danger, 0.8);
+  }
+}
+
+.btn-small {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: $font-family;
+
+  @media (max-width: 768px) {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  &--secondary {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba($orange, 0.3);
+    color: $text;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba($orange, 0.5);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+}
+
+.form-hint {
+  font-size: 12px;
+  color: $muted;
+  margin: 4px 0 0 0;
+}
+
+.empty-state {
+  padding: 20px;
+  text-align: center;
+  color: $muted;
+  font-size: 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.modal__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  gap: 16px;
+}
+
+.modal__loading .spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba($orange, 0.2);
+  border-top-color: $orange;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Map Picker Modal */
+.modal--map {
+  max-width: 90vw;
+  max-height: 90vh;
+
+  @media (max-width: 768px) {
+    max-width: 100vw;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+}
+
+.modal__body--map {
+  padding: 0;
+  overflow: hidden;
+}
+
+.map-picker {
+  width: 100%;
+  height: 500px;
+
+  @media (max-width: 768px) {
+    height: 400px;
+  }
+}
+
+.location-input-wrapper {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.house-number-input {
+  margin-top: 12px;
+  width: 100%;
+}
+
+.house-number-input .form-input {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: $text;
+  font-size: 15px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.house-number-input .form-input:focus {
+  outline: none;
+  border-color: $orange;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.location-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.location-buttons .btn-small {
+  flex: 1;
+}
+
+.location-selected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba($orange, 0.1);
+  border: 1px solid rgba($orange, 0.25);
+  gap: 12px;
+
+  span {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 800;
+    color: $text;
+  }
+}
+
+.form-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: $danger;
+  font-weight: 800;
 }
 </style>

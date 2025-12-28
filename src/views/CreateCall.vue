@@ -25,11 +25,15 @@
     </div>
 
     <!-- Handymen Results Screen -->
-    <div
-      v-if="isLoading && foundHandymen.length > 0"
-      class="handymen-results-screen"
-    >
+    <div v-if="foundHandymen.length > 0" class="handymen-results-screen">
       <div class="handymen-results-header">
+        <button
+          class="handymen-results-back"
+          type="button"
+          @click="goBackToDashboard"
+        >
+          ← חזור לדשבורד
+        </button>
         <h2>נמצאו {{ foundHandymen.length }} הנדימנים שמתאימים לכל התחומים</h2>
         <p class="handymen-results-subtitle">
           הקריאה נוצרה ומחכה לאישור של הנדימן
@@ -873,6 +877,28 @@ export default {
       isUploadingImage: false,
     };
   },
+  computed: {
+    totalPrice() {
+      // Calculate total price from all subcategories
+      let total = 0;
+      if (
+        this.subcategoryInfoArray &&
+        Array.isArray(this.subcategoryInfoArray)
+      ) {
+        total = this.subcategoryInfoArray.reduce((sum, subcat) => {
+          const price = subcat?.price || 0;
+          return (
+            sum + (typeof price === "number" ? price : parseFloat(price) || 0)
+          );
+        }, 0);
+      }
+      // Add urgent fee (10 ILS) if urgent is selected
+      if (this.call.urgent) {
+        total += 10;
+      }
+      return total;
+    },
+  },
   created() {
     this.toast = useToast();
 
@@ -1182,6 +1208,12 @@ export default {
         this.$router.go(-1);
       }
     },
+    goBackToDashboard() {
+      this.$router.push({
+        name: "Dashboard",
+        params: { id: this.$route.params.id },
+      });
+    },
     onToggleUrgent() {
       this.call.urgent = !this.call.urgent;
     },
@@ -1429,32 +1461,15 @@ export default {
       const { lat, lng } = this.selectedMapLocation;
 
       try {
-        const response = await axios.get(
-          `https://nominatim.openstreetmap.org/reverse`,
-          {
-            params: {
-              format: "json",
-              lat: lat,
-              lon: lng,
-              zoom: 14,
-              addressdetails: 1,
-              "accept-language": "he",
-            },
-            headers: {
-              "User-Agent": "hendiman-app",
-            },
-          }
-        );
+        const response = await axios.get(`${URL}/reverse-geocode`, {
+          params: {
+            lat: lat,
+            lng: lng,
+          },
+        });
 
-        if (response.data) {
-          const address = response.data.address || {};
-          const cityName =
-            address.city ||
-            address.town ||
-            address.village ||
-            address.suburb ||
-            address.region ||
-            "";
+        if (response.data && response.data.success) {
+          const cityName = response.data.city || response.data.address || null;
 
           this.call.location = cityName || "מיקום שנבחר במפה";
           this.locationEnglishName = cityName || null;
@@ -1479,6 +1494,7 @@ export default {
         this.closeMapPicker();
         this.toast?.showSuccess("מיקום נבחר בהצלחה");
       } catch (error) {
+        console.error("Error in reverse geocoding:", error);
         this.call.location = "מיקום שנבחר במפה";
         this.call.coordinates = {
           lat: lat,
@@ -1569,6 +1585,37 @@ export default {
         // Add subcategoryInfo array to callData
         callData.subcategoryInfo = this.subcategoryInfoArray;
 
+        // Create Payment Intent before creating the job
+        let paymentIntentId = null;
+        try {
+          const totalAmount = this.totalPrice;
+          if (totalAmount > 0) {
+            // Create a temporary jobId (we'll update it after job creation)
+            const tempJobId = "temp-" + Date.now();
+            const paymentIntentResponse = await axios.post(
+              `${URL}/payment/create-intent`,
+              {
+                jobId: tempJobId,
+                clientId: this.$route.params.id || null,
+                amount: totalAmount,
+                urgent: this.call.urgent || false,
+              }
+            );
+
+            if (paymentIntentResponse.data.success) {
+              paymentIntentId = paymentIntentResponse.data.paymentIntentId;
+              callData.paymentIntentId = paymentIntentId;
+              // TODO: Show Stripe Elements form to confirm payment
+              // For now, we'll just save the paymentIntentId and handle payment confirmation later
+              // This is a simplified approach - in production, you'd want to use Stripe Elements
+            }
+          }
+        } catch (paymentError) {
+          console.error("Error creating Payment Intent:", paymentError);
+          // Don't fail the call creation if payment intent creation fails
+          // Just continue without paymentIntentId
+        }
+
         // Send to new endpoint
         const createCallUrl = `${URL}/create-call-v2`;
         // Start patience message interval
@@ -1592,12 +1639,7 @@ export default {
             this.toast.showSuccess(
               `נמצאו ${this.foundHandymen.length} הנדימנים מתאימים. הקריאה נוצרה ומחכה לאישור.`
             );
-            setTimeout(() => {
-              this.$router.push({
-                name: "Dashboard",
-                params: { id: this.$route.params.id },
-              });
-            }, 3000);
+            // Don't redirect automatically - let user see the handymen list and click "Back" button
           }, 2000);
         } else if (scenario === "no_match") {
           // No handymen match any subcategories
@@ -2293,6 +2335,28 @@ $danger: #ff3b3b;
   text-align: center;
   margin-bottom: 24px;
   padding-top: 40px;
+  position: relative;
+}
+
+.handymen-results-back {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: transparent;
+  border: none;
+  color: $text;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 8px;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.handymen-results-back:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .handymen-results-header h2 {
