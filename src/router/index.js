@@ -10,6 +10,8 @@ import About from "@/views/About.vue";
 import AdminManager from "@/views/Admin-manager.vue";
 import Payments from "@/views/Payments.vue";
 import PersonalRequestCall from "@/views/PersonalRequestCall.vue";
+import StripeSuccess from "@/views/StripeSuccess.vue";
+import StripeRefresh from "@/views/StripeRefresh.vue";
 const routes = [
   {
     path: "/",
@@ -76,6 +78,16 @@ const routes = [
     name: "PersonalRequestCall",
     component: PersonalRequestCall,
     props: true,
+  },
+  {
+    path: "/stripe/success",
+    name: "StripeSuccess",
+    component: StripeSuccess,
+  },
+  {
+    path: "/stripe/refresh",
+    name: "StripeRefresh",
+    component: StripeRefresh,
   },
 ];
 

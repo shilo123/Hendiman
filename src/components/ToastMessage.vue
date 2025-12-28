@@ -3,7 +3,13 @@
     <div v-if="isVisible" :class="['toast', type]">
       <div class="toast-content">
         <span class="toast-icon">{{
-          type === "success" ? "✓" : type === "error" ? "✕" : "⚠"
+          type === "success"
+            ? "✓"
+            : type === "error"
+            ? "✕"
+            : type === "warning"
+            ? "⚠"
+            : "ℹ"
         }}</span>
         <span class="toast-message">{{ content }}</span>
         <button class="toast-close" @click="hide" aria-label="סגור">✕</button>
@@ -23,7 +29,8 @@ export default {
     type: {
       type: String,
       default: "success",
-      validator: (value) => ["success", "error", "warning"].includes(value),
+      validator: (value) =>
+        ["success", "error", "warning", "info"].includes(value),
     },
     duration: {
       type: Number,
@@ -83,6 +90,12 @@ export default {
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
   border: 2px solid #f59e0b;
   box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4);
+}
+
+.toast.info {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  border: 2px solid #3b82f6;
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
 }
 
 .toast-content {

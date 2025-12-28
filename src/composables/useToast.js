@@ -59,5 +59,6 @@ export function useToast() {
     showSuccess: (content, duration) => showToast(content, "success", duration),
     showError: (content, duration) => showToast(content, "error", duration),
     showWarning: (content, duration) => showToast(content, "warning", duration),
+    showInfo: (content, duration) => showToast(content, "info", duration),
   };
 }

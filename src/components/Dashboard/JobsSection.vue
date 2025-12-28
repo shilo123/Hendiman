@@ -69,7 +69,8 @@
             max="50"
             step="1"
             :value="handymanFilters.maxKm"
-            @input="handleKmChange($event.target.value)"
+            @input="handleKmInput($event.target.value)"
+            @change="handleKmChange($event.target.value)"
           />
         </div>
 
@@ -356,6 +357,54 @@
           <div class="job__title">
             {{ getJobDisplayName(job) }}
           </div>
+          <!-- Client job menu button (3 dots) -->
+          <div
+            v-if="!isHendiman && isClientJob(job)"
+            class="job__menu"
+            :class="{
+              'job__menu--open':
+                openJobMenuId === job.id || openJobMenuId === job._id,
+            }"
+          >
+            <button
+              class="job__menu-btn"
+              type="button"
+              @click.stop="toggleJobMenu(job.id || job._id)"
+              aria-label="תפריט עבודה"
+            >
+              <span class="job__menu-text">אפשרויות</span>
+            </button>
+            <div
+              v-if="openJobMenuId === (job.id || job._id)"
+              class="job__menu-dropdown"
+              @click.stop
+            >
+              <button
+                class="job__menu-item"
+                type="button"
+                @click="handleEditJob(job)"
+              >
+                <span class="job__menu-icon">✏️</span>
+                עריכה
+              </button>
+              <button
+                class="job__menu-item"
+                type="button"
+                @click="handleDeleteJob(job)"
+              >
+                <span class="job__menu-icon">🗑️</span>
+                מחיקה
+              </button>
+              <button
+                class="job__menu-item"
+                type="button"
+                @click="handleViewJob(job)"
+              >
+                <span class="job__menu-icon">👁️</span>
+                צפייה
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="job__meta">
@@ -479,6 +528,7 @@ export default {
       default: () => ({ page: 1, total: 0, pageSize: 5 }),
     },
     handymanCoords: { type: Object, default: () => null },
+    currentUserId: { type: String, default: null },
   },
   emits: [
     "refresh",
@@ -491,6 +541,8 @@ export default {
     "view",
     "next-jobs-page",
     "prev-jobs-page",
+    "edit-job",
+    "delete-job",
   ],
   data() {
     return {
@@ -498,6 +550,7 @@ export default {
       isFilterDropdownOpen: false,
       localMaxKm: null, // Local value for display while dragging
       showFilterModal: false,
+      openJobMenuId: null, // Track which job menu is open
       localFilters: {
         status: "all",
         locationType: "residence",
@@ -566,6 +619,35 @@ export default {
       if (this.isFilterDropdownOpen && !e.target.closest(".filter-dropdown")) {
         this.isFilterDropdownOpen = false;
       }
+      // Close job menu if clicking outside
+      if (
+        this.openJobMenuId &&
+        !e.target.closest(".job__menu") &&
+        !e.target.closest(".job__menu-dropdown")
+      ) {
+        this.openJobMenuId = null;
+      }
+    },
+    isClientJob(job) {
+      if (!this.currentUserId || this.isHendiman) return false;
+      return (
+        job.clientId && String(job.clientId) === String(this.currentUserId)
+      );
+    },
+    toggleJobMenu(jobId) {
+      this.openJobMenuId = this.openJobMenuId === jobId ? null : jobId;
+    },
+    handleViewJob(job) {
+      this.openJobMenuId = null;
+      this.$emit("view", job);
+    },
+    handleEditJob(job) {
+      this.openJobMenuId = null;
+      this.$emit("edit-job", job);
+    },
+    handleDeleteJob(job) {
+      this.openJobMenuId = null;
+      this.$emit("delete-job", job);
     },
     getActiveFilterLabel() {
       const labels = [];
@@ -644,8 +726,12 @@ export default {
       };
       return labels[status] || status;
     },
+    handleKmInput(value) {
+      // Update local value for display while dragging (no filtering)
+      this.localMaxKm = Number(value);
+    },
     handleKmChange(value) {
-      // Reset local value and emit the change
+      // Reset local value and emit the change (actual filtering happens here)
       this.localMaxKm = null;
       this.$emit("change-km", value);
     },
@@ -1243,6 +1329,7 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
+  position: relative;
 }
 
 .job__title {
@@ -1253,6 +1340,114 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+
+  @media (max-width: 768px) {
+    font-size: 14px;
+  }
+}
+
+/* Job Menu (3 dots) */
+.job__menu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.job__menu-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  color: rgba(255, 255, 255, 0.8);
+  min-height: 36px;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 1);
+  }
+
+  &:active {
+    transform: scale(0.95);
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  @media (max-width: 768px) {
+    padding: 6px 12px;
+    min-height: 32px;
+  }
+}
+
+.job__menu-text {
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 800;
+  user-select: none;
+  pointer-events: none;
+  white-space: nowrap;
+
+  @media (max-width: 768px) {
+    font-size: 12px;
+  }
+}
+
+.job__menu-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 100;
+  background: rgba(15, 16, 22, 0.98);
+  border: 1px solid rgba($orange, 0.25);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  min-width: 160px;
+  backdrop-filter: blur(10px);
+
+  @media (max-width: 768px) {
+    min-width: 140px;
+    left: auto;
+    right: 0;
+  }
+}
+
+.job__menu-item {
+  width: 100%;
+  padding: 14px 18px;
+  border: none;
+  background: transparent;
+  color: $text;
+  font-weight: 900;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: right;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba($orange, 0.15);
+    color: $orange3;
+  }
+
+  &:active {
+    background: rgba($orange, 0.25);
+  }
+
+  @media (max-width: 768px) {
+    padding: 12px 16px;
+    font-size: 12px;
+  }
+}
+
+.job__menu-icon {
+  font-size: 16px;
+  flex-shrink: 0;
 
   @media (max-width: 768px) {
     font-size: 14px;

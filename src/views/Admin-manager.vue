@@ -351,8 +351,110 @@
 
         <!-- Payments Tab -->
         <div v-if="activeTab === 'payments'" class="tab-panel">
-          <div class="empty-state">
-            <p>תשלומים - בעתיד</p>
+          <div class="payments-section">
+            <div class="payments-section__header">
+              <h2 class="payments-section__title">תשלומים</h2>
+              <button
+                class="refresh-payments-btn"
+                type="button"
+                @click="loadPayments"
+              >
+                ↻ רענן
+              </button>
+            </div>
+
+            <div v-if="isLoadingPayments" class="loading-state">
+              טוען תשלומים...
+            </div>
+
+            <div v-else class="payments-table-wrapper">
+              <table class="payments-table">
+                <thead>
+                  <tr>
+                    <th>תאריך</th>
+                    <th>לקוח</th>
+                    <th>הנדימן</th>
+                    <th>עבודה</th>
+                    <th>סכום כולל</th>
+                    <th>רווח הנדימן</th>
+                    <th>רווח המערכת</th>
+                    <th>סטטוס</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="payment in payments"
+                    :key="payment._id"
+                    class="payments-table__row"
+                  >
+                    <td>
+                      <div class="date-cell">
+                        <div class="date-value">
+                          {{ formatDate(payment.createdAt) }}
+                        </div>
+                        <div
+                          v-if="payment.createdAt"
+                          class="date-tooltip"
+                          :title="getTimeAgo(payment.createdAt)"
+                        >
+                          {{ getTimeAgo(payment.createdAt) }}
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="user-cell">
+                        <span>{{ payment.client?.username || "ללא שם" }}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="user-cell">
+                        <span>{{
+                          payment.handyman?.username || "ללא שם"
+                        }}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="job-desc">{{
+                        payment.job?.desc || payment.job?.locationText || "-"
+                      }}</span>
+                    </td>
+                    <td class="amount-cell">
+                      {{ formatCurrencySimple(payment.totalAmount || 0) }} ₪
+                    </td>
+                    <td class="amount-cell amount-cell--handyman">
+                      {{ formatCurrencySimple(payment.spacious_H || 0) }} ₪
+                    </td>
+                    <td class="amount-cell amount-cell--system">
+                      {{ formatCurrencySimple(payment.spacious_M || 0) }} ₪
+                    </td>
+                    <td>
+                      <span
+                        class="status-badge"
+                        :class="{
+                          'status-badge--transferred':
+                            payment.status === 'transferred',
+                          'status-badge--pending': payment.status === 'pending',
+                          'status-badge--failed': payment.status === 'failed',
+                        }"
+                      >
+                        {{
+                          payment.status === "transferred"
+                            ? "הועבר"
+                            : payment.status === "pending"
+                            ? "ממתין"
+                            : payment.status === "failed"
+                            ? "נכשל"
+                            : payment.status || "ממתין"
+                        }}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr v-if="payments.length === 0">
+                    <td colspan="8" class="no-data">אין תשלומים להצגה</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -1293,6 +1395,9 @@ export default {
       usersChartData: [],
       transactionsChart: null,
       transactionsChartData: [],
+      // Payments
+      payments: [],
+      isLoadingPayments: false,
     };
   },
   created() {
@@ -1356,6 +1461,9 @@ export default {
         this.loadStatus();
         this.loadUsersChart();
         this.loadTransactionsChart();
+      }
+      if (newTab === "payments") {
+        this.loadPayments();
       }
     },
   },
@@ -2394,6 +2502,20 @@ export default {
           },
         },
       });
+    },
+    async loadPayments() {
+      this.isLoadingPayments = true;
+      try {
+        const response = await axios.get(`${URL}/admin/payments`);
+        if (response.data.success) {
+          this.payments = response.data.payments || [];
+        }
+      } catch (error) {
+        console.error("Error loading payments:", error);
+        this.toast?.showError("שגיאה בטעינת התשלומים");
+      } finally {
+        this.isLoadingPayments = false;
+      }
     },
   },
 };

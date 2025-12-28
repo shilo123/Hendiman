@@ -74,7 +74,7 @@
           <h2 class="summaryCard__title">פרטים כספיים</h2>
           <div class="summaryCard__body">
             <div class="infoRow">
-              <span class="infoRow__label">מחיר העבודה:</span>
+              <span class="infoRow__label">סכום העסקה:</span>
               <span class="infoRow__value money"
                 >{{ jobInfo?.price || 0 }} ₪</span
               >
@@ -82,6 +82,10 @@
             <div class="infoRow">
               <span class="infoRow__label">עמלה (10%):</span>
               <span class="infoRow__value money">{{ commission }} ₪</span>
+            </div>
+            <div v-if="urgentFee > 0" class="infoRow">
+              <span class="infoRow__label">קריאה דחופה:</span>
+              <span class="infoRow__value money">{{ urgentFee }} ₪</span>
             </div>
             <div class="infoRow infoRow--total">
               <span class="infoRow__label">סה״כ התקבל:</span>
@@ -141,6 +145,7 @@ export default {
     return {
       store: null,
       jobInfo: null,
+      paymentInfo: null,
       rating: null,
       review: "",
       isLoading: true,
@@ -161,13 +166,22 @@ export default {
       if (!this.rating) return false;
       return this.rating % 1 >= 0.5;
     },
+    urgentFee() {
+      return this.jobInfo?.urgent ? 10 : 0;
+    },
     commission() {
-      const price = this.jobInfo?.price || 0;
-      return Math.round(price * 0.1);
+      const price = this.paymentInfo?.totalAmount || this.jobInfo?.price || 0; // Total amount client paid (includes urgent fee if any)
+      return Math.round(price * 0.1 * 100) / 100; // Commission is 10% of total amount
     },
     totalEarned() {
-      const price = this.jobInfo?.price || 0;
-      return price - this.commission;
+      // אם יש payment info, נשתמש בו (זה יותר מדויק)
+      if (this.paymentInfo && this.paymentInfo.spacious_H !== undefined) {
+        return this.paymentInfo.spacious_H;
+      }
+      // אחרת נחשב מה-job info
+      const price = this.jobInfo?.price || 0; // Total amount client paid
+      // הנדימן מקבל: סכום העסקה פחות עמלה (10%) פחות קריאה דחופה (אם יש)
+      return price - this.commission - this.urgentFee;
     },
   },
   async mounted() {
@@ -184,6 +198,19 @@ export default {
         if (jobResponse.data.success && jobResponse.data.job) {
           this.jobInfo = jobResponse.data.job;
         } else {
+        }
+
+        // Load payment info if available
+        try {
+          const paymentResponse = await axios.get(
+            `${URL}/payment/${this.jobId}`
+          );
+          if (paymentResponse.data.success && paymentResponse.data.payment) {
+            this.paymentInfo = paymentResponse.data.payment;
+          }
+        } catch (paymentError) {
+          // Payment might not exist yet, that's ok
+          console.log("No payment found for job:", this.jobId);
         }
 
         // Load rating
@@ -239,8 +266,7 @@ export default {
             }`;
             await navigator.clipboard.writeText(shareText);
             alert("הקישור הועתק ללוח");
-          } catch (clipboardError) {
-          }
+          } catch (clipboardError) {}
         }
       }
     },

@@ -1,6 +1,11 @@
+// Initialize Stripe with secret key
+// IMPORTANT: Make sure STRIPE_SECRET_KEY is set in .env
+// - Test mode: sk_test_... (from Stripe Dashboard > Developers > API keys)
+// - Production: sk_live_... (when ready for production)
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 // Platform fee percentage (default 10%)
+// Can be overridden with PLATFORM_FEE_PERCENT in .env
 const PLATFORM_FEE_PERCENT = parseFloat(process.env.PLATFORM_FEE_PERCENT) || 10;
 
 /**
@@ -273,4 +278,3 @@ module.exports = {
   // Constants
   PLATFORM_FEE_PERCENT,
 };
-
