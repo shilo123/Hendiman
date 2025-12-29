@@ -594,8 +594,8 @@
 </template>
 
 <script>
-import AddressAutocomplete from "@/components/AddressAutocomplete.vue";
-import CreditCardForm from "@/components/CreditCardForm.vue";
+import AddressAutocomplete from "@/components/Global/AddressAutocomplete.vue";
+import CreditCardForm from "@/components/CreateCall/CreditCardForm.vue";
 import { URL } from "@/Url/url";
 import axios from "axios";
 import { useToast } from "@/composables/useToast";

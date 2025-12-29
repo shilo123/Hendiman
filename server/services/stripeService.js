@@ -16,34 +16,26 @@ const PLATFORM_FEE_PERCENT = parseFloat(process.env.PLATFORM_FEE_PERCENT) || 10;
  */
 async function getOrCreateConnectedAccount(handymanUser, usersCollection) {
   try {
-    console.log(
-      `[stripeService] Getting or creating Stripe Connect account for handyman: ${handymanUser._id}`
-    );
-
     // If handyman already has a Stripe account ID, return it
     if (handymanUser.stripeAccountId) {
-      console.log(
-        `[stripeService] Handyman already has Stripe account: ${handymanUser.stripeAccountId}`
-      );
       return handymanUser.stripeAccountId;
     }
 
-    console.log(
-      `[stripeService] Creating new Stripe Express account for handyman: ${handymanUser.email}`
-    );
-
     // Create a new Stripe Express account
+    // Note: For Israel (IL), card_payments capability is not supported
+    // We only request transfers capability for cross-border payouts
+    // For IL accounts, we need to specify 'recipient' service agreement
     const account = await stripe.accounts.create({
       type: "express",
       country: "IL", // Israel
       email: handymanUser.email,
       capabilities: {
-        card_payments: { requested: true },
         transfers: { requested: true },
       },
+      tos_acceptance: {
+        service_agreement: "recipient",
+      },
     });
-
-    console.log(`[stripeService] Stripe account created: ${account.id}`);
 
     // Save the account ID to the database
     if (usersCollection && handymanUser._id) {
@@ -51,30 +43,33 @@ async function getOrCreateConnectedAccount(handymanUser, usersCollection) {
         { _id: handymanUser._id },
         { $set: { stripeAccountId: account.id } }
       );
-      console.log(
-        `[stripeService] Stripe account ID saved to database for handyman: ${handymanUser._id}`
-      );
     }
 
     return account.id;
   } catch (error) {
-    console.error(
-      `[stripeService] Error creating/getting Stripe Connect account for handyman ${handymanUser._id}:`,
-      error
-    );
-    console.error("[stripeService] Error details:", {
-      message: error.message,
-      type: error.type,
-      code: error.code,
-      statusCode: error.statusCode,
-    });
-
     // Check if the error is about Stripe Connect not being enabled
     if (error.message && error.message.includes("signed up for Connect")) {
-      console.warn(
-        `[stripeService] Stripe Connect is not enabled for this account. Please enable it in Stripe Dashboard: https://stripe.com/docs/connect`
-      );
       // Return null instead of throwing - let the calling code handle it
+      return null;
+    }
+
+    // Check if the error is about card_payments capability for IL
+    if (
+      error.message &&
+      error.message.includes("card_payments") &&
+      error.message.includes("IL")
+    ) {
+      // Return null - account creation failed
+      return null;
+    }
+
+    // Check if the error is about recipient service agreement for IL
+    if (
+      error.message &&
+      error.message.includes("recipient") &&
+      error.message.includes("IL")
+    ) {
+      // Return null - account creation failed
       return null;
     }
 
@@ -101,7 +96,6 @@ async function createOnboardingLink(accountId, returnUrl, refreshUrl) {
 
     return accountLink.url;
   } catch (error) {
-    console.error("Error creating onboarding link:", error);
     throw error;
   }
 }
@@ -124,8 +118,7 @@ async function createEscrowPaymentIntent({
   metadata = {},
 }) {
   try {
-    console.log("[stripeService] Creating Escrow Payment Intent...");
-    console.log("[stripeService] Parameters:", {
+    console.log(`[stripeService] createEscrowPaymentIntent called with:`, {
       amountAgorot,
       currency,
       handymanAccountId,
@@ -133,7 +126,50 @@ async function createEscrowPaymentIntent({
       metadata,
     });
 
-    const paymentIntent = await stripe.paymentIntents.create({
+    console.log(`[stripeService] Creating Payment Intent via Stripe API...`);
+    console.log(
+      `[stripeService] Stripe key exists: ${!!process.env.STRIPE_SECRET_KEY}`
+    );
+    console.log(
+      `[stripeService] Stripe key prefix: ${
+        process.env.STRIPE_SECRET_KEY?.substring(0, 7) || "N/A"
+      }`
+    );
+
+    console.log(
+      `[stripeService] Validating parameters before Stripe API call...`
+    );
+    console.log(
+      `[stripeService] - amountAgorot: ${amountAgorot} (type: ${typeof amountAgorot})`
+    );
+    console.log(
+      `[stripeService] - handymanAccountId: ${handymanAccountId} (type: ${typeof handymanAccountId})`
+    );
+    console.log(
+      `[stripeService] - platformFeeAgorot: ${platformFeeAgorot} (type: ${typeof platformFeeAgorot})`
+    );
+
+    if (!handymanAccountId || !handymanAccountId.startsWith("acct_")) {
+      const error = new Error(
+        `Invalid handymanAccountId: ${handymanAccountId}`
+      );
+      console.error(`[stripeService] ❌ ${error.message}`);
+      throw error;
+    }
+
+    if (!amountAgorot || amountAgorot <= 0) {
+      const error = new Error(`Invalid amountAgorot: ${amountAgorot}`);
+      console.error(`[stripeService] ❌ ${error.message}`);
+      throw error;
+    }
+
+    console.log(
+      `[stripeService] Parameters validated, calling Stripe API now...`
+    );
+    console.log(`[stripeService] This may take a few seconds...`);
+
+    // Add timeout to prevent hanging (15 seconds - more reasonable)
+    const createPromise = stripe.paymentIntents.create({
       amount: amountAgorot,
       currency: currency,
       capture_method: "manual", // Escrow: authorize now, capture later
@@ -145,11 +181,26 @@ async function createEscrowPaymentIntent({
       payment_method_types: ["card"],
     });
 
-    console.log("[stripeService] Payment Intent created successfully:", {
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(
+          new Error(
+            "Stripe API call timeout after 15 seconds - please check your internet connection or Stripe service status"
+          )
+        );
+      }, 15000);
+    });
+
+    console.log(`[stripeService] Starting Promise.race with timeout...`);
+    const paymentIntent = await Promise.race([createPromise, timeoutPromise]);
+    console.log(`[stripeService] Promise.race completed!`);
+
+    console.log(`[stripeService] ✅ Stripe API responded successfully!`);
+
+    console.log(`[stripeService] Payment Intent created successfully:`, {
       id: paymentIntent.id,
       status: paymentIntent.status,
-      amount: paymentIntent.amount,
-      currency: paymentIntent.currency,
+      clientSecret: paymentIntent.client_secret ? "exists" : "missing",
     });
 
     return {
@@ -158,15 +209,11 @@ async function createEscrowPaymentIntent({
       status: paymentIntent.status,
     };
   } catch (error) {
-    console.error(
-      "[stripeService] Error creating Escrow Payment Intent:",
-      error
-    );
-    console.error("[stripeService] Error details:", {
+    console.error(`[stripeService] ❌ Error creating Payment Intent:`, {
       message: error.message,
       type: error.type,
       code: error.code,
-      statusCode: error.statusCode,
+      stack: error.stack,
     });
     throw error;
   }
@@ -198,7 +245,6 @@ async function createPaymentIntent(amount, jobId, clientId, metadata = {}) {
 
     return paymentIntent;
   } catch (error) {
-    console.error("Error creating Payment Intent:", error);
     throw error;
   }
 }
@@ -213,7 +259,6 @@ async function capturePaymentIntent(paymentIntentId) {
     const paymentIntent = await stripe.paymentIntents.capture(paymentIntentId);
     return paymentIntent;
   } catch (error) {
-    console.error("Error capturing Payment Intent:", error);
     throw error;
   }
 }
@@ -247,7 +292,6 @@ async function createTransfer(amount, handymanStripeAccountId, metadata = {}) {
 
     return transfer;
   } catch (error) {
-    console.error("Error creating Transfer:", error);
     throw error;
   }
 }
@@ -262,7 +306,6 @@ async function cancelPaymentIntent(paymentIntentId) {
     const paymentIntent = await stripe.paymentIntents.cancel(paymentIntentId);
     return paymentIntent;
   } catch (error) {
-    console.error("Error canceling Payment Intent:", error);
     throw error;
   }
 }
@@ -302,7 +345,6 @@ async function refundPayment(paymentIntentId, amountAgorot = null) {
     const refund = await stripe.refunds.create(refundParams);
     return refund;
   } catch (error) {
-    console.error("Error refunding payment:", error);
     throw error;
   }
 }
@@ -317,7 +359,6 @@ async function getPaymentIntent(paymentIntentId) {
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
     return paymentIntent;
   } catch (error) {
-    console.error("Error retrieving Payment Intent:", error);
     throw error;
   }
 }

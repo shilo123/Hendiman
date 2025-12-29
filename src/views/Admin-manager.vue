@@ -386,6 +386,44 @@
               </button>
             </div>
 
+            <!-- Filters -->
+            <div class="payments-section__filters">
+              <input
+                v-model="paymentFilters.search"
+                type="text"
+                class="filter-input"
+                placeholder="חפש לפי לקוח, הנדימן או עבודה..."
+                @input="filterPayments"
+              />
+              <select
+                v-model="paymentFilters.status"
+                class="filter-select"
+                @change="filterPayments"
+              >
+                <option value="">כל הסטטוסים</option>
+                <option value="transferred">הועבר</option>
+                <option value="succeeded">בוצע</option>
+                <option value="captured">נלכד</option>
+                <option value="pending">ממתין</option>
+                <option value="processing">מעבד</option>
+                <option value="requires_payment_method">נדרש תשלום</option>
+                <option value="requires_capture">נדרש לכידה</option>
+                <option value="failed">נכשל</option>
+                <option value="canceled">בוטל</option>
+              </select>
+              <select
+                v-model="paymentFilters.sortBy"
+                class="filter-select"
+                @change="filterPayments"
+              >
+                <option value="">מיין לפי</option>
+                <option value="date-desc">תאריך (חדש לישן)</option>
+                <option value="date-asc">תאריך (ישן לחדש)</option>
+                <option value="amount-desc">סכום (גבוה לנמוך)</option>
+                <option value="amount-asc">סכום (נמוך לגבוה)</option>
+              </select>
+            </div>
+
             <div v-if="isLoadingPayments" class="loading-state">
               טוען תשלומים...
             </div>
@@ -402,11 +440,12 @@
                     <th>רווח הנדימן</th>
                     <th>רווח המערכת</th>
                     <th>סטטוס</th>
+                    <th>פעולות</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr
-                    v-for="payment in payments"
+                    v-for="payment in filteredPayments"
                     :key="payment._id"
                     class="payments-table__row"
                   >
@@ -438,7 +477,7 @@
                     </td>
                     <td>
                       <span class="job-desc">{{
-                        payment.job?.desc || payment.job?.locationText || "-"
+                        getJobNames(payment.job) || "-"
                       }}</span>
                     </td>
                     <td class="amount-cell">
@@ -453,27 +492,24 @@
                     <td>
                       <span
                         class="status-badge"
-                        :class="{
-                          'status-badge--transferred':
-                            payment.status === 'transferred',
-                          'status-badge--pending': payment.status === 'pending',
-                          'status-badge--failed': payment.status === 'failed',
-                        }"
+                        :class="getStatusBadgeClass(payment.status)"
                       >
-                        {{
-                          payment.status === "transferred"
-                            ? "הועבר"
-                            : payment.status === "pending"
-                            ? "ממתין"
-                            : payment.status === "failed"
-                            ? "נכשל"
-                            : payment.status || "ממתין"
-                        }}
+                        {{ getStatusLabel(payment.status) }}
                       </span>
                     </td>
+                    <td>
+                      <button
+                        class="delete-payment-btn"
+                        type="button"
+                        @click="confirmDeletePayment(payment)"
+                        title="מחק תשלום"
+                      >
+                        <font-awesome-icon :icon="['fas', 'trash']" />
+                      </button>
+                    </td>
                   </tr>
-                  <tr v-if="payments.length === 0">
-                    <td colspan="8" class="no-data">אין תשלומים להצגה</td>
+                  <tr v-if="filteredPayments.length === 0">
+                    <td colspan="9" class="no-data">אין תשלומים להצגה</td>
                   </tr>
                 </tbody>
               </table>
@@ -1127,6 +1163,42 @@
         </div>
       </div>
 
+      <!-- Delete Payment Confirmation Modal -->
+      <div
+        v-if="showDeletePaymentModal"
+        class="modal-overlay"
+        @click="closeDeletePaymentModal"
+      >
+        <div class="modal-content modal-content--confirm" @click.stop>
+          <div class="modal-header">
+            <h3 class="modal-title">מחיקת תשלום</h3>
+            <button class="modal-close" @click="closeDeletePaymentModal">
+              ×
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="confirm-message">
+              האם אתה בטוח שברצונך למחוק את התשלום?
+              <br />
+              <strong>
+                לקוח: {{ paymentToDelete?.client?.username || "ללא שם" }} |
+                הנדימן: {{ paymentToDelete?.handyman?.username || "ללא שם" }} |
+                סכום:
+                {{ formatCurrencySimple(paymentToDelete?.totalAmount || 0) }} ₪
+              </strong>
+              <br />
+              פעולה זו לא ניתנת לביטול!
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn--ghost" @click="closeDeletePaymentModal">
+              ביטול
+            </button>
+            <button class="btn btn--danger" @click="deletePayment">מחק</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Subcategory Edit Modal -->
       <div
         v-if="showSubcategoryModal"
@@ -1421,6 +1493,14 @@ export default {
       // Payments
       payments: [],
       isLoadingPayments: false,
+      paymentFilters: {
+        search: "",
+        status: "",
+        sortBy: "",
+      },
+      // Delete payment modal
+      showDeletePaymentModal: false,
+      paymentToDelete: null,
     };
   },
   created() {
@@ -1458,6 +1538,52 @@ export default {
         "Revenue.Urgent call": "קריאת חירום",
       };
       return fieldMap[this.editFinancialField] || this.editFinancialField;
+    },
+    filteredPayments() {
+      let filtered = [...this.payments];
+
+      // Filter by search
+      if (this.paymentFilters.search) {
+        const searchLower = this.paymentFilters.search.toLowerCase();
+        filtered = filtered.filter((payment) => {
+          const clientName = (payment.client?.username || "").toLowerCase();
+          const handymanName = (payment.handyman?.username || "").toLowerCase();
+          const jobNames = this.getJobNames(payment.job) || "";
+          const jobNamesLower = jobNames.toLowerCase();
+          return (
+            clientName.includes(searchLower) ||
+            handymanName.includes(searchLower) ||
+            jobNamesLower.includes(searchLower)
+          );
+        });
+      }
+
+      // Filter by status
+      if (this.paymentFilters.status) {
+        filtered = filtered.filter(
+          (payment) => payment.status === this.paymentFilters.status
+        );
+      }
+
+      // Sort
+      if (this.paymentFilters.sortBy) {
+        filtered.sort((a, b) => {
+          switch (this.paymentFilters.sortBy) {
+            case "date-desc":
+              return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+            case "date-asc":
+              return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+            case "amount-desc":
+              return (b.totalAmount || 0) - (a.totalAmount || 0);
+            case "amount-asc":
+              return (a.totalAmount || 0) - (b.totalAmount || 0);
+            default:
+              return 0;
+          }
+        });
+      }
+
+      return filtered;
     },
   },
   async mounted() {
@@ -2565,6 +2691,78 @@ export default {
         this.isLoadingPayments = false;
       }
     },
+    getStatusLabel(status) {
+      const statusMap = {
+        transferred: "הועבר",
+        pending: "ממתין",
+        failed: "נכשל",
+        succeeded: "בוצע",
+        requires_payment_method: "נדרש תשלום",
+        requires_capture: "נדרש לכידה",
+        requires_confirmation: "נדרש אישור",
+        requires_action: "נדרש פעולה",
+        processing: "מעבד",
+        canceled: "בוטל",
+        captured: "נלכד",
+      };
+      return statusMap[status] || status || "לא ידוע";
+    },
+    getStatusBadgeClass(status) {
+      const classMap = {
+        transferred: "status-badge--transferred",
+        succeeded: "status-badge--succeeded",
+        captured: "status-badge--captured",
+        pending: "status-badge--pending",
+        processing: "status-badge--processing",
+        requires_payment_method: "status-badge--requires-payment",
+        requires_capture: "status-badge--requires-capture",
+        requires_confirmation: "status-badge--requires-confirmation",
+        requires_action: "status-badge--requires-action",
+        failed: "status-badge--failed",
+        canceled: "status-badge--canceled",
+      };
+      return classMap[status] || "status-badge--unknown";
+    },
+    getJobNames(job) {
+      if (!job || !job.subcategoryInfo || !Array.isArray(job.subcategoryInfo)) {
+        return null;
+      }
+      const names = job.subcategoryInfo
+        .map((item) => item.subcategory)
+        .filter((name) => name); // Filter out empty/null values
+      return names.length > 0 ? names.join(", ") : null;
+    },
+    filterPayments() {
+      // This method is called when filters change
+      // The computed property filteredPayments will automatically update
+    },
+    confirmDeletePayment(payment) {
+      this.paymentToDelete = payment;
+      this.showDeletePaymentModal = true;
+    },
+    closeDeletePaymentModal() {
+      this.showDeletePaymentModal = false;
+      this.paymentToDelete = null;
+    },
+    async deletePayment() {
+      if (!this.paymentToDelete || !this.paymentToDelete._id) {
+        this.toast?.showError("שגיאה: תשלום לא תקין");
+        return;
+      }
+
+      try {
+        const paymentId = this.paymentToDelete._id;
+        await axios.delete(`${URL}/admin/payments/${paymentId}`);
+        this.toast?.showSuccess("תשלום נמחק בהצלחה");
+        await this.loadPayments();
+        this.closeDeletePaymentModal();
+      } catch (error) {
+        console.error("Error deleting payment:", error);
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה במחיקת התשלום"
+        );
+      }
+    },
   },
 };
 </script>
@@ -2977,6 +3175,26 @@ $muted: rgba(255, 255, 255, 0.62);
   }
 }
 
+.delete-payment-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: rgba(239, 68, 68, 0.5);
+    transform: translateY(-1px);
+  }
+}
+
 .no-rating {
   color: $muted;
   font-style: italic;
@@ -2988,6 +3206,202 @@ $muted: rgba(255, 255, 255, 0.62);
   padding: 40px;
   color: $muted;
   font-size: 14px;
+}
+
+/* Payments Section */
+.payments-section__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.payments-section__filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.payments-section__title {
+  font-size: 20px;
+  font-weight: 1000;
+  color: $orange2;
+}
+
+.refresh-payments-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba($orange, 0.15);
+  color: $orange2;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: $font-family;
+
+  &:hover {
+    background: rgba($orange, 0.25);
+    border-color: rgba($orange, 0.5);
+    transform: translateY(-1px);
+  }
+}
+
+.payments-table-wrapper {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid rgba($orange, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.payments-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  thead {
+    background: rgba($orange, 0.1);
+  }
+
+  th {
+    padding: 14px 12px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 1000;
+    color: $orange2;
+    border-bottom: 1px solid rgba($orange, 0.2);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 12px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 800;
+    color: $text;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    vertical-align: middle;
+  }
+
+  tbody tr {
+    transition: background 0.2s ease;
+
+    &:hover {
+      background: rgba($orange, 0.05);
+    }
+
+    &:last-child td {
+      border-bottom: none;
+    }
+  }
+}
+
+.amount-cell {
+  font-weight: 1000;
+  font-family: "Courier New", monospace;
+  color: $orange2;
+
+  &--handyman {
+    color: #10b981;
+  }
+
+  &--system {
+    color: #3b82f6;
+  }
+}
+
+.job-desc {
+  font-size: 13px;
+  color: $text;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-badge {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  display: inline-block;
+  border: 1px solid;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+
+  &--transferred {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border-color: rgba(16, 185, 129, 0.3);
+  }
+
+  &--succeeded {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border-color: rgba(16, 185, 129, 0.3);
+  }
+
+  &--captured {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+
+  &--pending {
+    background: rgba(255, 193, 7, 0.15);
+    color: #ffc107;
+    border-color: rgba(255, 193, 7, 0.3);
+  }
+
+  &--processing {
+    background: rgba(139, 92, 246, 0.15);
+    color: #8b5cf6;
+    border-color: rgba(139, 92, 246, 0.3);
+  }
+
+  &--requires-payment {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+
+  &--requires-capture {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+    border-color: rgba(251, 191, 36, 0.3);
+  }
+
+  &--requires-confirmation {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+    border-color: rgba(251, 191, 36, 0.3);
+  }
+
+  &--requires-action {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+    border-color: rgba(251, 191, 36, 0.3);
+  }
+
+  &--failed {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+
+  &--canceled {
+    background: rgba(107, 114, 128, 0.15);
+    color: #6b7280;
+    border-color: rgba(107, 114, 128, 0.3);
+  }
+
+  &--unknown {
+    background: rgba(107, 114, 128, 0.15);
+    color: #6b7280;
+    border-color: rgba(107, 114, 128, 0.3);
+  }
 }
 
 /* Categories Section */
@@ -4459,6 +4873,32 @@ select.form-input {
   .category-tab {
     padding: 10px 16px;
     font-size: 12px;
+  }
+
+  .payments-section__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .refresh-payments-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .payments-table-wrapper {
+    font-size: 12px;
+  }
+
+  .payments-table {
+    th,
+    td {
+      padding: 8px 6px;
+      font-size: 11px;
+    }
+  }
+
+  .job-desc {
+    max-width: 150px;
   }
 }
 </style>

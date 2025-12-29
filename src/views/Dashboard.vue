@@ -237,22 +237,32 @@
             <h2 class="onboardingModal__title">הגדר חשבון תשלומים</h2>
             <p class="onboardingModal__message">
               <span v-if="onboardingUrl">
-                הלקוח אישר את סיום העבודה. כדי לקבל את התשלום, עליך להשלים את
-                הגדרת חשבון התשלומים ב-Stripe.
+                עוד לא מלאת פרטי חשבון כדי שתוכל לקבל כסף. אנא השלם את הגדרת
+                חשבון התשלומים ב-Stripe.
               </span>
               <span v-else>
-                הלקוח אישר את סיום העבודה והתשלום שוחרר. כדי לקבל את הכסף, עליך
-                להגדיר חשבון תשלומים. אנא פנה לתמיכה להשלמת ההגדרה.
+                עוד לא מלאת פרטי חשבון כדי שתוכל לקבל כסף. אנא פנה לתמיכה להשלמת
+                ההגדרה.
               </span>
             </p>
             <div class="onboardingModal__actions">
-              <button
+              <a
                 v-if="onboardingUrl"
+                :href="onboardingUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="onboardingModal__btn onboardingModal__btn--primary"
+                @click="showOnboardingModal = false"
+              >
+                הגדר עכשיו
+              </a>
+              <button
+                v-else
                 class="onboardingModal__btn onboardingModal__btn--primary"
                 type="button"
-                @click="openOnboardingLink"
+                @click="fetchOnboardingLinkForModal"
               >
-                הגדר תשלומים
+                הגדר עכשיו
               </button>
               <button
                 class="onboardingModal__btn onboardingModal__btn--secondary"
@@ -635,7 +645,7 @@ import ClientActions from "@/components/Dashboard/ClientActions.vue";
 import HandymanTools from "@/components/Dashboard/HandymanTools.vue";
 import ViewHandymanDetails from "@/components/Dashboard/ViewHandymanDetails.vue";
 import ViewJob from "@/components/Dashboard/ViewJob.vue";
-import ProfileSheet from "@/components/ProfileSheet.vue";
+import ProfileSheet from "@/components/Dashboard/ProfileSheet.vue";
 import JobChat from "@/components/Dashboard/JobChat.vue";
 import JobChatMobile from "@/components/Dashboard/JobChatMobile.vue";
 import axios from "axios";
@@ -644,7 +654,7 @@ import { useToast } from "@/composables/useToast";
 import { getCurrentLocation } from "@/utils/geolocation";
 import { io } from "socket.io-client";
 import { messaging, VAPID_KEY, getToken, onMessage } from "@/firebase";
-import AddressAutocomplete from "@/components/AddressAutocomplete.vue";
+import AddressAutocomplete from "@/components/Global/AddressAutocomplete.vue";
 import citiesData from "@/APIS/AdressFromIsrael.json";
 
 export default {
@@ -1155,10 +1165,6 @@ export default {
 
         // Check if handyman needs to complete Stripe onboarding
         if (data.needsOnboarding && data.onboardingUrl) {
-          console.log(
-            "[Dashboard] Handyman needs onboarding, URL:",
-            data.onboardingUrl
-          );
           // Store onboarding URL for later use (can be shown in JobChat)
           this.toast?.showInfo(
             "עליך להשלים את הגדרת חשבון התשלומים כדי לקבל תשלומים. לחץ על 'הגדר תשלומים' בצ'אט."
@@ -1249,7 +1255,30 @@ export default {
       } catch (error) {
         // Clear loading state on error
         this.acceptingJobId = null;
-        this.toast?.showError("שגיאה בקבלת העבודה");
+
+        // Check if error is about needing onboarding
+        if (error.response?.data?.needsOnboarding) {
+          const onboardingUrl = error.response.data.onboardingUrl;
+
+          if (onboardingUrl) {
+            // Show modal with onboarding link
+            this.onboardingUrl = onboardingUrl;
+            this.showOnboardingModal = true;
+            this.toast?.showError(
+              error.response.data.message ||
+                "עליך להשלים את הגדרת חשבון התשלומים לפני קבלת עבודה"
+            );
+          } else {
+            this.toast?.showError(
+              error.response.data.message ||
+                "עליך להשלים את הגדרת חשבון התשלומים לפני קבלת עבודה"
+            );
+          }
+        } else {
+          this.toast?.showError(
+            error.response?.data?.message || "שגיאה בקבלת העבודה"
+          );
+        }
       }
     },
 
@@ -1391,7 +1420,6 @@ export default {
           this.toast?.showError(response.data.message || "שגיאה בעדכון העבודה");
         }
       } catch (error) {
-        console.error("Error updating job:", error);
         this.toast?.showError(
           error.response?.data?.message || "שגיאה בעדכון העבודה"
         );
@@ -1658,7 +1686,6 @@ export default {
           }
         });
       } catch (error) {
-        console.error("Error creating map:", error);
         this.toast?.showError("שגיאה ביצירת המפה. נסה שוב.");
       }
     },
@@ -1699,7 +1726,6 @@ export default {
         this.editJobForm.locationError = null;
         this.closeEditMapPicker();
       } catch (error) {
-        console.error("Error reverse geocoding:", error);
         // Even if reverse geocoding fails, use coordinates
         this.editJobForm.coordinates = {
           lat: this.editJobForm.selectedMapLocation.lat,
@@ -1739,7 +1765,6 @@ export default {
           this.toast?.showError(response.data.message || "שגיאה במחיקת העבודה");
         }
       } catch (error) {
-        console.error("Error deleting job:", error);
         this.toast?.showError(
           error.response?.data?.message || "שגיאה במחיקת העבודה"
         );
@@ -1979,30 +2004,19 @@ export default {
       });
 
       this.socket.on("connect", () => {
-        console.log("[Dashboard] WebSocket connected");
         // Join user's personal room (for receiving job-accepted events)
         const userId = this.store.user?._id || this.me?.id;
         if (userId) {
           const userIdString = String(userId);
-          console.log("[Dashboard] Joining user room:", `user-${userIdString}`);
           this.socket.emit("join-user", userIdString);
-        } else {
-          console.warn("[Dashboard] No userId found - cannot join user room");
         }
 
         // Join all jobs that belong to this user
         if (userId && this.store.jobs) {
-          console.log(
-            `[Dashboard] Joining ${this.store.jobs.length} job room(s)...`
-          );
           this.store.jobs.forEach((job) => {
             const jobId = job._id || job.id;
             if (jobId) {
               const jobIdString = String(jobId);
-              console.log(
-                "[Dashboard] Joining job room:",
-                `job-${jobIdString}`
-              );
               this.socket.emit("join-job", jobIdString);
             }
           });
@@ -2069,20 +2083,13 @@ export default {
       });
 
       // Listen for job done event (for clients)
-      console.log("[Dashboard] Registering job-done event listener...");
       // Track processed job-done events to prevent duplicate processing
       const processedJobDoneEvents = new Set();
       this.socket.on("job-done", async (data) => {
-        console.log("[Dashboard] ✅ Received job-done event:", data);
         const jobId = String(data.jobId || "");
 
         // Prevent duplicate processing of the same event
-        const eventKey = `${jobId}-${Date.now()}`;
         if (processedJobDoneEvents.has(jobId)) {
-          console.log(
-            "[Dashboard] ⚠️ Duplicate job-done event ignored for jobId:",
-            jobId
-          );
           return;
         }
         processedJobDoneEvents.add(jobId);
@@ -2096,24 +2103,9 @@ export default {
         if (!this.isHendiman) {
           // For client: check if this is their job
           const userId = this.store.user?._id || this.me?.id;
-          console.log("[Dashboard] Client userId:", userId, "jobId:", jobId);
           if (userId) {
             // Refresh to get updated job data
-            console.log("[Dashboard] Refreshing jobs data...");
             await this.onRefresh();
-
-            // Log all jobs after refresh for debugging
-            console.log(
-              "[Dashboard] Total jobs after refresh:",
-              this.store.jobs?.length || 0
-            );
-            console.log("[Dashboard] Looking for jobId:", jobId);
-            if (this.store.jobs && this.store.jobs.length > 0) {
-              console.log(
-                "[Dashboard] Available job IDs:",
-                this.store.jobs.map((j) => String(j._id || j.id))
-              );
-            }
 
             // First check cache, then store
             let doneJob = this.doneJobsCache?.find(
@@ -2124,16 +2116,9 @@ export default {
                 (j) => String(j._id || j.id) === jobId
               );
             }
-            console.log(
-              "[Dashboard] Done job found in cache/store:",
-              doneJob ? "YES" : "NO"
-            );
 
             // If job not found (because it's filtered out as "done" in GetDataDeshboard), fetch it directly from server
             if (!doneJob) {
-              console.log(
-                "[Dashboard] Job not found in store (likely filtered as 'done'), fetching directly from server..."
-              );
               try {
                 const { URL } = await import("@/Url/url");
                 const response = await axios.get(`${URL}/jobs/${jobId}`);
@@ -2143,13 +2128,6 @@ export default {
                   response.data.job
                 ) {
                   doneJob = response.data.job;
-                  console.log(
-                    "[Dashboard] ✅ Job fetched directly from server:",
-                    {
-                      status: doneJob.status,
-                      clientApproved: doneJob.clientApproved,
-                    }
-                  );
                   // Add to store temporarily so it's available
                   if (!this.store.jobs) {
                     this.store.jobs = [];
@@ -2160,7 +2138,6 @@ export default {
                   );
                   if (!exists) {
                     this.store.jobs.push(doneJob);
-                    console.log("[Dashboard] Job added to store");
                   }
                   // Also save in component data to persist after refresh
                   if (!this.doneJobsCache) {
@@ -2171,64 +2148,30 @@ export default {
                   );
                   if (!existsInCache) {
                     this.doneJobsCache.push(doneJob);
-                    console.log("[Dashboard] Job added to cache");
                   }
-                } else {
-                  console.log(
-                    "[Dashboard] ❌ Job not found in server response"
-                  );
                 }
               } catch (fetchError) {
-                console.error(
-                  "[Dashboard] ❌ Error fetching job directly:",
-                  fetchError
-                );
+                // Error fetching job
               }
             }
 
-            if (doneJob) {
-              console.log("[Dashboard] Done job details:", {
-                id: doneJob._id || doneJob.id,
-                status: doneJob.status,
-                clientId: doneJob.clientId,
-                clientIdType: typeof doneJob.clientId,
-                userId: userId,
-                userIdType: typeof userId,
-                clientApproved: doneJob.clientApproved,
-              });
-            } else {
-              console.log(
-                "[Dashboard] ❌ Job still not found after direct fetch"
-              );
-            }
             // Only open chat if this job belongs to the current client
             if (
               doneJob &&
               String(doneJob.clientId || doneJob.client?._id || "") ===
                 String(userId)
             ) {
-              console.log("[Dashboard] Opening chat for done job:", jobId);
               // Open chat to show approval button
               this.activeAssignedJob = doneJob;
               this.isChatMinimized = false;
-            } else {
-              console.log(
-                "[Dashboard] Job does not belong to this client or not found"
-              );
             }
-          } else {
-            console.log(
-              "[Dashboard] No userId found - cannot process job-done event"
-            );
           }
         }
       });
 
       // Listen for onboarding required (when client approves and handyman needs onboarding)
       this.socket.on("onboarding-required", async (data) => {
-        console.log("[Dashboard] Received onboarding-required event:", data);
         if (this.isHendiman && data.needsOnboarding) {
-          console.log("[Dashboard] Showing onboarding modal for handyman");
           this.onboardingUrl = data.onboardingUrl;
           this.showOnboardingModal = true;
         }
@@ -2236,55 +2179,38 @@ export default {
 
       // Listen for job-done event to show approval modal for client
       this.socket.on("job-done", async (data) => {
-        console.log("[Dashboard] Received job-done event:", data);
         if (!this.isHendiman) {
           const jobId = String(data.jobId || "");
-          console.log("[Dashboard] Client - looking for job:", jobId);
           // Refresh jobs to get latest data
           await this.onRefresh();
           // Check if this job needs approval
           const job = this.store.jobs?.find(
             (j) => String(j._id || j.id) === jobId
           );
-          console.log(
-            "[Dashboard] Found job after refresh:",
-            job ? "YES" : "NO"
-          );
-          if (job) {
-            console.log(
-              "[Dashboard] Job status:",
-              job.status,
-              "clientApproved:",
-              job.clientApproved
-            );
-          }
-          if (job && job.status === "done" && !job.clientApproved) {
-            console.log("[Dashboard] Showing approval modal for client");
+          if (
+            job &&
+            job.status === "done" &&
+            (job.clientApproved === false || job.clientApproved == null)
+          ) {
             this.pendingApprovalJob = job;
             this.showClientApprovalModal = true;
           } else if (!job) {
             // If job not found in store, try to fetch it directly
-            console.log(
-              "[Dashboard] Job not found in store, fetching directly..."
-            );
             try {
               const { URL } = await import("@/Url/url");
               const response = await axios.get(`${URL}/jobs/${jobId}`);
               if (response.data && response.data.success && response.data.job) {
                 const fetchedJob = response.data.job;
-                if (
-                  fetchedJob.status === "done" &&
-                  !fetchedJob.clientApproved
-                ) {
-                  console.log(
-                    "[Dashboard] Showing approval modal for client (from direct fetch)"
-                  );
+                const needsApproval =
+                  fetchedJob.clientApproved === false ||
+                  fetchedJob.clientApproved == null;
+                if (fetchedJob.status === "done" && needsApproval) {
                   this.pendingApprovalJob = fetchedJob;
                   this.showClientApprovalModal = true;
                 }
               }
             } catch (fetchError) {
-              console.error("[Dashboard] Error fetching job:", fetchError);
+              // Error fetching job
             }
           }
         }
@@ -2319,10 +2245,7 @@ export default {
 
       // Listen for onboarding required (when client approves and handyman needs onboarding)
       this.socket.on("onboarding-required", async (data) => {
-        console.log("[Dashboard] Received onboarding-required event:", data);
-        console.log("[Dashboard] isHendiman:", this.isHendiman);
         if (this.isHendiman && data.needsOnboarding) {
-          console.log("[Dashboard] Showing onboarding modal for handyman");
           // Store onboarding URL and show modal (even if URL is null, show message)
           this.onboardingUrl = data.onboardingUrl;
           this.showOnboardingModal = true;
@@ -2331,7 +2254,6 @@ export default {
 
       // Listen for job-approved event (when client approves job)
       this.socket.on("job-approved", async (data) => {
-        console.log("[Dashboard] Received job-approved event:", data);
         if (this.isHendiman) {
           const jobId = String(data.jobId || "");
           // Refresh jobs to get latest data
@@ -2346,19 +2268,90 @@ export default {
             job.clientApproved === true &&
             !job.handymanReceivedPayment
           ) {
-            console.log(
-              "[Dashboard] Handyman - job approved, fetching onboarding link"
-            );
             await this.fetchOnboardingLinkForJob(job);
           }
         }
       });
     },
+    async fetchOnboardingLinkForModal() {
+      if (!this.isHendiman) return;
+
+      // Use route ID as fallback if store.user._id is not available
+      const handymanId =
+        this.store.user?._id ||
+        this.me?.id ||
+        this.me?._id ||
+        this.$route.params.id;
+
+      if (!handymanId) {
+        this.toast?.showError("לא ניתן לזהות את המשתמש");
+        return;
+      }
+
+      try {
+        const { URL } = await import("@/Url/url");
+        const response = await axios.post(
+          `${URL}/api/handyman/stripe/onboarding-link`,
+          { handymanId: String(handymanId) }
+        );
+
+        if (response.data && response.data.success && response.data.url) {
+          this.onboardingUrl = response.data.url;
+          // Save handymanId to localStorage before opening Stripe onboarding
+          if (handymanId) {
+            localStorage.setItem("userId", String(handymanId));
+          }
+          // Open the onboarding link in a new tab
+          window.open(this.onboardingUrl, "_blank");
+          this.showOnboardingModal = false;
+        } else {
+          const errorMessage =
+            response.data?.message ||
+            "לא ניתן ליצור קישור הגדרת תשלומים. אנא נסה שוב מאוחר יותר.";
+          this.toast?.showError(errorMessage);
+        }
+      } catch (error) {
+        const errorMessage =
+          error.response?.data?.message ||
+          "שגיאה בטעינת קישור הגדרת תשלומים. אנא נסה שוב מאוחר יותר.";
+        this.toast?.showError(errorMessage);
+      }
+    },
     async fetchOnboardingLinkForJob(job) {
       if (!job || !this.isHendiman) return;
 
-      const handymanId = this.store.user?._id || this.me?.id;
-      if (!handymanId) return;
+      // Use route ID as fallback if store.user._id is not available
+      const handymanId =
+        this.store.user?._id ||
+        this.me?.id ||
+        this.me?._id ||
+        this.$route.params.id;
+      if (!handymanId) {
+        return;
+      }
+
+      // First check if onboarding is actually needed
+      try {
+        const { URL } = await import("@/Url/url");
+        const statusResponse = await axios.get(
+          `${URL}/api/handyman/${handymanId}/stripe/status`
+        );
+
+        if (
+          statusResponse.data &&
+          statusResponse.data.success &&
+          !statusResponse.data.needsOnboarding
+        ) {
+          // Account is ready, no need to show onboarding modal
+          return;
+        }
+      } catch (statusError) {
+        console.error(
+          "[Dashboard] Error checking onboarding status:",
+          statusError
+        );
+        // Continue to show modal if status check fails
+      }
 
       try {
         const { URL } = await import("@/Url/url");
@@ -2375,17 +2368,77 @@ export default {
           this.showOnboardingModal = true;
         }
       } catch (error) {
-        console.error("Error fetching onboarding link:", error);
         // Show modal even if error (with message that they need to contact support)
         this.onboardingUrl = null;
         this.showOnboardingModal = true;
+      }
+    },
+    async checkHandymanOnboardingStatus() {
+      if (!this.isHendiman) return;
+
+      // Use route ID as fallback if store.user._id is not available
+      const handymanId =
+        this.store.user?._id ||
+        this.me?.id ||
+        this.me?._id ||
+        this.$route.params.id;
+
+      if (!handymanId) {
+        return;
+      }
+
+      try {
+        const { URL } = await import("@/Url/url");
+        const response = await axios.get(
+          `${URL}/api/handyman/${handymanId}/stripe/status`
+        );
+
+        if (response.data && response.data.success) {
+          const {
+            needsOnboarding,
+            hasAccount,
+            transfersEnabled,
+            payoutsEnabled,
+          } = response.data;
+
+          // Only show modal if account doesn't exist
+          // If account exists (even if not fully ready), don't show modal on mount
+          // The modal will show when client approves a job (via fetchOnboardingLinkForJob)
+          if (needsOnboarding && !hasAccount) {
+            // No account exists - show modal to create account
+            // Fetch onboarding link
+            const linkResponse = await axios.post(
+              `${URL}/api/handyman/stripe/onboarding-link`,
+              { handymanId: String(handymanId) }
+            );
+
+            if (
+              linkResponse.data &&
+              linkResponse.data.success &&
+              linkResponse.data.url
+            ) {
+              this.onboardingUrl = linkResponse.data.url;
+            } else {
+              this.onboardingUrl = null;
+            }
+
+            this.showOnboardingModal = true;
+          }
+        }
+      } catch (error) {
+        // Don't show modal on error - might be temporary issue
       }
     },
     async handleClientApprove() {
       if (!this.pendingApprovalJob) return;
 
       const jobId = this.pendingApprovalJob._id || this.pendingApprovalJob.id;
-      const clientId = this.store.user?._id || this.me?.id;
+      // Use clientId from the job itself (more reliable than store.user)
+      const clientId =
+        this.pendingApprovalJob.clientId?.toString() ||
+        this.pendingApprovalJob.clientId ||
+        this.store.user?._id ||
+        this.me?.id;
 
       if (!jobId || !clientId) {
         this.toast?.showError("שגיאה: חסרים פרטים לאישור העבודה");
@@ -2411,10 +2464,14 @@ export default {
           );
         }
       } catch (error) {
-        console.error("Error approving job:", error);
-        this.toast?.showError(
-          error.response?.data?.message || "שגיאה באישור העבודה"
-        );
+        console.error("[Dashboard] Error approving job:", error);
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          "שגיאה באישור העבודה";
+        console.log("[Dashboard] Showing error message:", errorMessage);
+        this.toast?.showError(errorMessage);
+        console.log("[Dashboard] Error message should be displayed");
       }
     },
     handleClientReject() {
@@ -2423,6 +2480,15 @@ export default {
     },
     openOnboardingLink() {
       if (this.onboardingUrl) {
+        // Save handymanId to localStorage before opening Stripe onboarding
+        const handymanId =
+          this.store.user?._id ||
+          this.me?.id ||
+          this.me?._id ||
+          this.$route.params.id;
+        if (handymanId) {
+          localStorage.setItem("userId", String(handymanId));
+        }
         window.open(this.onboardingUrl, "_blank");
         this.showOnboardingModal = false;
       } else {
@@ -2800,9 +2866,8 @@ export default {
       // קבל את הקואורדינטות הנוכחיות של המשתמש
       // נטען את המשתמש פעם אחת בלבד עם הקואורדינטות שלו (אם יש)
       // קודם נטען בלי קואורדינטות כדי לקבל את הקואורדינטות של המשתמש מה-DB
-      const initialData = await this.store.fetchDashboardData(
-        this.$route.params.id
-      );
+      const routeId = this.$route.params.id;
+      const initialData = await this.store.fetchDashboardData(routeId);
 
       // אם המשתמש לא נמצא, החזר ל-דף הבית
       if (!initialData || !initialData.User) {
@@ -2899,21 +2964,16 @@ export default {
           }, 500);
         }
 
-        // Check for jobs that need client approval (status: 'done', clientApproved: false)
+        // Check for jobs that need client approval (status: 'done', clientApproved: false or null/undefined)
         if (!this.isHendiman && data?.Jobs) {
-          const doneJobsNeedingApproval = data.Jobs.filter(
-            (job) => job.status === "done" && !job.clientApproved
-          );
-          console.log(
-            "[Dashboard] Found done jobs needing approval:",
-            doneJobsNeedingApproval.length
-          );
+          const doneJobsNeedingApproval = data.Jobs.filter((job) => {
+            const isDone = job.status === "done";
+            const needsApproval =
+              job.clientApproved === false || job.clientApproved == null;
+            return isDone && needsApproval;
+          });
           if (doneJobsNeedingApproval.length > 0) {
             // Show approval modal for the first job
-            console.log(
-              "[Dashboard] Showing approval modal for job:",
-              doneJobsNeedingApproval[0]._id || doneJobsNeedingApproval[0].id
-            );
             this.pendingApprovalJob = doneJobsNeedingApproval[0];
             this.showClientApprovalModal = true;
           }
@@ -2927,19 +2987,45 @@ export default {
               job.clientApproved === true &&
               !job.handymanReceivedPayment
           );
-          console.log(
-            "[Dashboard] Found approved jobs needing onboarding:",
-            approvedJobsNeedingOnboarding.length
-          );
           if (approvedJobsNeedingOnboarding.length > 0) {
-            // Get onboarding link for the first job
-            const job = approvedJobsNeedingOnboarding[0];
-            console.log(
-              "[Dashboard] Fetching onboarding link for job:",
-              job._id || job.id
-            );
-            await this.fetchOnboardingLinkForJob(job);
+            // First check if account is ready - if so, payment should have been released
+            // Only show onboarding modal if account is not ready
+            const handymanId =
+              this.store.user?._id ||
+              this.me?.id ||
+              this.me?._id ||
+              this.$route.params.id;
+
+            if (handymanId) {
+              try {
+                const { URL } = await import("@/Url/url");
+                const statusResponse = await axios.get(
+                  `${URL}/api/handyman/${handymanId}/stripe/status`
+                );
+
+                if (
+                  statusResponse.data &&
+                  statusResponse.data.success &&
+                  !statusResponse.data.needsOnboarding
+                ) {
+                  // Account is ready - payment should have been released, don't show modal
+                } else {
+                  // Account not ready - show onboarding modal
+                  const job = approvedJobsNeedingOnboarding[0];
+                  await this.fetchOnboardingLinkForJob(job);
+                }
+              } catch (statusError) {
+                // If status check fails, show modal to be safe
+                const job = approvedJobsNeedingOnboarding[0];
+                await this.fetchOnboardingLinkForJob(job);
+              }
+            }
           }
+        }
+
+        // Check if handyman needs to complete onboarding (on mount)
+        if (this.isHendiman) {
+          await this.checkHandymanOnboardingStatus();
         }
       }
 
@@ -5035,6 +5121,9 @@ $r2: 26px;
   transition: all 0.2s ease;
   font-family: $font-family;
   min-width: 140px;
+  display: inline-block;
+  text-decoration: none;
+  text-align: center;
 
   @media (max-width: 768px) {
     width: 100%;

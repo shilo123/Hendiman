@@ -546,8 +546,8 @@
 import axios from "axios";
 import { useToast } from "@/composables/useToast";
 import { URL } from "@/Url/url";
-import AddressAutocomplete from "@/components/AddressAutocomplete.vue";
-import CategoryCheckboxSelector from "@/components/CategoryCheckboxSelector.vue";
+import AddressAutocomplete from "@/components/Global/AddressAutocomplete.vue";
+import CategoryCheckboxSelector from "@/components/Global/CategoryCheckboxSelector.vue";
 export default {
   name: "RegisterView",
   components: {

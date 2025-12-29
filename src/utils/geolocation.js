@@ -18,9 +18,6 @@ export async function getCurrentLocation() {
       (err) => {
         // If timeout or position unavailable, try again with lower accuracy (faster)
         if (err.code === 3 || err.code === 2) {
-          console.log(
-            "Geolocation high accuracy failed, trying with standard accuracy..."
-          );
           navigator.geolocation.getCurrentPosition(
             (position) => {
               const { latitude, longitude, accuracy } = position.coords;

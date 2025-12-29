@@ -123,6 +123,36 @@
           </div>
         </section>
 
+        <!-- Payment Account Setup (handyman only) -->
+        <section v-if="isHandyman" class="card">
+          <div class="card__head">
+            <h3 class="card__title">חשבון תשלומים</h3>
+          </div>
+          <div class="muted" style="margin-bottom: 10px">
+            הגדר את פרטי החשבון שלך כדי לקבל תשלומים
+          </div>
+          <a
+            v-if="onboardingUrl"
+            :href="onboardingUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="paymentBtn"
+          >
+            <span>💳</span>
+            הגדר חשבון תשלומים
+          </a>
+          <button
+            v-else
+            class="paymentBtn"
+            type="button"
+            @click="fetchOnboardingLink"
+            :disabled="isLoadingOnboarding"
+          >
+            <span>💳</span>
+            {{ isLoadingOnboarding ? "טוען..." : "הגדר חשבון תשלומים" }}
+          </button>
+        </section>
+
         <!-- Logout section -->
         <section class="card">
           <button
@@ -241,7 +271,7 @@
 
 <script>
 import cities from "@/APIS/AdressFromIsrael.json";
-import CategoryCheckboxSelector from "@/components/CategoryCheckboxSelector.vue";
+import CategoryCheckboxSelector from "@/components/Global/CategoryCheckboxSelector.vue";
 import axios from "axios";
 import { URL } from "@/Url/url";
 
@@ -270,6 +300,10 @@ export default {
       showDeleteConfirm: false,
       isDeleting: false,
       isLoggingOut: false,
+
+      // Payment onboarding
+      onboardingUrl: null,
+      isLoadingOnboarding: false,
     };
   },
   computed: {
@@ -305,6 +339,9 @@ export default {
         this.citySearch = "";
         this.specOpen = false;
         this.cityError = "";
+      } else if (v && this.isHandyman) {
+        // Check onboarding status when profile sheet opens
+        this.checkOnboardingStatus();
       }
     },
   },
@@ -431,6 +468,65 @@ export default {
         this.$router.push("/");
       } finally {
         this.isLoggingOut = false;
+      }
+    },
+
+    async checkOnboardingStatus() {
+      if (!this.isHandyman) return;
+
+      const handymanId = this.user?._id || this.user?.id;
+      if (!handymanId) {
+        return;
+      }
+
+      try {
+        const response = await axios.get(
+          `${URL}/api/handyman/${handymanId}/stripe/status`
+        );
+
+        if (response.data && response.data.success) {
+          const { needsOnboarding } = response.data;
+
+          if (needsOnboarding) {
+            // Fetch onboarding link
+            await this.fetchOnboardingLink();
+          } else {
+            // Onboarding is complete, clear URL
+            this.onboardingUrl = null;
+          }
+        }
+      } catch (error) {
+        console.error("Error checking onboarding status:", error);
+        // Don't show error to user - just try to fetch link
+        await this.fetchOnboardingLink();
+      }
+    },
+
+    async fetchOnboardingLink() {
+      if (!this.isHandyman) return;
+
+      const handymanId = this.user?._id || this.user?.id;
+      if (!handymanId) return;
+
+      this.isLoadingOnboarding = true;
+      try {
+        const response = await axios.post(
+          `${URL}/api/handyman/stripe/onboarding-link`,
+          { handymanId: String(handymanId) }
+        );
+
+        if (response.data && response.data.success && response.data.url) {
+          this.onboardingUrl = response.data.url;
+        } else {
+          this.onboardingUrl = null;
+          alert("לא ניתן ליצור קישור הגדרת תשלומים. אנא נסה שוב מאוחר יותר.");
+        }
+      } catch (error) {
+        console.error("Error fetching onboarding link:", error);
+        this.onboardingUrl = null;
+        alert("שגיאה בטעינת קישור הגדרת תשלומים. אנא נסה שוב מאוחר יותר.");
+      } finally {
+        this.isLoadingOnboarding = false;
       }
     },
   },
@@ -744,6 +840,37 @@ $orange2: #ff8a2b;
 .logoutBtn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.paymentBtn {
+  width: 100%;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba($orange, 0.35);
+  background: rgba($orange, 0.12);
+  color: $orange;
+  font-weight: 1000;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.paymentBtn:hover:not(:disabled) {
+  background: rgba($orange, 0.18);
+  border-color: rgba($orange, 0.45);
+}
+
+.paymentBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.paymentBtn span {
+  font-size: 18px;
 }
 
 .dangerBtn {

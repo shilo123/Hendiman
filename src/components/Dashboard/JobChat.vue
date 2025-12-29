@@ -206,6 +206,18 @@
           <div class="segTip">עדכון סטטוס שולח התראה ללקוח</div>
         </div>
 
+        <!-- Price change button (for handyman) -->
+        <div v-if="isHandyman && (jobStatus === 'assigned' || jobStatus === 'on_the_way' || jobStatus === 'in_progress')" class="segWrap">
+          <button
+            class="seg__btn seg__btn--full seg__btn--price"
+            type="button"
+            @click="showPriceChangeModal = true"
+          >
+            💰 העלאה/הורדה במחיר
+          </button>
+          <div class="segTip">ניתן לשנות את המחיר עד 20%</div>
+        </div>
+
         <!-- Client location button -->
         <div v-if="!isHandyman && showStatusButtons" class="segWrap">
           <button
@@ -226,8 +238,7 @@
           v-if="
             !isHandyman &&
             jobStatus === 'done' &&
-            !(jobInfo?.clientApproved || job?.clientApproved) &&
-            !ratingSubmitted
+            !(jobInfo?.clientApproved || job?.clientApproved)
           "
           class="approvalCard"
         >
@@ -248,9 +259,14 @@
           </div>
         </div>
 
-        <!-- Rating overlay card (client only) -->
+        <!-- Rating overlay card (client only) - only show if client approved and rating not submitted -->
         <div
-          v-if="!isHandyman && jobStatus === 'done' && !ratingSubmitted"
+          v-if="
+            !isHandyman &&
+            jobStatus === 'done' &&
+            !ratingSubmitted &&
+            (jobInfo?.clientApproved || job?.clientApproved)
+          "
           class="rateCard"
         >
           <div class="rateCard__title">דרג את ההנדימן</div>
@@ -530,6 +546,122 @@
       </div>
     </div>
 
+    <!-- Price Change Modal (for handyman) -->
+    <div
+      v-if="showPriceChangeModal"
+      class="priceChangeModal"
+      dir="rtl"
+      @click.self="showPriceChangeModal = false"
+    >
+      <div class="priceChangeModal__content">
+        <button
+          class="priceChangeModal__close"
+          type="button"
+          @click="showPriceChangeModal = false"
+          aria-label="סגור"
+        >
+          ✕
+        </button>
+        <h2 class="priceChangeModal__title">שינוי מחיר</h2>
+        <p class="priceChangeModal__message">
+          המחיר הנוכחי: <strong>{{ currentPrice }} ₪</strong>
+        </p>
+        <p class="priceChangeModal__hint">
+          ניתן לשנות את המחיר עד 20% (עד {{ maxPriceChange }} ₪)
+        </p>
+        <div class="priceChangeModal__inputGroup">
+          <label class="priceChangeModal__label">מחיר חדש (₪)</label>
+          <input
+            v-model.number="newPrice"
+            type="number"
+            class="priceChangeModal__input"
+            :min="minAllowedPrice"
+            :max="maxAllowedPrice"
+            step="1"
+            placeholder="הכנס מחיר חדש"
+          />
+          <div class="priceChangeModal__changeInfo">
+            <span v-if="priceChange > 0" class="priceChangeModal__increase">
+              +{{ priceChange }} ₪ ({{ priceChangePercent }}%)
+            </span>
+            <span v-else-if="priceChange < 0" class="priceChangeModal__decrease">
+              {{ priceChange }} ₪ ({{ priceChangePercent }}%)
+            </span>
+            <span v-else class="priceChangeModal__noChange">
+              ללא שינוי
+            </span>
+          </div>
+        </div>
+        <div class="priceChangeModal__actions">
+          <button
+            class="priceChangeModal__btn priceChangeModal__btn--cancel"
+            type="button"
+            @click="showPriceChangeModal = false"
+          >
+            ביטול
+          </button>
+          <button
+            class="priceChangeModal__btn priceChangeModal__btn--submit"
+            type="button"
+            @click="requestPriceChange"
+            :disabled="!isPriceChangeValid || isRequestingPriceChange"
+          >
+            {{ isRequestingPriceChange ? "שולח..." : "שלח בקשה" }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Price Change Request Modal (for client) -->
+    <div
+      v-if="showPriceChangeRequestModal"
+      class="priceChangeRequestModal"
+      dir="rtl"
+      @click.self="showPriceChangeRequestModal = false"
+    >
+      <div class="priceChangeRequestModal__content">
+        <h2 class="priceChangeRequestModal__title">בקשת שינוי מחיר</h2>
+        <p class="priceChangeRequestModal__message">
+          ההנדימן מבקש לשנות את מחיר העבודה:
+        </p>
+        <div class="priceChangeRequestModal__priceInfo">
+          <div class="priceChangeRequestModal__priceRow">
+            <span>מחיר נוכחי:</span>
+            <strong>{{ priceChangeRequest.oldPrice }} ₪</strong>
+          </div>
+          <div class="priceChangeRequestModal__priceRow">
+            <span>מחיר חדש:</span>
+            <strong>{{ priceChangeRequest.newPrice }} ₪</strong>
+          </div>
+          <div class="priceChangeRequestModal__priceRow priceChangeRequestModal__priceRow--change">
+            <span>שינוי:</span>
+            <strong :class="priceChangeRequest.change > 0 ? 'increase' : 'decrease'">
+              {{ priceChangeRequest.change > 0 ? '+' : '' }}{{ priceChangeRequest.change }} ₪
+              ({{ priceChangeRequest.changePercent }}%)
+            </strong>
+          </div>
+        </div>
+        <div class="priceChangeRequestModal__actions">
+          <button
+            class="priceChangeRequestModal__btn priceChangeRequestModal__btn--reject"
+            type="button"
+            @click="respondToPriceChange(false)"
+            :disabled="isRespondingToPriceChange"
+          >
+            דחה
+          </button>
+          <button
+            class="priceChangeRequestModal__btn priceChangeRequestModal__btn--accept"
+            type="button"
+            @click="respondToPriceChange(true)"
+            :disabled="isRespondingToPriceChange"
+          >
+            {{ isRespondingToPriceChange ? "מעבד..." : "אשר" }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Cancel Job Confirmation Modal -->
     <div
       v-if="showCancelConfirmModal"
@@ -540,22 +672,29 @@
       <div class="cancelConfirmModal__content">
         <h2 class="cancelConfirmModal__title">ביטול עבודה</h2>
         <p class="cancelConfirmModal__message">
-          האם אתה בטוח שברצונך לבטל את העבודה?
+          מה תרצה לעשות?
         </p>
-        <div class="cancelConfirmModal__actions">
+        <div class="cancelConfirmModal__actions cancelConfirmModal__actions--vertical">
+          <button
+            class="cancelConfirmModal__btn cancelConfirmModal__btn--cancel-handyman"
+            type="button"
+            @click="handleCancelJobForHandyman"
+          >
+            בטל להנדימן הזה
+          </button>
+          <button
+            class="cancelConfirmModal__btn cancelConfirmModal__btn--cancel-complete"
+            type="button"
+            @click="handleCancelJobComplete"
+          >
+            בטל עבודה לגמרי
+          </button>
           <button
             class="cancelConfirmModal__btn cancelConfirmModal__btn--no"
             type="button"
             @click="showCancelConfirmModal = false"
           >
-            לא
-          </button>
-          <button
-            class="cancelConfirmModal__btn cancelConfirmModal__btn--yes"
-            type="button"
-            @click="handleCancelJob"
-          >
-            כן, בטל
+            ביטול
           </button>
         </div>
       </div>
@@ -662,27 +801,23 @@ export default {
       isApproving: false, // Track approval request state
       showOnboardingModal: false, // Show onboarding popup
       onboardingUrl: null, // Onboarding URL to display
+      showPriceChangeModal: false, // Show price change modal for handyman
+      newPrice: null, // New price input
+      showPriceChangeRequestModal: false, // Show price change request modal for client
+      priceChangeRequest: null, // Price change request data
+      isRequestingPriceChange: false, // Track price change request state
+      isRespondingToPriceChange: false, // Track price change response state
     };
   },
   computed: {
     jobStatus() {
       // Use local status if available (from WebSocket), otherwise use prop
-      const status =
+      return (
         this.localJobStatus ||
         this.job?.status ||
         this.jobInfo?.status ||
-        "open";
-      console.log(
-        "[JobChat] jobStatus computed:",
-        status,
-        "localJobStatus:",
-        this.localJobStatus,
-        "job.status:",
-        this.job?.status,
-        "jobInfo.status:",
-        this.jobInfo?.status
+        "open"
       );
-      return status;
     },
     showStatusButtons() {
       return ["assigned", "on_the_way", "in_progress"].includes(this.jobStatus);
@@ -701,13 +836,7 @@ export default {
       return this.job?.handymanName || "הנדימן";
     },
     jobInfo() {
-      const info = this.job;
-      console.log("[JobChat] jobInfo computed:", {
-        status: info?.status,
-        clientApproved: info?.clientApproved,
-        id: info?._id || info?.id,
-      });
-      return info;
+      return this.job;
     },
     jobLocation() {
       // Get job location from coordinates or location field
@@ -761,6 +890,32 @@ export default {
       if (this.jobStatus === "on_the_way") return "move";
       return "new";
     },
+    currentPrice() {
+      return this.jobInfo?.price || this.job?.price || 0;
+    },
+    maxPriceChange() {
+      return Math.round(this.currentPrice * 0.2);
+    },
+    minAllowedPrice() {
+      return Math.round(this.currentPrice * 0.8);
+    },
+    maxAllowedPrice() {
+      return Math.round(this.currentPrice * 1.2);
+    },
+    priceChange() {
+      if (!this.newPrice || this.newPrice === this.currentPrice) return 0;
+      return this.newPrice - this.currentPrice;
+    },
+    priceChangePercent() {
+      if (!this.currentPrice || this.currentPrice === 0) return 0;
+      return Math.round((this.priceChange / this.currentPrice) * 100);
+    },
+    isPriceChangeValid() {
+      if (!this.newPrice) return false;
+      const change = Math.abs(this.priceChange);
+      const maxChange = this.maxPriceChange;
+      return change <= maxChange && this.newPrice >= this.minAllowedPrice && this.newPrice <= this.maxAllowedPrice;
+    },
   },
   created() {
     this.toast = useToast();
@@ -768,6 +923,12 @@ export default {
     this.localJobStatus = this.job?.status || null;
   },
   async mounted() {
+    // Initialize ratingSubmitted from job data
+    if (this.job?.ratingSubmitted !== undefined) {
+      this.ratingSubmitted = this.job.ratingSubmitted;
+    } else if (this.jobInfo?.ratingSubmitted !== undefined) {
+      this.ratingSubmitted = this.jobInfo.ratingSubmitted;
+    }
     window.addEventListener("click", this.onOutsideTools);
     this.initWebSocket();
     await this.loadMessages();
@@ -787,6 +948,10 @@ export default {
         const newJobId = String(newJob?.id || newJob?._id || "");
         const oldJobId = String(oldJob?.id || oldJob?._id || "");
 
+        // Update ratingSubmitted from job data
+        if (newJob?.ratingSubmitted !== undefined) {
+          this.ratingSubmitted = newJob.ratingSubmitted;
+        }
         if (newJobId && newJobId !== oldJobId) {
           // Job changed - reload messages and reconnect WebSocket
           this.messages = []; // Clear old messages
@@ -881,20 +1046,9 @@ export default {
 
       // Listen for onboarding required (when client approves and handyman needs onboarding)
       this.socket.on("onboarding-required", (data) => {
-        console.log("[JobChat] Received onboarding-required event:", data);
         const receivedJobId = String(data.jobId || "");
         const currentJobId = String(jobId || "");
-        console.log(
-          "[JobChat] Comparing jobIds:",
-          receivedJobId,
-          "===",
-          currentJobId,
-          "isHandyman:",
-          this.isHandyman
-        );
         if (receivedJobId === currentJobId && this.isHandyman) {
-          console.log("[JobChat] Showing onboarding modal for handyman");
-          // Show popup with onboarding link (even if URL is null)
           this.onboardingUrl = data.onboardingUrl;
           this.showOnboardingModal = true;
         }
@@ -1525,7 +1679,7 @@ export default {
           }
         }
       } catch (error) {
-        console.error("Error checking onboarding status:", error);
+        // Error checking onboarding status
       }
     },
     async fetchOnboardingLink() {
@@ -1544,7 +1698,6 @@ export default {
           this.onboardingUrl = response.data.url;
         }
       } catch (error) {
-        console.error("Error fetching onboarding link:", error);
         this.toast?.showError("שגיאה בקבלת קישור הגדרת תשלומים");
       } finally {
         this.isLoadingOnboarding = false;
@@ -1557,50 +1710,6 @@ export default {
         this.toast?.showError(
           "קישור הגדרת תשלומים לא זמין. נסה שוב מאוחר יותר."
         );
-      }
-    },
-    async checkOnboardingStatus() {
-      if (!this.isHandyman) return;
-
-      const handymanId = this.store.user?._id || this.store.user?.id;
-      if (!handymanId) return;
-
-      try {
-        const response = await axios.get(
-          `${URL}/api/handyman/${handymanId}/stripe/status`
-        );
-        if (response.data && response.data.success) {
-          this.needsOnboarding = response.data.needsOnboarding || false;
-
-          // If needs onboarding, get the onboarding URL
-          if (this.needsOnboarding) {
-            await this.fetchOnboardingLink();
-          }
-        }
-      } catch (error) {
-        console.error("Error checking onboarding status:", error);
-      }
-    },
-    async fetchOnboardingLink() {
-      if (!this.isHandyman) return;
-
-      const handymanId = this.store.user?._id || this.store.user?.id;
-      if (!handymanId) return;
-
-      this.isLoadingOnboarding = true;
-      try {
-        const response = await axios.post(
-          `${URL}/api/handyman/stripe/onboarding-link`,
-          { handymanId: String(handymanId) }
-        );
-        if (response.data && response.data.success && response.data.url) {
-          this.onboardingUrl = response.data.url;
-        }
-      } catch (error) {
-        console.error("Error fetching onboarding link:", error);
-        this.toast?.showError("שגיאה בקבלת קישור הגדרת תשלומים");
-      } finally {
-        this.isLoadingOnboarding = false;
       }
     },
     handleOpenOnboarding() {
@@ -1666,31 +1775,30 @@ export default {
     },
 
     async handleApproveJob() {
-      console.log("[JobChat] handleApproveJob called");
       if (this.isApproving) {
-        console.log("[JobChat] Already approving, returning");
         return;
       }
 
       const jobId = this.job._id || this.job.id;
-      const clientId = this.store.user?._id || this.store.user?.id;
-
-      console.log("[JobChat] Approving job:", jobId, "clientId:", clientId);
+      const clientId =
+        this.job?.clientId?.toString() ||
+        this.job?.clientId ||
+        this.jobInfo?.clientId?.toString() ||
+        this.jobInfo?.clientId ||
+        this.store.user?._id ||
+        this.store.user?.id;
 
       if (!jobId || !clientId) {
-        console.error("[JobChat] Missing jobId or clientId");
         this.toast?.showError("שגיאה: חסרים פרטים לאישור העבודה");
         return;
       }
 
       this.isApproving = true;
       try {
-        console.log("[JobChat] Sending approval request to server...");
         const response = await axios.post(`${URL}/api/jobs/approve`, {
           jobId,
           clientId,
         });
-        console.log("[JobChat] Approval response:", response.data);
 
         if (response.data && response.data.success) {
           this.toast?.showSuccess("העבודה אושרה והתשלום שוחרר");
@@ -1706,7 +1814,6 @@ export default {
           );
         }
       } catch (error) {
-        console.error("Error approving job:", error);
         this.toast?.showError(
           error.response?.data?.message || "שגיאה באישור העבודה"
         );
@@ -1727,6 +1834,9 @@ export default {
     },
 
     async handleCancelJob() {
+      this.showCancelConfirmModal = true;
+    },
+    async handleCancelJobForHandyman() {
       try {
         const jobId = this.job._id || this.job.id;
         if (!jobId) return;
@@ -1742,12 +1852,104 @@ export default {
           userId,
         });
 
-        this.toast.showSuccess("העבודה בוטלה והשביוץ בוטל");
+        this.toast.showSuccess("העבודה בוטלה להנדימן הזה");
         this.showCancelConfirmModal = false;
         this.$emit("cancel-job");
       } catch (error) {
         this.toast.showError("שגיאה בביטול העבודה");
         this.showCancelConfirmModal = false;
+      }
+    },
+    async handleCancelJobComplete() {
+      try {
+        const jobId = this.job._id || this.job.id;
+        if (!jobId) return;
+
+        const userId = this.store.user?._id || this.store.user?.id;
+        if (!userId) {
+          this.toast.showError("שגיאה: לא נמצא מזהה משתמש");
+          return;
+        }
+
+        await axios.delete(`${URL}/jobs/${jobId}`, {
+          data: { userId },
+        });
+
+        this.toast.showSuccess("העבודה בוטלה לגמרי");
+        this.showCancelConfirmModal = false;
+        this.$emit("cancel-job");
+      } catch (error) {
+        this.toast.showError("שגיאה בביטול העבודה");
+        this.showCancelConfirmModal = false;
+      }
+    },
+    async requestPriceChange() {
+      if (!this.isPriceChangeValid || this.isRequestingPriceChange) return;
+
+      this.isRequestingPriceChange = true;
+      try {
+        const jobId = this.job._id || this.job.id;
+        if (!jobId) return;
+
+        const handymanId = this.store.user?._id || this.store.user?.id;
+        if (!handymanId) {
+          this.toast?.showError("שגיאה: לא נמצא מזהה משתמש");
+          return;
+        }
+
+        await axios.post(`${URL}/api/jobs/price-change-request`, {
+          jobId,
+          handymanId,
+          newPrice: this.newPrice,
+        });
+
+        this.toast?.showSuccess("בקשת שינוי מחיר נשלחה ללקוח");
+        this.showPriceChangeModal = false;
+        this.newPrice = null;
+      } catch (error) {
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה בשליחת בקשת שינוי מחיר"
+        );
+      } finally {
+        this.isRequestingPriceChange = false;
+      }
+    },
+    async respondToPriceChange(accepted) {
+      if (this.isRespondingToPriceChange) return;
+
+      this.isRespondingToPriceChange = true;
+      try {
+        const jobId = this.job._id || this.job.id;
+        if (!jobId) return;
+
+        const clientId = this.store.user?._id || this.store.user?.id;
+        if (!clientId) {
+          this.toast?.showError("שגיאה: לא נמצא מזהה משתמש");
+          return;
+        }
+
+        await axios.post(`${URL}/api/jobs/price-change-response`, {
+          jobId,
+          clientId,
+          accepted,
+        });
+
+        if (accepted) {
+          this.toast?.showSuccess("שינוי המחיר אושר");
+          this.jobInfo.price = this.priceChangeRequest.newPrice;
+          this.job.price = this.priceChangeRequest.newPrice;
+        } else {
+          this.toast?.showSuccess("שינוי המחיר נדחה");
+        }
+
+        this.showPriceChangeRequestModal = false;
+        this.priceChangeRequest = null;
+      } catch (error) {
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה בתגובה לבקשת שינוי מחיר"
+        );
+      } finally {
+        this.isRespondingToPriceChange = false;
       }
     },
   },
@@ -3458,5 +3660,323 @@ $orange2: #ff8a2b;
   width: 100%;
   height: auto;
   display: block;
+}
+
+/* Price Change Modal */
+.priceChangeModal {
+  position: fixed;
+  inset: 0;
+  z-index: 100002;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Heebo", sans-serif;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.priceChangeModal__content {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.95),
+    rgba(15, 16, 22, 0.98)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 32px;
+  max-width: 450px;
+  width: calc(100% - 40px);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  text-align: center;
+  position: relative;
+}
+
+.priceChangeModal__close {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  background: transparent;
+  border: 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 8px;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.priceChangeModal__close:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.priceChangeModal__title {
+  font-size: 22px;
+  font-weight: 900;
+  color: #fff;
+  margin: 0 0 16px 0;
+}
+
+.priceChangeModal__message {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0 0 8px 0;
+}
+
+.priceChangeModal__hint {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0 0 24px 0;
+}
+
+.priceChangeModal__inputGroup {
+  margin: 24px 0;
+  text-align: right;
+}
+
+.priceChangeModal__label {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 8px;
+}
+
+.priceChangeModal__input {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 900;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.priceChangeModal__input:focus {
+  border-color: rgba($orange, 0.45);
+  box-shadow: 0 0 0 3px rgba($orange, 0.18);
+}
+
+.priceChangeModal__changeInfo {
+  margin-top: 12px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.priceChangeModal__increase {
+  color: #10b981;
+}
+
+.priceChangeModal__decrease {
+  color: #ef4444;
+}
+
+.priceChangeModal__noChange {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.priceChangeModal__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+.priceChangeModal__btn {
+  padding: 12px 24px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 900;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: "Heebo", sans-serif;
+  min-width: 100px;
+}
+
+.priceChangeModal__btn--cancel {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.priceChangeModal__btn--cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.priceChangeModal__btn--submit {
+  background: linear-gradient(135deg, rgba($orange, 0.95), rgba($orange2, 0.92));
+  color: #0b0c10;
+  border-color: rgba($orange, 0.55);
+}
+
+.priceChangeModal__btn--submit:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba($orange, 1), rgba($orange2, 1));
+  box-shadow: 0 4px 16px rgba($orange, 0.3);
+}
+
+.priceChangeModal__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Price Change Request Modal (for client) */
+.priceChangeRequestModal {
+  position: fixed;
+  inset: 0;
+  z-index: 100002;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Heebo", sans-serif;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.priceChangeRequestModal__content {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.95),
+    rgba(15, 16, 22, 0.98)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 32px;
+  max-width: 450px;
+  width: calc(100% - 40px);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+
+.priceChangeRequestModal__title {
+  font-size: 22px;
+  font-weight: 900;
+  color: #fff;
+  margin: 0 0 16px 0;
+}
+
+.priceChangeRequestModal__message {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0 0 24px 0;
+}
+
+.priceChangeRequestModal__priceInfo {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 24px 0;
+  text-align: right;
+}
+
+.priceChangeRequestModal__priceRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.priceChangeRequestModal__priceRow--change {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 8px;
+  padding-top: 12px;
+  font-weight: 900;
+}
+
+.priceChangeRequestModal__priceRow .increase {
+  color: #10b981;
+}
+
+.priceChangeRequestModal__priceRow .decrease {
+  color: #ef4444;
+}
+
+.priceChangeRequestModal__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+.priceChangeRequestModal__btn {
+  padding: 12px 24px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 900;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: "Heebo", sans-serif;
+  min-width: 100px;
+}
+
+.priceChangeRequestModal__btn--reject {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.priceChangeRequestModal__btn--reject:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+.priceChangeRequestModal__btn--accept {
+  background: linear-gradient(135deg, rgba($orange, 0.95), rgba($orange2, 0.92));
+  color: #0b0c10;
+  border-color: rgba($orange, 0.55);
+}
+
+.priceChangeRequestModal__btn--accept:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba($orange, 1), rgba($orange2, 1));
+  box-shadow: 0 4px 16px rgba($orange, 0.3);
+}
+
+.priceChangeRequestModal__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cancelConfirmModal__actions--vertical {
+  flex-direction: column;
+}
+
+.cancelConfirmModal__btn--cancel-handyman {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.cancelConfirmModal__btn--cancel-handyman:hover {
+  background: rgba(59, 130, 246, 0.3);
+  border-color: rgba(59, 130, 246, 0.6);
+}
+
+.cancelConfirmModal__btn--cancel-complete {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.cancelConfirmModal__btn--cancel-complete:hover {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+.seg__btn--price {
+  background: linear-gradient(135deg, rgba($orange, 0.2), rgba($orange2, 0.15));
+  border-color: rgba($orange, 0.4);
+  color: $orange;
+}
+
+.seg__btn--price:hover {
+  background: linear-gradient(135deg, rgba($orange, 0.3), rgba($orange2, 0.25));
+  border-color: rgba($orange, 0.6);
 }
 </style>

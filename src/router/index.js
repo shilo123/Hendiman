@@ -1,23 +1,48 @@
 import { createRouter, createWebHistory } from "vue-router";
+
+// Public routes
 import HomeView from "@/views/HomeView.vue";
+import About from "@/views/About.vue";
+import TermsOfService from "@/views/TermsOfService.vue";
+
+// Auth routes
 import LogIn from "@/views/Login/log-in.vue";
 import Register from "@/views/Login/register.vue";
+
+// Dashboard routes
 import Dashboard from "@/views/Dashboard.vue";
 import CreateCall from "@/views/CreateCall.vue";
 import JobSummary from "@/views/JobSummary.vue";
 import HandymanRatings from "@/views/HandymanRatings.vue";
-import About from "@/views/About.vue";
-import AdminManager from "@/views/Admin-manager.vue";
 import Payments from "@/views/Payments.vue";
 import PersonalRequestCall from "@/views/PersonalRequestCall.vue";
+
+// Admin routes
+import AdminManager from "@/views/Admin-manager.vue";
+
+// Stripe routes
 import StripeSuccess from "@/views/StripeSuccess.vue";
 import StripeRefresh from "@/views/StripeRefresh.vue";
+
 const routes = [
+  // Public routes
   {
     path: "/",
     name: "home",
     component: HomeView,
   },
+  {
+    path: "/about",
+    name: "About",
+    component: About,
+  },
+  {
+    path: "/terms-of-service",
+    name: "TermsOfService",
+    component: TermsOfService,
+  },
+
+  // Auth routes
   {
     path: "/log-in",
     name: "logIn",
@@ -33,6 +58,8 @@ const routes = [
     name: "Register",
     component: Register,
   },
+
+  // Dashboard routes (all require :id param)
   {
     path: "/Dashboard/:id",
     name: "Dashboard",
@@ -58,16 +85,6 @@ const routes = [
     props: true,
   },
   {
-    path: "/about",
-    name: "About",
-    component: About,
-  },
-  {
-    path: "/admin-manager",
-    name: "AdminManager",
-    component: AdminManager,
-  },
-  {
     path: "/Dashboard/:id/payments",
     name: "Payments",
     component: Payments,
@@ -79,6 +96,15 @@ const routes = [
     component: PersonalRequestCall,
     props: true,
   },
+
+  // Admin routes
+  {
+    path: "/admin-manager",
+    name: "AdminManager",
+    component: AdminManager,
+  },
+
+  // Stripe routes
   {
     path: "/stripe/success",
     name: "StripeSuccess",

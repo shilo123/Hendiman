@@ -1,5 +1,5 @@
 import { createApp } from "vue";
-import ToastMessage from "@/components/ToastMessage.vue";
+import ToastMessage from "@/components/Global/ToastMessage.vue";
 
 let toastContainer = null;
 let toastApp = null;

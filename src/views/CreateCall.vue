@@ -538,10 +538,48 @@
           class="step-content step-content--animated"
         >
           <div class="step-container">
+            <!-- Show saved payment method option if exists -->
+            <div
+              v-if="savedPaymentMethod && !showChangePaymentMethod"
+              class="saved-payment-method-card"
+            >
+              <div class="saved-payment-method-header">
+                <h3>אמצעי תשלום שמור</h3>
+              </div>
+              <div class="saved-payment-method-info">
+                <div class="payment-method-details">
+                  <span class="card-brand">{{
+                    savedPaymentMethod.card.brand
+                  }}</span>
+                  <span class="card-number"
+                    >**** **** **** {{ savedPaymentMethod.card.last4 }}</span
+                  >
+                  <span class="card-expiry"
+                    >{{ savedPaymentMethod.card.expMonth }}/{{
+                      savedPaymentMethod.card.expYear
+                    }}</span
+                  >
+                </div>
+                <div class="payment-method-actions">
+                  <button
+                    class="btn btn--secondary"
+                    type="button"
+                    @click="changePaymentMethod"
+                  >
+                    שנה אמצעי תשלום
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Show credit card form if no saved payment method or user wants to change -->
             <CreditCardForm
+              v-if="!savedPaymentMethod || showChangePaymentMethod"
               ref="creditCardForm"
               v-model="creditCard"
               :errors="errors"
+              :amount="totalPrice"
+              currency="ils"
               @update:errors="errors = $event"
               @payment-method-created="onPaymentMethodCreated"
               @validation-changed="onCreditCardValidationChanged"
@@ -556,7 +594,9 @@
               class="submit-btn"
               type="button"
               @click="onSubmitCall"
-              :disabled="isProcessingPayment"
+              :disabled="
+                isProcessingPayment || (!paymentMethodId && !isCreditCardValid)
+              "
             >
               <span v-if="isProcessingPayment">מעבד תשלום...</span>
               <span v-else>שלח קריאה</span>
@@ -729,8 +769,8 @@
 </template>
 
 <script>
-import AddressAutocomplete from "@/components/AddressAutocomplete.vue";
-import CreditCardForm from "@/components/CreditCardForm.vue";
+import AddressAutocomplete from "@/components/Global/AddressAutocomplete.vue";
+import CreditCardForm from "@/components/CreateCall/CreditCardForm.vue";
 import { URL } from "@/Url/url";
 import axios from "axios";
 import { useToast } from "@/composables/useToast";
@@ -810,6 +850,8 @@ export default {
       isProcessingPayment: false,
       paymentMethodId: null, // Store payment method ID (token) instead of card details
       isCreditCardValid: false, // Track credit card validation status
+      savedPaymentMethod: null, // Saved payment method from DB
+      showChangePaymentMethod: false, // Show option to change payment method
     };
   },
   computed: {
@@ -946,6 +988,19 @@ export default {
 
       if (this.currentStep < 4) {
         this.currentStep++;
+
+        // When moving to step 4, check if user has saved payment method
+        if (this.currentStep === 4) {
+          // Wait a bit for store to be ready, then check
+          await this.$nextTick();
+          // Try multiple times if user is not loaded yet
+          let attempts = 0;
+          while (attempts < 5 && !this.store?.user) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            attempts++;
+          }
+          await this.checkSavedPaymentMethod();
+        }
       }
     },
     prevStep() {
@@ -1006,13 +1061,146 @@ export default {
         `נבחרו ${this.manuallySelectedSubcategories.length} תת-קטגוריות`
       );
     },
+    async checkSavedPaymentMethod() {
+      try {
+        // Try to get userId from multiple sources
+        let userId = this.store?.user?._id || this.store?.user?.id;
+
+        // If not in store, try to get from route params (like Dashboard does)
+        if (!userId && this.$route?.params?.id) {
+          userId = this.$route.params.id;
+          // Load user data if not already loaded
+          if (!this.store?.user && userId) {
+            try {
+              await this.store.fetchDashboardData(userId);
+              userId = this.store?.user?._id || this.store?.user?.id || userId;
+            } catch (error) {
+              console.error("[CreateCall] Error loading user data:", error);
+            }
+          }
+        }
+
+        console.log("[CreateCall] 🔍 Checking store:", {
+          store: this.store,
+          user: this.store?.user,
+          userId: userId,
+          routeParams: this.$route?.params,
+        });
+
+        if (!userId) {
+          console.log(
+            "[CreateCall] ⚠️ Cannot check saved payment method - no userId",
+            {
+              store: this.store,
+              user: this.store?.user,
+              routeParams: this.$route?.params,
+            }
+          );
+          return;
+        }
+
+        console.log(
+          `[CreateCall] 🔍 Checking for saved payment method for user ${userId}`
+        );
+        const { URL } = await import("@/Url/url");
+        const response = await axios.get(
+          `${URL}/api/users/${userId}/payment-method`
+        );
+
+        console.log(
+          "[CreateCall] Payment method check response:",
+          response.data
+        );
+
+        if (response.data && response.data.success) {
+          if (response.data.hasPaymentMethod) {
+            console.log(
+              "[CreateCall] ✅ Found saved payment method:",
+              response.data
+            );
+            this.savedPaymentMethod = response.data;
+            this.paymentMethodId = response.data.paymentMethodId;
+            // Use saved payment method automatically, don't show form
+            this.showChangePaymentMethod = false;
+            this.isCreditCardValid = true; // Mark as valid since we have saved payment method
+            console.log("[CreateCall] Saved payment method set:", {
+              savedPaymentMethod: this.savedPaymentMethod,
+              paymentMethodId: this.paymentMethodId,
+              showChangePaymentMethod: this.showChangePaymentMethod,
+            });
+          } else {
+            console.log("[CreateCall] ℹ️ No saved payment method found");
+            // No saved payment method, show form to create one
+            this.showChangePaymentMethod = false;
+            this.savedPaymentMethod = null;
+          }
+        } else {
+          console.log(
+            "[CreateCall] ⚠️ Server response indicates no payment method"
+          );
+          this.savedPaymentMethod = null;
+        }
+      } catch (error) {
+        console.error("[CreateCall] ❌ Error checking payment method:", error);
+        // Error checking payment method, show form anyway
+        this.showChangePaymentMethod = false;
+        this.savedPaymentMethod = null;
+      }
+    },
+    async savePaymentMethodToDB(paymentMethodId) {
+      try {
+        const userId = this.store?.user?._id || this.store?.user?.id;
+        if (!userId || !paymentMethodId) {
+          console.log(
+            "[CreateCall] ⚠️ Cannot save payment method - missing userId or paymentMethodId",
+            {
+              userId: userId || "null",
+              paymentMethodId: paymentMethodId || "null",
+            }
+          );
+          return;
+        }
+
+        console.log(
+          `[CreateCall] 💾 Saving payment method ${paymentMethodId} to DB for user ${userId}`
+        );
+        const { URL } = await import("@/Url/url");
+        const response = await axios.post(
+          `${URL}/api/users/${userId}/payment-method`,
+          { paymentMethodId }
+        );
+
+        if (response.data && response.data.success) {
+          console.log(
+            "[CreateCall] ✅ Payment method saved successfully to DB"
+          );
+          this.savedPaymentMethod = response.data;
+        } else {
+          console.error(
+            "[CreateCall] ❌ Failed to save payment method - server returned:",
+            response.data
+          );
+        }
+      } catch (error) {
+        console.error(
+          "[CreateCall] ❌ Error saving payment method to DB:",
+          error
+        );
+        // Error saving payment method, but continue anyway
+      }
+    },
     onPaymentMethodCreated(paymentMethodId) {
-      console.log("[CreateCall] Payment method created:", paymentMethodId);
       this.paymentMethodId = paymentMethodId;
+      // Save payment method to DB
+      this.savePaymentMethodToDB(paymentMethodId);
     },
     onCreditCardValidationChanged(isValid) {
-      console.log("[CreateCall] Credit card validation changed:", isValid);
       this.isCreditCardValid = isValid;
+    },
+    changePaymentMethod() {
+      // Show form to change payment method
+      this.showChangePaymentMethod = true;
+      // Keep savedPaymentMethod and paymentMethodId so user can go back
     },
     async processPayment(jobId) {
       if (!this.stripe) {
@@ -1586,86 +1774,35 @@ export default {
 
         // Create Payment Method with Stripe Elements before sending to server
         // This way we only send the paymentMethodId (token) to server, not card details
-        if (this.totalPrice > 0 && this.stripe) {
+        console.log(
+          "[CreateCall] 🔍 Checking if payment method needs to be created:",
+          {
+            totalPrice: this.totalPrice,
+            hasCreditCardForm: !!this.$refs.creditCardForm,
+            hasPaymentMethodId: !!this.paymentMethodId,
+            shouldCreate: this.totalPrice > 0 && !this.paymentMethodId,
+          }
+        );
+
+        // Create payment method using CreditCardForm component (only if no saved payment method)
+        if (this.totalPrice > 0 && !this.paymentMethodId) {
           try {
             console.log("[CreateCall] Creating payment method with Stripe...");
 
-            // Validate credit card before creating payment method
-            if (!this.validateCreditCard()) {
-              console.error("[CreateCall] Credit card validation failed");
+            // Check if CreditCardForm component is available
+            if (!this.$refs.creditCardForm) {
+              console.error("[CreateCall] CreditCardForm ref not found");
               this.isLoading = false;
+              this.toast?.showError("טופס כרטיס האשראי לא זמין. אנא נסה שוב.");
               return;
             }
 
-            let paymentMethod;
+            // Use CreditCardForm's createPaymentMethod method
+            const paymentMethodId =
+              await this.$refs.creditCardForm.createPaymentMethod();
 
-            // Use Stripe Elements if available (recommended)
-            if (this.cardElement) {
-              console.log(
-                "[CreateCall] Using Stripe Elements to create payment method"
-              );
-              const { error: pmError, paymentMethod: pm } =
-                await this.stripe.createPaymentMethod({
-                  type: "card",
-                  card: this.cardElement,
-                  billing_details: {
-                    name: this.creditCard.cardName || "Client",
-                  },
-                });
-
-              if (pmError) {
-                console.error(
-                  "[CreateCall] Stripe Elements payment method error:",
-                  pmError
-                );
-                this.isLoading = false;
-                this.toast?.showError(
-                  pmError.message || "שגיאה ביצירת אמצעי תשלום. אנא נסה שוב."
-                );
-                return;
-              }
-
-              paymentMethod = pm;
-            } else {
-              // Fallback: Manual input (not recommended, but for backward compatibility)
-              console.log("[CreateCall] Using manual card input (fallback)");
-              const cardNumberDigits = this.creditCard.cardNumber.replace(
-                /\s/g,
-                ""
-              );
-              const [month, year] = this.creditCard.expiryDate.split("/");
-
-              const { error: pmError, paymentMethod: pm } =
-                await this.stripe.createPaymentMethod({
-                  type: "card",
-                  card: {
-                    number: cardNumberDigits,
-                    exp_month: parseInt(month),
-                    exp_year: parseInt("20" + year),
-                    cvc: this.creditCard.cvv,
-                  },
-                  billing_details: {
-                    name: this.creditCard.cardName,
-                  },
-                });
-
-              if (pmError || !pm) {
-                console.error(
-                  "[CreateCall] Manual payment method error:",
-                  pmError
-                );
-                this.isLoading = false;
-                this.toast?.showError(
-                  pmError?.message || "שגיאה ביצירת אמצעי תשלום. אנא נסה שוב."
-                );
-                return;
-              }
-
-              paymentMethod = pm;
-            }
-
-            if (!paymentMethod) {
-              console.error("[CreateCall] Payment method is null");
+            if (!paymentMethodId) {
+              console.error("[CreateCall] Payment method ID is null");
               this.isLoading = false;
               this.toast?.showError("שגיאה ביצירת אמצעי תשלום. אנא נסה שוב.");
               return;
@@ -1673,25 +1810,56 @@ export default {
 
             console.log(
               "[CreateCall] Payment method created successfully:",
-              paymentMethod.id
+              paymentMethodId
             );
 
             // Store payment method ID to send to server (not card details!)
-            this.paymentMethodId = paymentMethod.id;
-            callData.paymentMethodId = paymentMethod.id;
+            this.paymentMethodId = paymentMethodId;
+            callData.paymentMethodId = paymentMethodId;
+            console.log(
+              "[CreateCall] ✅ Added paymentMethodId to callData:",
+              callData.paymentMethodId
+            );
           } catch (paymentError) {
             console.error(
               "[CreateCall] Error creating payment method:",
               paymentError
             );
             this.isLoading = false;
-            this.toast?.showError("שגיאה ביצירת אמצעי תשלום. אנא נסה שוב.");
+            this.toast?.showError(
+              paymentError.message || "שגיאה ביצירת אמצעי תשלום. אנא נסה שוב."
+            );
             return;
           }
+        } else if (this.totalPrice > 0 && this.paymentMethodId) {
+          // Use saved payment method
+          console.log(
+            "[CreateCall] Using saved payment method:",
+            this.paymentMethodId
+          );
+          callData.paymentMethodId = this.paymentMethodId;
+          console.log(
+            "[CreateCall] ✅ Added saved paymentMethodId to callData:",
+            callData.paymentMethodId
+          );
+        } else {
+          console.log("[CreateCall] ⚠️ Skipping payment method creation:", {
+            reason: "totalPrice is 0",
+            totalPrice: this.totalPrice,
+          });
         }
 
         // Send to new endpoint
         const createCallUrl = `${URL}/create-call-v2`;
+
+        // Log what we're sending to server
+        console.log("[CreateCall] 📤 Sending callData to server:", {
+          paymentMethodId: callData.paymentMethodId || "null",
+          hasPaymentMethodId: !!callData.paymentMethodId,
+          totalPrice: this.totalPrice,
+          callDataKeys: Object.keys(callData),
+        });
+
         // Start patience message interval
         this.requestStartTime = Date.now();
         this.startPatienceMessageInterval();
@@ -3917,6 +4085,101 @@ $danger: #ff3b3b;
 .credit-form {
   display: grid;
   gap: 16px;
+}
+
+.saved-payment-method-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid rgba($orange, 0.4);
+  border-radius: 18px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.saved-payment-method-header {
+  margin-bottom: 20px;
+
+  h3 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 900;
+    color: $orange;
+  }
+}
+
+.saved-payment-method-info {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.payment-method-details {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+
+  .card-brand {
+    text-transform: uppercase;
+    font-weight: 700;
+    color: $orange;
+    font-size: 14px;
+  }
+
+  .card-number {
+    font-family: monospace;
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.9);
+    letter-spacing: 2px;
+  }
+
+  .card-expiry {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+  }
+}
+
+.payment-method-actions {
+  display: flex;
+  gap: 12px;
+
+  .btn {
+    flex: 1;
+    padding: 14px 24px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+
+    &--primary {
+      background: $orange;
+      color: #000;
+
+      &:hover {
+        background: $orange2;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba($orange, 0.4);
+      }
+    }
+
+    &--secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: rgba(255, 255, 255, 0.3);
+      }
+    }
+  }
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+  }
 }
 
 /* Stripe Elements Card Element */

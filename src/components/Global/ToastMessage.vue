@@ -70,7 +70,7 @@ export default {
   padding: 16px 20px;
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  z-index: 10000;
+  z-index: 100002;
   animation: slideInDown 0.3s ease-out;
 }
 

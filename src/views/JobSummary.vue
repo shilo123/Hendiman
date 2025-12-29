@@ -210,7 +210,6 @@ export default {
           }
         } catch (paymentError) {
           // Payment might not exist yet, that's ok
-          console.log("No payment found for job:", this.jobId);
         }
 
         // Load rating

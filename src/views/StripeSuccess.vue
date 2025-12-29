@@ -28,21 +28,40 @@
           חשבון התשלומים שלך ב-Stripe הוגדר בהצלחה. כעת תוכל לקבל תשלומים
           מהלקוחות שלך.
         </p>
+        <p class="stripe-message-small">מעבר לדשבורד תוך 3 שניות...</p>
 
         <!-- Button -->
-        <button class="stripe-btn" @click="goToDashboard">חזרה לדשבורד</button>
+        <button class="stripe-btn" @click="goToDashboard">מעבר לדשבורד</button>
       </div>
     </div>
   </div>
 </template>
 
 <script>
+import { useMainStore } from "@/store";
+
 export default {
   name: "StripeSuccess",
+  setup() {
+    const store = useMainStore();
+    return { store };
+  },
   methods: {
     goToDashboard() {
-      // נסה לקבל את ה-userId מה-localStorage או מה-route
-      const userId = localStorage.getItem("userId");
+      // נסה לקבל את ה-userId מהמקורות הבאים (בסדר עדיפות):
+      // 1. מה-route query params (אם נשלח ב-returnUrl)
+      // 2. מה-localStorage (נשמר לפני פתיחת Stripe)
+      // 3. מה-store (אם המשתמש מחובר)
+      // 4. מה-route params (אם יש)
+
+      const userId =
+        this.$route.query.userId ||
+        this.$route.query.id ||
+        localStorage.getItem("userId") ||
+        this.$route.params.id ||
+        this.store?.user?._id ||
+        this.store?.user?.id;
+
       if (userId) {
         this.$router.push({ name: "Dashboard", params: { id: userId } });
       } else {
@@ -52,8 +71,10 @@ export default {
     },
   },
   mounted() {
-    // אפשר להוסיף כאן לוגיקה נוספת אם צריך
-    // למשל: שליחת בקשה לשרת לעדכון סטטוס onboarding
+    // Redirect אוטומטי לדשבורד אחרי 3 שניות
+    setTimeout(() => {
+      this.goToDashboard();
+    }, 3000);
   },
 };
 </script>
@@ -109,11 +130,19 @@ export default {
 }
 
 .stripe-message {
-  margin: 0 0 32px;
+  margin: 0 0 12px;
   color: rgba(255, 255, 255, 0.85);
   font-size: 16px;
   font-weight: 600;
   line-height: 1.6;
+}
+
+.stripe-message-small {
+  margin: 0 0 32px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .stripe-btn {
