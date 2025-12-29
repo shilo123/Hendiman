@@ -92,10 +92,10 @@
           </div>
 
           <!-- Amount (if needed) -->
-          <div v-if="amount" class="form-field">
+          <div v-if="currentAmount || amount" class="form-field">
             <label class="form-label">סכום לתשלום</label>
             <div class="amount-display">
-              {{ formatCurrency(amount) }}
+              {{ formatCurrency(currentAmount || amount) }}
             </div>
           </div>
 
@@ -154,7 +154,14 @@
             :disabled="isProcessing || !isFormValid"
           >
             <span v-if="isProcessing">מעבד תשלום...</span>
-            <span v-else>שלם {{ amount ? formatCurrency(amount) : "" }}</span>
+            <span v-else
+              >שלם
+              {{
+                currentAmount || amount
+                  ? formatCurrency(currentAmount || amount)
+                  : ""
+              }}</span
+            >
           </button>
 
           <!-- Error Message -->
@@ -170,6 +177,7 @@
 <script>
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
+import { loadStripe } from "@stripe/stripe-js";
 
 export default {
   name: "Payments",
@@ -191,6 +199,10 @@ export default {
     return {
       toast: null,
       userId: this.id,
+      stripe: null,
+      stripePublishableKey: null,
+      currentJobId: null,
+      currentAmount: null,
       paymentForm: {
         cardNumber: "",
         cardHolder: "",
@@ -219,8 +231,32 @@ export default {
       );
     },
   },
-  created() {
+  async created() {
     this.toast = useToast();
+    // Get jobId and amount from query params if not provided as props
+    if (this.$route.query.jobId) {
+      this.currentJobId = this.$route.query.jobId;
+    } else if (this.jobId) {
+      this.currentJobId = this.jobId;
+    }
+    if (this.$route.query.amount) {
+      this.currentAmount = parseFloat(this.$route.query.amount);
+    } else if (this.amount) {
+      this.currentAmount = this.amount;
+    }
+
+    // Get Stripe publishable key from server
+    try {
+      const response = await fetch(`${URL}/api/stripe/publishable-key`);
+      const data = await response.json();
+      if (data.publishableKey) {
+        this.stripePublishableKey = data.publishableKey;
+        this.stripe = await loadStripe(data.publishableKey);
+      }
+    } catch (error) {
+      console.error("Error loading Stripe:", error);
+      this.submitError = "שגיאה בטעינת מערכת התשלומים. אנא נסה שוב.";
+    }
   },
   methods: {
     formatCardNumber(event) {
@@ -331,48 +367,117 @@ export default {
         return;
       }
 
+      if (!this.stripe) {
+        this.submitError = "מערכת התשלומים לא נטענה. אנא רענן את הדף.";
+        return;
+      }
+
+      const jobIdToUse = this.currentJobId;
+      if (!jobIdToUse) {
+        this.submitError = "מספר עבודה לא נמצא. אנא חזור לדשבורד.";
+        return;
+      }
+
       this.isProcessing = true;
       this.submitError = "";
 
       try {
-        // Prepare payment data (don't send full card number to server in real app)
+        // Step 1: Create Payment Intent on server
+        const createIntentResponse = await fetch(
+          `${URL}/api/payments/create-intent`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              jobId: jobIdToUse,
+            }),
+          }
+        );
+
+        const intentData = await createIntentResponse.json();
+
+        if (!intentData.success || !intentData.clientSecret) {
+          this.submitError =
+            intentData.message || "שגיאה ביצירת כוונת תשלום. אנא נסה שוב.";
+          return;
+        }
+
+        // Step 2: Create payment method first
         const cardNumberDigits = this.paymentForm.cardNumber.replace(/\s/g, "");
         const [month, year] = this.paymentForm.expiryDate.split("/");
 
-        const paymentData = {
-          userId: this.userId,
-          jobId: this.jobId,
-          amount: this.amount,
-          cardLast4: cardNumberDigits.slice(-4), // Only last 4 digits for reference
-          cardHolder: this.paymentForm.cardHolder,
-          expiryMonth: month,
-          expiryYear: year,
-          billingAddress: this.paymentForm.billingAddress,
-          city: this.paymentForm.city,
-          zipCode: this.paymentForm.zipCode,
-          // In a real app, you would use a payment gateway (Stripe, PayPal, etc.)
-          // and never send full card details to your server
-        };
+        const { error: pmError, paymentMethod } =
+          await this.stripe.createPaymentMethod({
+            type: "card",
+            card: {
+              number: cardNumberDigits,
+              exp_month: parseInt(month),
+              exp_year: parseInt("20" + year),
+              cvc: this.paymentForm.cvv,
+            },
+            billing_details: {
+              name: this.paymentForm.cardHolder,
+              address: {
+                line1: this.paymentForm.billingAddress || undefined,
+                city: this.paymentForm.city || undefined,
+                postal_code: this.paymentForm.zipCode || undefined,
+              },
+            },
+          });
 
-        // Send to server (in production, use payment gateway)
-        const response = await fetch(`${URL}/payments/process`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(paymentData),
-        });
+        if (pmError || !paymentMethod) {
+          this.submitError =
+            pmError?.message || "שגיאה ביצירת אמצעי תשלום. אנא נסה שוב.";
+          return;
+        }
 
-        const data = await response.json();
+        // Step 3: Confirm payment with Stripe.js using the payment method
+        const { error, paymentIntent } = await this.stripe.confirmCardPayment(
+          intentData.clientSecret,
+          {
+            payment_method: paymentMethod.id,
+          }
+        );
 
-        if (data.success) {
-          this.toast?.showSuccess("התשלום בוצע בהצלחה!");
-          // Redirect to success page or dashboard
-          setTimeout(() => {
-            this.$router.push(`/Dashboard/${this.userId}`);
-          }, 1500);
+        if (error) {
+          this.submitError =
+            error.message || "שגיאה באישור התשלום. אנא נסה שוב.";
+          return;
+        }
+
+        // Step 4: Update server with payment confirmation
+        if (paymentIntent && paymentIntent.status === "requires_capture") {
+          const confirmResponse = await fetch(`${URL}/api/payments/confirm`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              jobId: jobIdToUse,
+              paymentIntentId: paymentIntent.id,
+              stripeStatus: paymentIntent.status,
+            }),
+          });
+
+          const confirmData = await confirmResponse.json();
+
+          if (confirmData.success) {
+            this.toast?.showSuccess(
+              "התשלום אושר בהצלחה! הכסף יועבר לאחר אישור סיום העבודה."
+            );
+            // Redirect to dashboard
+            setTimeout(() => {
+              this.$router.push(`/Dashboard/${this.userId}`);
+            }, 2000);
+          } else {
+            this.submitError =
+              confirmData.message ||
+              "התשלום אושר אך יש בעיה בעדכון השרת. אנא פנה לתמיכה.";
+          }
         } else {
-          this.submitError = data.message || "שגיאה בעיבוד התשלום";
+          this.submitError = "מצב תשלום לא צפוי. אנא פנה לתמיכה.";
         }
       } catch (error) {
         console.error("Payment error:", error);

@@ -86,21 +86,9 @@ function initializeFirebaseAdmin() {
  */
 async function sendPushNotification(fcmToken, title, body, data = {}) {
   try {
-    console.log("[sendPushNotification] Starting push notification");
-    console.log(
-      "[sendPushNotification] FCM Token:",
-      fcmToken ? `${fcmToken.substring(0, 20)}...` : "MISSING"
-    );
-    console.log("[sendPushNotification] Title:", title);
-    console.log("[sendPushNotification] Body:", body);
-
     try {
       initializeFirebaseAdmin();
     } catch (initError) {
-      console.error(
-        "[sendPushNotification] Firebase initialization failed:",
-        initError.message
-      );
       // Don't fail the request - just log and return silently
       // This allows the app to work even if Firebase is not configured
       return { success: false, error: initError.message, silent: true };
@@ -108,9 +96,6 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
 
     // Check if Firebase is actually initialized and has project ID
     if (!admin.apps.length || admin.apps.length === 0) {
-      console.warn(
-        "[sendPushNotification] Firebase not initialized, skipping notification"
-      );
       return {
         success: false,
         error: "Firebase not initialized",
@@ -122,9 +107,6 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
     const app = admin.app();
     const projectId = app?.options?.projectId;
     if (!projectId) {
-      console.warn(
-        "[sendPushNotification] Firebase project ID not available, skipping notification. Set FIREBASE_PROJECT_ID or use FIREBASE_SERVICE_ACCOUNT with project_id."
-      );
       return {
         success: false,
         error: "Firebase project ID not configured",
@@ -190,29 +172,14 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
       },
     };
 
-    console.log("[sendPushNotification] Sending message via Firebase Admin...");
     const response = await admin.messaging().send(message);
-    console.log(
-      "[sendPushNotification] SUCCESS: Message sent, messageId:",
-      response
-    );
     return { success: true, messageId: response };
   } catch (error) {
-    console.error(
-      "[sendPushNotification] ERROR: Failed to send push notification"
-    );
-    console.error("[sendPushNotification] Error code:", error.code);
-    console.error("[sendPushNotification] Error message:", error.message);
-    console.error("[sendPushNotification] Full error:", error);
-
     // Handle invalid token error
     if (
       error.code === "messaging/invalid-registration-token" ||
       error.code === "messaging/registration-token-not-registered"
     ) {
-      console.log(
-        "[sendPushNotification] Token is invalid, marking for removal"
-      );
       // Token is invalid, should be removed from database
       return { success: false, error: "invalid_token", shouldRemove: true };
     }

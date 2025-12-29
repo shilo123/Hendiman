@@ -672,8 +672,8 @@ function findAvailablePort(startPort) {
         return;
       }
 
-      // Find all handymen within 25km (default max distance)
-      const maxDistanceMeters = 25000; // 25km
+      // Find all handymen within 30km (default max distance)
+      const maxDistanceMeters = 30000; // 30km
       let relevantHandymen = [];
 
       try {
@@ -713,7 +713,7 @@ function findAvailablePort(startPort) {
             handymanLat
           );
 
-          return distanceKm !== null && distanceKm <= 25; // 25km max
+          return distanceKm !== null && distanceKm <= 30; // 30km max
         });
       }
 
@@ -797,12 +797,19 @@ function findAvailablePort(startPort) {
         }
         user = await collection.findOne({ googleId: googleId });
       } else {
-        // Regular user, find by username
-        user = await collection.findOne({ username });
+        // Regular user, find by username or email
+        user = await collection.findOne({
+          $or: [{ username: username }, { email: username }],
+        });
       }
 
       if (!user) {
         return res.json({ message: "NoUser" });
+      }
+
+      // Check if user is blocked
+      if (user.isBlocked === true) {
+        return res.json({ message: "Blocked" });
       }
 
       // If Google user, verify they have a googleId (registered via Google)
@@ -1621,6 +1628,10 @@ function findAvailablePort(startPort) {
                   createdAt: 1,
                   updatedAt: 1,
                   ratingSubmitted: 1,
+                  clientApproved: 1, // Add clientApproved field
+                  handymanReceivedPayment: 1, // Add handymanReceivedPayment field
+                  paymentIntentId: 1, // Add paymentIntentId field
+                  paymentStatus: 1, // Add paymentStatus field
                   // Add other fields that might be needed
                 },
               }
@@ -1630,11 +1641,16 @@ function findAvailablePort(startPort) {
 
       // Filter out "done" jobs with ratingSubmitted for clients
       // Keep "done" jobs without ratingSubmitted so client can rate them
+      // Also keep "done" jobs that need client approval (clientApproved: false)
       if (!User.isHandyman) {
         Jobs = Jobs.filter((job) => {
           // If job is done and rating was submitted, exclude it
           if (job.status === "done" && job.ratingSubmitted === true) {
             return false;
+          }
+          // Keep "done" jobs that need client approval
+          if (job.status === "done" && job.clientApproved === false) {
+            return true;
           }
           return true;
         });
@@ -1697,11 +1713,16 @@ function findAvailablePort(startPort) {
       }
 
       // Filter out "done" jobs for clients - they shouldn't see completed jobs in the main dashboard
+      // BUT: Keep "done" jobs that need client approval (clientApproved: false)
       // Clients can only see active jobs (assigned, on_the_way, in_progress, or open)
-      // Done jobs are only accessible through specific routes (like rating)
+      // Done jobs are only accessible through specific routes (like rating) OR if they need approval
       if (!User.isHandyman) {
         Jobs = Jobs.filter((job) => {
-          // Exclude all "done" jobs from the main dashboard view
+          // Keep "done" jobs that need client approval
+          if (job.status === "done" && job.clientApproved === false) {
+            return true;
+          }
+          // Exclude other "done" jobs from the main dashboard view
           if (job.status === "done") {
             return false;
           }
@@ -2269,6 +2290,22 @@ function findAvailablePort(startPort) {
   });
 
   // Stripe Connect: Create onboarding link for handyman
+  // GET /api/stripe/publishable-key
+  // Returns Stripe publishable key for client-side use
+  app.get("/api/stripe/publishable-key", (req, res) => {
+    const publishableKey = process.env.STRIPE_PUBLISHABLE_KEY;
+    if (!publishableKey) {
+      return res.status(500).json({
+        success: false,
+        message: "Stripe publishable key not configured",
+      });
+    }
+    return res.json({
+      success: true,
+      publishableKey: publishableKey,
+    });
+  });
+
   app.post("/api/handyman/stripe/onboarding-link", async (req, res) => {
     try {
       const { handymanId } = req.body;
@@ -2293,6 +2330,14 @@ function findAvailablePort(startPort) {
 
       // Get or create Stripe Connect account
       const accountId = await getOrCreateConnectedAccount(handyman, usersCol);
+
+      if (!accountId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Stripe Connect is not enabled. Please enable it in your Stripe Dashboard: https://stripe.com/docs/connect",
+        });
+      }
 
       // Create onboarding link
       // NOTE: In TEST MODE, you can use localhost URLs for testing
@@ -2431,11 +2476,77 @@ function findAvailablePort(startPort) {
     }
   });
 
+  // Get clientSecret for existing Payment Intent (for client to confirm payment)
+  app.get("/api/payments/:jobId/client-secret", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      if (!jobId) {
+        return res.status(400).json({
+          success: false,
+          message: "jobId required",
+        });
+      }
+
+      const jobsCol = getCollectionJobs();
+
+      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
+
+      if (!job.paymentIntentId) {
+        return res.status(400).json({
+          success: false,
+          message: "No payment intent found for this job",
+        });
+      }
+
+      // Get payment intent from Stripe to retrieve clientSecret
+      try {
+        const paymentIntent = await stripe.paymentIntents.retrieve(
+          job.paymentIntentId
+        );
+
+        return res.json({
+          success: true,
+          clientSecret: paymentIntent.client_secret,
+          paymentIntentId: job.paymentIntentId,
+          status: paymentIntent.status,
+        });
+      } catch (stripeError) {
+        console.error("Error retrieving payment intent:", stripeError);
+        return res.status(500).json({
+          success: false,
+          message: "Error retrieving payment intent",
+          error: stripeError.message,
+        });
+      }
+    } catch (error) {
+      console.error("Error getting client secret:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה בקבלת client secret",
+        error: error.message,
+      });
+    }
+  });
+
   // Stripe Connect: Create Escrow Payment Intent
   app.post("/api/payments/create-intent", async (req, res) => {
+    console.log("[create-intent] ====== START ======");
+    console.log(
+      "[create-intent] Request body:",
+      JSON.stringify(req.body, null, 2)
+    );
     try {
       const { jobId } = req.body;
+      console.log("[create-intent] jobId received:", jobId);
+
       if (!jobId) {
+        console.log("[create-intent] ERROR: jobId is missing");
         return res.status(400).json({
           success: false,
           message: "jobId required",
@@ -2447,43 +2558,146 @@ function findAvailablePort(startPort) {
       const paymentsCol = getCollectionPayments();
 
       // Get job details
+      console.log("[create-intent] Fetching job from DB...");
       const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+      console.log("[create-intent] Job found:", job ? "YES" : "NO");
       if (!job) {
+        console.log("[create-intent] ERROR: Job not found in DB");
         return res.status(404).json({
           success: false,
           message: "Job not found",
         });
       }
+      console.log("[create-intent] Job details:", {
+        _id: job._id,
+        price: job.price,
+        clientId: job.clientId,
+        handymanId: job.handymanId,
+        handymanIdSpecial: job.handymanIdSpecial,
+        status: job.status,
+        subcategoryInfo: job.subcategoryInfo
+          ? Array.isArray(job.subcategoryInfo)
+            ? `Array(${job.subcategoryInfo.length})`
+            : "Object"
+          : "None",
+        urgent: job.urgent,
+      });
 
       // Get handyman (support both single handyman and array)
-      const handymanId =
+      // Also check for handymanIdSpecial (for personal requests)
+      let handymanId =
         Array.isArray(job.handymanId) && job.handymanId.length > 0
           ? job.handymanId[0]
           : job.handymanId;
 
+      // If no handymanId, check for handymanIdSpecial (personal request)
+      // handymanIdSpecial can be string, ObjectId, or null
+      if (!handymanId && job.handymanIdSpecial) {
+        // Convert to string for comparison and logging
+        const handymanIdSpecialStr = String(job.handymanIdSpecial);
+        if (
+          handymanIdSpecialStr &&
+          handymanIdSpecialStr !== "null" &&
+          handymanIdSpecialStr !== "undefined"
+        ) {
+          handymanId = job.handymanIdSpecial;
+          console.log(
+            "[create-intent] Using handymanIdSpecial:",
+            handymanId,
+            "Type:",
+            typeof handymanId
+          );
+        }
+      }
+
+      console.log("[create-intent] handymanId extracted:", handymanId);
+      console.log("[create-intent] Job status:", job.status);
+      console.log("[create-intent] Job handymanId:", job.handymanId);
+      console.log(
+        "[create-intent] Job handymanIdSpecial:",
+        job.handymanIdSpecial,
+        "Type:",
+        typeof job.handymanIdSpecial,
+        "String value:",
+        job.handymanIdSpecial ? String(job.handymanIdSpecial) : "null/undefined"
+      );
+
       if (!handymanId) {
+        console.log("[create-intent] ERROR: Job has no assigned handyman");
+        console.log(
+          "[create-intent] Full job object for debugging:",
+          JSON.stringify(
+            {
+              _id: job._id,
+              handymanId: job.handymanId,
+              handymanIdSpecial: job.handymanIdSpecial,
+              status: job.status,
+            },
+            null,
+            2
+          )
+        );
         return res.status(400).json({
           success: false,
-          message: "Job has no assigned handyman",
+          message:
+            "Job has no assigned handyman. Please wait for a handyman to accept the job first, or if this is a personal request, ensure handymanIdSpecial is set.",
         });
       }
 
+      console.log("[create-intent] Fetching handyman from DB...");
+      // Convert handymanId to ObjectId if it's a string
+      const handymanObjectId =
+        handymanId instanceof ObjectId ? handymanId : new ObjectId(handymanId);
+
+      console.log(
+        "[create-intent] Searching for handyman with ID:",
+        handymanObjectId,
+        "Original:",
+        handymanId,
+        "Type:",
+        typeof handymanId
+      );
+
       const handyman = await usersCol.findOne({
-        _id: new ObjectId(handymanId),
+        _id: handymanObjectId,
       });
 
+      console.log("[create-intent] Handyman found:", handyman ? "YES" : "NO");
       if (!handyman) {
+        console.log("[create-intent] ERROR: Handyman not found in DB");
+        console.log(
+          "[create-intent] Searched for handymanId:",
+          handymanId,
+          "Type:",
+          typeof handymanId
+        );
+        console.log("[create-intent] Converted to ObjectId:", handymanObjectId);
         return res.status(404).json({
           success: false,
           message: "Handyman not found",
         });
       }
+      console.log("[create-intent] Handyman details:", {
+        _id: handyman._id,
+        username: handyman.username,
+        stripeAccountId: handyman.stripeAccountId || "NOT SET",
+      });
 
       // Get or create Stripe Connect account for handyman
+      console.log("[create-intent] Getting or creating Stripe account...");
       const handymanAccountId = await getOrCreateConnectedAccount(
         handyman,
         usersCol
       );
+      console.log("[create-intent] Stripe account ID:", handymanAccountId);
+
+      if (!handymanAccountId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Stripe Connect is not enabled. Please enable it in your Stripe Dashboard: https://stripe.com/docs/connect",
+        });
+      }
 
       // Check if handyman has completed onboarding (charges_enabled and payouts_enabled)
       // NOTE: In TEST MODE (with sk_test keys), this check is more lenient for testing
@@ -2525,32 +2739,106 @@ function findAvailablePort(startPort) {
         }
       }
 
-      // Calculate amounts
-      const amountAgorot = Math.round((job.price || 0) * 100);
+      // Calculate amounts from subcategoryInfo or job.price
+      console.log("[create-intent] Calculating amounts...");
+      console.log("[create-intent] Job subcategoryInfo:", job.subcategoryInfo);
+      console.log("[create-intent] Job price:", job.price);
+
+      let totalPrice = 0;
+
+      // Calculate price from subcategoryInfo array (preferred method)
+      if (
+        job.subcategoryInfo &&
+        Array.isArray(job.subcategoryInfo) &&
+        job.subcategoryInfo.length > 0
+      ) {
+        totalPrice = job.subcategoryInfo.reduce((sum, subcat) => {
+          const price = subcat?.price || 0;
+          return (
+            sum + (typeof price === "number" ? price : parseFloat(price) || 0)
+          );
+        }, 0);
+        console.log(
+          "[create-intent] Calculated price from subcategoryInfo array:",
+          totalPrice
+        );
+      } else if (
+        job.subcategoryInfo &&
+        typeof job.subcategoryInfo === "object" &&
+        job.subcategoryInfo.price
+      ) {
+        // Handle single subcategoryInfo object
+        totalPrice =
+          typeof job.subcategoryInfo.price === "number"
+            ? job.subcategoryInfo.price
+            : parseFloat(job.subcategoryInfo.price) || 0;
+        console.log(
+          "[create-intent] Calculated price from subcategoryInfo object:",
+          totalPrice
+        );
+      } else if (job.price) {
+        // Fallback to job.price
+        totalPrice =
+          typeof job.price === "number"
+            ? job.price
+            : parseFloat(job.price) || 0;
+        console.log("[create-intent] Using job.price:", totalPrice);
+      }
+
+      // Add urgent fee if applicable
+      if (job.urgent) {
+        totalPrice += 10;
+        console.log("[create-intent] Added urgent fee (+10):", totalPrice);
+      }
+
+      const amountAgorot = Math.round(totalPrice * 100);
       const platformFeeAgorot = Math.round(
         (amountAgorot * PLATFORM_FEE_PERCENT) / 100
       );
+      console.log("[create-intent] Final amounts:", {
+        totalPrice,
+        amountAgorot,
+        platformFeeAgorot,
+        platformFeePercent: PLATFORM_FEE_PERCENT,
+      });
 
       if (amountAgorot <= 0) {
+        console.log(
+          "[create-intent] ERROR: Invalid job price (amountAgorot <= 0)"
+        );
         return res.status(400).json({
           success: false,
-          message: "Invalid job price",
+          message:
+            "Invalid job price - no price found in subcategoryInfo or job.price",
         });
       }
 
       // Create Escrow Payment Intent
+      console.log("[create-intent] Creating Escrow Payment Intent...");
+      const paymentIntentParams = {
+        amountAgorot,
+        currency: "ils",
+        handymanAccountId,
+        platformFeeAgorot,
+        metadata: {
+          jobId: jobId,
+          clientId: job.clientId?.toString() || "",
+          handymanId: handymanId.toString(),
+        },
+      };
+      console.log(
+        "[create-intent] Payment Intent params:",
+        JSON.stringify(paymentIntentParams, null, 2)
+      );
+
       const { clientSecret, paymentIntentId, status } =
-        await createEscrowPaymentIntent({
-          amountAgorot,
-          currency: "ils",
-          handymanAccountId,
-          platformFeeAgorot,
-          metadata: {
-            jobId: jobId,
-            clientId: job.clientId?.toString() || "",
-            handymanId: handymanId.toString(),
-          },
-        });
+        await createEscrowPaymentIntent(paymentIntentParams);
+
+      console.log("[create-intent] Payment Intent created:", {
+        paymentIntentId,
+        status,
+        hasClientSecret: !!clientSecret,
+      });
 
       // Save payment record
       const paymentRecord = {
@@ -2567,9 +2855,11 @@ function findAvailablePort(startPort) {
         updatedAt: new Date(),
       };
 
+      console.log("[create-intent] Saving payment record to DB...");
       await paymentsCol.insertOne(paymentRecord);
 
       // Update job with payment intent ID
+      console.log("[create-intent] Updating job with paymentIntentId...");
       await jobsCol.updateOne(
         { _id: new ObjectId(jobId) },
         {
@@ -2580,6 +2870,76 @@ function findAvailablePort(startPort) {
         }
       );
 
+      // Create financial record for this payment (in managers_financials collection)
+      console.log("[create-intent] Creating financial record...");
+      const financialsCol = getCollectionFinancials();
+
+      // Check if financial record already exists (prevent duplicates)
+      // Check by paymentIntentId OR jobId to ensure no duplicates
+      const existingFinancial = await financialsCol.findOne({
+        $or: [
+          { paymentIntentId: paymentIntentId },
+          { jobId: new ObjectId(jobId) },
+        ],
+      });
+
+      if (existingFinancial) {
+        console.log(
+          "[create-intent] Financial record already exists in managers_financials:",
+          {
+            existingId: existingFinancial._id,
+            paymentIntentId: existingFinancial.paymentIntentId,
+            jobId: existingFinancial.jobId,
+          }
+        );
+        console.log("[create-intent] Skipping creation to prevent duplicate");
+      } else {
+        // Calculate platform fee (already calculated above)
+        const platformFee = platformFeeAgorot / 100; // Convert to ILS
+
+        // Calculate urgent call fee
+        const urgentFee = job.urgent ? 10 : 0;
+
+        // Calculate clearing fee (Stripe fee: 2.9% + 0.3 ILS)
+        const clearingFeeRate = 0.029; // 2.9%
+        const clearingFeeFixed = 0.3; // 0.3 ILS
+        const clearingFee =
+          Math.round((totalPrice * clearingFeeRate + clearingFeeFixed) * 100) /
+          100;
+
+        // Create financial document (one document per payment)
+        const financialsDoc = {
+          _id: new ObjectId(),
+          expenses: {
+            "AI expenses": 0,
+            "DB expenses": 0,
+            "API expenses": 0,
+            "Marketing expenses": 0,
+            "clearing fee": clearingFee,
+          },
+          Revenue: {
+            Fees: platformFee,
+            Drawings: 0,
+            "Urgent call": urgentFee,
+          },
+          updatedAt: new Date(),
+          // Store paymentIntentId to prevent duplicates
+          paymentIntentId: paymentIntentId,
+          jobId: new ObjectId(jobId),
+        };
+
+        console.log(
+          "[create-intent] Financial record:",
+          JSON.stringify(financialsDoc, null, 2)
+        );
+
+        await financialsCol.insertOne(financialsDoc);
+        console.log(
+          "[create-intent] Financial record saved successfully to managers_financials"
+        );
+      }
+
+      console.log("[create-intent] ====== SUCCESS ======");
       return res.json({
         success: true,
         clientSecret: clientSecret,
@@ -2587,7 +2947,19 @@ function findAvailablePort(startPort) {
         status: status,
       });
     } catch (error) {
-      console.error("Error creating payment intent:", error);
+      console.error("[create-intent] ====== ERROR ======");
+      console.error("[create-intent] Error type:", error.constructor.name);
+      console.error("[create-intent] Error message:", error.message);
+      console.error("[create-intent] Error stack:", error.stack);
+      if (error.response) {
+        console.error(
+          "[create-intent] Error response:",
+          JSON.stringify(error.response.data, null, 2)
+        );
+      }
+      if (error.request) {
+        console.error("[create-intent] Error request:", error.request);
+      }
       return res.status(500).json({
         success: false,
         message: "שגיאה ביצירת כוונת תשלום",
@@ -2598,14 +2970,28 @@ function findAvailablePort(startPort) {
 
   // Update payment status after client confirms payment with Stripe.js
   app.post("/api/payments/confirm", async (req, res) => {
+    console.log("[payments/confirm] ====== START ======");
+    console.log("[payments/confirm] Timestamp:", new Date().toISOString());
+    console.log(
+      "[payments/confirm] Request body:",
+      JSON.stringify(req.body, null, 2)
+    );
+
     try {
       const { paymentIntentId, jobId } = req.body;
       if (!paymentIntentId || !jobId) {
+        console.log(
+          "[payments/confirm] ERROR: Missing paymentIntentId or jobId"
+        );
         return res.status(400).json({
           success: false,
           message: "paymentIntentId and jobId required",
         });
       }
+
+      console.log(
+        `[payments/confirm] Processing confirmation for paymentIntentId: ${paymentIntentId}, jobId: ${jobId}`
+      );
 
       const jobsCol = getCollectionJobs();
       const paymentsCol = getCollectionPayments();
@@ -2613,9 +2999,23 @@ function findAvailablePort(startPort) {
       // Get payment intent from Stripe to verify status
       let paymentIntent;
       try {
+        console.log(
+          `[payments/confirm] Retrieving payment intent from Stripe: ${paymentIntentId}`
+        );
         paymentIntent = await getPaymentIntent(paymentIntentId);
+        console.log(
+          `[payments/confirm] Payment intent retrieved, status: ${paymentIntent.status}`
+        );
       } catch (stripeError) {
-        console.error("Error retrieving payment intent:", stripeError);
+        console.error(
+          "[payments/confirm] Error retrieving payment intent:",
+          stripeError
+        );
+        console.error("[payments/confirm] Error details:", {
+          message: stripeError.message,
+          type: stripeError.type,
+          code: stripeError.code,
+        });
         return res.status(500).json({
           success: false,
           message: "Failed to verify payment status",
@@ -2658,11 +3058,16 @@ function findAvailablePort(startPort) {
         );
       }
 
+      console.log(
+        `[payments/confirm] Updating payment record with status: ${paymentIntent.status}`
+      );
       await paymentsCol.updateOne(
         { paymentIntentId: paymentIntentId },
         { $set: updateData }
       );
+      console.log("[payments/confirm] Payment record updated successfully");
 
+      console.log("[payments/confirm] ====== SUCCESS ======");
       return res.json({
         success: true,
         paymentIntentId: paymentIntentId,
@@ -2675,7 +3080,10 @@ function findAvailablePort(startPort) {
             : "Payment status updated",
       });
     } catch (error) {
-      console.error("Error confirming payment:", error);
+      console.error("[payments/confirm] ====== ERROR ======");
+      console.error("[payments/confirm] Error type:", error.constructor.name);
+      console.error("[payments/confirm] Error message:", error.message);
+      console.error("[payments/confirm] Error stack:", error.stack);
       return res.status(500).json({
         success: false,
         message: "שגיאה באישור התשלום",
@@ -3291,61 +3699,84 @@ function findAvailablePort(startPort) {
 
       // Create Stripe Connect account if it doesn't exist
       // This happens when handyman accepts their first job
+      // Do this in background to not block response
       let needsOnboarding = false;
-      if (!handyman.stripeAccountId) {
-        try {
-          await getOrCreateConnectedAccount(handyman, usersCol);
-          // Reload handyman to get updated stripeAccountId
-          const updatedHandyman = await usersCol.findOne({
-            _id: new ObjectId(handymanId),
-          });
-          if (updatedHandyman) {
-            Object.assign(handyman, updatedHandyman);
-          }
-        } catch (stripeError) {
-          console.error(
-            "Error creating Stripe account for handyman:",
-            stripeError
-          );
-          // Don't fail the job acceptance - Stripe account can be created later
-        }
-      }
+      let onboardingUrl = null;
 
-      // Check if handyman needs to complete onboarding
-      if (handyman.stripeAccountId) {
+      if (!handyman.stripeAccountId) {
+        // If no account, assume needs onboarding and create account in background
+        needsOnboarding = true;
+        setImmediate(async () => {
+          try {
+            console.log(
+              `[jobs/accept] Creating Stripe account in background for handyman ${handymanId}...`
+            );
+            const accountId = await getOrCreateConnectedAccount(
+              handyman,
+              usersCol
+            );
+            if (!accountId) {
+              console.warn(
+                `[jobs/accept] Stripe Connect not enabled. Payment processing will be limited.`
+              );
+            } else {
+              console.log(`[jobs/accept] Stripe account created: ${accountId}`);
+            }
+          } catch (stripeError) {
+            console.error(
+              "[jobs/accept] Error creating Stripe account for handyman:",
+              stripeError
+            );
+            // Don't fail the job acceptance - Stripe account can be created later
+          }
+        });
+      } else {
+        // Check if handyman needs to complete onboarding (with timeout)
         try {
-          const account = await stripe.accounts.retrieve(
+          const accountPromise = stripe.accounts.retrieve(
             handyman.stripeAccountId
           );
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Account retrieval timeout")),
+              5000
+            )
+          );
+          const account = await Promise.race([accountPromise, timeoutPromise]);
           if (!account.charges_enabled || !account.payouts_enabled) {
             needsOnboarding = true;
+            // Try to create onboarding link (with timeout)
+            try {
+              const returnUrl =
+                process.env.STRIPE_ONBOARDING_RETURN_URL ||
+                `${URL_CLIENT}/stripe/success`;
+              const refreshUrl =
+                process.env.STRIPE_ONBOARDING_REFRESH_URL ||
+                `${URL_CLIENT}/stripe/refresh`;
+              const linkPromise = createOnboardingLink(
+                handyman.stripeAccountId,
+                returnUrl,
+                refreshUrl
+              );
+              const linkTimeoutPromise = new Promise((_, reject) =>
+                setTimeout(
+                  () => reject(new Error("Onboarding link timeout")),
+                  5000
+                )
+              );
+              onboardingUrl = await Promise.race([
+                linkPromise,
+                linkTimeoutPromise,
+              ]);
+            } catch (onboardingError) {
+              console.error("Error creating onboarding link:", onboardingError);
+              // Link can be created later via /api/handyman/stripe/onboarding-link
+            }
           }
         } catch (stripeError) {
           console.error("Error checking Stripe account status:", stripeError);
           // Assume needs onboarding if we can't check
           needsOnboarding = true;
-        }
-      }
-
-      // If needs onboarding, create the link and return it
-      // NOTE: In TEST MODE, URLs can be localhost for testing
-      let onboardingUrl = null;
-      if (needsOnboarding && handyman.stripeAccountId) {
-        try {
-          const returnUrl =
-            process.env.STRIPE_ONBOARDING_RETURN_URL ||
-            `${URL_CLIENT}/stripe/success`;
-          const refreshUrl =
-            process.env.STRIPE_ONBOARDING_REFRESH_URL ||
-            `${URL_CLIENT}/stripe/refresh`;
-          onboardingUrl = await createOnboardingLink(
-            handyman.stripeAccountId,
-            returnUrl,
-            refreshUrl
-          );
-        } catch (onboardingError) {
-          console.error("Error creating onboarding link:", onboardingError);
-          // Don't fail the request if onboarding link creation fails
         }
       }
 
@@ -3405,7 +3836,8 @@ function findAvailablePort(startPort) {
       const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
       const clientId = job?.clientId;
 
-      // Emit WebSocket event to notify client that job was accepted
+      // Emit WebSocket event to notify both client and handyman that job was accepted
+      // This will trigger chat to open automatically for both parties
       io.to(`job-${jobId}`).emit("job-accepted", {
         jobId: jobId,
         handymanId: handymanId,
@@ -3413,50 +3845,390 @@ function findAvailablePort(startPort) {
         status: "assigned",
       });
 
-      // Send Push Notification to client
-      if (clientId) {
-        try {
-          // Handle both ObjectId and string clientId
-          const clientObjectId =
-            clientId instanceof ObjectId ? clientId : new ObjectId(clientId);
-          const client = await usersCol.findOne({
-            _id: clientObjectId,
-          });
+      // Also emit to handyman's personal room to ensure they receive the event
+      // This is important if the handyman is not yet in the job room
+      io.to(`user-${handymanId}`).emit("job-accepted", {
+        jobId: jobId,
+        handymanId: handymanId,
+        handymanName: handymanName,
+        status: "assigned",
+      });
 
-          if (client) {
-            if (client.fcmToken) {
-              const pushResult = await sendPushNotification(
-                client.fcmToken,
-                "עבודה שובצה! 🎉",
-                `קבלו את העבודה שלך - ${handymanName}`,
-                {
-                  type: "job_accepted",
-                  jobId: jobId.toString(),
+      // Send Push Notification to client (non-blocking - run in background)
+      if (clientId) {
+        setImmediate(async () => {
+          try {
+            // Handle both ObjectId and string clientId
+            const clientObjectId =
+              clientId instanceof ObjectId ? clientId : new ObjectId(clientId);
+            const client = await usersCol.findOne({
+              _id: clientObjectId,
+            });
+
+            if (client) {
+              if (client.fcmToken) {
+                // Send notification about job acceptance
+                const pushResult = await sendPushNotification(
+                  client.fcmToken,
+                  "עבודה שובצה! 🎉",
+                  `קבלו את העבודה שלך - ${handymanName}`,
+                  {
+                    type: "job_accepted",
+                    jobId: jobId.toString(),
+                    handymanId: handymanId.toString(),
+                    handymanName: handymanName || "",
+                  }
+                );
+
+                // If token is invalid, remove it from database
+                if (pushResult.shouldRemove) {
+                  await usersCol.updateOne(
+                    { _id: clientObjectId },
+                    { $unset: { fcmToken: "" } }
+                  );
+                }
+              }
+            }
+          } catch (pushError) {
+            console.error(
+              "[jobs/accept] Error sending push notification:",
+              pushError
+            );
+            // Don't fail the request if push notification fails
+          }
+        });
+      }
+
+      // Create Payment Intent for Escrow (if job has a price)
+      // This is the Escrow flow: payment is created when handyman accepts,
+      // money is held (requires_capture), and released when client approves after job is done
+      // Do this in background to not block response
+      let paymentIntentCreated = false;
+      let clientSecret = null;
+
+      if (job && !job.paymentIntentId) {
+        // Run payment creation in background to not block response
+        setImmediate(async () => {
+          try {
+            // Calculate job price
+            let totalPrice = 0;
+
+            if (
+              job.subcategoryInfo &&
+              Array.isArray(job.subcategoryInfo) &&
+              job.subcategoryInfo.length > 0
+            ) {
+              totalPrice = job.subcategoryInfo.reduce((sum, subcat) => {
+                const price = subcat?.price || 0;
+                return (
+                  sum +
+                  (typeof price === "number" ? price : parseFloat(price) || 0)
+                );
+              }, 0);
+            } else if (
+              job.subcategoryInfo &&
+              typeof job.subcategoryInfo === "object" &&
+              job.subcategoryInfo.price
+            ) {
+              totalPrice =
+                typeof job.subcategoryInfo.price === "number"
+                  ? job.subcategoryInfo.price
+                  : parseFloat(job.subcategoryInfo.price) || 0;
+            } else if (job.price) {
+              totalPrice =
+                typeof job.price === "number"
+                  ? job.price
+                  : parseFloat(job.price) || 0;
+            }
+
+            // Add urgent fee if applicable
+            if (job.urgent) {
+              totalPrice += 10;
+            }
+
+            // Only create payment intent if there's a price
+            if (totalPrice > 0 && handyman.stripeAccountId) {
+              const amountAgorot = Math.round(totalPrice * 100);
+              const platformFeeAgorot = Math.round(
+                (amountAgorot * PLATFORM_FEE_PERCENT) / 100
+              );
+
+              // Create Escrow Payment Intent with timeout
+              console.log(
+                `[jobs/accept] Creating Escrow Payment Intent for job ${jobId}...`
+              );
+              console.log(
+                `[jobs/accept] Amount: ${amountAgorot} agorot, Platform fee: ${platformFeeAgorot} agorot`
+              );
+              console.log(
+                `[jobs/accept] Handyman account: ${handyman.stripeAccountId}`
+              );
+
+              // Use Promise.race with timeout to prevent hanging
+              const paymentIntentPromise = createEscrowPaymentIntent({
+                amountAgorot,
+                currency: "ils",
+                handymanAccountId: handyman.stripeAccountId,
+                platformFeeAgorot,
+                metadata: {
+                  jobId: jobId,
+                  clientId: job.clientId?.toString() || "",
                   handymanId: handymanId.toString(),
-                  handymanName: handymanName || "",
+                },
+              });
+              const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(
+                  () => reject(new Error("Payment Intent creation timeout")),
+                  10000
+                )
+              );
+
+              const {
+                clientSecret: secret,
+                paymentIntentId,
+                status,
+              } = await Promise.race([paymentIntentPromise, timeoutPromise]);
+
+              console.log(
+                `[jobs/accept] Payment Intent created: ${paymentIntentId}, status: ${status}`
+              );
+              clientSecret = secret;
+
+              // If paymentMethodId exists (from CreateCall), attach it and confirm payment automatically
+              // Do this in background to not block response
+              if (job.paymentMethodId) {
+                setImmediate(async () => {
+                  try {
+                    console.log(
+                      `[jobs/accept] Found paymentMethodId: ${job.paymentMethodId}, confirming payment...`
+                    );
+
+                    // Use timeout to prevent hanging
+                    const confirmPromise = stripe.paymentIntents.confirm(
+                      paymentIntentId,
+                      {
+                        payment_method: job.paymentMethodId,
+                      }
+                    );
+                    const timeoutPromise = new Promise((_, reject) =>
+                      setTimeout(
+                        () => reject(new Error("Payment confirmation timeout")),
+                        10000
+                      )
+                    );
+
+                    // Attach payment method to payment intent and confirm
+                    const confirmedPaymentIntent = await Promise.race([
+                      confirmPromise,
+                      timeoutPromise,
+                    ]);
+
+                    console.log(
+                      `[jobs/accept] Payment confirmed automatically with paymentMethodId: ${job.paymentMethodId}, status: ${confirmedPaymentIntent.status}`
+                    );
+
+                    // Update payment record with confirmed status
+                    await paymentsCol.updateOne(
+                      { paymentIntentId: paymentIntentId },
+                      {
+                        $set: {
+                          status: confirmedPaymentIntent.status,
+                          updatedAt: new Date(),
+                        },
+                      }
+                    );
+
+                    console.log(
+                      `[jobs/accept] Payment record updated with status: ${confirmedPaymentIntent.status}`
+                    );
+
+                    // Update job payment status
+                    await jobsCol.updateOne(
+                      { _id: new ObjectId(jobId) },
+                      {
+                        $set: {
+                          paymentStatus:
+                            confirmedPaymentIntent.status === "requires_capture"
+                              ? "pending"
+                              : confirmedPaymentIntent.status,
+                        },
+                      }
+                    );
+
+                    console.log(
+                      `[jobs/accept] Job payment status updated to: ${
+                        confirmedPaymentIntent.status === "requires_capture"
+                          ? "pending"
+                          : confirmedPaymentIntent.status
+                      }`
+                    );
+                  } catch (confirmError) {
+                    console.error(
+                      "[jobs/accept] Error confirming payment with paymentMethodId:",
+                      confirmError
+                    );
+                    console.error("[jobs/accept] Error details:", {
+                      message: confirmError.message,
+                      type: confirmError.type,
+                      code: confirmError.code,
+                    });
+                    // Don't fail the job acceptance if payment confirmation fails
+                    // Payment can be confirmed later manually
+                  }
+                });
+              } else {
+                console.log(
+                  `[jobs/accept] No paymentMethodId found in job, payment will need to be confirmed manually`
+                );
+              }
+
+              // Save payment record
+              const paymentsCol = getCollectionPayments();
+              const paymentRecord = {
+                _id: new ObjectId(),
+                jobId: new ObjectId(jobId),
+                clientId: new ObjectId(job.clientId),
+                handymanId: new ObjectId(handymanId),
+                paymentIntentId: paymentIntentId,
+                amount: amountAgorot / 100,
+                platformFee: platformFeeAgorot / 100,
+                currency: "ils",
+                status: status,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              };
+              await paymentsCol.insertOne(paymentRecord);
+
+              // Update job with payment intent ID
+              await jobsCol.updateOne(
+                { _id: new ObjectId(jobId) },
+                {
+                  $set: {
+                    paymentIntentId: paymentIntentId,
+                    paymentStatus: "pending",
+                  },
                 }
               );
 
-              // If token is invalid, remove it from database
-              if (pushResult.shouldRemove) {
-                await usersCol.updateOne(
-                  { _id: clientObjectId },
-                  { $unset: { fcmToken: "" } }
-                );
+              // Create financial record
+              const financialsCol = getCollectionFinancials();
+              const existingFinancial = await financialsCol.findOne({
+                paymentIntentId: paymentIntentId,
+              });
+
+              if (!existingFinancial) {
+                const platformFee = platformFeeAgorot / 100;
+                const urgentFee = job.urgent ? 10 : 0;
+                const clearingFeeRate = 0.029;
+                const clearingFeeFixed = 0.3;
+                const clearingFee =
+                  Math.round(
+                    (totalPrice * clearingFeeRate + clearingFeeFixed) * 100
+                  ) / 100;
+
+                const financialsDoc = {
+                  _id: new ObjectId(),
+                  expenses: {
+                    "AI expenses": 0,
+                    "DB expenses": 0,
+                    "API expenses": 0,
+                    "Marketing expenses": 0,
+                    "clearing fee": clearingFee,
+                  },
+                  Revenue: {
+                    Fees: platformFee,
+                    Drawings: 0,
+                    "Urgent call": urgentFee,
+                  },
+                  updatedAt: new Date(),
+                  paymentIntentId: paymentIntentId,
+                  jobId: new ObjectId(jobId),
+                };
+
+                await financialsCol.insertOne(financialsDoc);
+              }
+
+              paymentIntentCreated = true;
+              console.log(
+                `[jobs/accept] Payment Intent created for job ${jobId}: ${paymentIntentId}`
+              );
+
+              // Send notification to client about payment requirement (non-blocking)
+              if (clientId) {
+                setImmediate(async () => {
+                  try {
+                    const clientObjectId =
+                      clientId instanceof ObjectId
+                        ? clientId
+                        : new ObjectId(clientId);
+                    const client = await usersCol.findOne({
+                      _id: clientObjectId,
+                    });
+
+                    if (client && client.fcmToken) {
+                      await sendPushNotification(
+                        client.fcmToken,
+                        "נדרש אישור תשלום 💳",
+                        `ההנדימן ${handymanName} קיבל את העבודה. אנא אשר את התשלום כדי להמשיך.`,
+                        {
+                          type: "payment_required",
+                          jobId: jobId.toString(),
+                          handymanId: handymanId.toString(),
+                          paymentIntentId: paymentIntentId,
+                        }
+                      );
+                    }
+                  } catch (notificationError) {
+                    console.error(
+                      "[jobs/accept] Error sending payment notification:",
+                      notificationError
+                    );
+                    // Don't fail if notification fails
+                  }
+                });
               }
             }
+          } catch (paymentError) {
+            console.error(
+              "[jobs/accept] Error creating payment intent:",
+              paymentError
+            );
+            // Don't fail the job acceptance if payment creation fails
+            // Payment can be created later via /api/payments/create-intent
           }
-        } catch (pushError) {
-          // Don't fail the request if push notification fails
-        }
+        });
       }
 
-      return res.json({
+      // Get updated job to return paymentIntentId
+      const updatedJob = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+
+      // Return response immediately - don't wait for slow operations
+      const response = {
         success: true,
         needsOnboarding: needsOnboarding,
         onboardingUrl: onboardingUrl,
+        paymentIntentCreated: paymentIntentCreated,
+        clientSecret: clientSecret, // Client will use this to confirm payment with Stripe.js
+        paymentIntentId: updatedJob?.paymentIntentId || null,
+      };
+
+      // Send response immediately
+      res.json(response);
+
+      // Continue with any remaining async operations in background (non-blocking)
+      // These won't block the response
+      setImmediate(async () => {
+        try {
+          // Any additional cleanup or logging can go here
+          console.log(
+            `[jobs/accept] Job ${jobId} accepted by handyman ${handymanId}`
+          );
+        } catch (bgError) {
+          console.error("[jobs/accept] Background operation error:", bgError);
+        }
       });
     } catch (error) {
+      console.error("[jobs/accept] Error accepting job:", error);
       return res.status(500).json({
         success: false,
         message: "Error accepting job",
@@ -4036,6 +4808,7 @@ function findAvailablePort(startPort) {
         $set: {
           status: "done",
           clientApproved: false,
+          handymanReceivedPayment: false, // Handyman hasn't received payment yet
         },
       });
 
@@ -4069,11 +4842,68 @@ function findAvailablePort(startPort) {
       // Emit WebSocket event to notify clients
       const io = req.app.get("io");
       if (io) {
+        console.log(
+          `[jobs/done] Emitting WebSocket events for job ${jobId}...`
+        );
+
+        // Emit to job room (for all participants)
         io.to(`job-${jobId}`).emit("job-status-updated", {
           jobId,
           status: "done",
           requiresClientApproval: true,
         });
+        console.log(
+          `[jobs/done] Emitted 'job-status-updated' to job-${jobId} room`
+        );
+
+        // Also emit to client's personal room to ensure they receive the event
+        const clientId = job?.clientId;
+        if (clientId) {
+          const clientIdString = clientId.toString();
+          const userRoomName = `user-${clientIdString}`;
+          const jobRoomName = `job-${jobId}`;
+
+          // Get list of sockets in user room for debugging
+          const userRoom = io.sockets.adapter.rooms.get(userRoomName);
+          const userRoomSize = userRoom ? userRoom.size : 0;
+          console.log(
+            `[jobs/done] User room '${userRoomName}' has ${userRoomSize} socket(s)`
+          );
+
+          // Get list of sockets in job room for debugging
+          const jobRoom = io.sockets.adapter.rooms.get(jobRoomName);
+          const jobRoomSize = jobRoom ? jobRoom.size : 0;
+          console.log(
+            `[jobs/done] Job room '${jobRoomName}' has ${jobRoomSize} socket(s)`
+          );
+
+          io.to(userRoomName).emit("job-done", {
+            jobId,
+            status: "done",
+            requiresClientApproval: true,
+          });
+          console.log(
+            `[jobs/done] Emitted 'job-done' to user-${clientIdString} room (${userRoomSize} socket(s))`
+          );
+
+          // Also emit to job room with specific event for client (in case they're in job room)
+          io.to(jobRoomName).emit("job-done", {
+            jobId,
+            status: "done",
+            requiresClientApproval: true,
+          });
+          console.log(
+            `[jobs/done] Also emitted 'job-done' to job-${jobId} room for client (${jobRoomSize} socket(s))`
+          );
+        } else {
+          console.log(
+            `[jobs/done] WARNING: No clientId found for job ${jobId} - cannot emit to user room`
+          );
+        }
+      } else {
+        console.error(
+          `[jobs/done] ERROR: Socket.IO instance not found - cannot emit WebSocket events`
+        );
       }
 
       // Send Push Notification to client
@@ -4090,9 +4920,13 @@ function findAvailablePort(startPort) {
                 ? job.handymanName[0]
                 : "ההנדימן";
 
+            console.log(
+              `[jobs/done] Sending push notification to client ${clientId} about job ${jobId} completion`
+            );
+
             const pushResult = await sendPushNotification(
               client.fcmToken,
-              "העבודה הושלמה",
+              "העבודה הושלמה ✅",
               `${handymanName} סיים את העבודה. אנא אשר את סיום העבודה כדי לשחרר את התשלום.`,
               {
                 type: "job_done",
@@ -4102,16 +4936,36 @@ function findAvailablePort(startPort) {
               }
             );
 
+            console.log(`[jobs/done] Push notification result:`, {
+              success: !pushResult.shouldRemove,
+              shouldRemove: pushResult.shouldRemove,
+            });
+
             if (pushResult.shouldRemove) {
               await usersCol.updateOne(
                 { _id: clientObjectId },
                 { $unset: { fcmToken: "" } }
               );
+              console.log(
+                `[jobs/done] Removed invalid FCM token for client ${clientId}`
+              );
             }
+          } else {
+            console.log(
+              `[jobs/done] Client ${clientId} has no FCM token - cannot send push notification`
+            );
           }
         } catch (pushError) {
+          console.error(
+            `[jobs/done] Error sending push notification to client ${clientId}:`,
+            pushError
+          );
           // Don't fail the request if push notification fails
         }
+      } else {
+        console.log(
+          `[jobs/done] Job ${jobId} has no clientId - cannot send notification`
+        );
       }
 
       // NOTE: Payment capture is NOT performed here - it requires client approval
@@ -4367,6 +5221,7 @@ function findAvailablePort(startPort) {
               $set: {
                 paymentStatus: "paid",
                 status: "paid",
+                handymanReceivedPayment: true, // Payment was captured and transferred
               },
             }
           );
@@ -4374,11 +5229,24 @@ function findAvailablePort(startPort) {
           // Emit WebSocket event
           const io = req.app.get("io");
           if (io) {
+            // Emit to job room
             io.to(`job-${jobId}`).emit("job-approved", {
               jobId,
               status: "paid",
               paymentReleased: true,
             });
+            // Also emit to handyman's personal room
+            if (handymanId) {
+              io.to(`user-${handymanId.toString()}`).emit("job-approved", {
+                jobId,
+                status: "paid",
+                paymentReleased: true,
+                clientApproved: true,
+              });
+              console.log(
+                `[jobs/approve] Emitted job-approved to user-${handymanId.toString()}`
+              );
+            }
           }
 
           // Send push notification to handyman
@@ -4396,18 +5264,174 @@ function findAvailablePort(startPort) {
                 _id: handymanObjectId,
               });
 
-              if (handyman?.fcmToken) {
-                await sendPushNotification(
-                  handyman.fcmToken,
-                  "תשלום שוחרר",
-                  "הלקוח אישר את סיום העבודה והתשלום שוחרר לחשבונך",
-                  {
-                    type: "payment_released",
-                    jobId: jobId.toString(),
-                  }
+              if (handyman) {
+                console.log(
+                  `[jobs/approve] Checking onboarding for handyman ${handymanId}, stripeAccountId: ${
+                    handyman.stripeAccountId || "none"
+                  }`
                 );
+                // Check if handyman needs onboarding
+                let needsOnboarding = false;
+                let onboardingUrl = null;
+
+                if (handyman.stripeAccountId) {
+                  try {
+                    const account = await stripe.accounts.retrieve(
+                      handyman.stripeAccountId
+                    );
+                    console.log(
+                      `[jobs/approve] Stripe account status - charges_enabled: ${account.charges_enabled}, payouts_enabled: ${account.payouts_enabled}`
+                    );
+                    if (!account.charges_enabled || !account.payouts_enabled) {
+                      needsOnboarding = true;
+                      // Create onboarding link
+                      const returnUrl =
+                        process.env.STRIPE_ONBOARDING_RETURN_URL ||
+                        `${URL_CLIENT}/stripe/success`;
+                      const refreshUrl =
+                        process.env.STRIPE_ONBOARDING_REFRESH_URL ||
+                        `${URL_CLIENT}/stripe/refresh`;
+                      try {
+                        onboardingUrl = await createOnboardingLink(
+                          handyman.stripeAccountId,
+                          returnUrl,
+                          refreshUrl
+                        );
+                        console.log(
+                          `[jobs/approve] Created onboarding URL: ${
+                            onboardingUrl ? "success" : "failed"
+                          }`
+                        );
+                      } catch (linkError) {
+                        console.error(
+                          "[jobs/approve] Error creating onboarding link:",
+                          linkError
+                        );
+                      }
+                    }
+                  } catch (stripeError) {
+                    console.error(
+                      "[jobs/approve] Error checking Stripe account status:",
+                      stripeError
+                    );
+                    // If we can't check, assume needs onboarding
+                    needsOnboarding = true;
+                  }
+                } else {
+                  // No Stripe account - needs onboarding
+                  console.log(
+                    `[jobs/approve] Handyman ${handymanId} has no stripeAccountId - needs onboarding`
+                  );
+                  needsOnboarding = true;
+                  // Try to create account and get onboarding link
+                  try {
+                    const accountId = await getOrCreateConnectedAccount(
+                      handyman,
+                      usersCol
+                    );
+                    if (accountId) {
+                      // Reload handyman to get updated stripeAccountId
+                      const updatedHandyman = await usersCol.findOne({
+                        _id: handymanObjectId,
+                      });
+                      if (updatedHandyman?.stripeAccountId) {
+                        const returnUrl =
+                          process.env.STRIPE_ONBOARDING_RETURN_URL ||
+                          `${URL_CLIENT}/stripe/success`;
+                        const refreshUrl =
+                          process.env.STRIPE_ONBOARDING_REFRESH_URL ||
+                          `${URL_CLIENT}/stripe/refresh`;
+                        try {
+                          onboardingUrl = await createOnboardingLink(
+                            updatedHandyman.stripeAccountId,
+                            returnUrl,
+                            refreshUrl
+                          );
+                        } catch (linkError) {
+                          console.error(
+                            "[jobs/approve] Error creating onboarding link:",
+                            linkError
+                          );
+                        }
+                      }
+                    }
+                  } catch (accountError) {
+                    console.error(
+                      "[jobs/approve] Error creating Stripe account:",
+                      accountError
+                    );
+                  }
+                }
+
+                // Send push notification
+                if (handyman?.fcmToken) {
+                  if (needsOnboarding) {
+                    // Send notification about needing onboarding (with or without URL)
+                    const message = onboardingUrl
+                      ? "הלקוח אישר את סיום העבודה. כדי לקבל את התשלום, עליך להשלים את הגדרת חשבון התשלומים"
+                      : "הלקוח אישר את סיום העבודה והתשלום שוחרר. כדי לקבל את הכסף, עליך להגדיר חשבון תשלומים";
+                    await sendPushNotification(
+                      handyman.fcmToken,
+                      "תשלום שוחרר - נדרש הגדרת תשלומים",
+                      message,
+                      {
+                        type: "payment_released_needs_onboarding",
+                        jobId: jobId.toString(),
+                        onboardingUrl: onboardingUrl,
+                      }
+                    );
+                  } else {
+                    // Regular payment released notification
+                    await sendPushNotification(
+                      handyman.fcmToken,
+                      "תשלום שוחרר",
+                      "הלקוח אישר את סיום העבודה והתשלום שוחרר לחשבונך",
+                      {
+                        type: "payment_released",
+                        jobId: jobId.toString(),
+                      }
+                    );
+                  }
+                }
+
+                // Emit WebSocket event with onboarding info if needed
+                const io = req.app.get("io");
+                if (io) {
+                  console.log(
+                    `[jobs/approve] needsOnboarding: ${needsOnboarding}, onboardingUrl: ${
+                      onboardingUrl ? "exists" : "null"
+                    }`
+                  );
+                  if (needsOnboarding) {
+                    const userRoom = `user-${handymanId.toString()}`;
+                    console.log(
+                      `[jobs/approve] Emitting onboarding-required to room: ${userRoom}`
+                    );
+                    const socketsInRoom =
+                      io.sockets.adapter.rooms.get(userRoom);
+                    console.log(
+                      `[jobs/approve] Sockets in room ${userRoom}: ${
+                        socketsInRoom ? socketsInRoom.size : 0
+                      }`
+                    );
+                    io.to(userRoom).emit("onboarding-required", {
+                      jobId: jobId.toString(),
+                      onboardingUrl: onboardingUrl,
+                      message:
+                        "הלקוח אישר את סיום העבודה. כדי לקבל את התשלום, עליך להשלים את הגדרת חשבון התשלומים",
+                      needsOnboarding: true,
+                    });
+                    console.log(
+                      `[jobs/approve] Emitted onboarding-required event to ${userRoom}`
+                    );
+                  }
+                }
               }
             } catch (pushError) {
+              console.error(
+                "Error sending notification to handyman:",
+                pushError
+              );
               // Don't fail if push notification fails
             }
           }
@@ -6619,6 +7643,9 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       // Use subcategoryInfo array from request (already processed by AI)
       const subcategoryInfoArray = subcategoryInfo;
 
+      // Get paymentMethodId from request (created by client with Stripe.js)
+      const { paymentMethodId } = req.body;
+
       // Get coordinates from location
       let userLng = null;
       let userLat = null;
@@ -6864,6 +7891,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           urgent: urgent || false,
           status: "open",
           paymentIntentId: req.body.paymentIntentId || null, // Stripe Payment Intent ID
+          paymentMethodId: paymentMethodId || null, // Stripe Payment Method ID (token, not card details)
           createdAt: new Date(),
           updatedAt: new Date(),
           location: {
@@ -6881,6 +7909,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         const savedJobId = result.insertedId;
 
         // Update Payment Intent metadata with actual jobId if paymentIntentId exists
+        // NOTE: Payment Intent is now created AFTER job creation, so this might not exist
         if (jobData.paymentIntentId) {
           try {
             const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
@@ -6892,10 +7921,6 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
               },
             });
           } catch (updateError) {
-            console.error(
-              "Error updating Payment Intent metadata:",
-              updateError
-            );
             // Don't fail the request if metadata update fails
           }
         }
@@ -8191,6 +9216,62 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
     }
   });
 
+  // Admin endpoint - Block/Unblock user
+  app.post("/admin/users/:id/block", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { isBlocked } = req.body;
+
+      if (!id) {
+        return res
+          .status(400)
+          .json({ success: false, message: "User ID required" });
+      }
+
+      if (typeof isBlocked !== "boolean") {
+        return res.status(400).json({
+          success: false,
+          message: "isBlocked must be a boolean",
+        });
+      }
+
+      const userId = new ObjectId(id);
+      const usersCol = getCollection();
+
+      // Check if user exists
+      const user = await usersCol.findOne({ _id: userId });
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+
+      // Update user blocked status
+      await usersCol.updateOne(
+        { _id: userId },
+        {
+          $set: {
+            isBlocked: isBlocked,
+            updatedAt: new Date(),
+          },
+        }
+      );
+
+      return res.json({
+        success: true,
+        message: isBlocked
+          ? "User blocked successfully"
+          : "User unblocked successfully",
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error updating user block status",
+        error: error.message,
+      });
+    }
+  });
+
   // Admin endpoint - Delete user
   app.delete("/admin/users/:id", async (req, res) => {
     try {
@@ -8837,6 +9918,18 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
   // Socket.IO connection handler
   io.on("connection", (socket) => {
+    // Join user's personal room (for receiving job-accepted events)
+    socket.on("join-user", (userId) => {
+      const roomName = `user-${userId}`;
+      socket.join(roomName);
+      console.log(`[Socket.IO] User ${userId} joined room: ${roomName}`);
+    });
+
+    // Leave user's personal room
+    socket.on("leave-user", (userId) => {
+      socket.leave(`user-${userId}`);
+    });
+
     // Join room for a specific job
     socket.on("join-job", (jobId) => {
       socket.join(`job-${jobId}`);

@@ -43,12 +43,12 @@
 
           <form class="form" @submit.prevent="handleLogin">
             <label class="field">
-              <span class="field__label">שם משתמש</span>
+              <span class="field__label">מייל או שם משתמש</span>
               <input
                 v-model="username"
                 class="field__input"
                 type="text"
-                placeholder="הכנס שם משתמש"
+                placeholder="הכנס מייל או שם משתמש"
                 required
                 autocomplete="username"
               />
@@ -217,12 +217,14 @@ export default {
               "משתמש Google לא נמצא במערכת. אנא הירשם תחילה."
             );
           } else {
-            this.toast.showError("שם משתמש לא נכון");
+            this.toast.showError("מייל או שם משתמש לא נכון");
           }
         } else if (data.message === "NoPass") {
           this.toast.showError("סיסמה לא נכונה");
         } else if (data.message === "NoEmail") {
           this.toast.showError("מייל לא נכון");
+        } else if (data.message === "Blocked") {
+          this.toast.showError("החשבון שלך חסום. אנא פנה לתמיכה");
         }
       } catch (error) {
         const errorMessage =

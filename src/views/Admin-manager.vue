@@ -100,6 +100,7 @@
                       מספר הזמנות
                     </th>
                     <th>נוצר ב</th>
+                    <th>חסום</th>
                     <th>פעולות</th>
                   </tr>
                 </thead>
@@ -180,6 +181,28 @@
                       </div>
                     </td>
                     <td>
+                      <button
+                        class="block-user-btn"
+                        :class="{
+                          'block-user-btn--blocked': user.isBlocked === true,
+                        }"
+                        type="button"
+                        @click="toggleBlockUser(user)"
+                        :title="
+                          user.isBlocked === true ? 'ביטול חסימה' : 'חסום'
+                        "
+                      >
+                        <font-awesome-icon
+                          :icon="
+                            user.isBlocked === true
+                              ? ['fas', 'ban']
+                              : ['fas', 'check']
+                          "
+                        />
+                        {{ user.isBlocked === true ? "חסום" : "פעיל" }}
+                      </button>
+                    </td>
+                    <td>
                       <div class="actions-buttons">
                         <button
                           class="edit-user-btn"
@@ -210,7 +233,7 @@
                   </tr>
                   <tr v-if="filteredUsers.length === 0">
                     <td
-                      :colspan="userFilters.userType === 'handyman' ? 9 : 7"
+                      :colspan="userFilters.userType === 'handyman' ? 10 : 8"
                       class="no-data"
                     >
                       אין משתמשים להצגה
@@ -1589,6 +1612,31 @@ export default {
         );
       }
     },
+    async toggleBlockUser(user) {
+      if (!user || !user._id) {
+        this.toast?.showError("שגיאה: משתמש לא תקין");
+        return;
+      }
+
+      const newBlockStatus = !(user.isBlocked === true);
+
+      try {
+        const userId = user._id || user.id;
+        await axios.post(`${URL}/admin/users/${userId}/block`, {
+          isBlocked: newBlockStatus,
+        });
+
+        this.toast?.showSuccess(
+          newBlockStatus ? "משתמש נחסם בהצלחה" : "חסימת משתמש בוטלה בהצלחה"
+        );
+        await this.loadUsers();
+      } catch (error) {
+        console.error("Error toggling user block status:", error);
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה בעדכון סטטוס החסימה"
+        );
+      }
+    },
     handleImageError(event) {
       event.target.style.display = "none";
     },
@@ -2892,6 +2940,40 @@ $muted: rgba(255, 255, 255, 0.62);
     background: rgba(239, 68, 68, 0.25);
     border-color: rgba(239, 68, 68, 0.5);
     transform: translateY(-1px);
+  }
+}
+
+.block-user-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  background: rgba(255, 193, 7, 0.15);
+  color: #ffc107;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 900;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+
+  &:hover {
+    background: rgba(255, 193, 7, 0.25);
+    border-color: rgba(255, 193, 7, 0.5);
+    transform: translateY(-1px);
+  }
+
+  &--blocked {
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+
+    &:hover {
+      background: rgba(239, 68, 68, 0.25);
+      border-color: rgba(239, 68, 68, 0.5);
+    }
   }
 }
 

@@ -101,6 +101,44 @@
             </div>
           </div>
 
+          <!-- Stripe Onboarding Button (for handyman) -->
+          <div v-if="isHandyman && needsOnboarding" class="onboardingCard">
+            <div class="onboardingCard__content">
+              <div class="onboardingCard__icon">💳</div>
+              <div class="onboardingCard__title">הגדר חשבון תשלומים</div>
+              <div class="onboardingCard__message">
+                כדי לקבל תשלומים, עליך להשלים את הגדרת חשבון התשלומים ב-Stripe
+              </div>
+              <button
+                class="onboardingCard__btn"
+                type="button"
+                @click="handleOpenOnboarding"
+                :disabled="isLoadingOnboarding"
+              >
+                {{ isLoadingOnboarding ? "טוען..." : "הגדר תשלומים" }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Stripe Onboarding Button (for handyman) -->
+          <div v-if="isHandyman && needsOnboarding" class="onboardingCard">
+            <div class="onboardingCard__content">
+              <div class="onboardingCard__icon">💳</div>
+              <div class="onboardingCard__title">הגדר חשבון תשלומים</div>
+              <div class="onboardingCard__message">
+                כדי לקבל תשלומים, עליך להשלים את הגדרת חשבון התשלומים ב-Stripe
+              </div>
+              <button
+                class="onboardingCard__btn"
+                type="button"
+                @click="handleOpenOnboarding"
+                :disabled="isLoadingOnboarding || !onboardingUrl"
+              >
+                {{ isLoadingOnboarding ? "טוען..." : "הגדר תשלומים" }}
+              </button>
+            </div>
+          </div>
+
           <div class="divider"></div>
 
           <!-- Step timeline (different style) -->
@@ -183,6 +221,33 @@
 
       <!-- Chat panel -->
       <main class="chatPanel">
+        <!-- Approval button (for client when job is done but not approved) -->
+        <div
+          v-if="
+            !isHandyman &&
+            jobStatus === 'done' &&
+            !(jobInfo?.clientApproved || job?.clientApproved) &&
+            !ratingSubmitted
+          "
+          class="approvalCard"
+        >
+          <div class="approvalCard__content">
+            <div class="approvalCard__icon">✅</div>
+            <div class="approvalCard__title">ההנדימן סיים את העבודה</div>
+            <div class="approvalCard__message">
+              אנא אשר שהעבודה הושלמה בהצלחה כדי לשחרר את התשלום
+            </div>
+            <button
+              class="approvalCard__btn"
+              type="button"
+              @click="handleApproveJob"
+              :disabled="isApproving"
+            >
+              {{ isApproving ? "מאשר..." : "אשר סיום עבודה ושחרר תשלום" }}
+            </button>
+          </div>
+        </div>
+
         <!-- Rating overlay card (client only) -->
         <div
           v-if="!isHandyman && jobStatus === 'done' && !ratingSubmitted"
@@ -424,6 +489,47 @@
       </div>
     </div>
 
+    <!-- Onboarding Required Modal (for handyman) -->
+    <div
+      v-if="showOnboardingModal && isHandyman"
+      class="onboardingModal"
+      dir="rtl"
+      @click.self="showOnboardingModal = false"
+    >
+      <div class="onboardingModal__content">
+        <button
+          class="onboardingModal__close"
+          type="button"
+          @click="showOnboardingModal = false"
+          aria-label="סגור"
+        >
+          ✕
+        </button>
+        <div class="onboardingModal__icon">💳</div>
+        <h2 class="onboardingModal__title">הגדר חשבון תשלומים</h2>
+        <p class="onboardingModal__message">
+          הלקוח אישר את סיום העבודה. כדי לקבל את התשלום, עליך להשלים את הגדרת
+          חשבון התשלומים ב-Stripe.
+        </p>
+        <div class="onboardingModal__actions">
+          <button
+            class="onboardingModal__btn onboardingModal__btn--primary"
+            type="button"
+            @click="openOnboardingLink"
+          >
+            הגדר תשלומים
+          </button>
+          <button
+            class="onboardingModal__btn onboardingModal__btn--secondary"
+            type="button"
+            @click="showOnboardingModal = false"
+          >
+            מאוחר יותר
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Cancel Job Confirmation Modal -->
     <div
       v-if="showCancelConfirmModal"
@@ -512,8 +618,8 @@
 
 <script>
 import axios from "axios";
-import { io } from "socket.io-client";
 import { URL } from "@/Url/url";
+import { io } from "socket.io-client";
 import { useToast } from "@/composables/useToast";
 import { useMainStore } from "@/store/index";
 import { getCurrentLocation } from "@/utils/geolocation";
@@ -553,12 +659,30 @@ export default {
       imagePreviewText: "", // Text to send with image
       imagePreviewFile: null, // The file to upload
       locationModal: null, // Location to show in modal
+      isApproving: false, // Track approval request state
+      showOnboardingModal: false, // Show onboarding popup
+      onboardingUrl: null, // Onboarding URL to display
     };
   },
   computed: {
     jobStatus() {
       // Use local status if available (from WebSocket), otherwise use prop
-      return this.localJobStatus || this.job?.status || "open";
+      const status =
+        this.localJobStatus ||
+        this.job?.status ||
+        this.jobInfo?.status ||
+        "open";
+      console.log(
+        "[JobChat] jobStatus computed:",
+        status,
+        "localJobStatus:",
+        this.localJobStatus,
+        "job.status:",
+        this.job?.status,
+        "jobInfo.status:",
+        this.jobInfo?.status
+      );
+      return status;
     },
     showStatusButtons() {
       return ["assigned", "on_the_way", "in_progress"].includes(this.jobStatus);
@@ -577,7 +701,13 @@ export default {
       return this.job?.handymanName || "הנדימן";
     },
     jobInfo() {
-      return this.job;
+      const info = this.job;
+      console.log("[JobChat] jobInfo computed:", {
+        status: info?.status,
+        clientApproved: info?.clientApproved,
+        id: info?._id || info?.id,
+      });
+      return info;
     },
     jobLocation() {
       // Get job location from coordinates or location field
@@ -746,6 +876,27 @@ export default {
           this.$router.push(
             `/Dashboard/${userId}/job-summary/${receivedJobId}`
           );
+        }
+      });
+
+      // Listen for onboarding required (when client approves and handyman needs onboarding)
+      this.socket.on("onboarding-required", (data) => {
+        console.log("[JobChat] Received onboarding-required event:", data);
+        const receivedJobId = String(data.jobId || "");
+        const currentJobId = String(jobId || "");
+        console.log(
+          "[JobChat] Comparing jobIds:",
+          receivedJobId,
+          "===",
+          currentJobId,
+          "isHandyman:",
+          this.isHandyman
+        );
+        if (receivedJobId === currentJobId && this.isHandyman) {
+          console.log("[JobChat] Showing onboarding modal for handyman");
+          // Show popup with onboarding link (even if URL is null)
+          this.onboardingUrl = data.onboardingUrl;
+          this.showOnboardingModal = true;
         }
       });
 
@@ -1355,7 +1506,112 @@ export default {
     openImage(src) {
       this.imageModal = src;
     },
+    async checkOnboardingStatus() {
+      if (!this.isHandyman) return;
 
+      const handymanId = this.store.user?._id || this.store.user?.id;
+      if (!handymanId) return;
+
+      try {
+        const response = await axios.get(
+          `${URL}/api/handyman/${handymanId}/stripe/status`
+        );
+        if (response.data && response.data.success) {
+          this.needsOnboarding = response.data.needsOnboarding || false;
+
+          // If needs onboarding, get the onboarding URL
+          if (this.needsOnboarding) {
+            await this.fetchOnboardingLink();
+          }
+        }
+      } catch (error) {
+        console.error("Error checking onboarding status:", error);
+      }
+    },
+    async fetchOnboardingLink() {
+      if (!this.isHandyman) return;
+
+      const handymanId = this.store.user?._id || this.store.user?.id;
+      if (!handymanId) return;
+
+      this.isLoadingOnboarding = true;
+      try {
+        const response = await axios.post(
+          `${URL}/api/handyman/stripe/onboarding-link`,
+          { handymanId: String(handymanId) }
+        );
+        if (response.data && response.data.success && response.data.url) {
+          this.onboardingUrl = response.data.url;
+        }
+      } catch (error) {
+        console.error("Error fetching onboarding link:", error);
+        this.toast?.showError("שגיאה בקבלת קישור הגדרת תשלומים");
+      } finally {
+        this.isLoadingOnboarding = false;
+      }
+    },
+    handleOpenOnboarding() {
+      if (this.onboardingUrl) {
+        window.open(this.onboardingUrl, "_blank");
+      } else {
+        this.toast?.showError(
+          "קישור הגדרת תשלומים לא זמין. נסה שוב מאוחר יותר."
+        );
+      }
+    },
+    async checkOnboardingStatus() {
+      if (!this.isHandyman) return;
+
+      const handymanId = this.store.user?._id || this.store.user?.id;
+      if (!handymanId) return;
+
+      try {
+        const response = await axios.get(
+          `${URL}/api/handyman/${handymanId}/stripe/status`
+        );
+        if (response.data && response.data.success) {
+          this.needsOnboarding = response.data.needsOnboarding || false;
+
+          // If needs onboarding, get the onboarding URL
+          if (this.needsOnboarding) {
+            await this.fetchOnboardingLink();
+          }
+        }
+      } catch (error) {
+        console.error("Error checking onboarding status:", error);
+      }
+    },
+    async fetchOnboardingLink() {
+      if (!this.isHandyman) return;
+
+      const handymanId = this.store.user?._id || this.store.user?.id;
+      if (!handymanId) return;
+
+      this.isLoadingOnboarding = true;
+      try {
+        const response = await axios.post(
+          `${URL}/api/handyman/stripe/onboarding-link`,
+          { handymanId: String(handymanId) }
+        );
+        if (response.data && response.data.success && response.data.url) {
+          this.onboardingUrl = response.data.url;
+        }
+      } catch (error) {
+        console.error("Error fetching onboarding link:", error);
+        this.toast?.showError("שגיאה בקבלת קישור הגדרת תשלומים");
+      } finally {
+        this.isLoadingOnboarding = false;
+      }
+    },
+    handleOpenOnboarding() {
+      if (this.onboardingUrl) {
+        window.open(this.onboardingUrl, "_blank");
+      } else {
+        this.toast?.showError(
+          "קישור הגדרת תשלומים לא זמין. נסה שוב מאוחר יותר."
+        );
+      }
+    },
     async updateStatus(newStatus) {
       try {
         const endpoint = `/jobs/${newStatus.replaceAll("_", "-")}`;
@@ -1407,6 +1663,67 @@ export default {
         const el = this.$refs.messagesContainer;
         if (el) el.scrollTop = el.scrollHeight;
       });
+    },
+
+    async handleApproveJob() {
+      console.log("[JobChat] handleApproveJob called");
+      if (this.isApproving) {
+        console.log("[JobChat] Already approving, returning");
+        return;
+      }
+
+      const jobId = this.job._id || this.job.id;
+      const clientId = this.store.user?._id || this.store.user?.id;
+
+      console.log("[JobChat] Approving job:", jobId, "clientId:", clientId);
+
+      if (!jobId || !clientId) {
+        console.error("[JobChat] Missing jobId or clientId");
+        this.toast?.showError("שגיאה: חסרים פרטים לאישור העבודה");
+        return;
+      }
+
+      this.isApproving = true;
+      try {
+        console.log("[JobChat] Sending approval request to server...");
+        const response = await axios.post(`${URL}/api/jobs/approve`, {
+          jobId,
+          clientId,
+        });
+        console.log("[JobChat] Approval response:", response.data);
+
+        if (response.data && response.data.success) {
+          this.toast?.showSuccess("העבודה אושרה והתשלום שוחרר");
+          // Update local job state
+          if (this.jobInfo) {
+            this.jobInfo.clientApproved = true;
+            this.jobInfo.status = "paid";
+          }
+          this.$emit("job-approved", { jobId, status: "paid" });
+        } else {
+          this.toast?.showError(
+            response.data?.message || "שגיאה באישור העבודה"
+          );
+        }
+      } catch (error) {
+        console.error("Error approving job:", error);
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה באישור העבודה"
+        );
+      } finally {
+        this.isApproving = false;
+      }
+    },
+
+    openOnboardingLink() {
+      if (this.onboardingUrl) {
+        window.open(this.onboardingUrl, "_blank");
+        this.showOnboardingModal = false;
+      } else {
+        this.toast?.showError(
+          "קישור הגדרת תשלומים לא זמין. נסה שוב מאוחר יותר."
+        );
+      }
     },
 
     async handleCancelJob() {
@@ -1781,6 +2098,156 @@ $orange2: #ff8a2b;
   transform: translateY(0);
 }
 
+// Onboarding Modal Styles
+.onboardingModal {
+  position: fixed;
+  inset: 0;
+  z-index: 100002;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Heebo", sans-serif;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.onboardingModal__content {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.95),
+    rgba(15, 16, 22, 0.98)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 32px;
+  max-width: 450px;
+  width: calc(100% - 40px);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  text-align: center;
+  position: relative;
+
+  @media (max-width: 768px) {
+    padding: 24px;
+    border-radius: 16px;
+    max-width: 100%;
+  }
+}
+
+.onboardingModal__close {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  background: transparent;
+  border: 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 8px;
+  line-height: 1;
+  transition: color 0.2s;
+
+  &:hover {
+    color: rgba(255, 255, 255, 0.9);
+  }
+}
+
+.onboardingModal__icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  line-height: 1;
+
+  @media (max-width: 768px) {
+    font-size: 48px;
+    margin-bottom: 12px;
+  }
+}
+
+.onboardingModal__title {
+  font-size: 24px;
+  font-weight: 900;
+  color: #fff;
+  margin: 0 0 16px 0;
+  line-height: 1.3;
+
+  @media (max-width: 768px) {
+    font-size: 20px;
+    margin-bottom: 12px;
+  }
+}
+
+.onboardingModal__message {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0 0 24px 0;
+  line-height: 1.6;
+
+  @media (max-width: 768px) {
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+}
+
+.onboardingModal__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+  }
+}
+
+.onboardingModal__btn {
+  padding: 14px 28px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 800;
+  border: 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: "Heebo", sans-serif;
+  min-width: 140px;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    padding: 12px 24px;
+    font-size: 14px;
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.onboardingModal__btn--primary {
+  background: linear-gradient(
+    135deg,
+    rgba($orange, 0.95),
+    rgba($orange2, 0.92)
+  );
+  color: #0b0c10;
+  border: 1px solid rgba($orange, 0.55);
+
+  &:hover {
+    background: linear-gradient(135deg, rgba($orange, 1), rgba($orange2, 1));
+    box-shadow: 0 4px 16px rgba($orange, 0.3);
+    transform: translateY(-1px);
+  }
+}
+
+.onboardingModal__btn--secondary {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+  }
+}
+
 .statusPill {
   display: flex;
   align-items: center;
@@ -2085,6 +2552,124 @@ $orange2: #ff8a2b;
   flex-direction: column;
   min-height: 0;
   position: relative;
+}
+
+.onboardingCard {
+  background: rgba(14, 14, 18, 0.95);
+  border: 2px solid rgba(249, 115, 22, 0.3);
+  border-radius: 20px;
+  padding: 24px;
+  margin: 14px;
+  text-align: center;
+}
+
+.onboardingCard__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.onboardingCard__icon {
+  font-size: 40px;
+  margin-bottom: 4px;
+}
+
+.onboardingCard__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: $text;
+  margin-bottom: 4px;
+}
+
+.onboardingCard__message {
+  font-size: 14px;
+  color: rgba($text, 0.7);
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+
+.onboardingCard__btn {
+  background: linear-gradient(135deg, $orange 0%, darken($orange, 10%) 100%);
+  border: none;
+  border-radius: 12px;
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 700;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 4px;
+  min-width: 200px;
+}
+
+.onboardingCard__btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba($orange, 0.4);
+}
+
+.onboardingCard__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.approvalCard {
+  background: rgba(14, 14, 18, 0.95);
+  border: 2px solid rgba(249, 115, 22, 0.3);
+  border-radius: 20px;
+  padding: 32px;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.approvalCard__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.approvalCard__icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.approvalCard__title {
+  font-size: 22px;
+  font-weight: 700;
+  color: $text;
+  margin-bottom: 8px;
+}
+
+.approvalCard__message {
+  font-size: 16px;
+  color: rgba($text, 0.7);
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+
+.approvalCard__btn {
+  background: linear-gradient(135deg, $orange 0%, darken($orange, 10%) 100%);
+  border: none;
+  border-radius: 14px;
+  padding: 16px 32px;
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 8px;
+  min-width: 240px;
+}
+
+.approvalCard__btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba($orange, 0.4);
+}
+
+.approvalCard__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .rateCard {

@@ -16,10 +16,21 @@ const PLATFORM_FEE_PERCENT = parseFloat(process.env.PLATFORM_FEE_PERCENT) || 10;
  */
 async function getOrCreateConnectedAccount(handymanUser, usersCollection) {
   try {
+    console.log(
+      `[stripeService] Getting or creating Stripe Connect account for handyman: ${handymanUser._id}`
+    );
+
     // If handyman already has a Stripe account ID, return it
     if (handymanUser.stripeAccountId) {
+      console.log(
+        `[stripeService] Handyman already has Stripe account: ${handymanUser.stripeAccountId}`
+      );
       return handymanUser.stripeAccountId;
     }
+
+    console.log(
+      `[stripeService] Creating new Stripe Express account for handyman: ${handymanUser.email}`
+    );
 
     // Create a new Stripe Express account
     const account = await stripe.accounts.create({
@@ -32,17 +43,42 @@ async function getOrCreateConnectedAccount(handymanUser, usersCollection) {
       },
     });
 
+    console.log(`[stripeService] Stripe account created: ${account.id}`);
+
     // Save the account ID to the database
     if (usersCollection && handymanUser._id) {
       await usersCollection.updateOne(
         { _id: handymanUser._id },
         { $set: { stripeAccountId: account.id } }
       );
+      console.log(
+        `[stripeService] Stripe account ID saved to database for handyman: ${handymanUser._id}`
+      );
     }
 
     return account.id;
   } catch (error) {
-    console.error("Error creating/getting Stripe Connect account:", error);
+    console.error(
+      `[stripeService] Error creating/getting Stripe Connect account for handyman ${handymanUser._id}:`,
+      error
+    );
+    console.error("[stripeService] Error details:", {
+      message: error.message,
+      type: error.type,
+      code: error.code,
+      statusCode: error.statusCode,
+    });
+
+    // Check if the error is about Stripe Connect not being enabled
+    if (error.message && error.message.includes("signed up for Connect")) {
+      console.warn(
+        `[stripeService] Stripe Connect is not enabled for this account. Please enable it in Stripe Dashboard: https://stripe.com/docs/connect`
+      );
+      // Return null instead of throwing - let the calling code handle it
+      return null;
+    }
+
+    // For other errors, still throw
     throw error;
   }
 }
@@ -88,6 +124,15 @@ async function createEscrowPaymentIntent({
   metadata = {},
 }) {
   try {
+    console.log("[stripeService] Creating Escrow Payment Intent...");
+    console.log("[stripeService] Parameters:", {
+      amountAgorot,
+      currency,
+      handymanAccountId,
+      platformFeeAgorot,
+      metadata,
+    });
+
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountAgorot,
       currency: currency,
@@ -100,13 +145,29 @@ async function createEscrowPaymentIntent({
       payment_method_types: ["card"],
     });
 
+    console.log("[stripeService] Payment Intent created successfully:", {
+      id: paymentIntent.id,
+      status: paymentIntent.status,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency,
+    });
+
     return {
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
       status: paymentIntent.status,
     };
   } catch (error) {
-    console.error("Error creating Escrow Payment Intent:", error);
+    console.error(
+      "[stripeService] Error creating Escrow Payment Intent:",
+      error
+    );
+    console.error("[stripeService] Error details:", {
+      message: error.message,
+      type: error.type,
+      code: error.code,
+      statusCode: error.statusCode,
+    });
     throw error;
   }
 }

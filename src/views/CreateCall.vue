@@ -538,99 +538,28 @@
           class="step-content step-content--animated"
         >
           <div class="step-container">
-            <section class="block block--credit">
-              <div class="block__head">
-                <div class="block__label">פרטי אשראי</div>
-                <div class="block__req">חובה</div>
-              </div>
-
-              <div class="credit-info">
-                <p class="credit-info__text">
-                  הכסף מגיע להנדימן רק אחרי העבודה
-                </p>
-              </div>
-
-              <div class="credit-form">
-                <div class="field">
-                  <label class="field__label" for="cardNumber"
-                    >מספר כרטיס אשראי</label
-                  >
-                  <input
-                    id="cardNumber"
-                    v-model="creditCard.cardNumber"
-                    type="text"
-                    class="input-small"
-                    placeholder="1234 5678 9012 3456"
-                    maxlength="19"
-                    @input="formatCardNumber"
-                  />
-                  <div v-if="errors.cardNumber" class="msg msg--err">
-                    {{ errors.cardNumber }}
-                  </div>
-                </div>
-
-                <div class="field">
-                  <label class="field__label" for="cardName"
-                    >שם על הכרטיס</label
-                  >
-                  <input
-                    id="cardName"
-                    v-model="creditCard.cardName"
-                    type="text"
-                    class="input-small"
-                    placeholder="יוסף כהן"
-                    @input="clearError('cardName')"
-                  />
-                  <div v-if="errors.cardName" class="msg msg--err">
-                    {{ errors.cardName }}
-                  </div>
-                </div>
-
-                <div class="twoCols">
-                  <div class="field">
-                    <label class="field__label" for="expiryDate"
-                      >תאריך תפוגה</label
-                    >
-                    <input
-                      id="expiryDate"
-                      v-model="creditCard.expiryDate"
-                      type="text"
-                      class="input-small"
-                      placeholder="MM/YY"
-                      maxlength="5"
-                      @input="formatExpiryDate"
-                    />
-                    <div v-if="errors.expiryDate" class="msg msg--err">
-                      {{ errors.expiryDate }}
-                    </div>
-                  </div>
-
-                  <div class="field">
-                    <label class="field__label" for="cvv">CVV</label>
-                    <input
-                      id="cvv"
-                      v-model="creditCard.cvv"
-                      type="text"
-                      class="input-small"
-                      placeholder="123"
-                      maxlength="4"
-                      @input="formatCVV"
-                    />
-                    <div v-if="errors.cvv" class="msg msg--err">
-                      {{ errors.cvv }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
+            <CreditCardForm
+              ref="creditCardForm"
+              v-model="creditCard"
+              :errors="errors"
+              @update:errors="errors = $event"
+              @payment-method-created="onPaymentMethodCreated"
+              @validation-changed="onCreditCardValidationChanged"
+            />
           </div>
 
           <div class="step-actions">
             <button class="back-btn" type="button" @click="prevStep">
               חזרה
             </button>
-            <button class="submit-btn" type="button" @click="onSubmitCall">
-              שלח קריאה
+            <button
+              class="submit-btn"
+              type="button"
+              @click="onSubmitCall"
+              :disabled="isProcessingPayment"
+            >
+              <span v-if="isProcessingPayment">מעבד תשלום...</span>
+              <span v-else>שלח קריאה</span>
             </button>
           </div>
         </div>
@@ -801,6 +730,7 @@
 
 <script>
 import AddressAutocomplete from "@/components/AddressAutocomplete.vue";
+import CreditCardForm from "@/components/CreditCardForm.vue";
 import { URL } from "@/Url/url";
 import axios from "axios";
 import { useToast } from "@/composables/useToast";
@@ -808,11 +738,13 @@ import { useMainStore } from "@/store/index";
 import { getCurrentLocation } from "@/utils/geolocation";
 import citiesData from "@/APIS/AdressFromIsrael.json";
 import { loadCategories } from "@/utils/categoriesLoader";
+import { loadStripe as loadStripeElements } from "@stripe/stripe-js";
 
 export default {
   name: "CreateCall",
   components: {
     AddressAutocomplete,
+    CreditCardForm,
   },
 
   setup() {
@@ -875,6 +807,9 @@ export default {
         cvv: "",
       },
       isUploadingImage: false,
+      isProcessingPayment: false,
+      paymentMethodId: null, // Store payment method ID (token) instead of card details
+      isCreditCardValid: false, // Track credit card validation status
     };
   },
   computed: {
@@ -899,7 +834,7 @@ export default {
       return total;
     },
   },
-  created() {
+  async created() {
     this.toast = useToast();
 
     this.cities = Array.isArray(citiesData)
@@ -924,6 +859,8 @@ export default {
       this.call.location = "המיקום שלי";
       this.usingMyLocation = true;
     }
+
+    // Stripe is now handled by CreditCardForm component
   },
 
   methods: {
@@ -1003,10 +940,8 @@ export default {
         }
         this.clearError("image");
       } else if (this.currentStep === 4) {
-        // Validate credit card
-        if (!this.validateCreditCard()) {
-          return;
-        }
+        // Credit card validation is handled by CreditCardForm component
+        // We'll validate when submitting the form
       }
 
       if (this.currentStep < 4) {
@@ -1071,70 +1006,134 @@ export default {
         `נבחרו ${this.manuallySelectedSubcategories.length} תת-קטגוריות`
       );
     },
-    formatCardNumber(event) {
-      let value = event.target.value.replace(/\s/g, "");
-      value = value.replace(/\D/g, "");
-      let formattedValue = value.match(/.{1,4}/g)?.join(" ") || value;
-      if (formattedValue.length > 19) {
-        formattedValue = formattedValue.substring(0, 19);
-      }
-      this.creditCard.cardNumber = formattedValue;
-      this.clearError("cardNumber");
+    onPaymentMethodCreated(paymentMethodId) {
+      console.log("[CreateCall] Payment method created:", paymentMethodId);
+      this.paymentMethodId = paymentMethodId;
     },
-    formatExpiryDate(event) {
-      let value = event.target.value.replace(/\D/g, "");
-      if (value.length >= 2) {
-        value = value.substring(0, 2) + "/" + value.substring(2, 4);
-      }
-      this.creditCard.expiryDate = value;
-      this.clearError("expiryDate");
+    onCreditCardValidationChanged(isValid) {
+      console.log("[CreateCall] Credit card validation changed:", isValid);
+      this.isCreditCardValid = isValid;
     },
-    formatCVV(event) {
-      let value = event.target.value.replace(/\D/g, "");
-      if (value.length > 4) {
-        value = value.substring(0, 4);
-      }
-      this.creditCard.cvv = value;
-      this.clearError("cvv");
-    },
-    validateCreditCard() {
-      this.errors = {};
-      let isValid = true;
-
-      // Validate card number (should be 16 digits)
-      const cardNumberDigits = this.creditCard.cardNumber.replace(/\s/g, "");
-      if (cardNumberDigits.length < 13 || cardNumberDigits.length > 19) {
-        this.errors.cardNumber = "מספר כרטיס לא תקין";
-        isValid = false;
+    async processPayment(jobId) {
+      if (!this.stripe) {
+        this.isLoading = false;
+        this.toast?.showError("מערכת התשלומים לא נטענה. אנא רענן את הדף.");
+        return;
       }
 
-      // Validate card name
-      if (
-        !this.creditCard.cardName ||
-        this.creditCard.cardName.trim().length < 2
-      ) {
-        this.errors.cardName = "שם על הכרטיס חובה";
-        isValid = false;
-      }
+      this.isProcessingPayment = true;
 
-      // Validate expiry date (MM/YY format)
-      const expiryRegex = /^(0[1-9]|1[0-2])\/\d{2}$/;
-      if (!expiryRegex.test(this.creditCard.expiryDate)) {
-        this.errors.expiryDate = "תאריך תפוגה לא תקין (MM/YY)";
-        isValid = false;
-      }
+      try {
+        // Step 1: Create Payment Intent on server
+        const createIntentResponse = await fetch(
+          `${URL}/api/payments/create-intent`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              jobId: jobId,
+            }),
+          }
+        );
 
-      // Validate CVV (3-4 digits)
-      if (this.creditCard.cvv.length < 3 || this.creditCard.cvv.length > 4) {
-        this.errors.cvv = "CVV לא תקין";
-        isValid = false;
-      }
+        const intentData = await createIntentResponse.json();
 
-      if (!isValid) {
-        this.toast?.showError("אנא מלא את כל פרטי האשראי");
-      }
+        if (!intentData.success || !intentData.clientSecret) {
+          this.isLoading = false;
+          this.isProcessingPayment = false;
+          this.toast?.showError(
+            intentData.message || "שגיאה ביצירת כוונת תשלום. אנא נסה שוב."
+          );
+          return;
+        }
 
-      return isValid;
+        // Step 2: Create payment method
+        const cardNumberDigits = this.creditCard.cardNumber.replace(/\s/g, "");
+        const [month, year] = this.creditCard.expiryDate.split("/");
+
+        const { error: pmError, paymentMethod } =
+          await this.stripe.createPaymentMethod({
+            type: "card",
+            card: {
+              number: cardNumberDigits,
+              exp_month: parseInt(month),
+              exp_year: parseInt("20" + year),
+              cvc: this.creditCard.cvv,
+            },
+            billing_details: {
+              name: this.creditCard.cardName,
+            },
+          });
+
+        if (pmError || !paymentMethod) {
+          this.isLoading = false;
+          this.isProcessingPayment = false;
+          this.toast?.showError(
+            pmError?.message || "שגיאה ביצירת אמצעי תשלום. אנא נסה שוב."
+          );
+          return;
+        }
+
+        // Step 3: Confirm payment with Stripe.js
+        const { error, paymentIntent } = await this.stripe.confirmCardPayment(
+          intentData.clientSecret,
+          {
+            payment_method: paymentMethod.id,
+          }
+        );
+
+        if (error) {
+          this.isLoading = false;
+          this.isProcessingPayment = false;
+          this.toast?.showError(
+            error.message || "שגיאה באישור התשלום. אנא נסה שוב."
+          );
+          return;
+        }
+
+        // Step 4: Update server with payment confirmation
+        if (paymentIntent && paymentIntent.status === "requires_capture") {
+          const confirmResponse = await fetch(`${URL}/api/payments/confirm`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              jobId: jobId,
+              paymentIntentId: paymentIntent.id,
+              stripeStatus: paymentIntent.status,
+            }),
+          });
+
+          const confirmData = await confirmResponse.json();
+
+          if (confirmData.success) {
+            this.isLoading = false;
+            this.isProcessingPayment = false;
+            this.toast?.showSuccess(
+              `נמצאו ${this.foundHandymen.length} הנדימנים מתאימים. התשלום אושר בהצלחה! הכסף יועבר לאחר אישור סיום העבודה.`
+            );
+          } else {
+            this.isLoading = false;
+            this.isProcessingPayment = false;
+            this.toast?.showError(
+              confirmData.message ||
+                "התשלום אושר אך יש בעיה בעדכון השרת. אנא פנה לתמיכה."
+            );
+          }
+        } else {
+          this.isLoading = false;
+          this.isProcessingPayment = false;
+          this.toast?.showError("מצב תשלום לא צפוי. אנא פנה לתמיכה.");
+        }
+      } catch (error) {
+        console.error("Payment error:", error);
+        this.isLoading = false;
+        this.isProcessingPayment = false;
+        this.toast?.showError("שגיאה בעיבוד התשלום. אנא נסה שוב.");
+      }
     },
     setMyLocation() {
       this.call.location = "המיקום שלי";
@@ -1585,35 +1584,110 @@ export default {
         // Add subcategoryInfo array to callData
         callData.subcategoryInfo = this.subcategoryInfoArray;
 
-        // Create Payment Intent before creating the job
-        let paymentIntentId = null;
-        try {
-          const totalAmount = this.totalPrice;
-          if (totalAmount > 0) {
-            // Create a temporary jobId (we'll update it after job creation)
-            const tempJobId = "temp-" + Date.now();
-            const paymentIntentResponse = await axios.post(
-              `${URL}/payment/create-intent`,
-              {
-                jobId: tempJobId,
-                clientId: this.$route.params.id || null,
-                amount: totalAmount,
-                urgent: this.call.urgent || false,
+        // Create Payment Method with Stripe Elements before sending to server
+        // This way we only send the paymentMethodId (token) to server, not card details
+        if (this.totalPrice > 0 && this.stripe) {
+          try {
+            console.log("[CreateCall] Creating payment method with Stripe...");
+
+            // Validate credit card before creating payment method
+            if (!this.validateCreditCard()) {
+              console.error("[CreateCall] Credit card validation failed");
+              this.isLoading = false;
+              return;
+            }
+
+            let paymentMethod;
+
+            // Use Stripe Elements if available (recommended)
+            if (this.cardElement) {
+              console.log(
+                "[CreateCall] Using Stripe Elements to create payment method"
+              );
+              const { error: pmError, paymentMethod: pm } =
+                await this.stripe.createPaymentMethod({
+                  type: "card",
+                  card: this.cardElement,
+                  billing_details: {
+                    name: this.creditCard.cardName || "Client",
+                  },
+                });
+
+              if (pmError) {
+                console.error(
+                  "[CreateCall] Stripe Elements payment method error:",
+                  pmError
+                );
+                this.isLoading = false;
+                this.toast?.showError(
+                  pmError.message || "שגיאה ביצירת אמצעי תשלום. אנא נסה שוב."
+                );
+                return;
               }
+
+              paymentMethod = pm;
+            } else {
+              // Fallback: Manual input (not recommended, but for backward compatibility)
+              console.log("[CreateCall] Using manual card input (fallback)");
+              const cardNumberDigits = this.creditCard.cardNumber.replace(
+                /\s/g,
+                ""
+              );
+              const [month, year] = this.creditCard.expiryDate.split("/");
+
+              const { error: pmError, paymentMethod: pm } =
+                await this.stripe.createPaymentMethod({
+                  type: "card",
+                  card: {
+                    number: cardNumberDigits,
+                    exp_month: parseInt(month),
+                    exp_year: parseInt("20" + year),
+                    cvc: this.creditCard.cvv,
+                  },
+                  billing_details: {
+                    name: this.creditCard.cardName,
+                  },
+                });
+
+              if (pmError || !pm) {
+                console.error(
+                  "[CreateCall] Manual payment method error:",
+                  pmError
+                );
+                this.isLoading = false;
+                this.toast?.showError(
+                  pmError?.message || "שגיאה ביצירת אמצעי תשלום. אנא נסה שוב."
+                );
+                return;
+              }
+
+              paymentMethod = pm;
+            }
+
+            if (!paymentMethod) {
+              console.error("[CreateCall] Payment method is null");
+              this.isLoading = false;
+              this.toast?.showError("שגיאה ביצירת אמצעי תשלום. אנא נסה שוב.");
+              return;
+            }
+
+            console.log(
+              "[CreateCall] Payment method created successfully:",
+              paymentMethod.id
             );
 
-            if (paymentIntentResponse.data.success) {
-              paymentIntentId = paymentIntentResponse.data.paymentIntentId;
-              callData.paymentIntentId = paymentIntentId;
-              // TODO: Show Stripe Elements form to confirm payment
-              // For now, we'll just save the paymentIntentId and handle payment confirmation later
-              // This is a simplified approach - in production, you'd want to use Stripe Elements
-            }
+            // Store payment method ID to send to server (not card details!)
+            this.paymentMethodId = paymentMethod.id;
+            callData.paymentMethodId = paymentMethod.id;
+          } catch (paymentError) {
+            console.error(
+              "[CreateCall] Error creating payment method:",
+              paymentError
+            );
+            this.isLoading = false;
+            this.toast?.showError("שגיאה ביצירת אמצעי תשלום. אנא נסה שוב.");
+            return;
           }
-        } catch (paymentError) {
-          console.error("Error creating Payment Intent:", paymentError);
-          // Don't fail the call creation if payment intent creation fails
-          // Just continue without paymentIntentId
         }
 
         // Send to new endpoint
@@ -1634,10 +1708,14 @@ export default {
         if (response.data.success && scenario === "all_match") {
           // Handymen found matching all subcategories - job created
           this.foundHandymen = response.data.handymen || [];
+          const createdJobId = response.data.jobId || response.data.job?._id;
+
+          // For CreateCall: Payment will be created after handyman accepts the job
+          // Don't create payment immediately - wait for handyman to accept
           setTimeout(() => {
             this.isLoading = false;
             this.toast.showSuccess(
-              `נמצאו ${this.foundHandymen.length} הנדימנים מתאימים. הקריאה נוצרה ומחכה לאישור.`
+              `נמצאו ${this.foundHandymen.length} הנדימנים מתאימים. הקריאה נוצרה ומחכה לאישור. התשלום יתבצע לאחר שההנדימן יקבל את העבודה.`
             );
             // Don't redirect automatically - let user see the handymen list and click "Back" button
           }, 2000);
@@ -1939,7 +2017,6 @@ export default {
     // Clean up interval when component is destroyed
     this.stopPatienceMessageInterval();
   },
-
   async mounted() {
     try {
       const loc = await this.getCurrentLocation();
@@ -3800,6 +3877,27 @@ $danger: #ff3b3b;
   }
 }
 
+/* Stripe Elements Card Element */
+.stripe-card-element {
+  padding: 14px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.22);
+  min-height: 48px;
+  transition: all 0.2s;
+}
+
+.stripe-card-element:focus {
+  outline: none;
+  border-color: $orange;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.stripe-card-element--invalid {
+  border-color: rgba($danger, 0.55);
+  background: rgba($danger, 0.08);
+}
+
 .credit-info {
   margin-bottom: 20px;
   padding: 14px;
@@ -3819,6 +3917,27 @@ $danger: #ff3b3b;
 .credit-form {
   display: grid;
   gap: 16px;
+}
+
+/* Stripe Elements Card Element */
+.stripe-card-element {
+  padding: 14px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.22);
+  min-height: 48px;
+  transition: all 0.2s;
+}
+
+.stripe-card-element:focus {
+  outline: none;
+  border-color: $orange;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.stripe-card-element--invalid {
+  border-color: rgba($danger, 0.55);
+  background: rgba($danger, 0.08);
 }
 
 /* Manual Category Selector Modal */
