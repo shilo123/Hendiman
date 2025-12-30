@@ -541,34 +541,114 @@
             <!-- Show saved payment method option if exists -->
             <div
               v-if="savedPaymentMethod && !showChangePaymentMethod"
-              class="saved-payment-method-card"
+              class="saved-payment-method-wrapper"
             >
-              <div class="saved-payment-method-header">
-                <h3>אמצעי תשלום שמור</h3>
+              <div class="flip-card">
+                <div class="flip-card-inner">
+                  <div class="flip-card-front">
+                    <p class="heading_8264">
+                      {{ getCardBrandName(savedPaymentMethod.card?.brand) }}
+                    </p>
+                    <svg
+                      class="logo"
+                      xmlns="http://www.w3.org/2000/svg"
+                      x="0px"
+                      y="0px"
+                      width="36"
+                      height="36"
+                      viewBox="0 0 48 48"
+                    >
+                      <path
+                        fill="#ff9800"
+                        d="M32 10A14 14 0 1 0 32 38A14 14 0 1 0 32 10Z"
+                      ></path>
+                      <path
+                        fill="#d50000"
+                        d="M16 10A14 14 0 1 0 16 38A14 14 0 1 0 16 10Z"
+                      ></path>
+                      <path
+                        fill="#ff3d00"
+                        d="M18,24c0,4.755,2.376,8.95,6,11.48c3.624-2.53,6-6.725,6-11.48s-2.376-8.95-6-11.48 C20.376,15.05,18,19.245,18,24z"
+                      ></path>
+                    </svg>
+                    <svg
+                      version="1.1"
+                      class="chip"
+                      id="Layer_1"
+                      xmlns="http://www.w3.org/2000/svg"
+                      xmlns:xlink="http://www.w3.org/1999/xlink"
+                      x="0px"
+                      y="0px"
+                      width="30px"
+                      height="30px"
+                      viewBox="0 0 50 50"
+                      xml:space="preserve"
+                    >
+                      <image
+                        id="image0"
+                        width="50"
+                        height="50"
+                        x="0"
+                        y="0"
+                        href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAMAAAAp4XiDAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAB6VBMVEUAAACNcTiVeUKVeUOYfEaafEeUeUSYfEWZfEaykleyklaXe0SWekSZZjOYfEWYe0WXfUWXe0WcgEicfkiXe0SVekSXekSWekKYe0a9nF67m12ZfUWUeEaXfESVekOdgEmVeUWWekSniU+VeUKVeUOrjFKYfEWliE6WeESZe0GSe0WYfES7ml2Xe0WXeESUeEOWfEWcf0eWfESXe0SXfEWYekSVeUKXfEWxklawkVaZfEWWekOUekOWekSYfESZe0eXekWYfEWZe0WZe0eVeUSWeETAnmDCoWLJpmbxy4P1zoXwyoLIpWbjvXjivnjgu3bfu3beunWvkFWxkle/nmDivXiWekTnwXvkwHrCoWOuj1SXe0TEo2TDo2PlwHratnKZfEbQrWvPrWuafUfbt3PJp2agg0v0zYX0zYSfgkvKp2frxX7mwHrlv3rsxn/yzIPgvHfduXWXe0XuyIDzzISsjVO1lVm0lFitjVPzzIPqxX7duna0lVncuHTLqGjvyIHeuXXxyYGZfUayk1iyk1e2lln1zYTEomO2llrbtnOafkjFpGSbfkfZtXLhvHfkv3nqxH3mwXujhU3KqWizlFilh06khk2fgkqsjlPHpWXJp2erjVOhg0yWe0SliE+XekShhEvAn2D///+gx8TWAAAARnRSTlMACVCTtsRl7Pv7+vxkBab7pZv5+ZlL/UnU/f3SJCVe+Fx39naA9/75XSMh0/3SSkia+pil/KRj7Pr662JPkrbP7OLQ0JFOijI1MwAAAAFiS0dEorDd34wAAAAJcEhZcwAACxMAAAsTAQCanBgAAAAHdElNRQfnAg0IDx2lsiuJAAACLElEQVRIx2NkGAXkAUYmZhZWPICFmYkRVQcbOwenmzse4MbFzc6DpIGXj8PD04sA8PbhF+CFaxEU8iWkAQT8hEVgOkTF/InR4eUVICYO1SIhCRMLDAoKDvFDVhUaEhwUFAjjSUlDdMiEhcOEItzdI6OiYxA6YqODIt3dI2DcuDBZsBY5eVTr4xMSYcyk5BRUOXkFsBZFJTQnp6alQxgZmVloUkrKYC0qqmji2WE5EEZuWB6alKoKdi35YQUQRkFYPpFaCouKIYzi6EDitJSUlsGY5RWVRGjJLyxNy4ZxqtIqqvOxaVELQwZFZdkIJVU1RSiSalAt6rUwUBdWG1CP6pT6gNqwOrgCdQyHNYR5YQFhDXj8MiK1IAeyN6aORiyBjByVTc0FqBoKWpqwRCVSgilOaY2OaUPw29qjOzqLvTAchpos47u6EZyYnngUSRwpuTe6D+6qaFQdOPNLRzOM1dzhRZyW+CZouHk3dWLXglFcFIflQhj9YWjJGlZcaKAVSvjyPrRQ0oQVKDAQHlYFYUwIm4gqExGmBSkutaVQJeomwViTJqPK6OhCy2Q9sQBk8cY0DxjTJw0lAQWK6cOKfgNhpKK7ZMpUeF3jPa28BCETamiEqJKM+X1gxvWXpoUjVIVPnwErw71nmpgiqiQGBjNzbgs3j1nus+fMndc+Cwm0T52/oNR9lsdCS24ra7Tq1cbWjpXV3sHRCb1idXZ0sGdltXNxRateRwHRAACYHutzk/2I5QAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAyMy0wMi0xM1QwODoxNToyOSswMDowMEUnN7UAAAAldEVYdGRhdGU6bW9kaWZ5ADIwMjMtMDItMTNUMDg6MTU6MjkrMDA6MDA0eo8JAAAAKHRFWHRkYXRlOnRpbWVzdGFtcAAyMDIzLTAyLTEzVDA4OjE1OjI5KzAwOjAwY2+u1gAAAABJRU5ErkJggg=="
+                      ></image>
+                    </svg>
+                    <svg
+                      version="1.1"
+                      class="contactless"
+                      id="Layer_1"
+                      xmlns="http://www.w3.org/2000/svg"
+                      xmlns:xlink="http://www.w3.org/1999/xlink"
+                      x="0px"
+                      y="0px"
+                      width="20px"
+                      height="20px"
+                      viewBox="0 0 50 50"
+                      xml:space="preserve"
+                    >
+                      <image
+                        id="image0"
+                        width="50"
+                        height="50"
+                        x="0"
+                        y="0"
+                        href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAQAAAC0NkA6AAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAAmJLR0QA/4ePzL8AAAAJcEhZcwAACxMAAAsTAQCanBgAAAAHdElNRQfnAg0IEzgIwaKTAAADDklEQVRYw+1XS0iUURQ+f5qPyjQflGRFEEFK76koKGxRbWyVVLSOgsCgwjZBJJYuKogSIoOonUK4q3U0WVBWFPZYiIE6kuArG3VGzK/FfPeMM/MLt99/NuHdfPd888/57jn3nvsQWWj/VcMlvMMd5KRTogqx9iCdIjUUmcGR9ImUYowyP3xNGQJoRLVaZ2DaZf8kyjEJALhI28ELioyiwC+Rc3QZwRYyO/DH51hQgWm6DMIh10KmD4u9O16K49itVoPOAmcGAWWOepXIRScAoJZ2Frro8oN+EyTT6lWkkg6msZfMSR35QTJmjU0g15tIGSJ08ZZMJkJkHpNZgSkyXosS13TkJpZ62mPIJvOSzC1bp8vRhhCakEk7G9/o4gmZdbpsTcKu0m63FbnBP9Qrc15zbkbemfgNDtEOI8NO5L5O9VYyRYgmJayZ9nPaxZrSjW4+F6Uw9yQqIiIZwhp2huQTf6OIvCZyGM6gDJBZbyXifJXr7FZjGXsdxADxI7HUJFB6iWvsIhFpkoiIiGTJfjJfiCuJg2ZEspq9EHGVpYgzKqwJqSAOEwuJQ/pxPvE3cYltJCLdxBLiSKKIE5HxJKcTRNeadxfhDiuYw44zVs1dxKwRk/uCxIiQkxKBsSctRVAge9g1E15EHE6yRUaJecRxcWlukdRIbGFOSZCMWQA/iWauIP3slREHXPyliqBcrrD71AmzZ+rD1Mt2Yr8TZc/UR4/YtFnbijnHi3UrN9vKQ9rPaJf867ZiaqDB+czeKYmd3pNa6fuI75MiC0uXXSR5aEMf7s7a6r/PudVXkjFb/SsrCRfROk0Fx6+H1i9kkTGn/E1vEmt1m089fh+RKdQ5O+xNJPUicUIjO0Dm7HwvErEr0YxeibL1StSh37STafE4I7zcBdRq1DiOkdmlTJVnkQTBTS7X1FYyvfO4piaInKbDCDaT2anLudYXCRFsQBgAcIF2/Okwgvz5+Z4tsw118dzruvIvjhTB+HOuWy8UvovEH6beitBKxDyxm9MmISKCWrzB7bSlaqGlsf0FC0gMjzTg6GgAAAAldEVYdGRhdGU6Y3JlYXRlADIwMjMtMDItMTNUMDg6MTk6NTYrMDA6MDCjlq7LAAAAJXRFWHRkYXRlOm1vZGlmeQAyMDIzLTAyLTEzVDA4OjE5OjU2KzAwOjAw0ssWdwAAACh0RVh0ZGF0ZTp0aW1lc3RhbXAAMjAyMy0wMi0xM1QwODoxOTo1NiswMDowMIXeN6gAAAAASUVORK5CYII="
+                      ></image>
+                    </svg>
+                    <p class="number">
+                      **** **** ****
+                      {{ savedPaymentMethod.card?.last4 || "****" }}
+                    </p>
+                    <p class="valid_thru">VALID THRU</p>
+                    <p class="date_8264">
+                      {{
+                        formatExpiryDate(
+                          savedPaymentMethod.card?.expMonth,
+                          savedPaymentMethod.card?.expYear
+                        )
+                      }}
+                    </p>
+                    <p class="name">
+                      {{ store?.user?.username?.toUpperCase() || "CARDHOLDER" }}
+                    </p>
+                  </div>
+                  <div class="flip-card-back">
+                    <div class="strip"></div>
+                    <div class="mstrip"></div>
+                    <div class="sstrip">
+                      <p class="code">***</p>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div class="saved-payment-method-info">
-                <div class="payment-method-details">
-                  <span class="card-brand">{{
-                    savedPaymentMethod.card.brand
-                  }}</span>
-                  <span class="card-number"
-                    >**** **** **** {{ savedPaymentMethod.card.last4 }}</span
-                  >
-                  <span class="card-expiry"
-                    >{{ savedPaymentMethod.card.expMonth }}/{{
-                      savedPaymentMethod.card.expYear
-                    }}</span
-                  >
-                </div>
-                <div class="payment-method-actions">
-                  <button
-                    class="btn btn--secondary"
-                    type="button"
-                    @click="changePaymentMethod"
-                  >
-                    שנה אמצעי תשלום
-                  </button>
-                </div>
+              <div class="payment-method-actions">
+                <button
+                  class="btn btn--secondary"
+                  type="button"
+                  @click="changePaymentMethod"
+                >
+                  שנה אמצעי תשלום
+                </button>
               </div>
             </div>
 
@@ -904,7 +984,19 @@ export default {
 
     // Stripe is now handled by CreditCardForm component
   },
-
+  watch: {
+    "store.user": {
+      handler(newUser) {
+        if (newUser && this.currentStep === 4) {
+          // User data loaded, check for saved payment method
+          this.$nextTick(() => {
+            this.checkSavedPaymentMethod();
+          });
+        }
+      },
+      immediate: false,
+    },
+  },
   methods: {
     async getCurrentLocation() {
       return await getCurrentLocation();
@@ -1103,45 +1195,83 @@ export default {
           `[CreateCall] 🔍 Checking for saved payment method for user ${userId}`
         );
         const { URL } = await import("@/Url/url");
-        const response = await axios.get(
-          `${URL}/api/users/${userId}/payment-method`
-        );
 
-        console.log(
-          "[CreateCall] Payment method check response:",
-          response.data
-        );
+        try {
+          const response = await axios.get(
+            `${URL}/api/users/${userId}/payment-method`,
+            {
+              timeout: 10000, // 10 second timeout
+            }
+          );
 
-        if (response.data && response.data.success) {
-          if (response.data.hasPaymentMethod) {
-            console.log(
-              "[CreateCall] ✅ Found saved payment method:",
-              response.data
-            );
-            this.savedPaymentMethod = response.data;
-            this.paymentMethodId = response.data.paymentMethodId;
-            // Use saved payment method automatically, don't show form
-            this.showChangePaymentMethod = false;
-            this.isCreditCardValid = true; // Mark as valid since we have saved payment method
-            console.log("[CreateCall] Saved payment method set:", {
-              savedPaymentMethod: this.savedPaymentMethod,
-              paymentMethodId: this.paymentMethodId,
-              showChangePaymentMethod: this.showChangePaymentMethod,
-            });
+          console.log(
+            "[CreateCall] Payment method check response:",
+            response.data
+          );
+
+          if (response.data && response.data.success) {
+            if (response.data.hasPaymentMethod) {
+              console.log(
+                "[CreateCall] ✅ Found saved payment method:",
+                response.data
+              );
+              this.savedPaymentMethod = response.data;
+              this.paymentMethodId = response.data.paymentMethodId;
+              // Use saved payment method automatically, don't show form
+              this.showChangePaymentMethod = false;
+              this.isCreditCardValid = true; // Mark as valid since we have saved payment method
+              console.log("[CreateCall] Saved payment method set:", {
+                savedPaymentMethod: this.savedPaymentMethod,
+                paymentMethodId: this.paymentMethodId,
+                showChangePaymentMethod: this.showChangePaymentMethod,
+              });
+            } else {
+              console.log("[CreateCall] ℹ️ No saved payment method found");
+              // No saved payment method, show form to create one
+              this.showChangePaymentMethod = false;
+              this.savedPaymentMethod = null;
+            }
           } else {
-            console.log("[CreateCall] ℹ️ No saved payment method found");
-            // No saved payment method, show form to create one
-            this.showChangePaymentMethod = false;
+            console.log(
+              "[CreateCall] ⚠️ Server response indicates no payment method"
+            );
             this.savedPaymentMethod = null;
           }
-        } else {
-          console.log(
-            "[CreateCall] ⚠️ Server response indicates no payment method"
-          );
+        } catch (axiosError) {
+          // Handle axios errors specifically
+          if (
+            axiosError.code === "ECONNREFUSED" ||
+            axiosError.code === "ERR_CONNECTION_REFUSED"
+          ) {
+            console.error(
+              "[CreateCall] ❌ Server connection refused - is the server running?",
+              axiosError.message
+            );
+            this.toast?.showError("לא ניתן להתחבר לשרת. אנא ודא שהשרת רץ.");
+          } else if (axiosError.response) {
+            // Server responded with error status
+            console.error(
+              "[CreateCall] ❌ Server error:",
+              axiosError.response.status,
+              axiosError.response.data
+            );
+            if (axiosError.response.status === 404) {
+              console.error(
+                "[CreateCall] ❌ Endpoint not found - check server routes"
+              );
+            }
+          } else {
+            console.error(
+              "[CreateCall] ❌ Error checking payment method:",
+              axiosError.message
+            );
+          }
+          // Error checking payment method, show form anyway
+          this.showChangePaymentMethod = false;
           this.savedPaymentMethod = null;
         }
       } catch (error) {
-        console.error("[CreateCall] ❌ Error checking payment method:", error);
+        console.error("[CreateCall] ❌ Unexpected error:", error);
         // Error checking payment method, show form anyway
         this.showChangePaymentMethod = false;
         this.savedPaymentMethod = null;
@@ -1201,6 +1331,25 @@ export default {
       // Show form to change payment method
       this.showChangePaymentMethod = true;
       // Keep savedPaymentMethod and paymentMethodId so user can go back
+    },
+    getCardBrandName(brand) {
+      if (!brand) return "CARD";
+      const brandMap = {
+        visa: "VISA",
+        mastercard: "MASTERCARD",
+        amex: "AMEX",
+        discover: "DISCOVER",
+        diners: "DINERS",
+        jcb: "JCB",
+        unionpay: "UNIONPAY",
+      };
+      return brandMap[brand.toLowerCase()] || brand.toUpperCase();
+    },
+    formatExpiryDate(month, year) {
+      if (!month || !year) return "** / **";
+      const formattedMonth = String(month).padStart(2, "0");
+      const formattedYear = String(year).slice(-2);
+      return `${formattedMonth} / ${formattedYear}`;
     },
     async processPayment(jobId) {
       if (!this.stripe) {
@@ -4087,57 +4236,252 @@ $danger: #ff3b3b;
   gap: 16px;
 }
 
-.saved-payment-method-card {
-  background: rgba(255, 255, 255, 0.06);
-  border: 2px solid rgba($orange, 0.4);
-  border-radius: 18px;
-  padding: 24px;
-  margin-bottom: 24px;
-}
-
-.saved-payment-method-header {
-  margin-bottom: 20px;
-
-  h3 {
-    margin: 0;
-    font-size: 20px;
-    font-weight: 900;
-    color: $orange;
-  }
-}
-
-.saved-payment-method-info {
+.saved-payment-method-wrapper {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 20px;
+  margin-bottom: 24px;
+  padding: 20px 0;
 }
 
-.payment-method-details {
+.flip-card {
+  background-color: transparent;
+  width: 100%;
+  max-width: 320px;
+  height: 200px;
+  perspective: 1000px;
+  color: white;
+
+  @media (max-width: 768px) {
+    max-width: 280px;
+    height: 175px;
+  }
+}
+
+.heading_8264 {
+  position: absolute;
+  letter-spacing: 0.2em;
+  font-size: 0.9em;
+  top: 2em;
+  left: 18.6em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: $orange;
+
+  @media (max-width: 768px) {
+    font-size: 0.8em;
+    top: 1.8em;
+    left: 16em;
+  }
+}
+
+.logo {
+  position: absolute;
+  top: 6.8em;
+  left: 11.7em;
+
+  @media (max-width: 768px) {
+    width: 30px;
+    height: 30px;
+    top: 6em;
+    left: 10em;
+  }
+}
+
+.chip {
+  position: absolute;
+  top: 2.3em;
+  left: 1.5em;
+
+  @media (max-width: 768px) {
+    width: 25px;
+    height: 25px;
+    top: 2em;
+    left: 1.2em;
+  }
+}
+
+.contactless {
+  position: absolute;
+  top: 3.5em;
+  left: 12.4em;
+
+  @media (max-width: 768px) {
+    width: 18px;
+    height: 18px;
+    top: 3.2em;
+    left: 11em;
+  }
+}
+
+.number {
+  position: absolute;
+  font-weight: bold;
+  font-size: 1em;
+  top: 8.3em;
+  left: 1.6em;
+  letter-spacing: 0.1em;
+  font-family: "Courier New", monospace;
+  color: $orange;
+
+  @media (max-width: 768px) {
+    font-size: 0.9em;
+    top: 7.5em;
+    left: 1.4em;
+  }
+}
+
+.valid_thru {
+  position: absolute;
+  font-weight: bold;
+  top: 12.5em;
+  font-size: 0.5em;
+  left: 3.2em;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.7);
+
+  @media (max-width: 768px) {
+    font-size: 0.45em;
+    top: 11.5em;
+    left: 2.8em;
+  }
+}
+
+.date_8264 {
+  position: absolute;
+  font-weight: bold;
+  font-size: 0.8em;
+  top: 13.6em;
+  left: 3.2em;
+  font-family: "Courier New", monospace;
+  color: $orange;
+
+  @media (max-width: 768px) {
+    font-size: 0.7em;
+    top: 12.5em;
+    left: 2.8em;
+  }
+}
+
+.name {
+  position: absolute;
+  font-weight: bold;
+  font-size: 0.8em;
+  top: 16.1em;
+  left: 2em;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $orange;
+
+  @media (max-width: 768px) {
+    font-size: 0.7em;
+    top: 15em;
+    left: 1.8em;
+  }
+}
+
+.strip {
+  position: absolute;
+  background-color: black;
+  width: 15em;
+  height: 1.5em;
+  top: 2.4em;
+  background: repeating-linear-gradient(
+    45deg,
+    #303030,
+    #303030 10px,
+    #202020 10px,
+    #202020 20px
+  );
+
+  @media (max-width: 768px) {
+    width: 13em;
+    height: 1.3em;
+    top: 2.2em;
+  }
+}
+
+.mstrip {
+  position: absolute;
+  background-color: rgb(255, 255, 255);
+  width: 8em;
+  height: 0.8em;
+  top: 5em;
+  left: 0.8em;
+  border-radius: 2.5px;
+
+  @media (max-width: 768px) {
+    width: 7em;
+    height: 0.7em;
+    top: 4.5em;
+    left: 0.7em;
+  }
+}
+
+.sstrip {
+  position: absolute;
+  background-color: rgb(255, 255, 255);
+  width: 4.1em;
+  height: 0.8em;
+  top: 5em;
+  left: 10em;
+  border-radius: 2.5px;
+
+  @media (max-width: 768px) {
+    width: 3.6em;
+    height: 0.7em;
+    top: 4.5em;
+    left: 9em;
+  }
+}
+
+.code {
+  font-weight: bold;
+  text-align: center;
+  margin: 0.2em;
+  color: black;
+  font-size: 0.8em;
+}
+
+.flip-card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  transition: transform 0.8s;
+  transform-style: preserve-3d;
+}
+
+.flip-card:hover .flip-card-inner {
+  transform: rotateY(180deg);
+}
+
+.flip-card-front,
+.flip-card-back {
+  box-shadow: 0 8px 14px 0 rgba(0, 0, 0, 0.2);
+  position: absolute;
   display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 12px;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  border-radius: 1rem;
+}
 
-  .card-brand {
-    text-transform: uppercase;
-    font-weight: 700;
-    color: $orange;
-    font-size: 14px;
-  }
+.flip-card-front {
+  box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 2px,
+    rgba(0, 0, 0, 0.3) 0px 7px 13px -3px, rgba(0, 0, 0, 0.2) 0px -1px 0px inset;
+  background-color: #171717;
+}
 
-  .card-number {
-    font-family: monospace;
-    font-size: 16px;
-    color: rgba(255, 255, 255, 0.9);
-    letter-spacing: 2px;
-  }
-
-  .card-expiry {
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.7);
-  }
+.flip-card-back {
+  box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 2px,
+    rgba(0, 0, 0, 0.3) 0px 7px 13px -3px, rgba(0, 0, 0, 0.2) 0px -1px 0px inset;
+  background-color: #171717;
+  transform: rotateY(180deg);
 }
 
 .payment-method-actions {

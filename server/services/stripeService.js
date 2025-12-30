@@ -3,10 +3,56 @@
 // - Test mode: sk_test_... (from Stripe Dashboard > Developers > API keys)
 // - Production: sk_live_... (when ready for production)
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const fs = require("fs");
+const path = require("path");
 
-// Platform fee percentage (default 10%)
-// Can be overridden with PLATFORM_FEE_PERCENT in .env
-const PLATFORM_FEE_PERCENT = parseFloat(process.env.PLATFORM_FEE_PERCENT) || 10;
+// Platform fee percentage - read from dry-data.json
+function getPlatformFeePercent() {
+  try {
+    const dryDataPath = path.join(__dirname, "../API/dry-data.json");
+    const dryData = JSON.parse(fs.readFileSync(dryDataPath, "utf8"));
+    return parseFloat(dryData.FEE) || 10; // Default to 10% if not found
+  } catch (error) {
+    console.error("[stripeService] Error reading dry-data.json:", error);
+    return parseFloat(process.env.PLATFORM_FEE_PERCENT) || 10; // Fallback to env or default
+  }
+}
+
+// Get current platform fee (read from file each time to get latest value)
+// Note: We export a getter function instead of a constant to always get the latest value
+let _cachedFee = null;
+let _lastReadTime = 0;
+const CACHE_DURATION = 5000; // Cache for 5 seconds to avoid reading file too often
+
+function getCachedPlatformFeePercent() {
+  const now = Date.now();
+  if (_cachedFee !== null && (now - _lastReadTime) < CACHE_DURATION) {
+    return _cachedFee;
+  }
+  _cachedFee = getPlatformFeePercent();
+  _lastReadTime = now;
+  return _cachedFee;
+}
+
+// For backward compatibility, export a getter
+const PLATFORM_FEE_PERCENT = getCachedPlatformFeePercent();
+
+// Function to update platform fee in dry-data.json
+function updatePlatformFeePercent(newFee) {
+  try {
+    const dryDataPath = path.join(__dirname, "../API/dry-data.json");
+    const dryData = JSON.parse(fs.readFileSync(dryDataPath, "utf8"));
+    dryData.FEE = parseFloat(newFee);
+    fs.writeFileSync(dryDataPath, JSON.stringify(dryData, null, 2), "utf8");
+    // Clear cache to force re-read
+    _cachedFee = parseFloat(newFee);
+    _lastReadTime = Date.now();
+    return true;
+  } catch (error) {
+    console.error("[stripeService] Error updating dry-data.json:", error);
+    return false;
+  }
+}
 
 /**
  * Get or create a Stripe Connect account for a handyman
@@ -377,6 +423,8 @@ module.exports = {
   captureEscrow,
   cancelEscrow,
   refundPayment,
-  // Constants
+  // Constants and functions
   PLATFORM_FEE_PERCENT,
+  getPlatformFeePercent,
+  updatePlatformFeePercent,
 };

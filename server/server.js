@@ -42,7 +42,8 @@ const {
   captureEscrow,
   cancelEscrow,
   refundPayment,
-  PLATFORM_FEE_PERCENT,
+  getPlatformFeePercent,
+  updatePlatformFeePercent,
 } = require("./services/stripeService");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
@@ -1290,6 +1291,7 @@ function findAvailablePort(startPort) {
         minPrice,
         maxPrice,
       } = req.query;
+
       const query = {};
       if (status && status !== "all") {
         query.status = status;
@@ -1301,13 +1303,43 @@ function findAvailablePort(startPort) {
         query.workType = workType;
       }
 
+      // Store handymanIdSpecial filter separately (will be applied after $geoNear)
+      // $or doesn't work well with $geoNear, so we'll filter after the geo query
+      let handymanIdSpecialFilter = null;
+      if (handymanId) {
+        try {
+          const handymanObjectId = new ObjectId(handymanId);
+          const handymanIdString = String(handymanId);
+          // Store filter to apply after $geoNear
+          handymanIdSpecialFilter = {
+            $or: [
+              { handymanIdSpecial: handymanObjectId },
+              { handymanIdSpecial: handymanIdString },
+              { handymanIdSpecial: { $exists: false } },
+              { handymanIdSpecial: null },
+            ],
+          };
+        } catch (error) {
+          // Invalid handymanId, exclude all personal requests
+          handymanIdSpecialFilter = {
+            handymanIdSpecial: { $exists: false },
+          };
+        }
+      } else {
+        // If no handymanId, exclude all personal requests (handymanIdSpecial)
+        handymanIdSpecialFilter = {
+          $or: [
+            { handymanIdSpecial: { $exists: false } },
+            { handymanIdSpecial: null },
+          ],
+        };
+      }
+
       const userLng = parseFloat(lng);
       const userLat = parseFloat(lat);
       const hasCoords = !isNaN(userLng) && !isNaN(userLat);
       const maxDistanceMeters =
         maxKm && !isNaN(parseFloat(maxKm)) ? parseFloat(maxKm) * 1000 : null;
-
-      // Jobs filter request received
 
       let jobs = [];
 
@@ -1331,6 +1363,10 @@ function findAvailablePort(startPort) {
 
       if (hasCoords) {
         try {
+          // Remove $or from query for $geoNear (it doesn't work well with $geoNear)
+          const geoQuery = { ...query };
+          delete geoQuery.$or;
+
           const pipeline = [
             {
               $geoNear: {
@@ -1340,11 +1376,35 @@ function findAvailablePort(startPort) {
                 ...(maxDistanceMeters
                   ? { maxDistance: maxDistanceMeters }
                   : {}),
-                ...(Object.keys(query).length ? { query } : {}),
+                ...(Object.keys(geoQuery).length ? { query: geoQuery } : {}),
               },
             },
           ];
 
+          // Add $match stage after $geoNear to filter handymanIdSpecial
+          if (handymanIdSpecialFilter) {
+            pipeline.push({ $match: handymanIdSpecialFilter });
+          }
+
+          // First, get jobs after $geoNear but BEFORE $match to see all jobs from MongoDB
+          const pipelineBeforeMatch = [
+            {
+              $geoNear: {
+                near: { type: "Point", coordinates: [userLng, userLat] },
+                distanceField: "distanceMeters",
+                spherical: true,
+                ...(maxDistanceMeters
+                  ? { maxDistance: maxDistanceMeters }
+                  : {}),
+                ...(Object.keys(geoQuery).length ? { query: geoQuery } : {}),
+              },
+            },
+          ];
+          const jobsBeforeMatch = await collectionJobs
+            .aggregate(pipelineBeforeMatch)
+            .toArray();
+
+          // Now get jobs after $match
           jobs = await collectionJobs.aggregate(pipeline).toArray();
 
           jobs = jobs.map((job) => {
@@ -1402,7 +1462,47 @@ function findAvailablePort(startPort) {
             });
         }
       } else {
-        jobs = await collectionJobs.find(query).toArray();
+        // Remove $or from query for find (we'll filter manually)
+        const findQuery = { ...query };
+        delete findQuery.$or;
+
+        jobs = await collectionJobs.find(findQuery).toArray();
+
+        // Apply handymanIdSpecial filter manually
+        if (handymanIdSpecialFilter) {
+          const filterCondition = handymanIdSpecialFilter.$or
+            ? handymanIdSpecialFilter.$or
+            : [handymanIdSpecialFilter];
+          jobs = jobs.filter((job) => {
+            if (handymanIdSpecialFilter.$or) {
+              // Check if job matches any of the $or conditions
+              return filterCondition.some((condition) => {
+                if (condition.handymanIdSpecial?.$exists === false) {
+                  return !job.handymanIdSpecial;
+                }
+                if (condition.handymanIdSpecial === null) {
+                  return job.handymanIdSpecial === null;
+                }
+                // Check if handymanIdSpecial matches (as ObjectId or string)
+                const jobSpecialStr = job.handymanIdSpecial
+                  ? String(job.handymanIdSpecial)
+                  : null;
+                const conditionSpecialStr = condition.handymanIdSpecial
+                  ? String(condition.handymanIdSpecial)
+                  : null;
+                return jobSpecialStr === conditionSpecialStr;
+              });
+            } else {
+              // Single condition
+              if (
+                handymanIdSpecialFilter.handymanIdSpecial?.$exists === false
+              ) {
+                return !job.handymanIdSpecial;
+              }
+              return true;
+            }
+          });
+        }
       }
 
       // Filter jobs by handyman specialties if handymanId was provided
@@ -1458,18 +1558,62 @@ function findAvailablePort(startPort) {
       if (handymanId) {
         const handymanIdString = String(handymanId);
         const jobsBeforeHandymanFilter = jobs.length;
+
+        // Count jobs with handymanIdSpecial before filtering
+        const jobsWithSpecialBefore = jobs.filter(
+          (j) => j.handymanIdSpecial
+        ).length;
+
         jobs = jobs.filter((job) => {
           // Exclude "done" jobs for handyman (unless specifically requested)
           if (job.status === "done" && (!status || status === "all")) {
             return false;
           }
 
-          // Priority 1: Show jobs where handymanIdSpecial matches this handyman
+          // CRITICAL: If job has handymanIdSpecial, it should ONLY be shown to that specific handyman
+          // This is a personal request and should NOT be shown to other handymen
           if (job.handymanIdSpecial) {
-            return String(job.handymanIdSpecial) === handymanIdString;
+            // Convert both to string for comparison (handymanIdSpecial can be ObjectId or string)
+            // Handle ObjectId by converting to string using toString() or String()
+            let jobHandymanIdSpecialStr;
+            if (job.handymanIdSpecial instanceof ObjectId) {
+              jobHandymanIdSpecialStr = job.handymanIdSpecial.toString();
+            } else if (job.handymanIdSpecial.toString) {
+              jobHandymanIdSpecialStr = job.handymanIdSpecial.toString();
+            } else {
+              jobHandymanIdSpecialStr = String(job.handymanIdSpecial);
+            }
+
+            const currentHandymanIdStr = String(handymanId);
+
+            // Also try comparing as ObjectId if possible
+            let isMatch = jobHandymanIdSpecialStr === currentHandymanIdStr;
+
+            // If string comparison fails, try ObjectId comparison
+            if (!isMatch) {
+              try {
+                const jobSpecialObjectId =
+                  job.handymanIdSpecial instanceof ObjectId
+                    ? job.handymanIdSpecial
+                    : new ObjectId(job.handymanIdSpecial);
+                const currentHandymanObjectId = new ObjectId(handymanId);
+                isMatch = jobSpecialObjectId.equals(currentHandymanObjectId);
+              } catch (e) {
+                // If ObjectId conversion fails, stick with string comparison
+                isMatch = false;
+              }
+            }
+
+            if (!isMatch) {
+              // This is NOT the special handyman, hide the job completely
+              return false;
+            }
+            // This IS the special handyman, show the job
+            return true;
           }
 
           // Priority 2: Show open jobs (handymanId is null or doesn't exist)
+          // These are regular jobs that should be shown to all handymen
           // and match handyman specialties (already filtered above)
           if (!job.handymanId) return true;
           if (Array.isArray(job.handymanId) && job.handymanId.length === 0)
@@ -1477,6 +1621,23 @@ function findAvailablePort(startPort) {
           return false;
         });
         const jobsAfterHandymanFilter = jobs.length;
+        const jobsWithSpecialAfter = jobs.filter(
+          (j) => j.handymanIdSpecial
+        ).length;
+      } else {
+        // If no handymanId is provided, we should still filter out jobs with handymanIdSpecial
+        // because they are personal requests and should only be shown to the specific handyman
+        const jobsWithSpecialBefore = jobs.filter(
+          (j) => j.handymanIdSpecial
+        ).length;
+        jobs = jobs.filter((job) => {
+          // Don't show personal requests (handymanIdSpecial) if no handymanId is provided
+          const hasSpecial = !!job.handymanIdSpecial;
+          return !hasSpecial;
+        });
+        const jobsWithSpecialAfter = jobs.filter(
+          (j) => j.handymanIdSpecial
+        ).length;
       }
 
       // Filter by price range if provided
@@ -1554,6 +1715,26 @@ function findAvailablePort(startPort) {
         }
       }
 
+      // Sort jobs: 1. Urgent first, 2. Special (handymanIdSpecial) second, 3. By creation time (newest first)
+      jobs.sort((a, b) => {
+        // Priority 1: Urgent jobs first
+        const aUrgent = a.urgent === true || a.isUrgent === true;
+        const bUrgent = b.urgent === true || b.isUrgent === true;
+        if (aUrgent && !bUrgent) return -1;
+        if (!aUrgent && bUrgent) return 1;
+
+        // Priority 2: Special jobs (handymanIdSpecial) second
+        const aSpecial = !!a.handymanIdSpecial;
+        const bSpecial = !!b.handymanIdSpecial;
+        if (aSpecial && !bSpecial) return -1;
+        if (!aSpecial && bSpecial) return 1;
+
+        // Priority 3: By creation time (newest first)
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTime - aTime; // Newest first
+      });
+
       return res.json({ success: true, jobs });
     } catch (error) {
       return res.status(500).json({
@@ -1616,6 +1797,7 @@ function findAvailablePort(startPort) {
                   clientName: 1,
                   handymanId: 1,
                   handymanName: 1,
+                  handymanIdSpecial: 1,
                   coordinates: 1,
                   location: 1,
                   locationText: 1,
@@ -1715,6 +1897,53 @@ function findAvailablePort(startPort) {
         Jobs = Jobs.filter(jobMatchesSpecialties);
       }
 
+      // CRITICAL: Filter handymanIdSpecial for handymen
+      // If user is a handyman, only show jobs where:
+      // 1. handymanIdSpecial matches the current handyman, OR
+      // 2. handymanIdSpecial doesn't exist (regular jobs)
+      if (User.isHandyman && User._id) {
+        const handymanIdString = String(User._id);
+        const handymanObjectId =
+          User._id instanceof ObjectId ? User._id : new ObjectId(User._id);
+
+        Jobs = Jobs.filter((job) => {
+          // If job has handymanIdSpecial, it should ONLY be shown to that specific handyman
+          if (job.handymanIdSpecial) {
+            // Convert both to string for comparison
+            let jobHandymanIdSpecialStr;
+            if (job.handymanIdSpecial instanceof ObjectId) {
+              jobHandymanIdSpecialStr = job.handymanIdSpecial.toString();
+            } else if (job.handymanIdSpecial.toString) {
+              jobHandymanIdSpecialStr = job.handymanIdSpecial.toString();
+            } else {
+              jobHandymanIdSpecialStr = String(job.handymanIdSpecial);
+            }
+
+            // Check if it matches
+            let isMatch = jobHandymanIdSpecialStr === handymanIdString;
+
+            // If string comparison fails, try ObjectId comparison
+            if (!isMatch) {
+              try {
+                const jobSpecialObjectId =
+                  job.handymanIdSpecial instanceof ObjectId
+                    ? job.handymanIdSpecial
+                    : new ObjectId(job.handymanIdSpecial);
+                isMatch = jobSpecialObjectId.equals(handymanObjectId);
+              } catch (e) {
+                isMatch = false;
+              }
+            }
+
+            // Only show if it matches
+            return isMatch;
+          }
+
+          // If no handymanIdSpecial, it's a regular job - show it
+          return true;
+        });
+      }
+
       // Filter out "done" jobs for clients - they shouldn't see completed jobs in the main dashboard
       // BUT: Keep "done" jobs that need client approval (clientApproved: false or null/undefined)
       // Clients can only see active jobs (assigned, on_the_way, in_progress, or open)
@@ -1798,6 +2027,26 @@ function findAvailablePort(startPort) {
         Hendimands = await collection.find({ isHandyman: true }).toArray();
       }
 
+      // Sort jobs: 1. Urgent first, 2. Special (handymanIdSpecial) second, 3. By creation time (newest first)
+      Jobs.sort((a, b) => {
+        // Priority 1: Urgent jobs first
+        const aUrgent = a.urgent === true || a.isUrgent === true;
+        const bUrgent = b.urgent === true || b.isUrgent === true;
+        if (aUrgent && !bUrgent) return -1;
+        if (!aUrgent && bUrgent) return 1;
+
+        // Priority 2: Special jobs (handymanIdSpecial) second
+        const aSpecial = !!a.handymanIdSpecial;
+        const bSpecial = !!b.handymanIdSpecial;
+        if (aSpecial && !bSpecial) return -1;
+        if (!aSpecial && bSpecial) return 1;
+
+        // Priority 3: By creation time (newest first)
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTime - aTime; // Newest first
+      });
+
       return res.json({
         success: true,
         User,
@@ -1854,7 +2103,7 @@ function findAvailablePort(startPort) {
                       type: "Point",
                       coordinates: [userLng, userLat], // [longitude, latitude]
                     },
-                    $maxDistance: 10000, // 10 ק"מ במטר
+                    $maxDistance: 20000, // 10 ק"מ במטר
                   },
                 },
               })
@@ -2509,6 +2758,7 @@ function findAvailablePort(startPort) {
   app.get("/api/users/:userId/payment-method", async (req, res) => {
     try {
       const { userId } = req.params;
+
       if (!userId) {
         return res.status(400).json({
           success: false,
@@ -2517,6 +2767,13 @@ function findAvailablePort(startPort) {
       }
 
       const usersCol = getCollection();
+      if (!usersCol) {
+        return res.status(500).json({
+          success: false,
+          message: "Database not connected",
+        });
+      }
+
       const user = await usersCol.findOne({ _id: new ObjectId(userId) });
 
       if (!user) {
@@ -2526,34 +2783,228 @@ function findAvailablePort(startPort) {
         });
       }
 
-      // Return payment method if exists
+      // Check if user has stripeCustomerId - if yes, try to find payment methods from Stripe
+      let customerId = user.stripeCustomerId;
+
+      // Verify that the customer still exists in Stripe
+      if (customerId) {
+        try {
+          const existingCustomer = await stripe.customers.retrieve(customerId);
+          if (existingCustomer && existingCustomer.deleted) {
+            // Customer was deleted, remove from DB
+            customerId = null;
+            await usersCol.updateOne(
+              { _id: new ObjectId(userId) },
+              { $unset: { stripeCustomerId: "" } }
+            );
+          }
+        } catch (customerError) {
+          // Customer doesn't exist or error retrieving, remove from DB
+          customerId = null;
+          await usersCol.updateOne(
+            { _id: new ObjectId(userId) },
+            { $unset: { stripeCustomerId: "" } }
+          );
+        }
+      }
+
+      // First, try to use paymentMethodId from DB if exists
       if (user.paymentMethodId) {
         try {
-          // Retrieve payment method from Stripe to get details
-          const paymentMethod = await stripe.paymentMethods.retrieve(
+          // Add timeout to Stripe API call (5 seconds)
+          const stripePromise = stripe.paymentMethods.retrieve(
             user.paymentMethodId
           );
-          return res.json({
-            success: true,
-            hasPaymentMethod: true,
-            paymentMethodId: user.paymentMethodId,
-            card: {
-              brand: paymentMethod.card?.brand,
-              last4: paymentMethod.card?.last4,
-              expMonth: paymentMethod.card?.exp_month,
-              expYear: paymentMethod.card?.exp_year,
-            },
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => {
+              reject(new Error("Stripe API timeout after 5 seconds"));
+            }, 5000);
           });
+
+          const paymentMethod = await Promise.race([
+            stripePromise,
+            timeoutPromise,
+          ]);
+
+          // Verify that the payment method is attached to the correct customer
+          if (customerId && paymentMethod.customer !== customerId) {
+            try {
+              await stripe.paymentMethods.attach(user.paymentMethodId, {
+                customer: customerId,
+              });
+            } catch (attachError) {
+              // If payment method was previously used without customer, it can't be reused
+              if (
+                attachError.message &&
+                attachError.message.includes(
+                  "previously used without being attached"
+                )
+              ) {
+                // Remove invalid payment method from DB
+                await usersCol.updateOne(
+                  { _id: new ObjectId(userId) },
+                  { $unset: { paymentMethodId: "" } }
+                );
+                // Fall through to search for alternative payment methods
+              } else {
+                throw attachError;
+              }
+            }
+          }
+
+          // If payment method is valid and attached to customer, return it
+          if (paymentMethod.customer === customerId || !customerId) {
+            return res.json({
+              success: true,
+              hasPaymentMethod: true,
+              paymentMethodId: user.paymentMethodId,
+              stripeCustomerId: customerId || user.stripeCustomerId || null,
+              card: {
+                brand: paymentMethod.card?.brand,
+                last4: paymentMethod.card?.last4,
+                expMonth: paymentMethod.card?.exp_month,
+                expYear: paymentMethod.card?.exp_year,
+              },
+            });
+          }
         } catch (stripeError) {
-          // Payment method might be deleted in Stripe, remove from DB
+          // If timeout or payment method not found, try to find alternative payment methods
+          if (stripeError.message.includes("timeout")) {
+            // If we have customerId, try to find payment methods from customer
+            if (customerId) {
+              try {
+                const customerPaymentMethods = await stripe.paymentMethods.list(
+                  {
+                    customer: customerId,
+                    type: "card",
+                  }
+                );
+
+                if (
+                  customerPaymentMethods.data &&
+                  customerPaymentMethods.data.length > 0
+                ) {
+                  // Use the first available payment method
+                  const alternativePaymentMethod =
+                    customerPaymentMethods.data[0];
+                  // Update DB with the alternative payment method
+                  await usersCol.updateOne(
+                    { _id: new ObjectId(userId) },
+                    { $set: { paymentMethodId: alternativePaymentMethod.id } }
+                  );
+                  return res.json({
+                    success: true,
+                    hasPaymentMethod: true,
+                    paymentMethodId: alternativePaymentMethod.id,
+                    stripeCustomerId: customerId,
+                    card: {
+                      brand: alternativePaymentMethod.card?.brand,
+                      last4: alternativePaymentMethod.card?.last4,
+                      expMonth: alternativePaymentMethod.card?.exp_month,
+                      expYear: alternativePaymentMethod.card?.exp_year,
+                    },
+                  });
+                }
+              } catch (listError) {
+                // Error listing payment methods, continue to return basic info
+              }
+            }
+
+            // Return basic info without Stripe details
+            return res.json({
+              success: true,
+              hasPaymentMethod: true,
+              paymentMethodId: user.paymentMethodId,
+              stripeCustomerId: customerId || user.stripeCustomerId || null,
+              card: {
+                brand: "card",
+                last4: "****",
+                expMonth: null,
+                expYear: null,
+              },
+              note: "Payment method exists but Stripe details unavailable",
+            });
+          }
+
+          // Payment method might be deleted in Stripe, try to find alternative
+          if (customerId) {
+            try {
+              const customerPaymentMethods = await stripe.paymentMethods.list({
+                customer: customerId,
+                type: "card",
+              });
+
+              if (
+                customerPaymentMethods.data &&
+                customerPaymentMethods.data.length > 0
+              ) {
+                // Use the first available payment method
+                const alternativePaymentMethod = customerPaymentMethods.data[0];
+                // Update DB with the alternative payment method
+                await usersCol.updateOne(
+                  { _id: new ObjectId(userId) },
+                  { $set: { paymentMethodId: alternativePaymentMethod.id } }
+                );
+                return res.json({
+                  success: true,
+                  hasPaymentMethod: true,
+                  paymentMethodId: alternativePaymentMethod.id,
+                  stripeCustomerId: customerId,
+                  card: {
+                    brand: alternativePaymentMethod.card?.brand,
+                    last4: alternativePaymentMethod.card?.last4,
+                    expMonth: alternativePaymentMethod.card?.exp_month,
+                    expYear: alternativePaymentMethod.card?.exp_year,
+                  },
+                });
+              }
+            } catch (listError) {
+              // Error listing payment methods, continue to remove from DB
+            }
+          }
+
+          // Payment method not found and no alternatives, remove from DB
           await usersCol.updateOne(
             { _id: new ObjectId(userId) },
             { $unset: { paymentMethodId: "" } }
           );
-          return res.json({
-            success: true,
-            hasPaymentMethod: false,
+        }
+      }
+
+      // If no paymentMethodId in DB but we have customerId, try to find payment methods from customer
+      if (customerId && !user.paymentMethodId) {
+        try {
+          const customerPaymentMethods = await stripe.paymentMethods.list({
+            customer: customerId,
+            type: "card",
           });
+
+          if (
+            customerPaymentMethods.data &&
+            customerPaymentMethods.data.length > 0
+          ) {
+            // Use the first available payment method
+            const alternativePaymentMethod = customerPaymentMethods.data[0];
+            // Update DB with the alternative payment method
+            await usersCol.updateOne(
+              { _id: new ObjectId(userId) },
+              { $set: { paymentMethodId: alternativePaymentMethod.id } }
+            );
+            return res.json({
+              success: true,
+              hasPaymentMethod: true,
+              paymentMethodId: alternativePaymentMethod.id,
+              stripeCustomerId: customerId,
+              card: {
+                brand: alternativePaymentMethod.card?.brand,
+                last4: alternativePaymentMethod.card?.last4,
+                expMonth: alternativePaymentMethod.card?.exp_month,
+                expYear: alternativePaymentMethod.card?.exp_year,
+              },
+            });
+          }
+        } catch (listError) {
+          // Error listing payment methods, continue
         }
       }
 
@@ -2602,12 +3053,9 @@ function findAvailablePort(startPort) {
 
         // Get or create Stripe Customer for the user
         let customerId = user.stripeCustomerId;
-        
+
         if (!customerId) {
           // Create new customer
-          console.log(
-            `[payment-method] Creating new Stripe Customer for user ${userId}`
-          );
           const customer = await stripe.customers.create({
             email: user?.email || undefined,
             metadata: {
@@ -2615,40 +3063,45 @@ function findAvailablePort(startPort) {
             },
           });
           customerId = customer.id;
-          console.log(
-            `[payment-method] Created Stripe Customer: ${customerId}`
-          );
-        } else {
-          console.log(
-            `[payment-method] Using existing Stripe Customer: ${customerId}`
-          );
         }
 
         // Attach payment method to customer if not already attached
         if (!paymentMethod.customer || paymentMethod.customer !== customerId) {
-          console.log(
-            `[payment-method] Attaching payment method ${paymentMethodId} to customer ${customerId}`
-          );
-          await stripe.paymentMethods.attach(paymentMethodId, {
-            customer: customerId,
-          });
-          console.log(
-            `[payment-method] Payment method attached to customer successfully`
-          );
-        } else {
-          console.log(
-            `[payment-method] Payment method already attached to customer`
-          );
+          try {
+            await stripe.paymentMethods.attach(paymentMethodId, {
+              customer: customerId,
+            });
+          } catch (attachError) {
+            // If the payment method was previously used without customer attachment,
+            // we can't reuse it. Return an error asking the user to add a new payment method.
+            if (
+              attachError.message &&
+              attachError.message.includes(
+                "previously used without being attached"
+              )
+            ) {
+              return res.status(400).json({
+                success: false,
+                message:
+                  "אמצעי התשלום הזה כבר שימש בעבר ולא ניתן לשימוש חוזר. אנא הוסף כרטיס אשראי חדש.",
+                requiresNewPaymentMethod: true,
+                error: attachError.message,
+              });
+            } else {
+              // Other attach errors, re-throw
+              throw attachError;
+            }
+          }
         }
 
         // Save payment method ID and customer ID to user
         await usersCol.updateOne(
           { _id: new ObjectId(userId) },
-          { 
-            $set: { 
+          {
+            $set: {
               paymentMethodId: paymentMethodId,
-              stripeCustomerId: customerId
-            } 
+              stripeCustomerId: customerId,
+            },
           }
         );
 
@@ -2868,10 +3321,6 @@ function findAvailablePort(startPort) {
             sum + (typeof price === "number" ? price : parseFloat(price) || 0)
           );
         }, 0);
-        console.log(
-          "[create-intent] Calculated price from subcategoryInfo array:",
-          totalPrice
-        );
       } else if (
         job.subcategoryInfo &&
         typeof job.subcategoryInfo === "object" &&
@@ -2882,10 +3331,6 @@ function findAvailablePort(startPort) {
           typeof job.subcategoryInfo.price === "number"
             ? job.subcategoryInfo.price
             : parseFloat(job.subcategoryInfo.price) || 0;
-        console.log(
-          "[create-intent] Calculated price from subcategoryInfo object:",
-          totalPrice
-        );
       } else if (job.price) {
         // Fallback to job.price
         totalPrice =
@@ -2901,19 +3346,10 @@ function findAvailablePort(startPort) {
 
       const amountAgorot = Math.round(totalPrice * 100);
       const platformFeeAgorot = Math.round(
-        (amountAgorot * PLATFORM_FEE_PERCENT) / 100
+        (amountAgorot * getPlatformFeePercent()) / 100
       );
-      console.log("[create-intent] Final amounts:", {
-        totalPrice,
-        amountAgorot,
-        platformFeeAgorot,
-        platformFeePercent: PLATFORM_FEE_PERCENT,
-      });
 
       if (amountAgorot <= 0) {
-        console.log(
-          "[create-intent] ERROR: Invalid job price (amountAgorot <= 0)"
-        );
         return res.status(400).json({
           success: false,
           message:
@@ -2977,14 +3413,6 @@ function findAvailablePort(startPort) {
         status: status,
       });
     } catch (error) {
-      if (error.response) {
-        console.error(
-          "[create-intent] Error response:",
-          JSON.stringify(error.response.data, null, 2)
-        );
-      }
-      if (error.request) {
-      }
       return res.status(500).json({
         success: false,
         message: "שגיאה ביצירת כוונת תשלום",
@@ -2995,26 +3423,14 @@ function findAvailablePort(startPort) {
 
   // Update payment status after client confirms payment with Stripe.js
   app.post("/api/payments/confirm", async (req, res) => {
-    console.log(
-      "[payments/confirm] Request body:",
-      JSON.stringify(req.body, null, 2)
-    );
-
     try {
       const { paymentIntentId, jobId } = req.body;
       if (!paymentIntentId || !jobId) {
-        console.log(
-          "[payments/confirm] ERROR: Missing paymentIntentId or jobId"
-        );
         return res.status(400).json({
           success: false,
           message: "paymentIntentId and jobId required",
         });
       }
-
-      console.log(
-        `[payments/confirm] Processing confirmation for paymentIntentId: ${paymentIntentId}, jobId: ${jobId}`
-      );
 
       const jobsCol = getCollectionJobs();
       const paymentsCol = getCollectionPayments();
@@ -3022,23 +3438,8 @@ function findAvailablePort(startPort) {
       // Get payment intent from Stripe to verify status
       let paymentIntent;
       try {
-        console.log(
-          `[payments/confirm] Retrieving payment intent from Stripe: ${paymentIntentId}`
-        );
         paymentIntent = await getPaymentIntent(paymentIntentId);
-        console.log(
-          `[payments/confirm] Payment intent retrieved, status: ${paymentIntent.status}`
-        );
       } catch (stripeError) {
-        console.error(
-          "[payments/confirm] Error retrieving payment intent:",
-          stripeError
-        );
-        console.error("[payments/confirm] Error details:", {
-          message: stripeError.message,
-          type: stripeError.type,
-          code: stripeError.code,
-        });
         return res.status(500).json({
           success: false,
           message: "Failed to verify payment status",
@@ -3081,9 +3482,6 @@ function findAvailablePort(startPort) {
         );
       }
 
-      console.log(
-        `[payments/confirm] Updating payment record with status: ${paymentIntent.status}`
-      );
       await paymentsCol.updateOne(
         { paymentIntentId: paymentIntentId },
         { $set: updateData }
@@ -3109,6 +3507,122 @@ function findAvailablePort(startPort) {
     }
   });
 
+  // Confirm payment with saved payment method (for PersonalRequestCall)
+  app.post("/api/payments/confirm-with-saved-method", async (req, res) => {
+    try {
+      const { paymentIntentId, paymentMethodId, userId, jobId } = req.body;
+
+      if (!paymentIntentId || !paymentMethodId || !userId || !jobId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "paymentIntentId, paymentMethodId, userId, and jobId required",
+        });
+      }
+
+      const usersCol = getCollection();
+      const jobsCol = getCollectionJobs();
+
+      // Get user to find stripeCustomerId
+      const user = await usersCol.findOne({ _id: new ObjectId(userId) });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Get or create Stripe Customer
+      let customerId = user.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email || undefined,
+          metadata: {
+            userId: userId.toString(),
+          },
+        });
+        customerId = customer.id;
+
+        // Save customer ID to user
+        await usersCol.updateOne(
+          { _id: new ObjectId(userId) },
+          { $set: { stripeCustomerId: customerId } }
+        );
+      }
+
+      // Verify payment method exists and attach to customer if needed
+      try {
+        const paymentMethod = await stripe.paymentMethods.retrieve(
+          paymentMethodId
+        );
+
+        // Attach payment method to customer if not already attached
+        if (!paymentMethod.customer || paymentMethod.customer !== customerId) {
+          await stripe.paymentMethods.attach(paymentMethodId, {
+            customer: customerId,
+          });
+        }
+      } catch (pmError) {
+        return res.status(400).json({
+          success: false,
+          message: "שגיאה באימות אמצעי התשלום",
+          error: pmError.message,
+        });
+      }
+
+      // Update Payment Intent with customer and payment method
+      await stripe.paymentIntents.update(paymentIntentId, {
+        customer: customerId,
+        payment_method: paymentMethodId,
+      });
+
+      // Confirm Payment Intent
+      const confirmedPaymentIntent = await stripe.paymentIntents.confirm(
+        paymentIntentId
+      );
+
+      // Update payment record
+      const paymentsCol = getCollectionPayments();
+      await paymentsCol.updateOne(
+        { paymentIntentId: paymentIntentId },
+        {
+          $set: {
+            status: confirmedPaymentIntent.status,
+            updatedAt: new Date(),
+          },
+        }
+      );
+
+      // Update job payment status
+      await jobsCol.updateOne(
+        { _id: new ObjectId(jobId) },
+        {
+          $set: {
+            paymentStatus:
+              confirmedPaymentIntent.status === "succeeded"
+                ? "paid"
+                : confirmedPaymentIntent.status === "requires_capture"
+                ? "pending"
+                : "pending",
+          },
+        }
+      );
+
+      return res.json({
+        success: true,
+        paymentIntentId: paymentIntentId,
+        status: confirmedPaymentIntent.status,
+        message: "תשלום אושר בהצלחה",
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה באישור התשלום",
+        error: error.message,
+      });
+    }
+  });
+
   // Stripe Webhook endpoint for payment status updates
   // This endpoint receives events from Stripe when payment status changes
   app.post(
@@ -3120,15 +3634,7 @@ function findAvailablePort(startPort) {
       const isTestMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_test");
 
       if (!webhookSecret) {
-        if (isTestMode) {
-          console.log(
-            "[Stripe Webhook] TEST MODE - webhook verification disabled (OK for testing with Stripe CLI)"
-          );
-        } else {
-          console.warn(
-            "[Stripe Webhook] WARNING: STRIPE_WEBHOOK_SECRET not configured in production!"
-          );
-        }
+        // webhookSecret not configured
       }
 
       let event;
@@ -3141,22 +3647,12 @@ function findAvailablePort(startPort) {
           // In test mode without webhook secret, parse the event directly
           // This allows testing with Stripe CLI: stripe listen --forward-to localhost:PORT/api/stripe/webhook
           event = JSON.parse(req.body.toString());
-          console.log(
-            `[Stripe Webhook] TEST MODE - processing event: ${event.type} (signature verification skipped)`
-          );
         }
       } catch (err) {
-        console.error(
-          `[Stripe Webhook] Signature verification failed:`,
-          err.message
-        );
         // In test mode, still try to parse the event
         if (isTestMode) {
           try {
             event = JSON.parse(req.body.toString());
-            console.warn(
-              `[Stripe Webhook] TEST MODE - continuing without signature verification`
-            );
           } catch (parseErr) {
             return res.status(400).send(`Webhook Error: ${err.message}`);
           }
@@ -3175,9 +3671,6 @@ function findAvailablePort(startPort) {
           case "payment_intent.succeeded":
             {
               const paymentIntent = event.data.object;
-              console.log(
-                `[Stripe Webhook] Payment Intent succeeded: ${paymentIntent.id}`
-              );
 
               // Find job by paymentIntentId
               const job = await jobsCol.findOne({
@@ -3214,9 +3707,6 @@ function findAvailablePort(startPort) {
           case "payment_intent.payment_failed":
             {
               const paymentIntent = event.data.object;
-              console.log(
-                `[Stripe Webhook] Payment Intent failed: ${paymentIntent.id}`
-              );
 
               // Update payment record
               await paymentsCol.updateOne(
@@ -3234,9 +3724,6 @@ function findAvailablePort(startPort) {
           case "payment_intent.canceled":
             {
               const paymentIntent = event.data.object;
-              console.log(
-                `[Stripe Webhook] Payment Intent canceled: ${paymentIntent.id}`
-              );
 
               // Update payment record
               await paymentsCol.updateOne(
@@ -3254,9 +3741,6 @@ function findAvailablePort(startPort) {
           case "payment_intent.amount_capturable_updated":
             {
               const paymentIntent = event.data.object;
-              console.log(
-                `[Stripe Webhook] Payment Intent capturable: ${paymentIntent.id}, status: ${paymentIntent.status}`
-              );
 
               // If payment is now requires_capture, update our records
               if (paymentIntent.status === "requires_capture") {
@@ -3300,10 +3784,6 @@ function findAvailablePort(startPort) {
         // Return a response to acknowledge receipt of the event
         res.json({ received: true });
       } catch (webhookError) {
-        console.error(
-          `[Stripe Webhook] Error processing webhook:`,
-          webhookError
-        );
         // Still return 200 to Stripe to prevent retries
         res.json({ received: true, error: webhookError.message });
       }
@@ -3885,10 +4365,6 @@ function findAvailablePort(startPort) {
               }
             }
           } catch (pushError) {
-            console.error(
-              "[jobs/accept] Error sending push notification:",
-              pushError
-            );
             // Don't fail the request if push notification fails
           }
         });
@@ -3900,19 +4376,6 @@ function findAvailablePort(startPort) {
       let paymentIntentCreated = false;
       let clientSecret = null;
       let paymentIntentId = null;
-
-      console.log(
-        `[jobs/accept] Checking if Payment Intent needs to be created...`
-      );
-
-      console.log(
-        `[jobs/accept] job.paymentIntentId: ${job?.paymentIntentId || "null"}`
-      );
-      console.log(
-        `[jobs/accept] handyman.stripeAccountId: ${
-          handyman?.stripeAccountId || "null"
-        }`
-      );
 
       if (job && !job.paymentIntentId) {
         try {
@@ -3952,47 +4415,28 @@ function findAvailablePort(startPort) {
             totalPrice += 10;
           }
 
-          console.log(
-            `[jobs/accept] handyman.stripeAccountId exists: ${!!handyman.stripeAccountId}`
-          );
-
           // Only create payment intent if there's a price
           if (totalPrice > 0 && handyman.stripeAccountId) {
-            console.log(
-              `[jobs/accept] ✅ Conditions met - creating Payment Intent`
-            );
             const amountAgorot = Math.round(totalPrice * 100);
             const platformFeeAgorot = Math.round(
-              (amountAgorot * PLATFORM_FEE_PERCENT) / 100
+              (amountAgorot * getPlatformFeePercent()) / 100
             );
 
             // Create Escrow Payment Intent - wait for it to complete
-            console.log(
-              `[jobs/accept] ====== CREATING ESCROW PAYMENT INTENT ======`
-            );
-            console.log(
-              `[jobs/accept] Amount: ${amountAgorot} agorot, Platform fee: ${platformFeeAgorot} agorot`
-            );
-            console.log(
-              `[jobs/accept] Handyman account: ${handyman.stripeAccountId}`
-            );
-            console.log(
-              `[jobs/accept] Calling createEscrowPaymentIntent with:`,
-              JSON.stringify(
-                {
-                  amountAgorot,
-                  currency: "ils",
-                  handymanAccountId: handyman.stripeAccountId,
-                  platformFeeAgorot,
-                  metadata: {
-                    jobId: jobId,
-                    clientId: job.clientId?.toString() || "",
-                    handymanId: handymanId.toString(),
-                  },
+            JSON.stringify(
+              {
+                amountAgorot,
+                currency: "ils",
+                handymanAccountId: handyman.stripeAccountId,
+                platformFeeAgorot,
+                metadata: {
+                  jobId: jobId,
+                  clientId: job.clientId?.toString() || "",
+                  handymanId: handymanId.toString(),
                 },
-                null,
-                2
-              )
+              },
+              null,
+              2
             );
 
             const result = await createEscrowPaymentIntent({
@@ -4007,18 +4451,9 @@ function findAvailablePort(startPort) {
               },
             });
 
-            console.log(
-              `[jobs/accept] createEscrowPaymentIntent returned:`,
-              JSON.stringify(result, null, 2)
-            );
-
             paymentIntentId = result.paymentIntentId;
             clientSecret = result.clientSecret;
             const status = result.status;
-
-            console.log(
-              `[jobs/accept] ✅ Payment Intent created successfully!`
-            );
 
             // Save payment record
             const paymentsCol = getCollectionPayments();
@@ -4038,10 +4473,7 @@ function findAvailablePort(startPort) {
             await paymentsCol.insertOne(paymentRecord);
 
             // Update job with payment intent ID
-            console.log(
-              `[jobs/accept] Updating job ${jobId} with paymentIntentId: ${paymentIntentId}`
-            );
-            const updateResult = await jobsCol.updateOne(
+            await jobsCol.updateOne(
               { _id: new ObjectId(jobId) },
               {
                 $set: {
@@ -4050,51 +4482,28 @@ function findAvailablePort(startPort) {
                 },
               }
             );
-            console.log(`[jobs/accept] Job update result:`, {
-              matchedCount: updateResult.matchedCount,
-              modifiedCount: updateResult.modifiedCount,
-            });
-
-            // Verify the update
-            const verifyJob = await jobsCol.findOne({
-              _id: new ObjectId(jobId),
-            });
-            console.log(
-              `[jobs/accept] Verified job paymentIntentId in DB: ${
-                verifyJob?.paymentIntentId || "null"
-              }`
-            );
 
             // Note: managers_financials record will be created when payment is actually transferred
             // (in /payment/transfer or /jobs/done endpoints) with paymentID reference
 
             paymentIntentCreated = true;
-            console.log(
-              `[jobs/accept] Payment Intent created for job ${jobId}: ${paymentIntentId}`
-            );
 
             // If paymentMethodId exists (from CreateCall), attach it and confirm payment automatically
             // Do this in background to not block response
             if (job.paymentMethodId) {
               setImmediate(async () => {
                 try {
-                  console.log(
-                    `[jobs/accept] Found paymentMethodId: ${job.paymentMethodId}, confirming payment...`
-                  );
-
                   // Get client's Stripe Customer ID
-                  const clientIdForCustomer = job.clientId?.toString() || job.clientId;
+                  const clientIdForCustomer =
+                    job.clientId?.toString() || job.clientId;
                   const client = await usersCol.findOne({
                     _id: new ObjectId(clientIdForCustomer),
                   });
 
                   let customerId = client?.stripeCustomerId;
-                  
+
                   if (!customerId) {
                     // Create customer if doesn't exist
-                    console.log(
-                      `[jobs/accept] Creating Stripe Customer for client ${clientIdForCustomer}`
-                    );
                     const customer = await stripe.customers.create({
                       email: client?.email || undefined,
                       metadata: {
@@ -4102,40 +4511,25 @@ function findAvailablePort(startPort) {
                       },
                     });
                     customerId = customer.id;
-                    
+
                     // Save customer ID to user
                     await usersCol.updateOne(
                       { _id: new ObjectId(clientIdForCustomer) },
                       { $set: { stripeCustomerId: customerId } }
                     );
-                    console.log(
-                      `[jobs/accept] Created and saved Stripe Customer: ${customerId}`
-                    );
-                  } else {
-                    console.log(
-                      `[jobs/accept] Using existing Stripe Customer: ${customerId}`
-                    );
                   }
 
                   // Attach payment method to customer if not already attached
                   try {
-                    const pm = await stripe.paymentMethods.retrieve(job.paymentMethodId);
+                    const pm = await stripe.paymentMethods.retrieve(
+                      job.paymentMethodId
+                    );
                     if (!pm.customer || pm.customer !== customerId) {
-                      console.log(
-                        `[jobs/accept] Attaching payment method ${job.paymentMethodId} to customer ${customerId}`
-                      );
                       await stripe.paymentMethods.attach(job.paymentMethodId, {
                         customer: customerId,
                       });
-                      console.log(
-                        `[jobs/accept] Payment method attached to customer successfully`
-                      );
                     }
                   } catch (attachError) {
-                    console.error(
-                      `[jobs/accept] Error attaching payment method:`,
-                      attachError.message
-                    );
                     // Continue anyway - might already be attached
                   }
 
@@ -4148,10 +4542,6 @@ function findAvailablePort(startPort) {
                   const confirmedPaymentIntent =
                     await stripe.paymentIntents.confirm(paymentIntentId);
 
-                  console.log(
-                    `[jobs/accept] Payment confirmed automatically with paymentMethodId: ${job.paymentMethodId}, status: ${confirmedPaymentIntent.status}`
-                  );
-
                   // Update payment record with confirmed status
                   await paymentsCol.updateOne(
                     { paymentIntentId: paymentIntentId },
@@ -4161,10 +4551,6 @@ function findAvailablePort(startPort) {
                         updatedAt: new Date(),
                       },
                     }
-                  );
-
-                  console.log(
-                    `[jobs/accept] Payment record updated with status: ${confirmedPaymentIntent.status}`
                   );
 
                   // Update job payment status
@@ -4179,32 +4565,11 @@ function findAvailablePort(startPort) {
                       },
                     }
                   );
-
-                  console.log(
-                    `[jobs/accept] Job payment status updated to: ${
-                      confirmedPaymentIntent.status === "requires_capture"
-                        ? "pending"
-                        : confirmedPaymentIntent.status
-                    }`
-                  );
                 } catch (confirmError) {
-                  console.error(
-                    "[jobs/accept] Error confirming payment with paymentMethodId:",
-                    confirmError
-                  );
-                  console.error("[jobs/accept] Error details:", {
-                    message: confirmError.message,
-                    type: confirmError.type,
-                    code: confirmError.code,
-                  });
                   // Don't fail the job acceptance if payment confirmation fails
                   // Payment can be confirmed later manually
                 }
               });
-            } else {
-              console.log(
-                `[jobs/accept] No paymentMethodId found in job, payment will need to be confirmed manually`
-              );
             }
 
             // Send notification to client about payment requirement (non-blocking)
@@ -4233,55 +4598,20 @@ function findAvailablePort(startPort) {
                     );
                   }
                 } catch (notificationError) {
-                  console.error(
-                    "[jobs/accept] Error sending payment notification:",
-                    notificationError
-                  );
                   // Don't fail if notification fails
                 }
               });
             }
-          } else {
-            console.log(
-              `[jobs/accept] ❌ Conditions NOT met for creating Payment Intent:`
-            );
-            console.log(
-              `[jobs/accept]   - totalPrice > 0: ${
-                totalPrice > 0
-              } (totalPrice = ${totalPrice})`
-            );
-            console.log(
-              `[jobs/accept]   - handyman.stripeAccountId exists: ${!!handyman.stripeAccountId}`
-            );
           }
         } catch (paymentError) {
-          console.error(
-            "[jobs/accept] ❌ ERROR creating payment intent:",
-            paymentError
-          );
-
           // Don't fail the job acceptance if payment creation fails
           // Payment can be created later via /api/payments/create-intent
         }
       } else {
-        console.log(
-          `[jobs/accept]   - job.paymentIntentId: ${
-            job?.paymentIntentId || "null"
-          }`
-        );
         if (job?.paymentIntentId) {
-          console.log(
-            `[jobs/accept]   - Payment Intent already exists, using existing one`
-          );
           paymentIntentId = job.paymentIntentId;
         }
       }
-
-      console.log(
-        `[jobs/accept] Final paymentIntentId before response: ${
-          paymentIntentId || "null"
-        }`
-      );
 
       // Return response with payment intent info
       const response = {
@@ -4300,10 +4630,7 @@ function findAvailablePort(startPort) {
       // These won't block the response
       setImmediate(async () => {
         try {
-          // Any additional cleanup or logging can go here
-          console.log(
-            `[jobs/accept] Job ${jobId} accepted by handyman ${handymanId}`
-          );
+          // Any additional cleanup can go here
         } catch (bgError) {}
       });
     } catch (error) {
@@ -4871,10 +5198,19 @@ function findAvailablePort(startPort) {
           .json({ success: false, message: "Job not found" });
       }
 
+      // Get handymanId - check both handymanId and handymanIdSpecial (for personal requests)
+      let actualHandymanId = job.handymanId;
+      if (!actualHandymanId && job.handymanIdSpecial) {
+        actualHandymanId = job.handymanIdSpecial;
+      }
+      if (!actualHandymanId) {
+        actualHandymanId = handymanId;
+      }
+
       // Use the handymanId from the job (as it's stored in DB)
       const query = {
         _id: new ObjectId(jobId),
-        handymanId: job.handymanId || handymanId,
+        handymanId: actualHandymanId,
       };
 
       // Update status to "done" - waiting for client approval before payment capture
@@ -4886,11 +5222,11 @@ function findAvailablePort(startPort) {
         },
       });
 
-      // Update jobDone for handyman (handle both array and single handymanId)
-      if (job.handymanId) {
-        const handymanIds = Array.isArray(job.handymanId)
-          ? job.handymanId
-          : [job.handymanId];
+      // Update jobDone for handyman (handle both array and single handymanId, and handymanIdSpecial)
+      if (actualHandymanId) {
+        const handymanIds = Array.isArray(actualHandymanId)
+          ? actualHandymanId
+          : [actualHandymanId];
         const handymanIdString = handymanId.toString();
 
         // Find the handyman in the array that matches
@@ -4906,7 +5242,7 @@ function findAvailablePort(startPort) {
           }
         }
       } else {
-        // Fallback to provided handymanId if job.handymanId is not set
+        // Fallback to provided handymanId if actualHandymanId is not set
         await usersCol.updateOne(
           { _id: new ObjectId(handymanId) },
           { $inc: { jobDone: 1 } }
@@ -4916,19 +5252,12 @@ function findAvailablePort(startPort) {
       // Emit WebSocket event to notify clients
       const io = req.app.get("io");
       if (io) {
-        console.log(
-          `[jobs/done] Emitting WebSocket events for job ${jobId}...`
-        );
-
         // Emit to job room (for all participants)
         io.to(`job-${jobId}`).emit("job-status-updated", {
           jobId,
           status: "done",
           requiresClientApproval: true,
         });
-        console.log(
-          `[jobs/done] Emitted 'job-status-updated' to job-${jobId} room`
-        );
 
         // Also emit to client's personal room to ensure they receive the event
         const clientId = job?.clientId;
@@ -4937,28 +5266,11 @@ function findAvailablePort(startPort) {
           const userRoomName = `user-${clientIdString}`;
           const jobRoomName = `job-${jobId}`;
 
-          // Get list of sockets in user room for debugging
-          const userRoom = io.sockets.adapter.rooms.get(userRoomName);
-          const userRoomSize = userRoom ? userRoom.size : 0;
-          console.log(
-            `[jobs/done] User room '${userRoomName}' has ${userRoomSize} socket(s)`
-          );
-
-          // Get list of sockets in job room for debugging
-          const jobRoom = io.sockets.adapter.rooms.get(jobRoomName);
-          const jobRoomSize = jobRoom ? jobRoom.size : 0;
-          console.log(
-            `[jobs/done] Job room '${jobRoomName}' has ${jobRoomSize} socket(s)`
-          );
-
           io.to(userRoomName).emit("job-done", {
             jobId,
             status: "done",
             requiresClientApproval: true,
           });
-          console.log(
-            `[jobs/done] Emitted 'job-done' to user-${clientIdString} room (${userRoomSize} socket(s))`
-          );
 
           // Also emit to job room with specific event for client (in case they're in job room)
           io.to(jobRoomName).emit("job-done", {
@@ -4966,18 +5278,7 @@ function findAvailablePort(startPort) {
             status: "done",
             requiresClientApproval: true,
           });
-          console.log(
-            `[jobs/done] Also emitted 'job-done' to job-${jobId} room for client (${jobRoomSize} socket(s))`
-          );
-        } else {
-          console.log(
-            `[jobs/done] WARNING: No clientId found for job ${jobId} - cannot emit to user room`
-          );
         }
-      } else {
-        console.error(
-          `[jobs/done] ERROR: Socket.IO instance not found - cannot emit WebSocket events`
-        );
       }
 
       // Send Push Notification to client
@@ -4994,10 +5295,6 @@ function findAvailablePort(startPort) {
                 ? job.handymanName[0]
                 : "ההנדימן";
 
-            console.log(
-              `[jobs/done] Sending push notification to client ${clientId} about job ${jobId} completion`
-            );
-
             const pushResult = await sendPushNotification(
               client.fcmToken,
               "העבודה הושלמה ✅",
@@ -5010,36 +5307,16 @@ function findAvailablePort(startPort) {
               }
             );
 
-            console.log(`[jobs/done] Push notification result:`, {
-              success: !pushResult.shouldRemove,
-              shouldRemove: pushResult.shouldRemove,
-            });
-
             if (pushResult.shouldRemove) {
               await usersCol.updateOne(
                 { _id: clientObjectId },
                 { $unset: { fcmToken: "" } }
               );
-              console.log(
-                `[jobs/done] Removed invalid FCM token for client ${clientId}`
-              );
             }
-          } else {
-            console.log(
-              `[jobs/done] Client ${clientId} has no FCM token - cannot send push notification`
-            );
           }
         } catch (pushError) {
-          console.error(
-            `[jobs/done] Error sending push notification to client ${clientId}:`,
-            pushError
-          );
           // Don't fail the request if push notification fails
         }
-      } else {
-        console.log(
-          `[jobs/done] Job ${jobId} has no clientId - cannot send notification`
-        );
       }
 
       // Send Push Notification to handyman (confirming they marked job as done)
@@ -5052,10 +5329,6 @@ function findAvailablePort(startPort) {
           const handyman = await usersCol.findOne({ _id: handymanObjectId });
 
           if (handyman?.fcmToken) {
-            console.log(
-              `[jobs/done] Sending push notification to handyman ${handymanId} about job ${jobId} completion`
-            );
-
             const pushResult = await sendPushNotification(
               handyman.fcmToken,
               "העבודה סומנה כהושלמה ✅",
@@ -5068,30 +5341,14 @@ function findAvailablePort(startPort) {
               }
             );
 
-            console.log(`[jobs/done] Push notification result for handyman:`, {
-              success: !pushResult.shouldRemove,
-              shouldRemove: pushResult.shouldRemove,
-            });
-
             if (pushResult.shouldRemove) {
               await usersCol.updateOne(
                 { _id: handymanObjectId },
                 { $unset: { fcmToken: "" } }
               );
-              console.log(
-                `[jobs/done] Removed invalid FCM token for handyman ${handymanId}`
-              );
             }
-          } else {
-            console.log(
-              `[jobs/done] Handyman ${handymanId} has no FCM token - cannot send push notification`
-            );
           }
         } catch (pushError) {
-          console.error(
-            `[jobs/done] Error sending push notification to handyman ${handymanId}:`,
-            pushError
-          );
           // Don't fail the request if push notification fails
         }
       }
@@ -5122,10 +5379,6 @@ function findAvailablePort(startPort) {
       const { jobId, clientId } = req.body;
 
       if (!jobId || !clientId) {
-        console.log("[jobs/approve] Missing required fields:", {
-          jobId,
-          clientId,
-        });
         return res.status(400).json({
           success: false,
           message: "jobId and clientId required",
@@ -5144,55 +5397,16 @@ function findAvailablePort(startPort) {
         });
       }
 
-      console.log("[jobs/approve] Job found:", {
-        jobId: job._id.toString(),
-        jobClientId: job.clientId?.toString() || job.clientId,
-        jobClientIdType: typeof job.clientId,
-        jobClientIdIsObjectId: job.clientId instanceof ObjectId,
-        requestClientId: clientId.toString(),
-        requestClientIdType: typeof clientId,
-      });
-
       // Verify that the requester is the client
       const jobClientId = job.clientId?.toString() || job.clientId;
       const requestClientId = clientId.toString();
 
-      console.log("[jobs/approve] Comparing client IDs:", {
-        jobClientId,
-        requestClientId,
-        areEqual: jobClientId === requestClientId,
-        jobClientIdLength: jobClientId?.length,
-        requestClientIdLength: requestClientId?.length,
-        jobClientIdTrimmed: jobClientId?.trim(),
-        requestClientIdTrimmed: requestClientId?.trim(),
-      });
-
       if (jobClientId !== requestClientId) {
-        console.log(
-          "[jobs/approve] Job clientId:",
-          JSON.stringify(jobClientId)
-        );
-        console.log(
-          "[jobs/approve] Request clientId:",
-          JSON.stringify(requestClientId)
-        );
         return res.status(403).json({
           success: false,
           message: "Only the job client can approve completion",
         });
       }
-
-      console.log(
-        "[jobs/approve] ✅ Client ID verified - proceeding with approval"
-      );
-
-      // Verify job status is "done" (handyman marked as done)
-      console.log("[jobs/approve] Checking job status:", {
-        status: job.status,
-        clientApproved: job.clientApproved,
-        paymentStatus: job.paymentStatus,
-        paymentIntentId: job.paymentIntentId,
-      });
 
       if (job.status !== "done") {
         return res.status(400).json({
@@ -5213,18 +5427,9 @@ function findAvailablePort(startPort) {
       }
 
       // If already approved but payment not released, continue to release payment
-      if (job.clientApproved === true) {
-        console.log(
-          "[jobs/approve] ⚠️ Job already approved, but payment not released. Proceeding to release payment..."
-        );
-      }
 
       // Check if paymentIntentId exists - if not, create it now
       if (!job.paymentIntentId) {
-        console.log(
-          "[jobs/approve] ⚠️ No paymentIntentId found for job - creating it now..."
-        );
-
         // Get handyman to create payment intent
         const handymanIdForPayment =
           job.handymanId?.toString() || job.handymanId;
@@ -5284,11 +5489,7 @@ function findAvailablePort(startPort) {
         if (totalPrice > 0) {
           const amountAgorot = Math.round(totalPrice * 100);
           const platformFeeAgorot = Math.round(
-            (amountAgorot * PLATFORM_FEE_PERCENT) / 100
-          );
-
-          console.log(
-            `[jobs/approve] Creating Payment Intent: amount=${amountAgorot}, platformFee=${platformFeeAgorot}`
+            (amountAgorot * getPlatformFeePercent()) / 100
           );
 
           try {
@@ -5302,11 +5503,6 @@ function findAvailablePort(startPort) {
                 clientId: job.clientId?.toString() || "",
                 handymanId: handymanIdForPayment,
               },
-            });
-
-            console.log(`[jobs/approve] createEscrowPaymentIntent returned:`, {
-              paymentIntentId: result.paymentIntentId,
-              status: result.status,
             });
 
             // Update job with payment intent ID
@@ -5345,25 +5541,7 @@ function findAvailablePort(startPort) {
               _id: new ObjectId(jobId),
             });
             Object.assign(job, updatedJob);
-            console.log(
-              `[jobs/approve] Job reloaded, paymentIntentId: ${job.paymentIntentId}`
-            );
-
-            console.log(
-              `[jobs/approve] ✅ Payment Intent created: ${result.paymentIntentId}`
-            );
           } catch (createError) {
-            console.error(
-              "[jobs/approve] ❌ Error creating Payment Intent:",
-              createError
-            );
-            console.error("[jobs/approve] Error details:", {
-              message: createError.message,
-              type: createError.type,
-              code: createError.code,
-              stack: createError.stack,
-            });
-
             const errorResponse = {
               success: false,
               message: "שגיאה ביצירת תשלום. אנא נסה שוב מאוחר יותר.",
@@ -5375,9 +5553,6 @@ function findAvailablePort(startPort) {
             return;
           }
         } else {
-          console.log(
-            "[jobs/approve] ❌ Job has no price - cannot create payment"
-          );
           return res.status(400).json({
             success: false,
             message: "Job has no price. Cannot create payment.",
@@ -5387,9 +5562,7 @@ function findAvailablePort(startPort) {
 
       // Update job - mark as client approved (only if not already approved)
       // If already approved, we'll just release the payment
-      console.log(
-        `[jobs/approve] Checking if job needs to be marked as approved...`
-      );
+
       if (job.clientApproved !== true) {
         await jobsCol.updateOne(
           { _id: new ObjectId(jobId) },
@@ -5404,15 +5577,8 @@ function findAvailablePort(startPort) {
       }
 
       // Now capture the payment (if paymentIntentId exists)
-      console.log(
-        `[jobs/approve] Checking paymentIntentId: ${
-          job.paymentIntentId || "null"
-        }`
-      );
+
       if (job.paymentIntentId) {
-        console.log(
-          `[jobs/approve] ✅ Payment Intent exists, proceeding to capture...`
-        );
         try {
           // Call the capture endpoint logic
           const paymentsCol = getCollectionPayments();
@@ -5422,14 +5588,7 @@ function findAvailablePort(startPort) {
           let paymentIntent;
           try {
             paymentIntent = await getPaymentIntent(job.paymentIntentId);
-            console.log(
-              `[Stripe] Retrieved Payment Intent ${job.paymentIntentId} in /api/jobs/approve, status: ${paymentIntent.status}, jobId: ${jobId}`
-            );
           } catch (stripeError) {
-            console.error(
-              `[Stripe Error] Failed to get Payment Intent ${job.paymentIntentId} in /api/jobs/approve:`,
-              stripeError
-            );
             return res.status(500).json({
               success: false,
               message: "Failed to retrieve payment information",
@@ -5440,91 +5599,80 @@ function findAvailablePort(startPort) {
           // Check payment status
           // If payment is in requires_payment_method, try to use saved payment method
           if (paymentIntent.status === "requires_payment_method") {
-            console.log(
-              `[jobs/approve] Payment Intent requires_payment_method, checking for payment method...`
-            );
-            console.log(
-              `[jobs/approve] job.paymentMethodId: ${
-                job.paymentMethodId || "null"
-              }`
-            );
-
             // First check if job has paymentMethodId (from when job was created)
             let paymentMethodIdToUse = job.paymentMethodId;
 
             // If job doesn't have paymentMethodId, check user's saved payment method
             if (!paymentMethodIdToUse) {
-              console.log(
-                `[jobs/approve] No paymentMethodId in job, checking user's saved payment method...`
-              );
               const client = await usersCol.findOne({
                 _id: new ObjectId(clientId),
               });
               if (client && client.paymentMethodId) {
-                console.log(
-                  `[jobs/approve] Found paymentMethodId in user: ${client.paymentMethodId}`
-                );
                 paymentMethodIdToUse = client.paymentMethodId;
-              } else {
-                console.log(
-                  `[jobs/approve] No paymentMethodId found in user either`
-                );
               }
-            } else {
-              console.log(
-                `[jobs/approve] Using paymentMethodId from job: ${paymentMethodIdToUse}`
-              );
             }
 
             if (paymentMethodIdToUse) {
-              console.log(
-                `[jobs/approve] Attempting to attach and confirm payment method: ${paymentMethodIdToUse}`
-              );
               try {
                 // First, verify the payment method exists and is valid
-                console.log(
-                  `[jobs/approve] Verifying payment method ${paymentMethodIdToUse}`
-                );
                 let pm;
                 try {
                   pm = await stripe.paymentMethods.retrieve(
                     paymentMethodIdToUse
                   );
-                  console.log(`[jobs/approve] Payment method verified:`, {
-                    id: pm.id,
-                    type: pm.type,
-                    customer: pm.customer,
-                    card: pm.card
-                      ? { brand: pm.card.brand, last4: pm.card.last4 }
-                      : null,
-                  });
-                } catch (pmError) {
-                  console.error(
-                    `[jobs/approve] ❌ Payment method verification failed:`,
-                    pmError.message
-                  );
-                  throw new Error(
-                    `Payment method not found or invalid: ${pmError.message}`
-                  );
-                }
+                } catch (pmError) {}
 
                 // Get or create Stripe Customer for the client
+
                 let customerId;
                 const client = await usersCol.findOne({
                   _id: new ObjectId(clientId),
                 });
 
                 if (client && client.stripeCustomerId) {
-                  // Use existing customer
-                  customerId = client.stripeCustomerId;
-                  console.log(
-                    `[jobs/approve] Using existing Stripe Customer: ${customerId}`
-                  );
+                  // Verify that the customer still exists in Stripe
+                  try {
+                    const existingCustomer = await stripe.customers.retrieve(
+                      client.stripeCustomerId
+                    );
+                    if (existingCustomer && !existingCustomer.deleted) {
+                      // Use existing customer
+                      customerId = client.stripeCustomerId;
+                    } else {
+                      // Customer was deleted in Stripe, create a new one
+                      const customer = await stripe.customers.create({
+                        email: client?.email || undefined,
+                        metadata: {
+                          userId: clientId.toString(),
+                        },
+                      });
+                      customerId = customer.id;
+
+                      // Save customer ID to user
+                      await usersCol.updateOne(
+                        { _id: new ObjectId(clientId) },
+                        { $set: { stripeCustomerId: customerId } }
+                      );
+                    }
+                  } catch (customerError) {
+                    // Customer doesn't exist or error retrieving, create a new one
+                    const customer = await stripe.customers.create({
+                      email: client?.email || undefined,
+                      metadata: {
+                        userId: clientId.toString(),
+                      },
+                    });
+                    customerId = customer.id;
+
+                    // Save customer ID to user
+                    await usersCol.updateOne(
+                      { _id: new ObjectId(clientId) },
+                      { $set: { stripeCustomerId: customerId } }
+                    );
+                  }
                 } else {
                   // Create new customer
-                  console.log(
-                    `[jobs/approve] Creating new Stripe Customer for client ${clientId}`
-                  );
+
                   const customer = await stripe.customers.create({
                     email: client?.email || undefined,
                     metadata: {
@@ -5538,61 +5686,151 @@ function findAvailablePort(startPort) {
                     { _id: new ObjectId(clientId) },
                     { $set: { stripeCustomerId: customerId } }
                   );
-                  console.log(
-                    `[jobs/approve] Created and saved Stripe Customer: ${customerId}`
-                  );
                 }
 
                 // Attach payment method to customer if not already attached
+
                 if (!pm.customer || pm.customer !== customerId) {
-                  console.log(
-                    `[jobs/approve] Attaching payment method ${paymentMethodIdToUse} to customer ${customerId}`
-                  );
-                  await stripe.paymentMethods.attach(paymentMethodIdToUse, {
-                    customer: customerId,
-                  });
-                  console.log(
-                    `[jobs/approve] Payment method attached to customer successfully`
-                  );
+                  try {
+                    await stripe.paymentMethods.attach(paymentMethodIdToUse, {
+                      customer: customerId,
+                    });
+                  } catch (attachError) {
+                    // If the payment method was previously used without customer attachment,
+                    // we can't reuse it. Try to find another payment method for this customer.
+                    if (
+                      attachError.message &&
+                      attachError.message.includes(
+                        "previously used without being attached"
+                      )
+                    ) {
+                      // Try to list all payment methods for this customer
+                      let customerPaymentMethods;
+                      try {
+                        customerPaymentMethods =
+                          await stripe.paymentMethods.list({
+                            customer: customerId,
+                            type: "card",
+                          });
+
+                        if (
+                          customerPaymentMethods.data &&
+                          customerPaymentMethods.data.length > 0
+                        ) {
+                        } else {
+                        }
+                      } catch (listError) {
+                        throw new Error(
+                          `Failed to retrieve payment methods: ${listError.message}`
+                        );
+                      }
+
+                      if (
+                        customerPaymentMethods.data &&
+                        customerPaymentMethods.data.length > 0
+                      ) {
+                        // Use the first available payment method
+                        const alternativePaymentMethod =
+                          customerPaymentMethods.data[0];
+                        paymentMethodIdToUse = alternativePaymentMethod.id;
+
+                        // Update pm to point to the new payment method
+                        pm = alternativePaymentMethod;
+
+                        // Update the user's paymentMethodId in DB
+                        const updateResult = await usersCol.updateOne(
+                          { _id: new ObjectId(clientId) },
+                          {
+                            $set: {
+                              paymentMethodId: alternativePaymentMethod.id,
+                            },
+                          }
+                        );
+                      } else {
+                        // No alternative payment method found
+
+                        // Remove the invalid payment method from DB
+
+                        await usersCol.updateOne(
+                          { _id: new ObjectId(clientId) },
+                          { $unset: { paymentMethodId: "" } }
+                        );
+
+                        // Update the existing Payment Intent to allow adding a new payment method
+                        // Set setup_future_usage so the new payment method can be saved
+                        try {
+                          const updatedPaymentIntent =
+                            await stripe.paymentIntents.update(
+                              job.paymentIntentId,
+                              {
+                                setup_future_usage: "off_session",
+                                customer: customerId,
+                              }
+                            );
+
+                          // Return error with clientSecret so user can add a new payment method
+                          return res.status(400).json({
+                            success: false,
+                            message:
+                              "אמצעי התשלום השמור לא יכול לשמש. אנא הוסף כרטיס אשראי חדש.",
+                            requiresPaymentMethod: true,
+                            paymentIntentId: job.paymentIntentId,
+                            clientSecret: updatedPaymentIntent.client_secret,
+                            error:
+                              "Payment method cannot be reused. Please add a new payment method.",
+                          });
+                        } catch (updateError) {
+                          console.error(
+                            `[jobs/approve] ❌ Error updating Payment Intent: ${updateError.message}`
+                          );
+                          // Return error with original clientSecret
+                          return res.status(400).json({
+                            success: false,
+                            message:
+                              "אמצעי התשלום השמור לא יכול לשמש. אנא הוסף כרטיס אשראי חדש.",
+                            requiresPaymentMethod: true,
+                            paymentIntentId: job.paymentIntentId,
+                            clientSecret: paymentIntent.client_secret,
+                            error:
+                              "Payment method cannot be reused. Please add a new payment method.",
+                          });
+                        }
+                      }
+                    } else {
+                      // Other attach errors, re-throw
+
+                      throw attachError;
+                    }
+                  }
                 } else {
-                  console.log(
-                    `[jobs/approve] Payment method already attached to customer`
-                  );
                 }
 
                 // Update payment intent with customer and payment method
-                console.log(
-                  `[jobs/approve] Updating Payment Intent ${job.paymentIntentId} with customer ${customerId} and payment method ${paymentMethodIdToUse}`
-                );
-                await stripe.paymentIntents.update(job.paymentIntentId, {
-                  customer: customerId,
-                  payment_method: paymentMethodIdToUse,
-                });
-                console.log(
-                  `[jobs/approve] Payment Intent updated successfully`
-                );
+
+                try {
+                  await stripe.paymentIntents.update(job.paymentIntentId, {
+                    customer: customerId,
+                    payment_method: paymentMethodIdToUse,
+                  });
+                } catch (updateError) {
+                  throw updateError;
+                }
 
                 // Confirm the payment intent
-                console.log(
-                  `[jobs/approve] Confirming Payment Intent ${job.paymentIntentId}`
-                );
-                const confirmedPaymentIntent =
-                  await stripe.paymentIntents.confirm(job.paymentIntentId);
-                console.log(
-                  `[jobs/approve] Payment Intent confirmed, status: ${confirmedPaymentIntent.status}`
-                );
+                let confirmedPaymentIntent;
+                try {
+                  confirmedPaymentIntent = await stripe.paymentIntents.confirm(
+                    job.paymentIntentId
+                  );
+                } catch (confirmError) {
+                  throw confirmError;
+                }
 
                 // Check if confirmation was successful
                 if (confirmedPaymentIntent.status === "requires_capture") {
                   // Payment confirmed, continue with capture
                   paymentIntent = confirmedPaymentIntent;
-                  console.log(
-                    `[jobs/approve] ✅ Payment confirmed successfully, ready for capture`
-                  );
                 } else {
-                  console.log(
-                    `[jobs/approve] ⚠️ Payment confirmation returned unexpected status: ${confirmedPaymentIntent.status}`
-                  );
                   return res.status(400).json({
                     success: false,
                     message: `שגיאה באישור התשלום. סטטוס: ${confirmedPaymentIntent.status}`,
@@ -5638,10 +5876,6 @@ function findAvailablePort(startPort) {
           // If payment is already succeeded, it means it was already captured (e.g., automatically when handyman accepted)
           // In this case, we just need to update the job status, not capture again
           if (paymentIntent.status === "succeeded") {
-            console.log(
-              "[jobs/approve] Payment already succeeded (already captured), updating job status only"
-            );
-
             // Payment already captured, just update job status
             const isConnectPayment =
               paymentIntent.transfer_data &&
@@ -5652,7 +5886,7 @@ function findAvailablePort(startPort) {
             const urgentFee = job.urgent ? 10 : 0;
             const platformFee = paymentIntent.application_fee_amount
               ? paymentIntent.application_fee_amount / 100
-              : totalAmount * (PLATFORM_FEE_PERCENT / 100);
+              : totalAmount * (getPlatformFeePercent() / 100);
             const handymanRevenue = totalAmount - platformFee;
 
             // Get handyman ID
@@ -5707,10 +5941,6 @@ function findAvailablePort(startPort) {
               }
             );
 
-            console.log(
-              `[jobs/approve] ✅ Payment already succeeded, job status updated`
-            );
-
             // Continue with success response (skip capture)
             // The payment was already captured, so we can proceed to send success response
             return res.json({
@@ -5723,10 +5953,6 @@ function findAvailablePort(startPort) {
 
           // Verify payment is in requires_capture state (ready to be captured)
           if (paymentIntent.status !== "requires_capture") {
-            console.log(
-              "[jobs/approve] Payment is not in requires_capture or succeeded state:",
-              paymentIntent.status
-            );
             return res.status(400).json({
               success: false,
               message: `Payment is not ready to be captured. Current status: ${paymentIntent.status}`,
@@ -5743,14 +5969,7 @@ function findAvailablePort(startPort) {
           let capturedPayment;
           try {
             capturedPayment = await captureEscrow(job.paymentIntentId);
-            console.log(
-              `[Stripe] Successfully captured Payment Intent ${job.paymentIntentId} in /api/jobs/approve for jobId: ${jobId}`
-            );
           } catch (captureError) {
-            console.error(
-              `[Stripe Error] Failed to capture Payment Intent ${job.paymentIntentId} in /api/jobs/approve:`,
-              captureError
-            );
             return res.status(500).json({
               success: false,
               message: "Failed to release payment",
@@ -5890,6 +6109,17 @@ function findAvailablePort(startPort) {
             }
           );
 
+          // Get handymanId before using it
+          let handymanId =
+            Array.isArray(job.handymanId) && job.handymanId.length > 0
+              ? job.handymanId[0]
+              : job.handymanId;
+
+          // Also check for handymanIdSpecial (for personal requests)
+          if (!handymanId && job.handymanIdSpecial) {
+            handymanId = job.handymanIdSpecial;
+          }
+
           // Emit WebSocket event
           const io = req.app.get("io");
           if (io) {
@@ -5907,17 +6137,10 @@ function findAvailablePort(startPort) {
                 paymentReleased: true,
                 clientApproved: true,
               });
-              console.log(
-                `[jobs/approve] Emitted job-approved to user-${handymanId.toString()}`
-              );
             }
           }
 
           // Send push notification to handyman
-          const handymanId =
-            Array.isArray(job.handymanId) && job.handymanId.length > 0
-              ? job.handymanId[0]
-              : job.handymanId;
           if (handymanId) {
             try {
               const handymanObjectId =
@@ -5929,11 +6152,6 @@ function findAvailablePort(startPort) {
               });
 
               if (handyman) {
-                console.log(
-                  `[jobs/approve] Checking onboarding for handyman ${handymanId}, stripeAccountId: ${
-                    handyman.stripeAccountId || "none"
-                  }`
-                );
                 // Check if handyman needs onboarding
                 let needsOnboarding = false;
                 let onboardingUrl = null;
@@ -5942,9 +6160,6 @@ function findAvailablePort(startPort) {
                   try {
                     const account = await stripe.accounts.retrieve(
                       handyman.stripeAccountId
-                    );
-                    console.log(
-                      `[jobs/approve] Stripe account status - charges_enabled: ${account.charges_enabled}, payouts_enabled: ${account.payouts_enabled}`
                     );
                     if (!account.charges_enabled || !account.payouts_enabled) {
                       needsOnboarding = true;
@@ -5961,16 +6176,8 @@ function findAvailablePort(startPort) {
                           returnUrl,
                           refreshUrl
                         );
-                        console.log(
-                          `[jobs/approve] Created onboarding URL: ${
-                            onboardingUrl ? "success" : "failed"
-                          }`
-                        );
                       } catch (linkError) {
-                        console.error(
-                          "[jobs/approve] Error creating onboarding link:",
-                          linkError
-                        );
+                        // Silently ignore link error
                       }
                     }
                   } catch (stripeError) {
@@ -5983,9 +6190,6 @@ function findAvailablePort(startPort) {
                   }
                 } else {
                   // No Stripe account - needs onboarding
-                  console.log(
-                    `[jobs/approve] Handyman ${handymanId} has no stripeAccountId - needs onboarding`
-                  );
                   needsOnboarding = true;
                   // Try to create account and get onboarding link
                   try {
@@ -6061,23 +6265,8 @@ function findAvailablePort(startPort) {
                 // Emit WebSocket event with onboarding info if needed
                 const io = req.app.get("io");
                 if (io) {
-                  console.log(
-                    `[jobs/approve] needsOnboarding: ${needsOnboarding}, onboardingUrl: ${
-                      onboardingUrl ? "exists" : "null"
-                    }`
-                  );
                   if (needsOnboarding) {
                     const userRoom = `user-${handymanId.toString()}`;
-                    console.log(
-                      `[jobs/approve] Emitting onboarding-required to room: ${userRoom}`
-                    );
-                    const socketsInRoom =
-                      io.sockets.adapter.rooms.get(userRoom);
-                    console.log(
-                      `[jobs/approve] Sockets in room ${userRoom}: ${
-                        socketsInRoom ? socketsInRoom.size : 0
-                      }`
-                    );
                     io.to(userRoom).emit("onboarding-required", {
                       jobId: jobId.toString(),
                       onboardingUrl: onboardingUrl,
@@ -6085,9 +6274,6 @@ function findAvailablePort(startPort) {
                         "הלקוח אישר את סיום העבודה. כדי לקבל את התשלום, עליך להשלים את הגדרת חשבון התשלומים",
                       needsOnboarding: true,
                     });
-                    console.log(
-                      `[jobs/approve] Emitted onboarding-required event to ${userRoom}`
-                    );
                   }
                 }
               }
@@ -6100,9 +6286,6 @@ function findAvailablePort(startPort) {
             }
           }
 
-          console.log(
-            `[jobs/approve] ✅ Payment processed successfully, returning response...`
-          );
           return res.json({
             success: true,
             message: "Job approved and payment released successfully",
@@ -6283,7 +6466,7 @@ function findAvailablePort(startPort) {
           try {
             const newAmountAgorot = Math.round(newPrice * 100);
             const platformFeeAgorot = Math.round(
-              newAmountAgorot * PLATFORM_FEE_PERCENT
+              (newAmountAgorot * getPlatformFeePercent()) / 100
             );
 
             await stripe.paymentIntents.update(job.paymentIntentId, {
@@ -6863,9 +7046,6 @@ function findAvailablePort(startPort) {
                 job.status === "paid");
 
             if (!isReadyForTransfer) {
-              console.log(
-                `[Payment Transfer] Skipping transfer for jobId: ${jobId} - Payment status: ${paymentIntent.status}, Job status: ${job.status}, Client approved: ${job.clientApproved}`
-              );
               // Don't attempt transfer - payment not ready or not approved
               return;
             }
@@ -8522,11 +8702,6 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
       // Get paymentMethodId from request (created by client with Stripe.js)
       const { paymentMethodId } = req.body;
-      console.log(
-        `[create-call-v2] Received paymentMethodId from request: ${
-          paymentMethodId || "null"
-        }`
-      );
 
       // Get coordinates from location
       let userLng = null;
@@ -8785,11 +8960,91 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
             lat: userLat,
           },
         };
-        console.log(
-          `[create-call-v2] Creating job with paymentMethodId: ${
-            jobData.paymentMethodId || "null"
-          }`
-        );
+
+        // If paymentMethodId is provided, attach it to customer immediately
+        // This ensures the payment method is saved in Stripe and can be reused
+        if (paymentMethodId && userId) {
+          try {
+            // Get or create Stripe Customer for the user
+
+            const client = await collection.findOne({
+              _id: new ObjectId(userId),
+            });
+            let customerId = client?.stripeCustomerId;
+
+            if (!customerId) {
+              // Create new customer
+
+              const customer = await stripe.customers.create({
+                email: client?.email || undefined,
+                metadata: {
+                  userId: userId.toString(),
+                },
+              });
+              customerId = customer.id;
+
+              // Save customer ID to user
+              await collection.updateOne(
+                { _id: new ObjectId(userId) },
+                { $set: { stripeCustomerId: customerId } }
+              );
+            } else {
+            }
+
+            // Verify payment method exists
+            const paymentMethod = await stripe.paymentMethods.retrieve(
+              paymentMethodId
+            );
+
+            // Attach payment method to customer if not already attached
+            if (
+              !paymentMethod.customer ||
+              paymentMethod.customer !== customerId
+            ) {
+              try {
+                await stripe.paymentMethods.attach(paymentMethodId, {
+                  customer: customerId,
+                });
+
+                // Save payment method ID and customer ID to user
+                await collection.updateOne(
+                  { _id: new ObjectId(userId) },
+                  {
+                    $set: {
+                      paymentMethodId: paymentMethodId,
+                      stripeCustomerId: customerId,
+                    },
+                  }
+                );
+              } catch (attachError) {
+                // If the payment method was previously used without customer attachment,
+                // we can't reuse it. Log error but continue (user will need to add new payment method later)
+                if (
+                  attachError.message &&
+                  attachError.message.includes(
+                    "previously used without being attached"
+                  )
+                ) {
+                } else {
+                  // Other attach errors, log but continue
+                }
+              }
+            } else {
+              // Save payment method ID and customer ID to user even if already attached
+              const updateResult = await collection.updateOne(
+                { _id: new ObjectId(userId) },
+                {
+                  $set: {
+                    paymentMethodId: paymentMethodId,
+                    stripeCustomerId: customerId,
+                  },
+                }
+              );
+            }
+          } catch (error) {
+            // Error attaching payment method, log but continue (job will be created anyway)
+          }
+        }
 
         const jobsCollection = getCollectionJobs();
         const result = await jobsCollection.insertOne(jobData);
@@ -8868,6 +9123,20 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
             // Push notification failed, continue anyway
           }
         })();
+
+        // Update user's Ordered count (+1)
+        if (userId) {
+          try {
+            const clientObjectId = new ObjectId(userId);
+            await collection.updateOne(
+              { _id: clientObjectId },
+              { $inc: { Ordered: 1 } }
+            );
+          } catch (error) {
+            // Silent fail - Ordered update is not critical
+            console.error("Error updating Ordered count:", error);
+          }
+        }
 
         return res.json({
           success: true,
@@ -9615,22 +9884,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
             urgent: urgent ? "true" : "false",
           }
         );
-        console.log(
-          `[Stripe] Successfully created Payment Intent ${paymentIntent.id} for jobId: ${jobId}, amount: ${amount} ILS (${amountInAgorot} agorot)`
-        );
       } catch (stripeError) {
-        console.error(
-          `[Stripe Error] Failed to create Payment Intent for jobId: ${jobId}:`,
-          {
-            error: stripeError.message,
-            type: stripeError.type,
-            code: stripeError.code,
-            amount: amount,
-            amountInAgorot: amountInAgorot,
-            jobId: jobId,
-            clientId: clientId,
-          }
-        );
         throw stripeError;
       }
 
@@ -9695,19 +9949,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       let paymentIntent;
       try {
         paymentIntent = await getPaymentIntent(job.paymentIntentId);
-        console.log(
-          `[Stripe] Retrieved Payment Intent ${job.paymentIntentId}, status: ${paymentIntent.status}`
-        );
       } catch (stripeError) {
-        console.error(
-          `[Stripe Error] Failed to get Payment Intent ${job.paymentIntentId}:`,
-          {
-            error: stripeError.message,
-            type: stripeError.type,
-            code: stripeError.code,
-            jobId: jobId,
-          }
-        );
         throw stripeError;
       }
 
@@ -9734,19 +9976,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       if (paymentIntent.status === "requires_capture") {
         try {
           capturedPayment = await capturePaymentIntent(job.paymentIntentId);
-          console.log(
-            `[Stripe] Successfully captured Payment Intent ${job.paymentIntentId} for jobId: ${jobId}`
-          );
         } catch (captureError) {
-          console.error(
-            `[Stripe Error] Failed to capture Payment Intent ${job.paymentIntentId}:`,
-            {
-              error: captureError.message,
-              type: captureError.type,
-              code: captureError.code,
-              jobId: jobId,
-            }
-          );
           throw captureError;
         }
       }
@@ -9779,9 +10009,6 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
       const insertResult = await paymentsCol.insertOne(paymentData);
       const paymentID = insertResult.insertedId;
-      console.log(
-        `[Payment Transfer] Successfully inserted payment record to 'payment' collection via /payment/transfer for jobId: ${jobId}, insertedId: ${paymentID}`
-      );
 
       // Calculate clearing fee (2.9% + 0.3 ILS)
       const clearingFeeRate = 0.029; // 2.9%
@@ -10555,18 +10782,19 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       // Count total users
       const totalUsersCount = await usersCol.countDocuments({});
 
-      // Get total amount of completed transactions (payments with status "paid")
+      // Get total amount of completed transactions (payments with status "transferred")
+      // Only count payments that were actually transferred to handymen
       const paymentsResult = await paymentsCol
         .aggregate([
           {
             $match: {
-              status: "paid",
+              status: "transferred",
             },
           },
           {
             $group: {
               _id: null,
-              totalAmount: { $sum: { $ifNull: ["$amount", 0] } },
+              totalAmount: { $sum: { $ifNull: ["$totalAmount", 0] } },
             },
           },
         ])
@@ -10747,6 +10975,64 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       return res.status(500).json({
         success: false,
         message: "Error fetching transactions chart data",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Get platform fee percentage
+  app.get("/admin/fee", async (req, res) => {
+    try {
+      const fee = getPlatformFeePercent();
+      return res.json({
+        success: true,
+        fee: fee,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching platform fee",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Update platform fee percentage
+  app.post("/admin/fee", async (req, res) => {
+    try {
+      const { fee } = req.body;
+      if (fee === undefined || fee === null) {
+        return res.status(400).json({
+          success: false,
+          message: "Fee is required",
+        });
+      }
+
+      const feeNumber = parseFloat(fee);
+      if (isNaN(feeNumber) || feeNumber < 0 || feeNumber > 100) {
+        return res.status(400).json({
+          success: false,
+          message: "Fee must be a number between 0 and 100",
+        });
+      }
+
+      const updated = updatePlatformFeePercent(feeNumber);
+      if (updated) {
+        return res.json({
+          success: true,
+          fee: feeNumber,
+          message: "Platform fee updated successfully",
+        });
+      } else {
+        return res.status(500).json({
+          success: false,
+          message: "Error updating platform fee",
+        });
+      }
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error updating platform fee",
         error: error.message,
       });
     }

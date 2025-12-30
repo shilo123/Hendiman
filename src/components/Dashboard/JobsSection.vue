@@ -352,7 +352,15 @@
 
     <!-- Jobs list -->
     <div class="jobs__list">
-      <article v-for="job in filteredJobs" :key="job.id" class="job">
+      <article
+        v-for="job in filteredJobs"
+        :key="job.id"
+        class="job"
+        :class="{
+          'job--urgent': job.urgent || job.isUrgent,
+          'job--special': job.handymanIdSpecial,
+        }"
+      >
         <div class="job__header">
           <div class="job__title">
             {{ getJobDisplayName(job) }}
@@ -412,6 +420,12 @@
             <span class="metaItem">👤 {{ job.clientName }}</span>
             <span class="metaSep">•</span>
             <span class="metaItem">📍 {{ job.locationText }}</span>
+            <span v-if="isHendiman && getTimeAgo(job)" class="metaSep">•</span>
+            <span
+              v-if="isHendiman && getTimeAgo(job)"
+              class="metaItem metaItem--time"
+              >⏰ {{ getTimeAgo(job) }}</span
+            >
           </div>
 
           <div class="metaLine metaLine--secondary">
@@ -429,7 +443,14 @@
         </div>
 
         <div class="chips" aria-label="תגיות">
-          <span v-if="job.isUrgent" class="chip chip--urgent">דחוף</span>
+          <span v-if="job.urgent || job.isUrgent" class="chip chip--urgent"
+            >דחוף</span
+          >
+          <span
+            v-if="job.handymanIdSpecial && isHendiman"
+            class="chip chip--special"
+            >הזמנה אישית</span
+          >
 
           <span
             class="chip chip--status"
@@ -725,6 +746,21 @@ export default {
         cancelled: "בוטלה",
       };
       return labels[status] || status;
+    },
+    getTimeAgo(job) {
+      if (!job.createdAt) return null;
+      const createdAt = new Date(job.createdAt);
+      const now = new Date();
+      const diffMs = now - createdAt;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffMins < 1) return "עכשיו";
+      if (diffMins < 60) return `לפני ${diffMins} דקות`;
+      if (diffHours < 24) return `לפני ${diffHours} שעות`;
+      if (diffDays < 7) return `לפני ${diffDays} ימים`;
+      return null; // לא מציגים יותר מ-7 ימים
     },
     handleKmInput(value) {
       // Update local value for display while dragging (no filtering)
@@ -1315,11 +1351,140 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   padding: 10px;
   display: grid;
   gap: 8px;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
 
   @media (max-width: 768px) {
     padding: 10px; /* חשוב: לא להקטין מדי – נותן אוויר */
     border-radius: 14px;
     gap: 8px;
+  }
+
+  // עבודה דחופה - אפקט אדום מהבהב
+  &--urgent {
+    border: 2px solid rgba($danger, 0.6);
+    background: linear-gradient(
+      135deg,
+      rgba($danger, 0.15),
+      rgba(255, 255, 255, 0.08)
+    );
+    box-shadow: 0 0 20px rgba($danger, 0.3), inset 0 0 20px rgba($danger, 0.1);
+    animation: urgentPulse 2s ease-in-out infinite;
+
+    &::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba($danger, 0.2),
+        transparent
+      );
+      animation: urgentShine 3s ease-in-out infinite;
+    }
+
+    .job__title {
+      color: #ffd4d4;
+      font-weight: 1100;
+    }
+  }
+
+  // עבודה ספיישל - אפקט זהב/סגול
+  &--special {
+    border: 2px solid rgba(255, 215, 0, 0.5);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 215, 0, 0.12),
+      rgba(138, 43, 226, 0.12),
+      rgba(255, 255, 255, 0.08)
+    );
+    box-shadow: 0 0 25px rgba(255, 215, 0, 0.25),
+      inset 0 0 20px rgba(255, 215, 0, 0.08);
+    position: relative;
+
+    &::after {
+      content: "⭐";
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      font-size: 20px;
+      animation: starTwinkle 2s ease-in-out infinite;
+      z-index: 1;
+
+      @media (max-width: 768px) {
+        font-size: 16px;
+        top: 6px;
+        left: 6px;
+      }
+    }
+
+    .job__title {
+      color: #ffd700;
+      font-weight: 1100;
+      text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+    }
+  }
+
+  // אם גם דחוף וגם ספיישל
+  &--urgent.job--special {
+    border: 2px solid rgba(255, 69, 0, 0.7);
+    background: linear-gradient(
+      135deg,
+      rgba($danger, 0.2),
+      rgba(255, 215, 0, 0.15),
+      rgba(138, 43, 226, 0.15)
+    );
+    box-shadow: 0 0 30px rgba(255, 69, 0, 0.4),
+      inset 0 0 25px rgba(255, 215, 0, 0.15);
+  }
+}
+
+@keyframes urgentPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba($danger, 0.3), inset 0 0 20px rgba($danger, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba($danger, 0.5), inset 0 0 25px rgba($danger, 0.2);
+  }
+}
+
+@keyframes urgentShine {
+  0% {
+    left: -100%;
+  }
+  50% {
+    left: 100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+@keyframes starTwinkle {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes chipPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 5px rgba($danger, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba($danger, 0.6);
   }
 }
 
@@ -1504,6 +1669,11 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   color: $orange3;
 }
 
+.metaItem--time {
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 900;
+}
+
 /* Chips: horizontal scroll on mobile, limit clutter */
 .chips {
   display: flex;
@@ -1548,6 +1718,19 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     border-color: rgba($danger, 0.45);
     background: rgba($danger, 0.12);
     color: #ffd4d4;
+    animation: chipPulse 2s ease-in-out infinite;
+  }
+
+  &--special {
+    border-color: rgba(255, 215, 0, 0.5);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 215, 0, 0.2),
+      rgba(138, 43, 226, 0.2)
+    );
+    color: #ffd700;
+    font-weight: 1100;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
   }
 
   &--status {

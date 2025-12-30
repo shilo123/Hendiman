@@ -907,7 +907,7 @@ export default {
       const assignedJobs = uniqueJobs.filter((job) => {
         if (this.isHendiman) {
           // עבור הנדימן - בודק אם handymanId תואם (תמיכה במערך)
-          // עבור הנדימן: עבודה ב-"done" לא נחשבת כעבודה פעילה (צריך להמתין לדירוג)
+          // עבור הנדימן: עבודה ב-"done" או "paid" לא נחשבת כעבודה פעילה
           let isHandymanInJob = false;
           if (job.handymanId) {
             if (Array.isArray(job.handymanId)) {
@@ -918,20 +918,27 @@ export default {
               isHandymanInJob = String(job.handymanId) === userIdStr;
             }
           }
-          // כל עבודה שלא בסטטוס "open" ולא בסטטוס "done" צריכה להיפתח
+          // כל עבודה שלא בסטטוס "open", "done" או "paid" צריכה להיפתח
+          // לא עבודות שדורגו (ratingSubmitted: true)
           return (
             isHandymanInJob &&
             job.status !== "open" && // לא עבודות פתוחות
-            job.status !== "done" // לא עבודות שהושלמו
+            job.status !== "done" && // לא עבודות שהושלמו
+            job.status !== "paid" && // לא עבודות משולמות
+            !job.ratingSubmitted // לא עבודות שדורגו
           );
         } else {
           // עבור לקוח - בודק אם clientId תואם
           // עבור לקוח: עבודה ב-"done" עם clientApproved: false צריכה להיפתח (לאשר)
+          // עבור לקוח: עבודה ב-"paid" לא צריכה להיפתח (העבודה הסתיימה והתשלום שוחרר)
+          // עבור לקוח: עבודה שדורגה (ratingSubmitted: true) לא צריכה להיפתח
           return (
             job.clientId &&
             String(job.clientId) === userIdStr &&
             job.handymanId && // רק עבודות ששובצו
             job.status !== "open" && // לא עבודות פתוחות
+            job.status !== "paid" && // לא עבודות משולמות
+            !job.ratingSubmitted && // לא עבודות שדורגו
             (job.status !== "done" || // לא עבודות שהושלמו (או...)
               (job.status === "done" && !job.clientApproved)) // אלא אם כן צריך אישור לקוח
           );
@@ -947,8 +954,21 @@ export default {
         this.activeAssignedJob &&
         (this.activeAssignedJob._id || this.activeAssignedJob.id)
       ) {
-        // עבור הנדימן - לא מציגים עבודות שהושלמו
-        if (this.isHendiman && this.activeAssignedJob.status === "done") {
+        // עבור הנדימן - לא מציגים עבודות שהושלמו, משולמות או שדורגו
+        if (
+          this.isHendiman &&
+          (this.activeAssignedJob.status === "done" ||
+            this.activeAssignedJob.status === "paid" ||
+            this.activeAssignedJob.ratingSubmitted)
+        ) {
+          return null;
+        }
+        // עבור לקוח - לא מציגים עבודות משולמות (paid) או שדורגו
+        if (
+          !this.isHendiman &&
+          (this.activeAssignedJob.status === "paid" ||
+            this.activeAssignedJob.ratingSubmitted)
+        ) {
           return null;
         }
         return this.activeAssignedJob;
@@ -1805,6 +1825,14 @@ export default {
         // Refresh to update job list
         await this.onRefresh();
       }
+
+      // If job is marked as paid (payment released), close the chat for both client and handyman
+      if (newStatus === "paid") {
+        this.activeAssignedJob = null;
+        this.isChatMinimized = false;
+        // Refresh to update job list
+        await this.onRefresh();
+      }
     },
 
     async onCancelJob() {
@@ -1849,10 +1877,26 @@ export default {
         }
       }
 
+      // Close chat after rating (before refresh to prevent reopening)
+      this.activeAssignedJob = null;
+      this.isChatMinimized = false;
+
       // Refresh after rating to update job data
       await this.onRefresh();
-      // Close chat after rating
-      this.activeAssignedJob = null;
+
+      // Ensure chat stays closed after refresh (in case checkForAssignedJob tries to reopen it)
+      this.$nextTick(() => {
+        if (this.activeAssignedJob) {
+          const currentJobId = String(
+            this.activeAssignedJob._id || this.activeAssignedJob.id || ""
+          );
+          if (currentJobId === String(jobId || "")) {
+            // This is the job that was just rated, close it
+            this.activeAssignedJob = null;
+            this.isChatMinimized = false;
+          }
+        }
+      });
     },
     // בדוק עבודה משובצת ישירות מנתונים שנטענו (לשימוש ב-mounted)
     checkForAssignedJobFromData(data) {
@@ -1875,30 +1919,40 @@ export default {
               isHandymanInJob = String(job.handymanId) === userIdStr;
             }
           }
-          // כל עבודה שלא בסטטוס "open" ולא בסטטוס "done" צריכה להיפתח
+          // כל עבודה שלא בסטטוס "open", "done" או "paid" צריכה להיפתח
+          // לא עבודות שדורגו (ratingSubmitted: true)
           return (
             isHandymanInJob &&
             job.status !== "open" && // לא עבודות פתוחות
-            job.status !== "done" // לא עבודות שהושלמו
+            job.status !== "done" && // לא עבודות שהושלמו
+            job.status !== "paid" && // לא עבודות משולמות
+            !job.ratingSubmitted // לא עבודות שדורגו
           );
         } else {
           // עבור לקוח - בודק אם clientId תואם
-          // כל עבודה שלא בסטטוס "open" ולא בסטטוס "done" צריכה להיפתח
+          // כל עבודה שלא בסטטוס "open", "done" או "paid" צריכה להיפתח
+          // לא עבודות שדורגו (ratingSubmitted: true)
           return (
             job.clientId &&
             String(job.clientId) === userIdStr &&
             job.handymanId && // רק עבודות ששובצו
             job.status !== "open" && // לא עבודות פתוחות
-            job.status !== "done" // לא עבודות שהושלמו
+            job.status !== "done" && // לא עבודות שהושלמו
+            job.status !== "paid" && // לא עבודות משולמות
+            !job.ratingSubmitted // לא עבודות שדורגו
           );
         }
       });
 
       // Only set activeAssignedJob if it's a valid active job
-      // Don't set if it's a done job (even if rating not submitted, it shouldn't auto-open)
+      // Don't set if it's a done, paid, or rated job (even if rating not submitted, it shouldn't auto-open)
       if (assignedJob && !this.activeAssignedJob) {
-        // Don't auto-open done jobs - client should open them manually from the list
-        if (assignedJob.status !== "done") {
+        // Don't auto-open done, paid, or rated jobs - client should open them manually from the list
+        if (
+          assignedJob.status !== "done" &&
+          assignedJob.status !== "paid" &&
+          !assignedJob.ratingSubmitted
+        ) {
           this.activeAssignedJob = assignedJob;
           this.isChatMinimized = false; // Ensure chat is not minimized when auto-opening
         }
@@ -1925,21 +1979,27 @@ export default {
               isHandymanInJob = String(job.handymanId) === userIdStr;
             }
           }
-          // כל עבודה שלא בסטטוס "open" ולא בסטטוס "done" צריכה להיפתח
+          // כל עבודה שלא בסטטוס "open", "done" או "paid" צריכה להיפתח
+          // לא עבודות שדורגו (ratingSubmitted: true)
           return (
             isHandymanInJob &&
             job.status !== "open" && // לא עבודות פתוחות
-            job.status !== "done" // לא עבודות שהושלמו
+            job.status !== "done" && // לא עבודות שהושלמו
+            job.status !== "paid" && // לא עבודות משולמות
+            !job.ratingSubmitted // לא עבודות שדורגו
           );
         } else {
           // עבור לקוח - בודק אם clientId תואם
-          // כל עבודה שלא בסטטוס "open" ולא בסטטוס "done" צריכה להיפתח
+          // כל עבודה שלא בסטטוס "open", "done" או "paid" צריכה להיפתח
+          // לא עבודות שדורגו (ratingSubmitted: true)
           return (
             job.clientId &&
             String(job.clientId) === userIdStr &&
             job.handymanId && // רק עבודות ששובצו
             job.status !== "open" && // לא עבודות פתוחות
-            job.status !== "done" // לא עבודות שהושלמו
+            job.status !== "done" && // לא עבודות שהושלמו
+            job.status !== "paid" && // לא עבודות משולמות
+            !job.ratingSubmitted // לא עבודות שדורגו
           );
         }
       });
@@ -1976,8 +2036,9 @@ export default {
                     isHandymanInJob &&
                     (job.status === "assigned" ||
                       job.status === "on_the_way" ||
-                      job.status === "in_progress")
-                    // עבור הנדימן - לא מציגים עבודות עם status "done"
+                      job.status === "in_progress") &&
+                    !job.ratingSubmitted
+                    // עבור הנדימן - לא מציגים עבודות עם status "done" או שדורגו
                   );
                 });
               }
@@ -1987,10 +2048,14 @@ export default {
       }
 
       // Only set activeAssignedJob if it's a valid active job
-      // Don't set if it's a done job (even if rating not submitted, it shouldn't auto-open)
+      // Don't set if it's a done, paid, or rated job (even if rating not submitted, it shouldn't auto-open)
       if (assignedJob && !this.activeAssignedJob) {
-        // Don't auto-open done jobs - client should open them manually from the list
-        if (assignedJob.status !== "done") {
+        // Don't auto-open done, paid, or rated jobs - client should open them manually from the list
+        if (
+          assignedJob.status !== "done" &&
+          assignedJob.status !== "paid" &&
+          !assignedJob.ratingSubmitted
+        ) {
           this.activeAssignedJob = assignedJob;
         }
       }
@@ -2254,10 +2319,25 @@ export default {
 
       // Listen for job-approved event (when client approves job)
       this.socket.on("job-approved", async (data) => {
+        const jobId = String(data.jobId || "");
+        const newStatus = data.status || "paid";
+
+        // Refresh jobs to get latest data
+        await this.onRefresh();
+
+        // If status is "paid", close the chat for both client and handyman
+        if (newStatus === "paid") {
+          // Check if this is the currently active job
+          const currentJobId = String(
+            this.activeAssignedJob?._id || this.activeAssignedJob?.id || ""
+          );
+          if (currentJobId === jobId) {
+            this.activeAssignedJob = null;
+            this.isChatMinimized = false;
+          }
+        }
+
         if (this.isHendiman) {
-          const jobId = String(data.jobId || "");
-          // Refresh jobs to get latest data
-          await this.onRefresh();
           // Check if this job needs onboarding
           const job = this.store.jobs?.find(
             (j) => String(j._id || j.id) === jobId
@@ -2470,7 +2550,23 @@ export default {
           error.message ||
           "שגיאה באישור העבודה";
         console.log("[Dashboard] Showing error message:", errorMessage);
-        this.toast?.showError(errorMessage);
+
+        // If payment method is required, redirect to CreateCall to add a new card
+        if (error.response?.data?.requiresPaymentMethod) {
+          this.toast?.showError(
+            "אמצעי התשלום השמור לא יכול לשמש. אנא הוסף כרטיס אשראי חדש."
+          );
+          // Redirect to CreateCall page to add a new payment method
+          setTimeout(() => {
+            const userId =
+              this.store?.user?._id ||
+              this.store?.user?.id ||
+              this.$route.params.id;
+            this.$router.push(`/create-call/${userId}`);
+          }, 2000);
+        } else {
+          this.toast?.showError(errorMessage);
+        }
         console.log("[Dashboard] Error message should be displayed");
       }
     },

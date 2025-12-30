@@ -717,6 +717,53 @@
           </div>
         </div>
 
+        <!-- Settings Tab -->
+        <div v-if="activeTab === 'settings'" class="tab-panel">
+          <div class="settings-section">
+            <div class="settings-section__header">
+              <h2 class="settings-section__title">הגדרות מערכת</h2>
+            </div>
+
+            <div class="settings-content">
+              <div class="settings-card">
+                <div class="settings-card__header">
+                  <h3 class="settings-card__title">אחוז עמלה</h3>
+                  <p class="settings-card__description">
+                    אחוז העמלה שהמערכת גובה מכל תשלום
+                  </p>
+                </div>
+                <div class="settings-card__body">
+                  <div class="form-field">
+                    <label class="form-label">אחוז עמלה (%)</label>
+                    <input
+                      v-model.number="platformFee"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      class="form-input"
+                      placeholder="לדוגמה: 7"
+                    />
+                    <div class="current-fee-display">
+                      ערך נוכחי: {{ currentPlatformFee }}%
+                    </div>
+                  </div>
+                  <div class="settings-card__actions">
+                    <button
+                      class="btn btn--primary"
+                      @click="updatePlatformFee"
+                      :disabled="isUpdatingFee || platformFee === currentPlatformFee"
+                    >
+                      <span v-if="isUpdatingFee">מעדכן...</span>
+                      <span v-else>עדכן עמלה</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Expenses Tab -->
         <div v-if="activeTab === 'expenses'" class="tab-panel">
           <div class="financials-section">
@@ -1390,6 +1437,7 @@ export default {
         { id: "payments", label: "תשלומים" },
         { id: "expenses", label: "פירוט הוצאות" },
         { id: "status", label: "סטטוסים" },
+        { id: "settings", label: "הגדרות" },
       ],
       users: [],
       filteredUsers: [],
@@ -1501,6 +1549,10 @@ export default {
       // Delete payment modal
       showDeletePaymentModal: false,
       paymentToDelete: null,
+      // Settings
+      platformFee: 7,
+      currentPlatformFee: 7,
+      isUpdatingFee: false,
     };
   },
   created() {
@@ -1599,6 +1651,9 @@ export default {
       await this.loadUsersChart();
       await this.loadTransactionsChart();
     }
+    if (this.activeTab === "settings") {
+      await this.loadPlatformFee();
+    }
   },
   watch: {
     activeTab(newTab) {
@@ -1613,6 +1668,9 @@ export default {
       }
       if (newTab === "payments") {
         this.loadPayments();
+      }
+      if (newTab === "settings") {
+        this.loadPlatformFee();
       }
     },
   },
@@ -2761,6 +2819,52 @@ export default {
         this.toast?.showError(
           error.response?.data?.message || "שגיאה במחיקת התשלום"
         );
+      }
+    },
+    async loadPlatformFee() {
+      try {
+        const response = await axios.get(`${URL}/admin/fee`);
+        if (response.data.success) {
+          this.currentPlatformFee = response.data.fee;
+          this.platformFee = response.data.fee;
+        }
+      } catch (error) {
+        console.error("Error loading platform fee:", error);
+        this.toast?.showError("שגיאה בטעינת אחוז העמלה");
+      }
+    },
+    async updatePlatformFee() {
+      if (this.platformFee === null || this.platformFee === undefined) {
+        this.toast?.showError("יש להזין אחוז עמלה תקין");
+        return;
+      }
+
+      if (this.platformFee < 0 || this.platformFee > 100) {
+        this.toast?.showError("אחוז העמלה חייב להיות בין 0 ל-100");
+        return;
+      }
+
+      this.isUpdatingFee = true;
+      try {
+        const response = await axios.post(`${URL}/admin/fee`, {
+          fee: this.platformFee,
+        });
+
+        if (response.data.success) {
+          this.currentPlatformFee = response.data.fee;
+          this.toast?.showSuccess("אחוז העמלה עודכן בהצלחה");
+        } else {
+          this.toast?.showError(
+            response.data.message || "שגיאה בעדכון אחוז העמלה"
+          );
+        }
+      } catch (error) {
+        console.error("Error updating platform fee:", error);
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה בעדכון אחוז העמלה"
+        );
+      } finally {
+        this.isUpdatingFee = false;
       }
     },
   },
@@ -4900,5 +5004,77 @@ select.form-input {
   .job-desc {
     max-width: 150px;
   }
+}
+
+/* Settings Section */
+.settings-section {
+  animation: fadeIn 0.3s ease;
+}
+
+.settings-section__header {
+  margin-bottom: 24px;
+}
+
+.settings-section__title {
+  font-size: 20px;
+  font-weight: 1000;
+  color: $orange2;
+}
+
+.settings-content {
+  display: grid;
+  gap: 24px;
+}
+
+.settings-card {
+  border-radius: 16px;
+  border: 1px solid rgba($orange, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba($orange, 0.3);
+  }
+}
+
+.settings-card__header {
+  padding: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.settings-card__title {
+  font-size: 18px;
+  font-weight: 1000;
+  color: $text;
+  margin: 0 0 8px 0;
+}
+
+.settings-card__description {
+  font-size: 14px;
+  font-weight: 800;
+  color: $muted;
+  margin: 0;
+}
+
+.settings-card__body {
+  padding: 20px;
+}
+
+.settings-card__actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
+}
+
+.current-fee-display {
+  font-size: 14px;
+  font-weight: 800;
+  color: $muted;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
 }
 </style>

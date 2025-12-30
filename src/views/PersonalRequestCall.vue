@@ -508,10 +508,133 @@
           class="step-content step-content--animated"
         >
           <div class="step-container">
+            <!-- Show saved payment method option if exists -->
+            <div
+              v-if="savedPaymentMethod && !showChangePaymentMethod"
+              class="saved-payment-method-wrapper"
+            >
+              <div class="flip-card">
+                <div class="flip-card-inner">
+                  <div class="flip-card-front">
+                    <p class="heading_8264">
+                      {{ getCardBrandName(savedPaymentMethod.card?.brand) }}
+                    </p>
+                    <svg
+                      class="logo"
+                      xmlns="http://www.w3.org/2000/svg"
+                      x="0px"
+                      y="0px"
+                      width="36"
+                      height="36"
+                      viewBox="0 0 48 48"
+                    >
+                      <path
+                        fill="#ff9800"
+                        d="M32 10A14 14 0 1 0 32 38A14 14 0 1 0 32 10Z"
+                      ></path>
+                      <path
+                        fill="#d50000"
+                        d="M16 10A14 14 0 1 0 16 38A14 14 0 1 0 16 10Z"
+                      ></path>
+                      <path
+                        fill="#ff3d00"
+                        d="M18,24c0,4.755,2.376,8.95,6,11.48c3.624-2.53,6-6.725,6-11.48s-2.376-8.95-6-11.48 C20.376,15.05,18,19.245,18,24z"
+                      ></path>
+                    </svg>
+                    <svg
+                      version="1.1"
+                      class="chip"
+                      id="Layer_1"
+                      xmlns="http://www.w3.org/2000/svg"
+                      xmlns:xlink="http://www.w3.org/1999/xlink"
+                      x="0px"
+                      y="0px"
+                      width="30px"
+                      height="30px"
+                      viewBox="0 0 50 50"
+                      xml:space="preserve"
+                    >
+                      <image
+                        id="image0"
+                        width="50"
+                        height="50"
+                        x="0"
+                        y="0"
+                        href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAMAAAAp4XiDAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAB6VBMVEUAAACNcTiVeUKVeUOYfEaafEeUeUSYfEWZfEaykleyklaXe0SWekSZZjOYfEWYe0WXfUWXe0WcgEicfkiXe0SVekSXekSWekKYe0a9nF67m12ZfUWUeEaXfESVekOdgEmVeUWWekSniU+VeUKVeUOrjFKYfEWliE6WeESZe0GSe0WYfES7ml2Xe0WXeESUeEOWfEWcf0eWfESXe0SXfEWYekSVeUKXfEWxklawkVaZfEWWekOUekOWekSYfESZe0eXekWYfEWZe0WZe0eVeUSWeETAnmDCoWLJpmbxy4P1zoXwyoLIpWbjvXjivnjgu3bfu3beunWvkFWxkle/nmDivXiWekTnwXvkwHrCoWOuj1SXe0TEo2TDo2PlwHratnKZfEbQrWvPrWuafUfbt3PJp2agg0v0zYX0zYSfgkvKp2frxX7mwHrlv3rsxn/yzIPgvHfduXWXe0XuyIDzzISsjVO1lVm0lFitjVPzzIPqxX7duna0lVncuHTLqGjvyIHeuXXxyYGZfUayk1iyk1e2lln1zYTEomO2llrbtnOafkjFpGSbfkfZtXLhvHfkv3nqxH3mwXujhU3KqWizlFilh06khk2fgkqsjlPHpWXJp2erjVOhg0yWe0SliE+XekShhEvAn2D///+gx8TWAAAARnRSTlMACVCTtsRl7Pv7+vxkBab7pZv5+ZlL/UnU/f3SJCVe+Fx39naA9/75XSMh0/3SSkia+pil/KRj7Pr662JPkrbP7OLQ0JFOijI1MwAAAAFiS0dEorDd34wAAAAJcEhZcwAACxMAAAsTAQCanBgAAAAHdElNRQfnAg0IDx2lsiuJAAACLElEQVRIx2NkGAXkAUYmZhZWPICFmYkRVQcbOwenmzse4MbFzc6DpIGXj8PD04sA8PbhF+CFaxEU8iWkAQT8hEVgOkTF/InR4eUVICYO1SIhCRMLDAoKDvFDVhUaEhwUFAjjSUlDdMiEhcOEItzdI6OiYxA6YqODIt3dI2DcuDBZsBY5eVTr4xMSYcyk5BRUOXkFsBZFJTQnp6alQxgZmVloUkrKYC0qqmji2WE5EEZuWB6alKoKdi35YQUQRkFYPpFaCouKIYzi6EDitJSUlsGY5RWVRGjJLyxNy4ZxqtIqqvOxaVELQwZFZdkIJVU1RSiSalAt6rUwUBdWG1CP6pT6gNqwOrgCdQyHNYR5YQFhDXj8MiK1IAeyN6aORiyBjByVTc0FqBoKWpqwRCVSgilOaY2OaUPw29qjOzqLvTAchoss47u6EZyYnngUSRwpuTe6D+6qaFQdOPNLRzOM1dzhRZyW+CZouHk3dWLXglFcFIflQhj9YWjJGlZcaKAVSvjyPrRQ0oQVKDAQHlYFYUwIm4gqExGmBSkutaVQJeomwViTJqPK6OhCy2Q9sQBk8cY0DxjTJw0lAQWK6cOKfgNhpKK7ZMpUeF3jPa28BCETamiEqJKM+X1gxvWXpoUjVIVPnwErw71nmpgiqiQGBjNzbgs3j1nus+fMndc+Cwm0T52/oNR9lsdCS24ra7Tq1cbWjpXV3sHRCb1idXZ0sGdltXNxRateRwHRAACYHutzk/2I5QAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAyMy0wMi0xM1QwODoxNToyOSswMDowMEUnN7UAAAAldEVYdGRhdGU6bW9kaWZ5ADIwMjMtMDItMTNUMDg6MTU6MjkrMDA6MDA0eo8JAAAAKHRFWHRkYXRlOnRpbWVzdGFtcAAyMDIzLTAyLTEzVDA4OjE1OjI5KzAwOjAwY2+u1gAAAABJRU5ErkJggg=="
+                      ></image>
+                    </svg>
+                    <svg
+                      version="1.1"
+                      class="contactless"
+                      id="Layer_1"
+                      xmlns="http://www.w3.org/2000/svg"
+                      xmlns:xlink="http://www.w3.org/1999/xlink"
+                      x="0px"
+                      y="0px"
+                      width="20px"
+                      height="20px"
+                      viewBox="0 0 50 50"
+                      xml:space="preserve"
+                    >
+                      <image
+                        id="image0"
+                        width="50"
+                        height="50"
+                        x="0"
+                        y="0"
+                        href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAQAAAC0NkA6AAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAAmJLR0QA/4ePzL8AAAAJcEhZcwAACxMAAAsTAQCanBgAAAAHdElNRQfnAg0IEzgIwaKTAAADDklEQVRYw+1XS0iUURQ+f5qPyjQflGRFEEFK76koKGxRbWyVVLSOgsCgwjZBJJYuKogSIoOonUK4q3U0WVBWFPZYiIE6kuArG3VGzK/FfPeMM/MLt99/NuHdfPd888/57jn3nvsQWWj/VcMlvMMd5KRTogqx9iCdIjUUmcGR9ImUYowyP3xNGQJoRLVaZ2DaZf8kyjEJALhI28ELioyiwC+Rc3QZwRYyO/DH51hQgWm6DMIh10KmD4u9O16K49itVoPOAmcGAWWOepXIRScAoJZ2Frro8oN+EyTT6lWkkg6msZfMSR35QTJmjU0g15tIGSJ08ZZMJkJkHpNZgSkyXosS13TkJpZ62mPIJvOSzC1bp8vRhhCakEk7G9/o4gmZdbpsTcKu0m63FbnBP9Qrc15zbkbemfgNDtEOI8NO5L5O9VYyRYgmJayZ9nPaxZrSjW4+F6Uw9yQqIiIZwhp2huQTf6OIvCZyGM6gDJBZbyXifJXr7FZjGXsdxADxI7HUJFB6iWvsIhFpkoiIiGTJfjJfiCuJg2ZEspq9EHGVpYgzKqwJqSAOEwuJQ/pxPvE3cYltJCLdxBLiSKKIE5HxJKcTRNeadxfhDiuYw44zVs1dxKwRk/uCxIiQkxKBsSctRVAge9g1E15EHE6yRUaJecRxcWlukdRIbGFOSZCMWQA/iWauIP3slREHXPyliqBcrrD71AmzZ+rD1Mt2Yr8TZc/UR4/YtFnbijnHi3UrN9vKQ9rPaJf867ZiaqDB+czeKYmd3pNa6fuI75MiC0uXXSR5aEMf7s7a6r/PudVXkjFb/SsrCRfROk0Fx6+H1i9kkTGn/E1vEmt1m089fh+RKdQ5O+xNJPUicUIjO0Dm7HwvErEr0YxeibL1StSh37STafE4I7zcBdRq1DiOkdmlTJVnkQTBTS7X1FYyvfO4piaInKbDCDaT2anLudYXCRFsQBgAcIF2/Okwgvz5+Z4tsw118dzruvIvjhTB+HOuWy8UvovEH6beitBKxDyxm9MmISKCWrzB7bSlaqGlsf0FC0gMjzTg6GgAAAAldEVYdGRhdGU6Y3JlYXRlADIwMjMtMDItMTNUMDg6MTk6NTYrMDA6MDCjlq7LAAAAJXRFWHRkYXRlOm1vZGlmeQAyMDIzLTAyLTEzVDA4OjE5OjU2KzAwOjAw0ssWdwAAACh0RVh0ZGF0ZTp0aW1lc3RhbXAAMjAyMy0wMi0xM1QwODoxOTo1NiswMDowMIXeN6gAAAAASUVORK5CYII="
+                      ></image>
+                    </svg>
+                    <p class="number">
+                      **** **** ****
+                      {{ savedPaymentMethod.card?.last4 || "****" }}
+                    </p>
+                    <p class="valid_thru">VALID THRU</p>
+                    <p class="date_8264">
+                      {{
+                        formatExpiryDate(
+                          savedPaymentMethod.card?.expMonth,
+                          savedPaymentMethod.card?.expYear
+                        )
+                      }}
+                    </p>
+                    <p class="name">
+                      {{ store?.user?.username?.toUpperCase() || "CARDHOLDER" }}
+                    </p>
+                  </div>
+                  <div class="flip-card-back">
+                    <div class="strip"></div>
+                    <div class="mstrip"></div>
+                    <div class="sstrip">
+                      <p class="code">***</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="payment-method-actions">
+                <button
+                  class="btn btn--secondary"
+                  type="button"
+                  @click="changePaymentMethod"
+                >
+                  שנה אמצעי תשלום
+                </button>
+              </div>
+            </div>
+
+            <!-- Always render CreditCardForm (even if hidden) so ref is available -->
             <CreditCardForm
               ref="creditCardForm"
               v-model="creditCard"
               :errors="errors"
+              :amount="totalPrice"
+              currency="ils"
+              :style="{
+                display:
+                  !savedPaymentMethod || showChangePaymentMethod
+                    ? 'block'
+                    : 'none',
+              }"
               @update:errors="errors = $event"
               @payment-method-created="onPaymentMethodCreated"
               @validation-changed="onCreditCardValidationChanged"
@@ -602,6 +725,7 @@ import { useToast } from "@/composables/useToast";
 import { useMainStore } from "@/store/index";
 import { getCurrentLocation } from "@/utils/geolocation";
 import citiesData from "@/APIS/AdressFromIsrael.json";
+import { loadStripe } from "@stripe/stripe-js";
 
 export default {
   name: "PersonalRequestCall",
@@ -664,6 +788,9 @@ export default {
       clientSecret: null,
       isProcessingPayment: false,
       isCreditCardValid: false, // Track credit card validation status
+      paymentMethodId: null, // Saved payment method ID
+      savedPaymentMethod: null, // Saved payment method from DB
+      showChangePaymentMethod: false, // Show option to change payment method
     };
   },
   computed: {
@@ -686,6 +813,22 @@ export default {
         total += 10;
       }
       return total;
+    },
+  },
+  watch: {
+    "store.user": {
+      handler(newUser) {
+        console.log(
+          "[PersonalRequestCall] 👀 store.user changed - checking saved payment method"
+        );
+        if (newUser && this.currentStep === 4 && this.totalPrice > 0) {
+          // Re-check saved payment method when user object is loaded
+          this.$nextTick(() => {
+            this.checkSavedPaymentMethod();
+          });
+        }
+      },
+      immediate: false,
     },
   },
   async created() {
@@ -821,6 +964,22 @@ export default {
 
       if (this.currentStep < 4) {
         this.currentStep++;
+
+        // When moving to step 4, check if user has saved payment method
+        if (this.currentStep === 4) {
+          console.log(
+            "[PersonalRequestCall] 🔄 Moving to step 4, checking for saved payment method"
+          );
+          // Wait a bit for store to be ready, then check
+          await this.$nextTick();
+          // Try multiple times if user is not loaded yet
+          let attempts = 0;
+          while (attempts < 5 && !this.store?.user) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            attempts++;
+          }
+          await this.checkSavedPaymentMethod();
+        }
       }
     },
     validateCategoriesMatch() {
@@ -1301,8 +1460,13 @@ export default {
         return;
       }
 
-      // Validate credit card if there's a price
-      if (this.totalPrice > 0 && !this.validateCreditCard()) {
+      // Validate credit card if there's a price and no saved payment method
+      if (
+        this.totalPrice > 0 &&
+        !this.savedPaymentMethod &&
+        !this.isCreditCardValid
+      ) {
+        this.toast?.showError("אנא מלא את פרטי כרטיס האשראי");
         return;
       }
 
@@ -1366,12 +1530,64 @@ export default {
 
         callData.subcategoryInfo = this.subcategoryInfoArray;
 
+        // Create payment method using CreditCardForm component (only if no saved payment method)
+        if (this.totalPrice > 0 && !this.paymentMethodId) {
+          try {
+            // Check if CreditCardForm component is available
+            if (!this.$refs.creditCardForm) {
+              this.isLoading = false;
+              this.toast?.showError("טופס כרטיס האשראי לא זמין. אנא נסה שוב.");
+              return;
+            }
+
+            // Use CreditCardForm's createPaymentMethod method
+            const paymentMethodId =
+              await this.$refs.creditCardForm.createPaymentMethod();
+
+            if (!paymentMethodId) {
+              this.isLoading = false;
+              this.toast?.showError("שגיאה ביצירת אמצעי תשלום. אנא נסה שוב.");
+              return;
+            }
+
+            // Store payment method ID to send to server
+            this.paymentMethodId = paymentMethodId;
+            callData.paymentMethodId = paymentMethodId;
+
+            // Save payment method to DB
+            await this.savePaymentMethodToDB(paymentMethodId);
+          } catch (error) {
+            console.error(
+              "[PersonalRequestCall] ❌ Error creating payment method:",
+              error
+            );
+            this.isLoading = false;
+            this.toast?.showError(
+              error.message || "שגיאה ביצירת אמצעי תשלום. אנא נסה שוב."
+            );
+            return;
+          }
+        } else if (this.totalPrice > 0 && this.paymentMethodId) {
+          // Use saved payment method
+          callData.paymentMethodId = this.paymentMethodId;
+        }
+
         // Payment Intent will be created after job creation (when we have the real jobId)
         // We'll redirect to payment page after job is created
 
         const createCallUrl = `${URL}/create-call-v2`;
         this.requestStartTime = Date.now();
         this.startPatienceMessageInterval();
+
+        // Log what we're sending to server
+        console.log("[PersonalRequestCall] 📤 Sending callData to server:", {
+          paymentMethodId: callData.paymentMethodId || "null",
+          hasPaymentMethodId: !!callData.paymentMethodId,
+          totalPrice: this.totalPrice,
+          userId: callData.userId || "null",
+          callDataKeys: Object.keys(callData),
+          url: createCallUrl,
+        });
 
         const response = await axios.post(createCallUrl, callData, {
           headers: { "Content-Type": "application/json" },
@@ -1531,90 +1747,69 @@ export default {
           return;
         }
 
-        // Step 2: Create payment method
-        const cardNumberDigits = this.creditCard.cardNumber.replace(/\s/g, "");
-        const [month, year] = this.creditCard.expiryDate.split("/");
+        // Step 2: Use payment method ID (should already be created in onSubmitCall)
+        const paymentMethodIdToUse = this.paymentMethodId;
 
-        const { error: pmError, paymentMethod } =
-          await this.stripe.createPaymentMethod({
-            type: "card",
-            card: {
-              number: cardNumberDigits,
-              exp_month: parseInt(month),
-              exp_year: parseInt("20" + year),
-              cvc: this.creditCard.cvv,
-            },
-            billing_details: {
-              name: this.creditCard.cardName,
-            },
-          });
-
-        if (pmError || !paymentMethod) {
+        if (!paymentMethodIdToUse) {
           this.isLoading = false;
           this.isProcessingPayment = false;
-          this.toast?.showError(
-            pmError?.message || "שגיאה ביצירת אמצעי תשלום. אנא נסה שוב."
-          );
+          this.toast?.showError("אמצעי תשלום לא נמצא. אנא נסה שוב.");
           return;
         }
 
-        // Step 3: Confirm payment with Stripe.js
-        const { error, paymentIntent } = await this.stripe.confirmCardPayment(
-          intentData.clientSecret,
+        // Step 3: Get userId
+        const userId =
+          this.store?.user?._id ||
+          this.store?.user?.id ||
+          this.$route.params.id;
+        if (!userId) {
+          this.isLoading = false;
+          this.isProcessingPayment = false;
+          this.toast?.showError("שגיאה באימות המשתמש. אנא נסה שוב.");
+          return;
+        }
+
+        // Step 4: Extract paymentIntentId from clientSecret
+        // clientSecret format: pi_xxx_secret_xxx
+        const paymentIntentId = intentData.clientSecret.split("_secret_")[0];
+
+        // Step 5: Confirm payment with saved payment method via server
+        const confirmResponse = await fetch(
+          `${URL}/api/payments/confirm-with-saved-method`,
           {
-            payment_method: paymentMethod.id,
-          }
-        );
-
-        if (error) {
-          this.isLoading = false;
-          this.isProcessingPayment = false;
-          this.toast?.showError(
-            error.message || "שגיאה באישור התשלום. אנא נסה שוב."
-          );
-          return;
-        }
-
-        // Step 4: Update server with payment confirmation
-        if (paymentIntent && paymentIntent.status === "requires_capture") {
-          const confirmResponse = await fetch(`${URL}/api/payments/confirm`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
+              paymentIntentId: paymentIntentId,
+              paymentMethodId: paymentMethodIdToUse,
+              userId: userId,
               jobId: jobId,
-              paymentIntentId: paymentIntent.id,
-              stripeStatus: paymentIntent.status,
             }),
-          });
-
-          const confirmData = await confirmResponse.json();
-
-          if (confirmData.success) {
-            this.isLoading = false;
-            this.isProcessingPayment = false;
-            this.toast?.showSuccess(
-              "הקריאה נשלחה להנדימן בהצלחה. התשלום אושר בהצלחה! הכסף יועבר לאחר אישור סיום העבודה."
-            );
-            setTimeout(() => {
-              this.$router.push({
-                name: "Dashboard",
-                params: { id: this.$route.params.id },
-              });
-            }, 3000);
-          } else {
-            this.isLoading = false;
-            this.isProcessingPayment = false;
-            this.toast?.showError(
-              confirmData.message ||
-                "התשלום אושר אך יש בעיה בעדכון השרת. אנא פנה לתמיכה."
-            );
           }
+        );
+
+        const confirmData = await confirmResponse.json();
+
+        if (confirmData.success) {
+          this.isLoading = false;
+          this.isProcessingPayment = false;
+          this.toast?.showSuccess(
+            "הקריאה נשלחה להנדימן בהצלחה. התשלום אושר בהצלחה! הכסף יועבר לאחר אישור סיום העבודה."
+          );
+          setTimeout(() => {
+            this.$router.push({
+              name: "Dashboard",
+              params: { id: this.$route.params.id },
+            });
+          }, 3000);
         } else {
           this.isLoading = false;
           this.isProcessingPayment = false;
-          this.toast?.showError("מצב תשלום לא צפוי. אנא פנה לתמיכה.");
+          this.toast?.showError(
+            confirmData.message || "שגיאה באישור התשלום. אנא נסה שוב."
+          );
         }
       } catch (error) {
         console.error("Payment error:", error);
@@ -1622,6 +1817,159 @@ export default {
         this.isProcessingPayment = false;
         this.toast?.showError("שגיאה בעיבוד התשלום. אנא נסה שוב.");
       }
+    },
+    async checkSavedPaymentMethod() {
+      try {
+        // Try to get userId from multiple sources
+        let userId = this.store?.user?._id || this.store?.user?.id;
+
+        // If not in store, try to get from route params
+        if (!userId) {
+          userId = this.$route.params.id;
+        }
+
+        console.log("[PersonalRequestCall] 🔍 Checking store:", {
+          store: this.store,
+          user: this.store?.user,
+          userId: userId,
+          routeParams: this.$route.params,
+        });
+
+        if (!userId) {
+          console.log(
+            "[PersonalRequestCall] ⚠️ Cannot check saved payment method - no userId"
+          );
+          this.savedPaymentMethod = null;
+          return;
+        }
+
+        console.log(
+          `[PersonalRequestCall] 🔍 Checking for saved payment method for user ${userId}`
+        );
+
+        const { URL } = await import("@/Url/url");
+        const endpoint = `${URL}/api/users/${userId}/payment-method`;
+        console.log("[PersonalRequestCall] 📡 Calling endpoint:", endpoint);
+
+        const response = await axios.get(endpoint);
+
+        console.log("[PersonalRequestCall] 📥 Payment method check response:", {
+          status: response.status,
+          success: response.data?.success,
+          hasPaymentMethod: response.data?.hasPaymentMethod,
+          paymentMethodId: response.data?.paymentMethodId || "null",
+          stripeCustomerId: response.data?.stripeCustomerId || "null",
+          card: response.data?.card || "null",
+          fullResponse: response.data,
+        });
+
+        if (response.data && response.data.success) {
+          if (response.data.hasPaymentMethod) {
+            console.log(
+              "[PersonalRequestCall] ✅ Found saved payment method:",
+              response.data
+            );
+            this.savedPaymentMethod = response.data;
+            this.paymentMethodId = response.data.paymentMethodId;
+            // Use saved payment method automatically, don't show form
+            this.showChangePaymentMethod = false;
+            this.isCreditCardValid = true; // Mark as valid since we have saved payment method
+            console.log("[PersonalRequestCall] ✅ Saved payment method set:", {
+              savedPaymentMethod: this.savedPaymentMethod ? "exists" : "null",
+              paymentMethodId: this.paymentMethodId,
+              showChangePaymentMethod: this.showChangePaymentMethod,
+              isCreditCardValid: this.isCreditCardValid,
+            });
+          } else {
+            console.log(
+              "[PersonalRequestCall] ℹ️ No saved payment method found (hasPaymentMethod: false)"
+            );
+            this.showChangePaymentMethod = false;
+            this.savedPaymentMethod = null;
+            this.paymentMethodId = null;
+          }
+        } else {
+          console.log(
+            "[PersonalRequestCall] ⚠️ Server response indicates no payment method",
+            {
+              hasData: !!response.data,
+              success: response.data?.success,
+              message: response.data?.message,
+            }
+          );
+          this.savedPaymentMethod = null;
+          this.paymentMethodId = null;
+        }
+      } catch (error) {
+        // Handle errors
+        if (
+          error.code === "ECONNREFUSED" ||
+          error.message?.includes("Network Error") ||
+          error.message?.includes("timeout")
+        ) {
+          console.error(
+            "[PersonalRequestCall] ❌ Error checking payment method:",
+            error.message
+          );
+        } else {
+          console.error(
+            "[PersonalRequestCall] ❌ Error checking payment method:",
+            error
+          );
+        }
+        // Error checking payment method, show form anyway
+        this.showChangePaymentMethod = false;
+        this.savedPaymentMethod = null;
+      }
+    },
+    async savePaymentMethodToDB(paymentMethodId) {
+      try {
+        const userId = this.store?.user?._id || this.store?.user?.id;
+        if (!userId || !paymentMethodId) {
+          return;
+        }
+
+        const { URL } = await import("@/Url/url");
+        const endpoint = `${URL}/api/users/${userId}/payment-method`;
+        const response = await axios.post(endpoint, { paymentMethodId });
+
+        if (response.data && response.data.success) {
+          this.savedPaymentMethod = response.data;
+        }
+      } catch (error) {
+        // Error saving payment method, but continue anyway
+      }
+    },
+    onPaymentMethodCreated(paymentMethodId) {
+      this.paymentMethodId = paymentMethodId;
+      // Save payment method to DB
+      this.savePaymentMethodToDB(paymentMethodId);
+    },
+    onCreditCardValidationChanged(isValid) {
+      this.isCreditCardValid = isValid;
+    },
+    changePaymentMethod() {
+      this.showChangePaymentMethod = true;
+      // Keep savedPaymentMethod and paymentMethodId so user can go back
+    },
+    getCardBrandName(brand) {
+      if (!brand) return "CARD";
+      const brandMap = {
+        visa: "VISA",
+        mastercard: "MASTERCARD",
+        amex: "AMEX",
+        discover: "DISCOVER",
+        diners: "DINERS",
+        jcb: "JCB",
+        unionpay: "UNIONPAY",
+      };
+      return brandMap[brand.toLowerCase()] || brand.toUpperCase();
+    },
+    formatExpiryDate(month, year) {
+      if (!month || !year) return "** / **";
+      const formattedMonth = String(month).padStart(2, "0");
+      const formattedYear = String(year).slice(-2);
+      return `${formattedMonth} / ${formattedYear}`;
     },
   },
   beforeUnmount() {
@@ -1637,6 +1985,21 @@ export default {
       }
     } catch (err) {
       // Silent fail - location is optional
+    }
+
+    // Check for saved payment method if already on step 4
+    if (this.currentStep === 4 && this.totalPrice > 0) {
+      console.log(
+        "[PersonalRequestCall] 🔄 mounted - checking saved payment method (already on step 4)"
+      );
+      // Wait for user to load
+      await this.$nextTick();
+      let attempts = 0;
+      while (attempts < 5 && !this.store?.user) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        attempts++;
+      }
+      await this.checkSavedPaymentMethod();
     }
   },
 };
@@ -3314,6 +3677,296 @@ $danger: #ff3b3b;
 
   .map-modal__map {
     height: 50vh;
+  }
+}
+
+.saved-payment-method-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 24px;
+  padding: 20px 0;
+}
+
+.flip-card {
+  background-color: transparent;
+  width: 100%;
+  max-width: 320px;
+  height: 200px;
+  perspective: 1000px;
+  color: white;
+
+  @media (max-width: 768px) {
+    max-width: 280px;
+    height: 175px;
+  }
+}
+
+.heading_8264 {
+  position: absolute;
+  letter-spacing: 0.2em;
+  font-size: 0.9em;
+  top: 2em;
+  left: 18.6em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: $orange;
+
+  @media (max-width: 768px) {
+    font-size: 0.8em;
+    top: 1.8em;
+    left: 16em;
+  }
+}
+
+.logo {
+  position: absolute;
+  top: 6.8em;
+  left: 11.7em;
+
+  @media (max-width: 768px) {
+    width: 30px;
+    height: 30px;
+    top: 6em;
+    left: 10em;
+  }
+}
+
+.chip {
+  position: absolute;
+  top: 2.3em;
+  left: 1.5em;
+
+  @media (max-width: 768px) {
+    width: 25px;
+    height: 25px;
+    top: 2em;
+    left: 1.2em;
+  }
+}
+
+.contactless {
+  position: absolute;
+  top: 3.5em;
+  left: 12.4em;
+
+  @media (max-width: 768px) {
+    width: 18px;
+    height: 18px;
+    top: 3.2em;
+    left: 11em;
+  }
+}
+
+.number {
+  position: absolute;
+  font-weight: bold;
+  font-size: 1em;
+  top: 8.3em;
+  left: 1.6em;
+  letter-spacing: 0.1em;
+  font-family: "Courier New", monospace;
+  color: $orange;
+
+  @media (max-width: 768px) {
+    font-size: 0.9em;
+    top: 7.5em;
+    left: 1.4em;
+  }
+}
+
+.valid_thru {
+  position: absolute;
+  font-weight: bold;
+  top: 12.5em;
+  font-size: 0.5em;
+  left: 3.2em;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.7);
+
+  @media (max-width: 768px) {
+    font-size: 0.45em;
+    top: 11.5em;
+    left: 2.8em;
+  }
+}
+
+.date_8264 {
+  position: absolute;
+  font-weight: bold;
+  font-size: 0.8em;
+  top: 13.6em;
+  left: 3.2em;
+  font-family: "Courier New", monospace;
+  color: $orange;
+
+  @media (max-width: 768px) {
+    font-size: 0.7em;
+    top: 12.5em;
+    left: 2.8em;
+  }
+}
+
+.name {
+  position: absolute;
+  font-weight: bold;
+  font-size: 0.8em;
+  top: 16.1em;
+  left: 2em;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $orange;
+
+  @media (max-width: 768px) {
+    font-size: 0.7em;
+    top: 15em;
+    left: 1.8em;
+  }
+}
+
+.strip {
+  position: absolute;
+  background-color: black;
+  width: 15em;
+  height: 1.5em;
+  top: 2.4em;
+  background: repeating-linear-gradient(
+    45deg,
+    #303030,
+    #303030 10px,
+    #202020 10px,
+    #202020 20px
+  );
+
+  @media (max-width: 768px) {
+    width: 13em;
+    height: 1.3em;
+    top: 2.2em;
+  }
+}
+
+.mstrip {
+  position: absolute;
+  background-color: rgb(255, 255, 255);
+  width: 8em;
+  height: 0.8em;
+  top: 5em;
+  left: 0.8em;
+  border-radius: 2.5px;
+
+  @media (max-width: 768px) {
+    width: 7em;
+    height: 0.7em;
+    top: 4.5em;
+    left: 0.7em;
+  }
+}
+
+.sstrip {
+  position: absolute;
+  background-color: rgb(255, 255, 255);
+  width: 4.1em;
+  height: 0.8em;
+  top: 5em;
+  left: 10em;
+  border-radius: 2.5px;
+
+  @media (max-width: 768px) {
+    width: 3.6em;
+    height: 0.7em;
+    top: 4.5em;
+    left: 9em;
+  }
+}
+
+.code {
+  font-weight: bold;
+  text-align: center;
+  margin: 0.2em;
+  color: black;
+  font-size: 0.8em;
+}
+
+.flip-card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  transition: transform 0.8s;
+  transform-style: preserve-3d;
+}
+
+.flip-card:hover .flip-card-inner {
+  transform: rotateY(180deg);
+}
+
+.flip-card-front,
+.flip-card-back {
+  box-shadow: 0 8px 14px 0 rgba(0, 0, 0, 0.2);
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  border-radius: 1rem;
+}
+
+.flip-card-front {
+  box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 2px,
+    rgba(0, 0, 0, 0.3) 0px 7px 13px -3px, rgba(0, 0, 0, 0.2) 0px -1px 0px inset;
+  background-color: #171717;
+}
+
+.flip-card-back {
+  box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 2px,
+    rgba(0, 0, 0, 0.3) 0px 7px 13px -3px, rgba(0, 0, 0, 0.2) 0px -1px 0px inset;
+  background-color: #171717;
+  transform: rotateY(180deg);
+}
+
+.payment-method-actions {
+  display: flex;
+  gap: 12px;
+
+  .btn {
+    flex: 1;
+    padding: 14px 24px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+
+    &--primary {
+      background: $orange;
+      color: #000;
+
+      &:hover {
+        background: $orange2;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba($orange, 0.4);
+      }
+    }
+
+    &--secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: rgba(255, 255, 255, 0.3);
+      }
+    }
+  }
+
+  @media (max-width: 768px) {
+    flex-direction: column;
   }
 }
 </style>
