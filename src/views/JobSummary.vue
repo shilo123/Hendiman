@@ -3,11 +3,7 @@
     <div class="jobSummary__container">
       <div class="jobSummary__header">
         <h1 class="jobSummary__title">סיכום עבודה</h1>
-        <button
-          class="jobSummary__close"
-          type="button"
-          @click="$router.push(`/Dashboard/${userId}`)"
-        >
+        <button class="jobSummary__close" type="button" @click="goToDashboard">
           ✕
         </button>
       </div>
@@ -100,11 +96,26 @@
         <div v-else class="summaryCard">
           <h2 class="summaryCard__title">פרטים כספיים</h2>
           <div class="summaryCard__body">
-            <div class="infoRow infoRow--total">
-              <span class="infoRow__label">סה״כ שולם:</span>
-              <span class="infoRow__value money money--total"
-                >{{ jobInfo?.price || 0 }} ₪</span
+            <div class="infoRow">
+              <span class="infoRow__label">סכום שנגבה:</span>
+              <span class="infoRow__value money"
+                >{{
+                  paymentInfo?.amountWithVAT ||
+                  paymentInfo?.totalAmount ||
+                  jobInfo?.price ||
+                  0
+                }}
+                ₪</span
               >
+            </div>
+            <div class="infoRow infoRow--total">
+              <span class="infoRow__label">חשבונית במייל</span>
+              <span
+                class="infoRow__value"
+                style="color: rgba(255, 255, 255, 0.7); font-size: 14px"
+              >
+                נשלחה למייל שלך
+              </span>
             </div>
           </div>
         </div>
@@ -153,6 +164,10 @@ export default {
   },
   computed: {
     userId() {
+      // Try to get userId from jobInfo.clientId if available, otherwise from route/store
+      if (this.jobInfo?.clientId) {
+        return this.jobInfo.clientId.toString();
+      }
       return this.store?.user?._id || this.$route.params.id;
     },
     isHandyman() {
@@ -234,6 +249,22 @@ export default {
       }
     },
 
+    goToDashboard() {
+      // Get userId from jobInfo if available, otherwise from route/store
+      const userId =
+        this.jobInfo?.clientId?.toString() ||
+        this.jobInfo?.clientId ||
+        this.store?.user?._id ||
+        this.$route.params.id;
+      if (userId) {
+        // Pass query parameter to indicate we're coming from JobSummary after rating
+        this.$router.push(
+          `/Dashboard/${userId}?fromJobSummary=true&jobId=${this.jobId}`
+        );
+      } else {
+        this.$router.push("/");
+      }
+    },
     async shareJob() {
       try {
         const shareData = {

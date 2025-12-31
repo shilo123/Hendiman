@@ -818,9 +818,6 @@ export default {
   watch: {
     "store.user": {
       handler(newUser) {
-        console.log(
-          "[PersonalRequestCall] 👀 store.user changed - checking saved payment method"
-        );
         if (newUser && this.currentStep === 4 && this.totalPrice > 0) {
           // Re-check saved payment method when user object is loaded
           this.$nextTick(() => {
@@ -967,9 +964,6 @@ export default {
 
         // When moving to step 4, check if user has saved payment method
         if (this.currentStep === 4) {
-          console.log(
-            "[PersonalRequestCall] 🔄 Moving to step 4, checking for saved payment method"
-          );
           // Wait a bit for store to be ready, then check
           await this.$nextTick();
           // Try multiple times if user is not loaded yet
@@ -1580,14 +1574,6 @@ export default {
         this.startPatienceMessageInterval();
 
         // Log what we're sending to server
-        console.log("[PersonalRequestCall] 📤 Sending callData to server:", {
-          paymentMethodId: callData.paymentMethodId || "null",
-          hasPaymentMethodId: !!callData.paymentMethodId,
-          totalPrice: this.totalPrice,
-          userId: callData.userId || "null",
-          callDataKeys: Object.keys(callData),
-          url: createCallUrl,
-        });
 
         const response = await axios.post(createCallUrl, callData, {
           headers: { "Content-Type": "application/json" },
@@ -1828,75 +1814,29 @@ export default {
           userId = this.$route.params.id;
         }
 
-        console.log("[PersonalRequestCall] 🔍 Checking store:", {
-          store: this.store,
-          user: this.store?.user,
-          userId: userId,
-          routeParams: this.$route.params,
-        });
-
         if (!userId) {
-          console.log(
-            "[PersonalRequestCall] ⚠️ Cannot check saved payment method - no userId"
-          );
           this.savedPaymentMethod = null;
           return;
         }
 
-        console.log(
-          `[PersonalRequestCall] 🔍 Checking for saved payment method for user ${userId}`
-        );
-
         const { URL } = await import("@/Url/url");
         const endpoint = `${URL}/api/users/${userId}/payment-method`;
-        console.log("[PersonalRequestCall] 📡 Calling endpoint:", endpoint);
 
         const response = await axios.get(endpoint);
 
-        console.log("[PersonalRequestCall] 📥 Payment method check response:", {
-          status: response.status,
-          success: response.data?.success,
-          hasPaymentMethod: response.data?.hasPaymentMethod,
-          paymentMethodId: response.data?.paymentMethodId || "null",
-          stripeCustomerId: response.data?.stripeCustomerId || "null",
-          card: response.data?.card || "null",
-          fullResponse: response.data,
-        });
-
         if (response.data && response.data.success) {
           if (response.data.hasPaymentMethod) {
-            console.log(
-              "[PersonalRequestCall] ✅ Found saved payment method:",
-              response.data
-            );
             this.savedPaymentMethod = response.data;
             this.paymentMethodId = response.data.paymentMethodId;
             // Use saved payment method automatically, don't show form
             this.showChangePaymentMethod = false;
             this.isCreditCardValid = true; // Mark as valid since we have saved payment method
-            console.log("[PersonalRequestCall] ✅ Saved payment method set:", {
-              savedPaymentMethod: this.savedPaymentMethod ? "exists" : "null",
-              paymentMethodId: this.paymentMethodId,
-              showChangePaymentMethod: this.showChangePaymentMethod,
-              isCreditCardValid: this.isCreditCardValid,
-            });
           } else {
-            console.log(
-              "[PersonalRequestCall] ℹ️ No saved payment method found (hasPaymentMethod: false)"
-            );
             this.showChangePaymentMethod = false;
             this.savedPaymentMethod = null;
             this.paymentMethodId = null;
           }
         } else {
-          console.log(
-            "[PersonalRequestCall] ⚠️ Server response indicates no payment method",
-            {
-              hasData: !!response.data,
-              success: response.data?.success,
-              message: response.data?.message,
-            }
-          );
           this.savedPaymentMethod = null;
           this.paymentMethodId = null;
         }
@@ -1989,9 +1929,6 @@ export default {
 
     // Check for saved payment method if already on step 4
     if (this.currentStep === 4 && this.totalPrice > 0) {
-      console.log(
-        "[PersonalRequestCall] 🔄 mounted - checking saved payment method (already on step 4)"
-      );
       // Wait for user to load
       await this.$nextTick();
       let attempts = 0;

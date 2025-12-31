@@ -25,6 +25,7 @@ const {
   getCollectionPayments,
   getCollectionChats,
   getCollectionFinancials,
+  getCollectionInquiries,
 } = require("./config/database");
 const setupPassport = require("./config/passport");
 const setupAuthRoutes = require("./routes/auth");
@@ -46,6 +47,53 @@ const {
   updatePlatformFeePercent,
 } = require("./services/stripeService");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
+// Helper function to read dry-data.json and get MAAM percentage
+function getMaamPercent() {
+  try {
+    const dryDataPath = path.join(__dirname, "API", "dry-data.json");
+    const dryData = JSON.parse(fs.readFileSync(dryDataPath, "utf8"));
+    return dryData.maam || 18; // Default to 18% if not found
+  } catch (error) {
+    return 18; // Default to 18%
+  }
+}
+
+// Helper function to read dry-data.json and get Monthly-subscriptions
+function getMonthlySubscription() {
+  try {
+    const dryDataPath = path.join(__dirname, "API", "dry-data.json");
+    const dryData = JSON.parse(fs.readFileSync(dryDataPath, "utf8"));
+    return dryData["Monthly-subscriptions"] || 49.9; // Default to 49.9 if not found
+  } catch (error) {
+    return 49.9; // Default to 49.9
+  }
+}
+
+// Helper function to update Monthly-subscriptions in dry-data.json
+function updateMonthlySubscription(amount) {
+  try {
+    const dryDataPath = path.join(__dirname, "API", "dry-data.json");
+    const dryData = JSON.parse(fs.readFileSync(dryDataPath, "utf8"));
+    dryData["Monthly-subscriptions"] = parseFloat(amount);
+    fs.writeFileSync(dryDataPath, JSON.stringify(dryData, null, 2), "utf8");
+    return true;
+  } catch (error) {
+    console.error("Error updating Monthly-subscriptions:", error);
+    return false;
+  }
+}
+
+// Helper function to calculate VAT amounts
+function calculateVAT(amount, vatPercent) {
+  const amountWithoutVAT = amount / (1 + vatPercent / 100);
+  const vatAmount = amount - amountWithoutVAT;
+  return {
+    amountWithoutVAT: Math.round(amountWithoutVAT * 100) / 100,
+    amountWithVAT: Math.round(amount * 100) / 100,
+    vatAmount: Math.round(vatAmount * 100) / 100,
+  };
+}
 
 //מרשמלו
 
@@ -153,6 +201,148 @@ function findAvailablePort(startPort) {
       })
     );
   }
+
+  // Stripe Webhook endpoint - MUST be before bodyParser to receive raw body
+  app.post(
+    "/stripe/webhook",
+    express.raw({ type: "application/json" }),
+    async (req, res) => {
+      const sig = req.headers["stripe-signature"];
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+      if (!webhookSecret) {
+        console.error("Stripe webhook secret not configured");
+        return res.status(500).json({ error: "Webhook secret not configured" });
+      }
+
+      let event;
+
+      try {
+        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+      } catch (err) {
+        console.error("Webhook signature verification failed:", err.message);
+        return res.status(400).send(`Webhook Error: ${err.message}`);
+      }
+
+      const paymentsCol = getCollectionPayments();
+      const financialsCol = getCollectionFinancials();
+      const usersCol = getCollection();
+
+      try {
+        // Handle subscription payment succeeded
+        if (event.type === "invoice.payment_succeeded") {
+          const invoice = event.data.object;
+
+          // Check if this is a subscription invoice
+          if (invoice.subscription) {
+            const subscription = await stripe.subscriptions.retrieve(
+              invoice.subscription
+            );
+
+            // Get customer
+            const customer = await stripe.customers.retrieve(invoice.customer);
+
+            // Find user by customer ID
+            const user = await usersCol.findOne({
+              stripeCustomerId: invoice.customer,
+            });
+
+            if (user) {
+              const amount = invoice.amount_paid / 100; // Convert from agorot to ILS
+              const amountInAgorot = invoice.amount_paid;
+
+              // Save payment record
+              await paymentsCol.insertOne({
+                type: "subscription",
+                amount: amount,
+                amountAgorot: amountInAgorot,
+                userId: user._id,
+                customerId: invoice.customer,
+                subscriptionId: invoice.subscription,
+                invoiceId: invoice.id,
+                status: "succeeded",
+                createdAt: new Date(),
+              });
+
+              // Save to financials
+              const vatPercent = getMaamPercent();
+              const vatAmount = (amount * vatPercent) / 100;
+
+              await financialsCol.insertOne({
+                Revenue: {
+                  Drawings: amount,
+                },
+                createdAt: new Date(),
+              });
+
+              // Update user subscription status
+              await usersCol.updateOne(
+                { _id: user._id },
+                {
+                  $set: {
+                    hasActiveSubscription: true,
+                    lastSubscriptionPayment: new Date(),
+                  },
+                }
+              );
+            }
+          }
+        }
+
+        // Handle subscription payment failed
+        if (event.type === "invoice.payment_failed") {
+          const invoice = event.data.object;
+
+          if (invoice.subscription) {
+            // Find user by customer ID
+            const user = await usersCol.findOne({
+              stripeCustomerId: invoice.customer,
+            });
+
+            if (user) {
+              // Update user subscription status to false
+              await usersCol.updateOne(
+                { _id: user._id },
+                {
+                  $set: {
+                    hasActiveSubscription: false,
+                  },
+                }
+              );
+            }
+          }
+        }
+
+        // Handle subscription cancelled
+        if (event.type === "customer.subscription.deleted") {
+          const subscription = event.data.object;
+
+          // Find user by customer ID
+          const user = await usersCol.findOne({
+            stripeCustomerId: subscription.customer,
+          });
+
+          if (user) {
+            // Update user subscription status to false
+            await usersCol.updateOne(
+              { _id: user._id },
+              {
+                $set: {
+                  hasActiveSubscription: false,
+                },
+              }
+            );
+          }
+        }
+
+        return res.json({ received: true });
+      } catch (error) {
+        console.error("Error processing webhook:", error);
+        return res.status(500).json({ error: "Webhook processing failed" });
+      }
+    }
+  );
+
   app.use(bodyParser.json({ limit: "10mb" }));
   app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
 
@@ -306,6 +496,7 @@ function findAvailablePort(startPort) {
   let collectionRatings;
   let collectionPayments;
   let collectionChats;
+  let collectionInquiries;
 
   try {
     await connectDatabase();
@@ -314,6 +505,7 @@ function findAvailablePort(startPort) {
     collectionRatings = getCollectionRatings();
     collectionPayments = getCollectionPayments();
     collectionChats = getCollectionChats();
+    collectionInquiries = getCollectionInquiries();
   } catch (error) {}
   //
 
@@ -723,6 +915,18 @@ function findAvailablePort(startPort) {
         handymanMatchesJob(handyman, jobData)
       );
 
+      // Filter out blocked handymen (if job has handiman-Blocked array)
+      if (
+        jobData["handiman-Blocked"] &&
+        Array.isArray(jobData["handiman-Blocked"])
+      ) {
+        const blockedIds = jobData["handiman-Blocked"].map((id) => String(id));
+        relevantHandymen = relevantHandymen.filter((handyman) => {
+          const handymanIdStr = String(handyman._id);
+          return !blockedIds.includes(handymanIdStr);
+        });
+      }
+
       // Send push notifications to all relevant handymen
       const notificationPromises = relevantHandymen
         .filter((handyman) => handyman.fcmToken)
@@ -809,7 +1013,7 @@ function findAvailablePort(startPort) {
       }
 
       // Check if user is blocked
-      if (user.isBlocked === true) {
+      if (user.IsBlocked === true || user.isBlocked === true) {
         return res.json({ message: "Blocked" });
       }
 
@@ -1056,6 +1260,16 @@ function findAvailablePort(startPort) {
       });
 
       if (existingUserByEmail) {
+        // בדיקה אם המשתמש חסום
+        if (
+          existingUserByEmail.IsBlocked === true ||
+          existingUserByEmail.isBlocked === true
+        ) {
+          return res.status(403).json({
+            success: false,
+            message: "Blocked",
+          });
+        }
         return res.status(400).json({
           success: false,
           message:
@@ -1070,6 +1284,16 @@ function findAvailablePort(startPort) {
         });
 
         if (existingUserByPhone) {
+          // בדיקה אם המשתמש חסום
+          if (
+            existingUserByPhone.IsBlocked === true ||
+            existingUserByPhone.isBlocked === true
+          ) {
+            return res.status(403).json({
+              success: false,
+              message: "Blocked",
+            });
+          }
           return res.status(400).json({
             success: false,
             message:
@@ -1086,6 +1310,16 @@ function findAvailablePort(startPort) {
         });
 
         if (existingUserByGoogleId) {
+          // בדיקה אם המשתמש חסום
+          if (
+            existingUserByGoogleId.IsBlocked === true ||
+            existingUserByGoogleId.isBlocked === true
+          ) {
+            return res.status(403).json({
+              success: false,
+              message: "Blocked",
+            });
+          }
           return res.status(400).json({
             success: false,
             message: "משתמש Google כבר קיים במערכת. אנא התחבר לחשבון הקיים.",
@@ -1232,6 +1466,14 @@ function findAvailablePort(startPort) {
         // הוסף שדות דירוג ומספר עבודות עם ערך התחלתי של 0
         userData.rating = 0;
         userData.jobsDone = 0;
+
+        // בדוק אם זה אחד מ-100 הנדימנים הראשונים
+        const handymenCount = await collection.countDocuments({
+          isHandyman: true,
+        });
+        if (handymenCount < 100) {
+          userData.handimanFree = true;
+        }
       }
 
       const result = await collection.insertOne(userData);
@@ -1293,12 +1535,17 @@ function findAvailablePort(startPort) {
       } = req.query;
 
       const query = {};
-      if (status && status !== "all") {
+      // Always exclude deleted/cancelled jobs
+      query.isDeleted = { $ne: true };
+      query.status = { $ne: "cancelled" };
+
+      if (status && status !== "all" && status !== "cancelled") {
         query.status = status;
       } else if ((!status || status === "all") && handymanId) {
         // For handyman, exclude "done" jobs when status is "all" or not specified
-        query.status = { $ne: "done" };
+        query.status = { $nin: ["done", "cancelled"] };
       }
+
       if (workType && workType !== "") {
         query.workType = workType;
       }
@@ -1612,6 +1859,18 @@ function findAvailablePort(startPort) {
             return true;
           }
 
+          // Check if this handyman is blocked in this job
+          if (
+            job["handiman-Blocked"] &&
+            Array.isArray(job["handiman-Blocked"])
+          ) {
+            const blockedIds = job["handiman-Blocked"].map((id) => String(id));
+            if (blockedIds.includes(handymanIdString)) {
+              // This handyman is blocked, don't show the job
+              return false;
+            }
+          }
+
           // Priority 2: Show open jobs (handymanId is null or doesn't exist)
           // These are regular jobs that should be shown to all handymen
           // and match handyman specialties (already filtered above)
@@ -1783,10 +2042,14 @@ function findAvailablePort(startPort) {
       // For handyman, we'll filter by specialties anyway, so we can optimize the query
       // For client, exclude "done" jobs that have been rated (ratingSubmitted = true)
       // We'll filter done jobs later based on clientId
+      // Always exclude deleted/cancelled jobs
       let Jobs = collectionJobs
         ? await collectionJobs
             .find(
-              {},
+              {
+                isDeleted: { $ne: true },
+                status: { $ne: "cancelled" },
+              },
               {
                 projection: {
                   _id: 1,
@@ -1814,6 +2077,7 @@ function findAvailablePort(startPort) {
                   handymanReceivedPayment: 1, // Add handymanReceivedPayment field
                   paymentIntentId: 1, // Add paymentIntentId field
                   paymentStatus: 1, // Add paymentStatus field
+                  "handiman-Blocked": 1, // Add handiman-Blocked field for filtering
                   // Add other fields that might be needed
                 },
               }
@@ -1907,6 +2171,18 @@ function findAvailablePort(startPort) {
           User._id instanceof ObjectId ? User._id : new ObjectId(User._id);
 
         Jobs = Jobs.filter((job) => {
+          // Check if this handyman is blocked in this job
+          if (
+            job["handiman-Blocked"] &&
+            Array.isArray(job["handiman-Blocked"])
+          ) {
+            const blockedIds = job["handiman-Blocked"].map((id) => String(id));
+            if (blockedIds.includes(handymanIdString)) {
+              // This handyman is blocked, don't show the job
+              return false;
+            }
+          }
+
           // If job has handymanIdSpecial, it should ONLY be shown to that specific handyman
           if (job.handymanIdSpecial) {
             // Convert both to string for comparison
@@ -2025,6 +2301,25 @@ function findAvailablePort(startPort) {
       } else {
         // אם אין קואורדינטות, שלוף את כל ההנדימנים
         Hendimands = await collection.find({ isHandyman: true }).toArray();
+      }
+
+      // Mark blocked handymen if user has handiman-Blocked array
+      if (
+        User &&
+        !User.isHandyman &&
+        User["handiman-Blocked"] &&
+        Array.isArray(User["handiman-Blocked"])
+      ) {
+        const blockedIds = User["handiman-Blocked"].map((id) => String(id));
+        Hendimands = Hendimands.map((handyman) => ({
+          ...handyman,
+          isBlocked: blockedIds.includes(String(handyman._id)),
+        }));
+      } else {
+        Hendimands = Hendimands.map((handyman) => ({
+          ...handyman,
+          isBlocked: false,
+        }));
       }
 
       // Sort jobs: 1. Urgent first, 2. Special (handymanIdSpecial) second, 3. By creation time (newest first)
@@ -2176,6 +2471,42 @@ function findAvailablePort(startPort) {
           .limit(limit)
           .toArray();
         // אין קואורדינטות, אז לא נחשב זמן נסיעה
+      }
+
+      // Mark blocked handymen if userId is provided and user has handiman-Blocked array
+      const { userId } = req.query;
+      if (userId) {
+        try {
+          const user = await collection.findOne({ _id: new ObjectId(userId) });
+          if (
+            user &&
+            !user.isHandyman &&
+            user["handiman-Blocked"] &&
+            Array.isArray(user["handiman-Blocked"])
+          ) {
+            const blockedIds = user["handiman-Blocked"].map((id) => String(id));
+            handymen = handymen.map((handyman) => ({
+              ...handyman,
+              isBlocked: blockedIds.includes(String(handyman._id)),
+            }));
+          } else {
+            handymen = handymen.map((handyman) => ({
+              ...handyman,
+              isBlocked: false,
+            }));
+          }
+        } catch (userError) {
+          // If user fetch fails, just mark all as not blocked
+          handymen = handymen.map((handyman) => ({
+            ...handyman,
+            isBlocked: false,
+          }));
+        }
+      } else {
+        handymen = handymen.map((handyman) => ({
+          ...handyman,
+          isBlocked: false,
+        }));
       }
 
       return res.json({
@@ -2810,164 +3141,75 @@ function findAvailablePort(startPort) {
 
       // First, try to use paymentMethodId from DB if exists
       if (user.paymentMethodId) {
-        try {
-          // Add timeout to Stripe API call (5 seconds)
-          const stripePromise = stripe.paymentMethods.retrieve(
-            user.paymentMethodId
-          );
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => {
-              reject(new Error("Stripe API timeout after 5 seconds"));
-            }, 5000);
+        // Return payment method from DB immediately with default card details
+        // Card details will be fetched in background if needed (non-blocking)
+        const cardDetails = {
+          brand: "card",
+          last4: "****",
+          expMonth: null,
+          expYear: null,
+        };
+
+        // Return immediately without waiting for Stripe API
+        res.json({
+          success: true,
+          hasPaymentMethod: true,
+          paymentMethodId: user.paymentMethodId,
+          stripeCustomerId: customerId || user.stripeCustomerId || null,
+          card: cardDetails,
+        });
+
+        // Fetch card details from Stripe in background (non-blocking, don't wait)
+        // This improves response time while still getting card details if possible
+        stripe.paymentMethods
+          .retrieve(user.paymentMethodId)
+          .then((paymentMethod) => {
+            if (paymentMethod && paymentMethod.card) {
+              // Optionally update user with card details for future use
+              // But don't block the response
+            }
+          })
+          .catch((err) => {
+            // Ignore errors - not critical
           });
 
-          const paymentMethod = await Promise.race([
-            stripePromise,
-            timeoutPromise,
-          ]);
+        return; // Exit early after sending response
 
-          // Verify that the payment method is attached to the correct customer
-          if (customerId && paymentMethod.customer !== customerId) {
-            try {
-              await stripe.paymentMethods.attach(user.paymentMethodId, {
-                customer: customerId,
-              });
-            } catch (attachError) {
-              // If payment method was previously used without customer, it can't be reused
-              if (
-                attachError.message &&
-                attachError.message.includes(
-                  "previously used without being attached"
-                )
-              ) {
-                // Remove invalid payment method from DB
-                await usersCol.updateOne(
-                  { _id: new ObjectId(userId) },
-                  { $unset: { paymentMethodId: "" } }
-                );
-                // Fall through to search for alternative payment methods
-              } else {
-                throw attachError;
-              }
-            }
-          }
-
-          // If payment method is valid and attached to customer, return it
-          if (paymentMethod.customer === customerId || !customerId) {
-            return res.json({
-              success: true,
-              hasPaymentMethod: true,
-              paymentMethodId: user.paymentMethodId,
-              stripeCustomerId: customerId || user.stripeCustomerId || null,
-              card: {
-                brand: paymentMethod.card?.brand,
-                last4: paymentMethod.card?.last4,
-                expMonth: paymentMethod.card?.exp_month,
-                expYear: paymentMethod.card?.exp_year,
-              },
+        // Payment method might be deleted in Stripe, try to find alternative (only if we have customerId and no paymentMethod yet)
+        if (customerId && !paymentMethod) {
+          try {
+            const customerPaymentMethods = await stripe.paymentMethods.list({
+              customer: customerId,
+              type: "card",
             });
-          }
-        } catch (stripeError) {
-          // If timeout or payment method not found, try to find alternative payment methods
-          if (stripeError.message.includes("timeout")) {
-            // If we have customerId, try to find payment methods from customer
-            if (customerId) {
-              try {
-                const customerPaymentMethods = await stripe.paymentMethods.list(
-                  {
-                    customer: customerId,
-                    type: "card",
-                  }
-                );
 
-                if (
-                  customerPaymentMethods.data &&
-                  customerPaymentMethods.data.length > 0
-                ) {
-                  // Use the first available payment method
-                  const alternativePaymentMethod =
-                    customerPaymentMethods.data[0];
-                  // Update DB with the alternative payment method
-                  await usersCol.updateOne(
-                    { _id: new ObjectId(userId) },
-                    { $set: { paymentMethodId: alternativePaymentMethod.id } }
-                  );
-                  return res.json({
-                    success: true,
-                    hasPaymentMethod: true,
-                    paymentMethodId: alternativePaymentMethod.id,
-                    stripeCustomerId: customerId,
-                    card: {
-                      brand: alternativePaymentMethod.card?.brand,
-                      last4: alternativePaymentMethod.card?.last4,
-                      expMonth: alternativePaymentMethod.card?.exp_month,
-                      expYear: alternativePaymentMethod.card?.exp_year,
-                    },
-                  });
-                }
-              } catch (listError) {
-                // Error listing payment methods, continue to return basic info
-              }
-            }
-
-            // Return basic info without Stripe details
-            return res.json({
-              success: true,
-              hasPaymentMethod: true,
-              paymentMethodId: user.paymentMethodId,
-              stripeCustomerId: customerId || user.stripeCustomerId || null,
-              card: {
-                brand: "card",
-                last4: "****",
-                expMonth: null,
-                expYear: null,
-              },
-              note: "Payment method exists but Stripe details unavailable",
-            });
-          }
-
-          // Payment method might be deleted in Stripe, try to find alternative
-          if (customerId) {
-            try {
-              const customerPaymentMethods = await stripe.paymentMethods.list({
-                customer: customerId,
-                type: "card",
+            if (
+              customerPaymentMethods.data &&
+              customerPaymentMethods.data.length > 0
+            ) {
+              // Use the first available payment method
+              const alternativePaymentMethod = customerPaymentMethods.data[0];
+              // Update DB with the alternative payment method
+              await usersCol.updateOne(
+                { _id: new ObjectId(userId) },
+                { $set: { paymentMethodId: alternativePaymentMethod.id } }
+              );
+              return res.json({
+                success: true,
+                hasPaymentMethod: true,
+                paymentMethodId: alternativePaymentMethod.id,
+                stripeCustomerId: customerId,
+                card: {
+                  brand: alternativePaymentMethod.card?.brand,
+                  last4: alternativePaymentMethod.card?.last4,
+                  expMonth: alternativePaymentMethod.card?.exp_month,
+                  expYear: alternativePaymentMethod.card?.exp_year,
+                },
               });
-
-              if (
-                customerPaymentMethods.data &&
-                customerPaymentMethods.data.length > 0
-              ) {
-                // Use the first available payment method
-                const alternativePaymentMethod = customerPaymentMethods.data[0];
-                // Update DB with the alternative payment method
-                await usersCol.updateOne(
-                  { _id: new ObjectId(userId) },
-                  { $set: { paymentMethodId: alternativePaymentMethod.id } }
-                );
-                return res.json({
-                  success: true,
-                  hasPaymentMethod: true,
-                  paymentMethodId: alternativePaymentMethod.id,
-                  stripeCustomerId: customerId,
-                  card: {
-                    brand: alternativePaymentMethod.card?.brand,
-                    last4: alternativePaymentMethod.card?.last4,
-                    expMonth: alternativePaymentMethod.card?.exp_month,
-                    expYear: alternativePaymentMethod.card?.exp_year,
-                  },
-                });
-              }
-            } catch (listError) {
-              // Error listing payment methods, continue to remove from DB
             }
+          } catch (listError) {
+            // Error listing payment methods, continue
           }
-
-          // Payment method not found and no alternatives, remove from DB
-          await usersCol.updateOne(
-            { _id: new ObjectId(userId) },
-            { $unset: { paymentMethodId: "" } }
-          );
         }
       }
 
@@ -3128,6 +3370,164 @@ function findAvailablePort(startPort) {
       return res.status(500).json({
         success: false,
         message: "שגיאה בשמירת אמצעי תשלום",
+        error: error.message,
+      });
+    }
+  });
+
+  // Block handyman endpoint - add handyman ID to user's handiman-Blocked array
+  app.post("/api/users/block-handyman", async (req, res) => {
+    try {
+      const { userId, handymanId } = req.body;
+
+      if (!userId || !handymanId) {
+        return res.status(400).json({
+          success: false,
+          message: "userId and handymanId are required",
+        });
+      }
+
+      const usersCol = getCollection();
+
+      // Verify user exists and is not a handyman
+      const user = await usersCol.findOne({ _id: new ObjectId(userId) });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      if (user.isHandyman) {
+        return res.status(400).json({
+          success: false,
+          message: "Handymen cannot block other handymen",
+        });
+      }
+
+      // Verify handyman exists
+      const handyman = await usersCol.findOne({
+        _id: new ObjectId(handymanId),
+      });
+      if (!handyman) {
+        return res.status(404).json({
+          success: false,
+          message: "Handyman not found",
+        });
+      }
+
+      // Add handyman ID to handiman-Blocked array (using $addToSet to avoid duplicates)
+      await usersCol.updateOne(
+        { _id: new ObjectId(userId) },
+        {
+          $addToSet: { "handiman-Blocked": new ObjectId(handymanId) },
+        }
+      );
+
+      // Update all open jobs created by this client to add the blocked handyman
+      const jobsCol = getCollectionJobs();
+      try {
+        const clientObjectId = new ObjectId(userId);
+        await jobsCol.updateMany(
+          {
+            clientId: clientObjectId,
+            status: "open",
+          },
+          {
+            $addToSet: { "handiman-Blocked": new ObjectId(handymanId) },
+          }
+        );
+      } catch (jobsError) {
+        // Continue even if updating jobs fails (log but don't fail the request)
+      }
+
+      return res.json({
+        success: true,
+        message: "Handyman blocked successfully",
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error blocking handyman",
+        error: error.message,
+      });
+    }
+  });
+
+  // Unblock handyman endpoint - remove handyman ID from user's handiman-Blocked array
+  app.post("/api/users/unblock-handyman", async (req, res) => {
+    try {
+      const { userId, handymanId } = req.body;
+
+      if (!userId || !handymanId) {
+        return res.status(400).json({
+          success: false,
+          message: "userId and handymanId are required",
+        });
+      }
+
+      const usersCol = getCollection();
+
+      // Verify user exists and is not a handyman
+      const user = await usersCol.findOne({ _id: new ObjectId(userId) });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      if (user.isHandyman) {
+        return res.status(400).json({
+          success: false,
+          message: "Handymen cannot unblock other handymen",
+        });
+      }
+
+      // Verify handyman exists
+      const handyman = await usersCol.findOne({
+        _id: new ObjectId(handymanId),
+      });
+      if (!handyman) {
+        return res.status(404).json({
+          success: false,
+          message: "Handyman not found",
+        });
+      }
+
+      // Remove handyman ID from handiman-Blocked array
+      await usersCol.updateOne(
+        { _id: new ObjectId(userId) },
+        {
+          $pull: { "handiman-Blocked": new ObjectId(handymanId) },
+        }
+      );
+
+      // Update all open jobs created by this client to remove the blocked handyman
+      const jobsCol = getCollectionJobs();
+      try {
+        const clientObjectId = new ObjectId(userId);
+        await jobsCol.updateMany(
+          {
+            clientId: clientObjectId,
+            status: "open",
+          },
+          {
+            $pull: { "handiman-Blocked": new ObjectId(handymanId) },
+          }
+        );
+      } catch (jobsError) {
+        // Continue even if updating jobs fails
+      }
+
+      return res.json({
+        success: true,
+        message: "Handyman unblocked successfully",
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error unblocking handyman",
         error: error.message,
       });
     }
@@ -3374,6 +3774,11 @@ function findAvailablePort(startPort) {
       const { clientSecret, paymentIntentId, status } =
         await createEscrowPaymentIntent(paymentIntentParams);
 
+      // Calculate VAT (MAAM)
+      const maamPercent = getMaamPercent();
+      const amountILS = amountAgorot / 100;
+      const vatCalculation = calculateVAT(amountILS, maamPercent);
+
       // Save payment record
       const paymentRecord = {
         _id: new ObjectId(),
@@ -3381,7 +3786,13 @@ function findAvailablePort(startPort) {
         clientId: new ObjectId(job.clientId),
         handymanId: new ObjectId(handymanId),
         paymentIntentId: paymentIntentId,
-        amount: amountAgorot / 100, // Convert to ILS
+        amount: amountILS, // Total amount with VAT
+        originalPrice: amountILS, // Initial price (will be updated if price changes)
+        priceChangePercent: 0, // No change initially
+        amountWithoutVAT: vatCalculation.amountWithoutVAT,
+        amountWithVAT: vatCalculation.amountWithVAT,
+        vatAmount: vatCalculation.vatAmount,
+        vatPercent: maamPercent,
         platformFee: platformFeeAgorot / 100,
         currency: "ils",
         status: status, // Usually "requires_payment_method" or "requires_confirmation"
@@ -3456,6 +3867,10 @@ function findAvailablePort(startPort) {
         });
       }
 
+      // Get user to save paymentMethodId
+      const clientId = job.clientId?.toString() || job.clientId;
+      const usersCol = getCollection();
+
       // Update payment record with current status
       const updateData = {
         status: paymentIntent.status,
@@ -3480,6 +3895,70 @@ function findAvailablePort(startPort) {
             },
           }
         );
+
+        // Save paymentMethodId to user if payment intent has payment method
+        // Do this in background to not block the response
+        if (paymentIntent.payment_method && clientId) {
+          // Run in background (don't await) to improve response time
+          (async () => {
+            try {
+              const clientObjectId = new ObjectId(clientId);
+
+              // Get or create Stripe Customer for the user
+              const client = await usersCol.findOne({ _id: clientObjectId });
+              if (client) {
+                let customerId = client.stripeCustomerId;
+
+                if (!customerId) {
+                  // Create new customer
+                  const customer = await stripe.customers.create({
+                    email: client?.email || undefined,
+                    metadata: {
+                      userId: clientId,
+                    },
+                  });
+                  customerId = customer.id;
+
+                  // Save customer ID to user
+                  await usersCol.updateOne(
+                    { _id: clientObjectId },
+                    { $set: { stripeCustomerId: customerId } }
+                  );
+                }
+
+                // Attach payment method to customer if not already attached
+                const paymentMethod = paymentIntent.payment_method;
+                const paymentMethodId =
+                  typeof paymentMethod === "string"
+                    ? paymentMethod
+                    : paymentMethod?.id;
+
+                if (paymentMethodId) {
+                  try {
+                    // Try to attach payment method (might already be attached)
+                    await stripe.paymentMethods.attach(paymentMethodId, {
+                      customer: customerId,
+                    });
+                  } catch (attachError) {
+                    // Payment method might already be attached, continue
+                  }
+
+                  // Save paymentMethodId to user (always do this, even if attach failed)
+                  await usersCol.updateOne(
+                    { _id: clientObjectId },
+                    { $set: { paymentMethodId: paymentMethodId } }
+                  );
+                }
+              }
+            } catch (userError) {
+              // Log error but don't fail the request
+              console.error(
+                "Error saving paymentMethodId to user (background):",
+                userError
+              );
+            }
+          })(); // Execute immediately without awaiting
+        }
       }
 
       await paymentsCol.updateOne(
@@ -3608,6 +4087,17 @@ function findAvailablePort(startPort) {
         }
       );
 
+      // Save paymentMethodId to user in background (already attached to customer above)
+      // Don't await to improve response time
+      usersCol
+        .updateOne(
+          { _id: new ObjectId(userId) },
+          { $set: { paymentMethodId: paymentMethodId } }
+        )
+        .catch((err) => {
+          // Error saving paymentMethodId (background)
+        });
+
       return res.json({
         success: true,
         paymentIntentId: paymentIntentId,
@@ -3671,6 +4161,7 @@ function findAvailablePort(startPort) {
           case "payment_intent.succeeded":
             {
               const paymentIntent = event.data.object;
+              const usersCol = getCollection();
 
               // Find job by paymentIntentId
               const job = await jobsCol.findOne({
@@ -3699,6 +4190,63 @@ function findAvailablePort(startPort) {
                       },
                     }
                   );
+                }
+
+                // Save paymentMethodId to user if payment intent has payment method
+                if (paymentIntent.payment_method && job.clientId) {
+                  try {
+                    const clientId = job.clientId?.toString() || job.clientId;
+                    const clientObjectId = new ObjectId(clientId);
+
+                    // Get or create Stripe Customer for the user
+                    const client = await usersCol.findOne({
+                      _id: clientObjectId,
+                    });
+                    if (client) {
+                      let customerId = client.stripeCustomerId;
+
+                      if (!customerId) {
+                        // Create new customer
+                        const customer = await stripe.customers.create({
+                          email: client?.email || undefined,
+                          metadata: {
+                            userId: clientId,
+                          },
+                        });
+                        customerId = customer.id;
+
+                        // Save customer ID to user
+                        await usersCol.updateOne(
+                          { _id: clientObjectId },
+                          { $set: { stripeCustomerId: customerId } }
+                        );
+                      }
+
+                      // Attach payment method to customer if not already attached
+                      const paymentMethodId =
+                        typeof paymentIntent.payment_method === "string"
+                          ? paymentIntent.payment_method
+                          : paymentIntent.payment_method?.id;
+
+                      if (paymentMethodId) {
+                        try {
+                          await stripe.paymentMethods.attach(paymentMethodId, {
+                            customer: customerId,
+                          });
+                        } catch (attachError) {
+                          // Payment method might already be attached, continue
+                        }
+
+                        // Save paymentMethodId to user
+                        await usersCol.updateOne(
+                          { _id: clientObjectId },
+                          { $set: { paymentMethodId: paymentMethodId } }
+                        );
+                      }
+                    }
+                  } catch (userError) {
+                    // Log error but don't fail the webhook
+                  }
                 }
               }
             }
@@ -3741,6 +4289,7 @@ function findAvailablePort(startPort) {
           case "payment_intent.amount_capturable_updated":
             {
               const paymentIntent = event.data.object;
+              const usersCol = getCollection();
 
               // If payment is now requires_capture, update our records
               if (paymentIntent.status === "requires_capture") {
@@ -3754,6 +4303,68 @@ function findAvailablePort(startPort) {
                     },
                   }
                 );
+
+                // Find job to get clientId
+                const job = await jobsCol.findOne({
+                  paymentIntentId: paymentIntent.id,
+                });
+
+                // Save paymentMethodId to user if payment intent has payment method
+                if (paymentIntent.payment_method && job?.clientId) {
+                  try {
+                    const clientId = job.clientId?.toString() || job.clientId;
+                    const clientObjectId = new ObjectId(clientId);
+
+                    // Get or create Stripe Customer for the user
+                    const client = await usersCol.findOne({
+                      _id: clientObjectId,
+                    });
+                    if (client) {
+                      let customerId = client.stripeCustomerId;
+
+                      if (!customerId) {
+                        // Create new customer
+                        const customer = await stripe.customers.create({
+                          email: client?.email || undefined,
+                          metadata: {
+                            userId: clientId,
+                          },
+                        });
+                        customerId = customer.id;
+
+                        // Save customer ID to user
+                        await usersCol.updateOne(
+                          { _id: clientObjectId },
+                          { $set: { stripeCustomerId: customerId } }
+                        );
+                      }
+
+                      // Attach payment method to customer if not already attached
+                      const paymentMethodId =
+                        typeof paymentIntent.payment_method === "string"
+                          ? paymentIntent.payment_method
+                          : paymentIntent.payment_method?.id;
+
+                      if (paymentMethodId) {
+                        try {
+                          await stripe.paymentMethods.attach(paymentMethodId, {
+                            customer: customerId,
+                          });
+                        } catch (attachError) {
+                          // Payment method might already be attached, continue
+                        }
+
+                        // Save paymentMethodId to user
+                        await usersCol.updateOne(
+                          { _id: clientObjectId },
+                          { $set: { paymentMethodId: paymentMethodId } }
+                        );
+                      }
+                    }
+                  } catch (userError) {
+                    // Log error but don't fail the webhook
+                  }
+                }
               }
             }
             break;
@@ -3993,6 +4604,377 @@ function findAvailablePort(startPort) {
       });
     }
   });
+
+  // ==================== SUBSCRIPTION ENDPOINTS ====================
+
+  // Get subscription amount from dry-data.json
+  app.get("/api/subscription/amount", (req, res) => {
+    try {
+      const amount = getMonthlySubscription();
+      return res.json({
+        success: true,
+        amount: amount,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה בקריאת סכום המנוי",
+        error: error.message,
+      });
+    }
+  });
+
+  // Create subscription setup intent
+  app.post("/api/subscription/create", async (req, res) => {
+    try {
+      const { registrationData } = req.body;
+
+      if (!registrationData) {
+        return res.status(400).json({
+          success: false,
+          message: "registrationData required",
+        });
+      }
+
+      const subscriptionAmount = getMonthlySubscription();
+      const amountInAgorot = Math.round(subscriptionAmount * 100); // Convert to agorot
+
+      // Create Setup Intent for subscription (not Payment Intent)
+      // Setup Intent is used to collect payment method for future charges
+      const setupIntent = await stripe.setupIntents.create({
+        payment_method_types: ["card"],
+        amount: amountInAgorot,
+        currency: "ils",
+        metadata: {
+          type: "handyman_subscription",
+          registrationData: JSON.stringify(registrationData),
+        },
+      });
+
+      return res.json({
+        success: true,
+        clientSecret: setupIntent.client_secret,
+        setupIntentId: setupIntent.id,
+      });
+    } catch (error) {
+      console.error("Error creating subscription setup intent:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה ביצירת מנוי",
+        error: error.message,
+      });
+    }
+  });
+
+  // Complete subscription registration after payment method is confirmed
+  app.post("/api/subscription/complete", async (req, res) => {
+    try {
+      const { setupIntentId, paymentMethodId } = req.body;
+
+      if (!setupIntentId || !paymentMethodId) {
+        return res.status(400).json({
+          success: false,
+          message: "setupIntentId and paymentMethodId required",
+        });
+      }
+
+      const usersCol = getCollection();
+      const paymentsCol = getCollectionPayments();
+      const financialsCol = getCollectionFinancials();
+
+      // Retrieve setup intent to get registration data
+      const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
+
+      if (setupIntent.status !== "succeeded") {
+        return res.status(400).json({
+          success: false,
+          message: "Setup intent not succeeded",
+        });
+      }
+
+      // Get registration data from metadata
+      let registrationData = null;
+      try {
+        if (setupIntent.metadata?.registrationData) {
+          registrationData = JSON.parse(setupIntent.metadata.registrationData);
+        }
+      } catch (parseError) {
+        console.error("Error parsing registration data:", parseError);
+      }
+
+      if (!registrationData) {
+        return res.status(400).json({
+          success: false,
+          message: "Registration data not found",
+        });
+      }
+
+      // Get subscription amount
+      const subscriptionAmount = getMonthlySubscription();
+      const amountInAgorot = Math.round(subscriptionAmount * 100);
+
+      // Create Stripe Customer
+      const customer = await stripe.customers.create({
+        email: registrationData.email || undefined,
+        payment_method: paymentMethodId,
+        metadata: {
+          userId: "pending", // Will be updated after user creation
+          type: "handyman_subscription",
+        },
+      });
+
+      // Create Subscription
+      const subscription = await stripe.subscriptions.create({
+        customer: customer.id,
+        items: [
+          {
+            price_data: {
+              currency: "ils",
+              product_data: {
+                name: "מנוי חודשי הנדימן",
+                description: "מנוי חודשי לפלטפורמת הנדימן",
+              },
+              recurring: {
+                interval: "month",
+              },
+              unit_amount: amountInAgorot,
+            },
+          },
+        ],
+        metadata: {
+          type: "handyman_subscription",
+        },
+      });
+
+      // Now register the user with the subscription info
+      // Reuse the registration logic from /register-handyman
+      const {
+        firstName,
+        lastName,
+        email,
+        password,
+        phone,
+        address,
+        addressEnglish,
+        howDidYouHear,
+        specialties,
+        imageUrl,
+        logoUrl,
+        isHandyman,
+        googleId,
+      } = registrationData;
+
+      const fullName = `${firstName || ""} ${lastName || ""}`.trim();
+
+      // Check if user already exists
+      const existingUser = await usersCol.findOne({ email: email });
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: "משתמש עם מייל זה כבר קיים",
+        });
+      }
+
+      // Extract coordinates from address (similar to register-handyman)
+      let extractedCoordinates = null;
+      if (addressEnglish || address) {
+        try {
+          const searchAddress = async (addr) => {
+            if (!addr || !addr.trim()) return null;
+            const cleaned = addr.trim().replace(/\s+/g, " ");
+            const encoded = encodeURIComponent(cleaned);
+            const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encoded}.json?country=il&access_token=${process.env.MAPBOX_TOKEN}`;
+            try {
+              const response = await axios.get(url, { timeout: 10000 });
+              if (response.data.features && response.data.features.length > 0) {
+                return response.data;
+              }
+            } catch (error) {
+              // Silent fail
+            }
+            return null;
+          };
+
+          let Coordinates = null;
+          if (addressEnglish && addressEnglish.trim()) {
+            Coordinates = await searchAddress(addressEnglish);
+          }
+          if (!Coordinates && address && address.trim()) {
+            Coordinates = await searchAddress(address);
+          }
+
+          if (
+            Coordinates &&
+            Coordinates.features &&
+            Coordinates.features.length > 0
+          ) {
+            const feature = Coordinates.features[0];
+            if (
+              feature.center &&
+              Array.isArray(feature.center) &&
+              feature.center.length >= 2
+            ) {
+              extractedCoordinates = {
+                lng: feature.center[0],
+                lat: feature.center[1],
+              };
+            } else if (
+              feature.geometry &&
+              feature.geometry.coordinates &&
+              Array.isArray(feature.geometry.coordinates) &&
+              feature.geometry.coordinates.length >= 2
+            ) {
+              extractedCoordinates = {
+                lng: feature.geometry.coordinates[0],
+                lat: feature.geometry.coordinates[1],
+              };
+            }
+          }
+        } catch (coordError) {
+          // Silent fail - continue without coordinates
+        }
+      }
+
+      // Build user object
+      const userData = {
+        username: fullName,
+        email: email || "",
+        password: password || "",
+        phone: phone || "",
+        address: address || "",
+        addressEnglish: addressEnglish || "",
+        howDidYouHear: howDidYouHear || "",
+        imageUrl: imageUrl || "",
+        isHandyman: isHandyman === true || isHandyman === "true",
+        createdAt: new Date(),
+        hasActiveSubscription: true,
+        stripeCustomerId: customer.id,
+        stripeSubscriptionId: subscription.id,
+        paymentMethodId: paymentMethodId,
+      };
+
+      if (googleId) {
+        userData.googleId = googleId;
+      }
+
+      // Add coordinates if available
+      if (
+        extractedCoordinates &&
+        extractedCoordinates.lng &&
+        extractedCoordinates.lat
+      ) {
+        userData.Coordinates = extractedCoordinates;
+        userData.location = {
+          type: "Point",
+          coordinates: [extractedCoordinates.lng, extractedCoordinates.lat],
+        };
+      }
+
+      if (userData.isHandyman) {
+        // Format specialties
+        let specialtiesArray = [];
+        if (Array.isArray(specialties)) {
+          specialtiesArray = specialties
+            .filter((item) => item !== null && item !== undefined)
+            .map((item) => {
+              if (typeof item === "object" && item.name) {
+                return {
+                  name: String(item.name).trim(),
+                  isFullCategory:
+                    item.isFullCategory === true || item.type === "category",
+                  type: item.isFullCategory ? "category" : "subCategory",
+                };
+              }
+              if (typeof item === "string") {
+                return {
+                  name: String(item).trim(),
+                  isFullCategory: true,
+                  type: "category",
+                };
+              }
+              return null;
+            })
+            .filter((item) => item !== null && item.name);
+        }
+        userData.specialties = specialtiesArray;
+        userData.logoUrl = logoUrl || "";
+        userData.rating = 0;
+        userData.jobsDone = 0;
+
+        // Check if this is one of the first 100 handymen
+        const handymenCount = await usersCol.countDocuments({
+          isHandyman: true,
+        });
+        if (handymenCount < 100) {
+          userData.handimanFree = true;
+        }
+      }
+
+      // Insert user
+      const result = await usersCol.insertOne(userData);
+
+      if (!result.insertedId) {
+        return res.status(500).json({
+          success: false,
+          message: "Failed to register user",
+        });
+      }
+
+      // Update Stripe customer metadata with actual userId
+      await stripe.customers.update(customer.id, {
+        metadata: {
+          userId: result.insertedId.toString(),
+          type: "handyman_subscription",
+        },
+      });
+
+      // Save payment record
+      await paymentsCol.insertOne({
+        type: "subscription",
+        amount: subscriptionAmount,
+        amountAgorot: amountInAgorot,
+        userId: result.insertedId,
+        customerId: customer.id,
+        subscriptionId: subscription.id,
+        paymentMethodId: paymentMethodId,
+        status: "active",
+        createdAt: new Date(),
+      });
+
+      // Save to financials
+      const vatPercent = getMaamPercent();
+      const vatAmount = (subscriptionAmount * vatPercent) / 100;
+      const amountWithoutVAT = subscriptionAmount - vatAmount;
+
+      await financialsCol.insertOne({
+        Revenue: {
+          Drawings: subscriptionAmount,
+        },
+        createdAt: new Date(),
+      });
+
+      // Get the created user
+      const savedUser = await usersCol.findOne({
+        _id: result.insertedId,
+      });
+
+      return res.json({
+        success: true,
+        user: savedUser,
+        subscriptionId: subscription.id,
+        customerId: customer.id,
+      });
+    } catch (error) {
+      console.error("Error completing subscription:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה בהשלמת הרשמת מנוי",
+        error: error.message,
+      });
+    }
+  });
+
+  // ==================== END SUBSCRIPTION ENDPOINTS ====================
 
   app.post("/user/update-profile", async (req, res) => {
     try {
@@ -4455,6 +5437,14 @@ function findAvailablePort(startPort) {
             clientSecret = result.clientSecret;
             const status = result.status;
 
+            // Calculate VAT (MAAM) for payment record
+            const maamPercentForPayment = getMaamPercent();
+            const amountILSForPayment = amountAgorot / 100;
+            const vatCalculationForPayment = calculateVAT(
+              amountILSForPayment,
+              maamPercentForPayment
+            );
+
             // Save payment record
             const paymentsCol = getCollectionPayments();
             const paymentRecord = {
@@ -4463,7 +5453,13 @@ function findAvailablePort(startPort) {
               clientId: new ObjectId(job.clientId),
               handymanId: new ObjectId(handymanId),
               paymentIntentId: paymentIntentId,
-              amount: amountAgorot / 100,
+              amount: amountILSForPayment,
+              originalPrice: amountILSForPayment,
+              priceChangePercent: 0,
+              amountWithoutVAT: vatCalculationForPayment.amountWithoutVAT,
+              amountWithVAT: vatCalculationForPayment.amountWithVAT,
+              vatAmount: vatCalculationForPayment.vatAmount,
+              vatPercent: maamPercentForPayment,
               platformFee: platformFeeAgorot / 100,
               currency: "ils",
               status: status,
@@ -4714,7 +5710,7 @@ function findAvailablePort(startPort) {
   });
   app.post("/jobs/cancel", async (req, res) => {
     try {
-      const { jobId, userId } = req.body;
+      const { jobId, userId, cancel } = req.body;
       if (!jobId) {
         return res
           .status(400)
@@ -4731,7 +5727,7 @@ function findAvailablePort(startPort) {
       }
 
       // Determine who cancelled: if userId matches handymanId, it's the handyman, otherwise it's the client
-      let cancelledBy = "client";
+      let personCancel = "customer";
       if (job.handymanId) {
         // Support both array and single value for handymanId
         if (Array.isArray(job.handymanId)) {
@@ -4739,27 +5735,114 @@ function findAvailablePort(startPort) {
             (id) => String(id) === String(userId)
           );
           if (isHandyman) {
-            cancelledBy = "handyman";
+            personCancel = "handyman";
           }
         } else {
           if (String(job.handymanId) === String(userId)) {
-            cancelledBy = "handyman";
+            personCancel = "handyman";
           }
         }
       }
       if (job.clientId && String(job.clientId) === String(userId)) {
-        cancelledBy = "client";
+        personCancel = "customer";
+      }
+
+      // Prepare update object
+      const updateData = {
+        handymanId: null,
+        handymanName: null,
+        status: "open",
+      };
+
+      // Add cancel object if provided
+      if (cancel) {
+        // Use cancel object from request, but ensure personcancel is set correctly
+        updateData.cancel = {
+          personcancel: cancel.personcancel || personCancel,
+          "reason-for-cancellation": cancel["reason-for-cancellation"] || "",
+          "Totally-cancels": cancel["Totally-cancels"] || false,
+          JobId: cancel.JobId || jobId,
+          cancelledAt: new Date(),
+        };
+      } else {
+        // Fallback for old format (backward compatibility)
+        updateData.cancel = {
+          personcancel: personCancel,
+          "reason-for-cancellation": "",
+          "Totally-cancels": false,
+          JobId: jobId,
+          cancelledAt: new Date(),
+        };
+      }
+
+      // If canceling for this handyman only, add handyman to handymanBlocked list
+      if (cancel && cancel["Totally-cancels"] === false && job.handymanId) {
+        const usersCol = getCollection();
+        const handymanIds = Array.isArray(job.handymanId)
+          ? job.handymanId
+          : [job.handymanId];
+
+        for (const handymanId of handymanIds) {
+          try {
+            const handymanIdStr = String(handymanId);
+            await usersCol.updateOne(
+              { _id: new ObjectId(handymanIdStr) },
+              {
+                $addToSet: { handymanBlocked: new ObjectId(jobId) },
+              }
+            );
+          } catch (blockError) {
+            // Continue even if blocking fails
+          }
+        }
+      }
+
+      // Handle payment refund if payment exists and is in escrow (requires_capture)
+      const paymentsCol = getCollectionPayments();
+      if (job.paymentIntentId) {
+        try {
+          // Check payment status
+          const payment = await paymentsCol.findOne({
+            paymentIntentId: job.paymentIntentId,
+          });
+
+          if (payment && payment.status === "requires_capture") {
+            // Payment is in escrow - cancel it to refund the client
+            try {
+              await cancelEscrow(job.paymentIntentId);
+
+              // Update payment record
+              await paymentsCol.updateOne(
+                { paymentIntentId: job.paymentIntentId },
+                {
+                  $set: {
+                    status: "cancelled",
+                    updatedAt: new Date(),
+                  },
+                }
+              );
+
+              // Update job payment status
+              updateData.paymentStatus = "cancelled";
+            } catch (cancelError) {
+              // Log error but continue with job cancellation
+              console.error(
+                `Error cancelling payment intent ${job.paymentIntentId}:`,
+                cancelError
+              );
+            }
+          }
+        } catch (paymentError) {
+          // Log error but continue with job cancellation
+          console.error("Error checking payment status:", paymentError);
+        }
       }
 
       // Update handymanId and handymanName to null instead of deleting
       await jobsCol.updateOne(
         { _id: new ObjectId(jobId) },
         {
-          $set: {
-            handymanId: null,
-            handymanName: null,
-            status: "open",
-          },
+          $set: updateData,
         }
       );
 
@@ -4779,11 +5862,27 @@ function findAvailablePort(startPort) {
         });
       }
 
+      // If client cancelled, notify handyman via WebSocket
+      if (personCancel === "customer" && job.handymanId) {
+        const handymanIds = Array.isArray(job.handymanId)
+          ? job.handymanId
+          : [job.handymanId];
+
+        for (const handymanId of handymanIds) {
+          const handymanIdStr = String(handymanId);
+          io.to(`user-${handymanIdStr}`).emit("job-cancelled-by-client", {
+            jobId: jobId,
+            message:
+              "אנחנו מצטערים אך הלקוח ביטל את העבודה במידת הצורך תקבל פיצוי",
+          });
+        }
+      }
+
       // Emit WebSocket event to notify that job was cancelled
       io.to(`job-${jobId}`).emit("job-cancelled", {
         jobId: jobId,
         status: "open",
-        cancelledBy: cancelledBy,
+        cancelledBy: personCancel,
       });
 
       return res.json({ success: true });
@@ -4795,11 +5894,12 @@ function findAvailablePort(startPort) {
       });
     }
   });
-  // Delete job endpoint (client only)
-  app.delete("/jobs/:jobId", async (req, res) => {
+
+  // Delete job endpoint (client only) - completely delete the job
+  app.delete("/jobs/:jobId/delete", async (req, res) => {
     try {
       const { jobId } = req.params;
-      const { userId } = req.body;
+      const { userId, cancel } = req.body;
 
       if (!jobId || !userId) {
         return res.status(400).json({
@@ -4829,6 +5929,229 @@ function findAvailablePort(startPort) {
         return res.status(403).json({
           success: false,
           message: "You are not authorized to delete this job",
+        });
+      }
+
+      // Handle payment refund if payment exists and is in escrow (requires_capture)
+      const paymentsCol = getCollectionPayments();
+      if (job.paymentIntentId) {
+        try {
+          // Check payment status
+          const payment = await paymentsCol.findOne({
+            paymentIntentId: job.paymentIntentId,
+          });
+
+          if (payment && payment.status === "requires_capture") {
+            // Payment is in escrow - cancel it to refund the client
+            try {
+              await cancelEscrow(job.paymentIntentId);
+
+              // Update payment record
+              await paymentsCol.updateOne(
+                { paymentIntentId: job.paymentIntentId },
+                {
+                  $set: {
+                    status: "cancelled",
+                    updatedAt: new Date(),
+                  },
+                }
+              );
+            } catch (cancelError) {
+              // Log error but continue with job deletion
+              console.error(
+                `Error cancelling payment intent ${job.paymentIntentId}:`,
+                cancelError
+              );
+            }
+          }
+        } catch (paymentError) {
+          // Log error but continue with job deletion
+          console.error("Error checking payment status:", paymentError);
+        }
+      }
+
+      // Prepare update data with cancel object and isDeleted flag
+      const updateData = {
+        status: "cancelled",
+        isDeleted: true, // Mark as deleted
+        paymentStatus: job.paymentIntentId ? "cancelled" : undefined,
+      };
+
+      // Add cancel object if provided
+      if (cancel) {
+        updateData.cancel = {
+          personcancel: cancel.personcancel || "customer",
+          "reason-for-cancellation": cancel["reason-for-cancellation"] || "",
+          "Totally-cancels":
+            cancel["Totally-cancels"] !== undefined
+              ? cancel["Totally-cancels"]
+              : true,
+          JobId: cancel.JobId || jobId,
+          cancelledAt: new Date(),
+          isDeleted: cancel.isDeleted !== undefined ? cancel.isDeleted : true,
+        };
+      } else {
+        // Fallback for old format (backward compatibility)
+        updateData.cancel = {
+          personcancel: "customer",
+          "reason-for-cancellation": "",
+          "Totally-cancels": true,
+          JobId: jobId,
+          cancelledAt: new Date(),
+          isDeleted: true,
+        };
+      }
+
+      // Update job with cancel info and mark as deleted
+      const updateResult = await jobsCol.updateOne(
+        { _id: new ObjectId(jobId) },
+        { $set: updateData }
+      );
+
+      if (updateResult.matchedCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
+
+      // Delete chat from database
+      await chatsCol.deleteOne({
+        jobId: new ObjectId(jobId),
+      });
+
+      // If job has a handyman assigned, notify them
+      if (job.handymanId) {
+        const handymanIds = Array.isArray(job.handymanId)
+          ? job.handymanId
+          : [job.handymanId];
+
+        for (const handymanId of handymanIds) {
+          try {
+            const handymanIdStr = String(handymanId);
+            const handyman = await usersCol.findOne({
+              _id: new ObjectId(handymanIdStr),
+            });
+
+            if (handyman?.fcmToken) {
+              await sendPushNotification(
+                handyman.fcmToken,
+                "עבודה נמחקה",
+                "הלקוח מחק את העבודה"
+              );
+            }
+
+            // Send WebSocket notification to handyman
+            if (io) {
+              io.to(`user-${handymanIdStr}`).emit("job-cancelled-by-client", {
+                jobId: jobId,
+                message:
+                  "אנחנו מצטערים אך הלקוח ביטל את העבודה במידת הצורך תקבל פיצוי",
+              });
+            }
+          } catch (notifError) {
+            // Continue even if notification fails
+          }
+        }
+      }
+
+      // Emit WebSocket event to notify that job was deleted
+      if (io) {
+        io.to(`job-${jobId}`).emit("job-deleted", {
+          jobId: jobId,
+          message: "Job has been deleted",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Job deleted successfully",
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error deleting job",
+        error: error.message,
+      });
+    }
+  });
+
+  // Delete job endpoint (client only) - cancel job
+  app.delete("/jobs/:jobId", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const { userId, cancel } = req.body;
+
+      if (!jobId || !userId) {
+        return res.status(400).json({
+          success: false,
+          message: "Job ID and User ID are required",
+        });
+      }
+
+      const jobsCol = getCollectionJobs();
+      const chatsCol = getCollectionChats();
+      const usersCol = getCollection();
+      const io = req.app.get("io");
+
+      // Find the job
+      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
+
+      // Verify that the user is the client who created the job
+      const userIdStr = String(userId);
+      const jobClientIdStr = String(job.clientId);
+      if (jobClientIdStr !== userIdStr) {
+        return res.status(403).json({
+          success: false,
+          message: "You are not authorized to delete this job",
+        });
+      }
+
+      // Prepare update data with cancel object
+      const updateData = {
+        status: "cancelled",
+        isDeleted: true, // Mark as deleted instead of actually deleting
+      };
+
+      // Add cancel object if provided
+      if (cancel) {
+        updateData.cancel = {
+          personcancel: cancel.personcancel || "customer",
+          "reason-for-cancellation": cancel["reason-for-cancellation"] || "",
+          "Totally-cancels":
+            cancel["Totally-cancels"] !== undefined
+              ? cancel["Totally-cancels"]
+              : true,
+          JobId: cancel.JobId || jobId,
+          cancelledAt: new Date(),
+        };
+      } else {
+        // Fallback for old format (backward compatibility)
+        updateData.cancel = {
+          personcancel: "customer",
+          "reason-for-cancellation": "",
+          "Totally-cancels": true,
+          JobId: jobId,
+          cancelledAt: new Date(),
+        };
+      }
+
+      // Update job with cancel info instead of deleting (preserve history)
+      const updateResult = await jobsCol.updateOne(
+        { _id: new ObjectId(jobId) },
+        { $set: updateData }
+      );
+
+      if (updateResult.matchedCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
         });
       }
 
@@ -4871,18 +6194,6 @@ function findAvailablePort(startPort) {
         await chatsCol.deleteMany({ jobId: new ObjectId(jobId) });
       } catch (error) {
         // Continue even if chat deletion fails
-      }
-
-      // Delete the job
-      const deleteResult = await jobsCol.deleteOne({
-        _id: new ObjectId(jobId),
-      });
-
-      if (deleteResult.deletedCount === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "Job not found",
-        });
       }
 
       // Emit WebSocket event to notify all connected clients
@@ -5417,12 +6728,23 @@ function findAvailablePort(startPort) {
         });
       }
 
-      // Check if already approved AND payment released
-      // If approved but payment not released, continue to release payment
+      // If payment already released, just update clientApproved flag
       if (job.paymentStatus === "paid") {
-        return res.status(400).json({
-          success: false,
-          message: "Payment already released",
+        // Payment already released, just update clientApproved
+        await jobsCol.updateOne(
+          { _id: new ObjectId(jobId) },
+          {
+            $set: {
+              clientApproved: true,
+            },
+          }
+        );
+
+        return res.json({
+          success: true,
+          message: "העבודה אושרה (התשלום כבר שוחרר קודם לכן)",
+          paymentStatus: "paid",
+          clientApproved: true,
         });
       }
 
@@ -5517,8 +6839,15 @@ function findAvailablePort(startPort) {
               }
             );
 
-            // Save payment record
+            // Calculate VAT (MAAM) for payment record
+            const maamPercentForApprove = getMaamPercent();
+            const amountILSForApprove = amountAgorot / 100;
+            const vatCalculationForApprove = calculateVAT(
+              amountILSForApprove,
+              maamPercentForApprove
+            );
 
+            // Save payment record
             const paymentsCol = getCollectionPayments();
             const paymentRecord = {
               _id: new ObjectId(),
@@ -5526,7 +6855,13 @@ function findAvailablePort(startPort) {
               clientId: new ObjectId(job.clientId),
               handymanId: new ObjectId(handymanIdForPayment),
               paymentIntentId: result.paymentIntentId,
-              amount: amountAgorot / 100,
+              amount: amountILSForApprove,
+              originalPrice: amountILSForApprove,
+              priceChangePercent: 0,
+              amountWithoutVAT: vatCalculationForApprove.amountWithoutVAT,
+              amountWithVAT: vatCalculationForApprove.amountWithVAT,
+              vatAmount: vatCalculationForApprove.vatAmount,
+              vatPercent: maamPercentForApprove,
               platformFee: platformFeeAgorot / 100,
               currency: "ils",
               status: result.status,
@@ -5883,6 +7218,14 @@ function findAvailablePort(startPort) {
 
             // Calculate amounts from the already-captured payment
             const totalAmount = paymentIntent.amount / 100; // Convert from agorot to ILS
+
+            // Calculate VAT (MAAM) for payment record
+            const maamPercentForSucceeded = getMaamPercent();
+            const vatCalculationForSucceeded = calculateVAT(
+              totalAmount,
+              maamPercentForSucceeded
+            );
+
             const urgentFee = job.urgent ? 10 : 0;
             const platformFee = paymentIntent.application_fee_amount
               ? paymentIntent.application_fee_amount / 100
@@ -5900,16 +7243,29 @@ function findAvailablePort(startPort) {
             });
 
             if (existingPayment) {
-              // Update existing payment record
+              // Update existing payment record with VAT if missing
+              const updateData = {
+                status: "succeeded",
+                handymanReceivedPayment: true,
+                updatedAt: new Date(),
+              };
+
+              // Add VAT fields if they don't exist
+              if (
+                !existingPayment.vatAmount ||
+                existingPayment.vatAmount === 0
+              ) {
+                updateData.amountWithoutVAT =
+                  vatCalculationForSucceeded.amountWithoutVAT;
+                updateData.amountWithVAT =
+                  vatCalculationForSucceeded.amountWithVAT;
+                updateData.vatAmount = vatCalculationForSucceeded.vatAmount;
+                updateData.vatPercent = maamPercentForSucceeded;
+              }
+
               await paymentsCol.updateOne(
                 { paymentIntentId: job.paymentIntentId },
-                {
-                  $set: {
-                    status: "succeeded",
-                    handymanReceivedPayment: true,
-                    updatedAt: new Date(),
-                  },
-                }
+                { $set: updateData }
               );
             } else {
               // Create new payment record
@@ -5919,6 +7275,12 @@ function findAvailablePort(startPort) {
                 clientId: new ObjectId(clientIdForPayment),
                 paymentIntentId: job.paymentIntentId,
                 amount: totalAmount,
+                originalPrice: totalAmount,
+                priceChangePercent: 0,
+                amountWithoutVAT: vatCalculationForSucceeded.amountWithoutVAT,
+                amountWithVAT: vatCalculationForSucceeded.amountWithVAT,
+                vatAmount: vatCalculationForSucceeded.vatAmount,
+                vatPercent: maamPercentForSucceeded,
                 platformFee: platformFee,
                 handymanRevenue: handymanRevenue,
                 currency: "ils",
@@ -5979,6 +7341,14 @@ function findAvailablePort(startPort) {
 
           // Calculate amounts
           const totalAmount = capturedPayment.amount / 100; // Convert from agorot to ILS
+
+          // Calculate VAT (MAAM) for payment record
+          const maamPercentForCaptured = getMaamPercent();
+          const vatCalculationForCaptured = calculateVAT(
+            totalAmount,
+            maamPercentForCaptured
+          );
+
           const urgentFee = job.urgent ? 10 : 0;
 
           // Get handyman ID
@@ -6003,6 +7373,18 @@ function findAvailablePort(startPort) {
               clientId: clientIdForPayment,
               paymentIntentId: job.paymentIntentId,
               amount: totalAmount,
+              originalPrice: existingPayment?.originalPrice || totalAmount,
+              priceChangePercent: existingPayment?.priceChangePercent || 0,
+              amountWithoutVAT:
+                existingPayment?.amountWithoutVAT ||
+                vatCalculationForCaptured.amountWithoutVAT,
+              amountWithVAT:
+                existingPayment?.amountWithVAT ||
+                vatCalculationForCaptured.amountWithVAT,
+              vatAmount:
+                existingPayment?.vatAmount ||
+                vatCalculationForCaptured.vatAmount,
+              vatPercent: existingPayment?.vatPercent || maamPercentForCaptured,
               platformFee: platformFee,
               handymanRevenue: handymanRevenue,
               currency: "ils",
@@ -6097,13 +7479,12 @@ function findAvailablePort(startPort) {
             await financialsCol.insertOne(financialsDoc);
           }
 
-          // Update job payment status to paid (status changes from "done" to "paid")
+          // Update job payment status to paid (status remains "done")
           await jobsCol.updateOne(
             { _id: new ObjectId(jobId) },
             {
               $set: {
                 paymentStatus: "paid",
-                status: "paid",
                 handymanReceivedPayment: true, // Payment was captured and transferred
               },
             }
@@ -6126,14 +7507,14 @@ function findAvailablePort(startPort) {
             // Emit to job room
             io.to(`job-${jobId}`).emit("job-approved", {
               jobId,
-              status: "paid",
+              paymentStatus: "paid",
               paymentReleased: true,
             });
             // Also emit to handyman's personal room
             if (handymanId) {
               io.to(`user-${handymanId.toString()}`).emit("job-approved", {
                 jobId,
-                status: "paid",
+                paymentStatus: "paid",
                 paymentReleased: true,
                 clientApproved: true,
               });
@@ -6289,7 +7670,7 @@ function findAvailablePort(startPort) {
           return res.json({
             success: true,
             message: "Job approved and payment released successfully",
-            status: "paid",
+            paymentStatus: "paid",
             paymentReleased: true,
           });
         } catch (paymentError) {
@@ -6428,6 +7809,7 @@ function findAvailablePort(startPort) {
       }
 
       const jobsCol = getCollectionJobs();
+      const usersCol = getCollection();
       const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
 
       if (!job) {
@@ -6464,16 +7846,287 @@ function findAvailablePort(startPort) {
         // Update Payment Intent in Stripe if it exists
         if (job.paymentIntentId) {
           try {
-            const newAmountAgorot = Math.round(newPrice * 100);
-            const platformFeeAgorot = Math.round(
-              (newAmountAgorot * getPlatformFeePercent()) / 100
+            // First, retrieve the payment intent to check its status
+            const paymentIntent = await stripe.paymentIntents.retrieve(
+              job.paymentIntentId
             );
 
-            await stripe.paymentIntents.update(job.paymentIntentId, {
-              amount: newAmountAgorot,
-              application_fee_amount: platformFeeAgorot,
-            });
+            // Only update if payment intent is in a state that allows updates
+            // According to Stripe: Can update: requires_payment_method, requires_confirmation, requires_action
+            // Cannot update: requires_capture, succeeded, canceled, processing
+            const updatableStatuses = [
+              "requires_payment_method",
+              "requires_confirmation",
+              "requires_action",
+            ];
+
+            if (updatableStatuses.includes(paymentIntent.status)) {
+              const newAmountAgorot = Math.round(newPrice * 100);
+              const platformFeeAgorot = Math.round(
+                (newAmountAgorot * getPlatformFeePercent()) / 100
+              );
+
+              // Update payment intent with new amount
+              await stripe.paymentIntents.update(job.paymentIntentId, {
+                amount: newAmountAgorot,
+                application_fee_amount: platformFeeAgorot,
+              });
+
+              // Also update payment record in database
+              const paymentsCol = getCollectionPayments();
+              const existingPayment = await paymentsCol.findOne({
+                paymentIntentId: job.paymentIntentId,
+              });
+              const originalPrice =
+                existingPayment?.originalPrice ||
+                existingPayment?.totalAmount ||
+                job.price ||
+                newPrice;
+              const priceChangePercent =
+                Math.round(
+                  ((newPrice - originalPrice) / originalPrice) * 100 * 100
+                ) / 100;
+
+              await paymentsCol.updateOne(
+                { paymentIntentId: job.paymentIntentId },
+                {
+                  $set: {
+                    amount: newPrice,
+                    totalAmount: newPrice,
+                    originalPrice: originalPrice,
+                    priceChangePercent: priceChangePercent,
+                    updatedAt: new Date(),
+                  },
+                }
+              );
+            } else if (paymentIntent.status === "requires_capture") {
+              // Payment intent is already confirmed but not captured
+              // We can't update the amount in Stripe, so we need to:
+              // 1. Cancel the old payment intent
+              // 2. Create a new payment intent with the new price
+              // 3. Update the job and payment records
+
+              const oldPaymentIntentId = job.paymentIntentId;
+              const oldPrice = paymentIntent.amount / 100;
+
+              // Get handyman account ID from payment intent
+              const handymanAccountId =
+                paymentIntent.transfer_data?.destination;
+
+              if (!handymanAccountId) {
+                console.error(
+                  `Cannot recreate payment intent: no handyman account ID found`
+                );
+                // Fallback: just update DB
+                const paymentsColForCapture = getCollectionPayments();
+                const existingPaymentForCapture =
+                  await paymentsColForCapture.findOne({
+                    paymentIntentId: oldPaymentIntentId,
+                  });
+                const originalPriceForCapture =
+                  existingPaymentForCapture?.originalPrice || oldPrice;
+                const priceChangePercentForCapture =
+                  Math.round(
+                    ((newPrice - originalPriceForCapture) /
+                      originalPriceForCapture) *
+                      100 *
+                      100
+                  ) / 100;
+
+                await paymentsCol.updateOne(
+                  { paymentIntentId: oldPaymentIntentId },
+                  {
+                    $set: {
+                      amount: newPrice,
+                      totalAmount: newPrice,
+                      originalPrice: originalPrice,
+                      priceChangePercent: priceChangePercent,
+                      updatedAt: new Date(),
+                    },
+                  }
+                );
+              } else {
+                // Cancel the old payment intent
+                try {
+                  await cancelEscrow(oldPaymentIntentId);
+                  console.log(
+                    `Cancelled old payment intent ${oldPaymentIntentId} due to price change`
+                  );
+                } catch (cancelError) {
+                  console.error(
+                    `Error cancelling old payment intent:`,
+                    cancelError.message
+                  );
+                  // Continue anyway - try to create new one
+                }
+
+                // Create new payment intent with new price
+                const newAmountAgorot = Math.round(newPrice * 100);
+                const platformFeeAgorot = Math.round(
+                  (newAmountAgorot * getPlatformFeePercent()) / 100
+                );
+
+                try {
+                  const newPaymentIntent = await createEscrowPaymentIntent({
+                    amountAgorot: newAmountAgorot,
+                    currency: "ils",
+                    handymanAccountId: handymanAccountId,
+                    platformFeeAgorot: platformFeeAgorot,
+                    metadata: {
+                      jobId: jobId,
+                      clientId: job.clientId?.toString() || "",
+                      handymanId:
+                        job.handymanId?.toString() ||
+                        (Array.isArray(job.handymanId) &&
+                          job.handymanId[0]?.toString()) ||
+                        "",
+                    },
+                  });
+
+                  // Update job with new payment intent ID
+                  await jobsCol.updateOne(
+                    { _id: new ObjectId(jobId) },
+                    {
+                      $set: {
+                        paymentIntentId: newPaymentIntent.paymentIntentId,
+                        updatedAt: new Date(),
+                      },
+                    }
+                  );
+
+                  // Update payment record with new payment intent
+                  const paymentsColForNewIntent = getCollectionPayments();
+                  const existingPaymentForNewIntent =
+                    await paymentsColForNewIntent.findOne({
+                      paymentIntentId: oldPaymentIntentId,
+                    });
+                  const originalPriceForNewIntent =
+                    existingPaymentForNewIntent?.originalPrice || oldPrice;
+                  const priceChangePercentForNewIntent =
+                    Math.round(
+                      ((newPrice - originalPriceForNewIntent) /
+                        originalPriceForNewIntent) *
+                        100 *
+                        100
+                    ) / 100;
+
+                  await paymentsColForNewIntent.updateOne(
+                    { paymentIntentId: oldPaymentIntentId },
+                    {
+                      $set: {
+                        paymentIntentId: newPaymentIntent.paymentIntentId,
+                        amount: newPrice,
+                        totalAmount: newPrice,
+                        originalPrice: originalPriceForNewIntent,
+                        priceChangePercent: priceChangePercentForNewIntent,
+                        status: newPaymentIntent.status,
+                        updatedAt: new Date(),
+                      },
+                    }
+                  );
+
+                  // If there's a saved payment method, attach it to the new payment intent
+                  if (job.paymentMethodId) {
+                    try {
+                      // Get customer ID
+                      const client = await usersCol.findOne({
+                        _id: new ObjectId(job.clientId),
+                      });
+                      let customerId = client?.stripeCustomerId;
+
+                      if (!customerId && client?.email) {
+                        const customer = await stripe.customers.create({
+                          email: client.email,
+                          metadata: {
+                            userId: job.clientId?.toString() || "",
+                          },
+                        });
+                        customerId = customer.id;
+                        await usersCol.updateOne(
+                          { _id: new ObjectId(job.clientId) },
+                          { $set: { stripeCustomerId: customerId } }
+                        );
+                      }
+
+                      if (customerId) {
+                        // Attach payment method to customer if needed
+                        try {
+                          await stripe.paymentMethods.attach(
+                            job.paymentMethodId,
+                            { customer: customerId }
+                          );
+                        } catch (attachError) {
+                          // Might already be attached, continue
+                        }
+
+                        // Update new payment intent with customer and payment method
+                        await stripe.paymentIntents.update(
+                          newPaymentIntent.paymentIntentId,
+                          {
+                            customer: customerId,
+                            payment_method: job.paymentMethodId,
+                          }
+                        );
+
+                        // Confirm the new payment intent
+                        await stripe.paymentIntents.confirm(
+                          newPaymentIntent.paymentIntentId
+                        );
+                      }
+                    } catch (confirmError) {
+                      console.error(
+                        `Error confirming new payment intent:`,
+                        confirmError.message
+                      );
+                      // Continue - payment intent is created, can be confirmed later
+                    }
+                  }
+
+                  console.log(
+                    `Created new payment intent ${newPaymentIntent.paymentIntentId} with price ${newPrice} ₪ (old: ${oldPrice} ₪)`
+                  );
+                } catch (createError) {
+                  console.error(
+                    `Error creating new payment intent:`,
+                    createError.message
+                  );
+                  // Fallback: just update DB
+                  const paymentsCol = getCollectionPayments();
+                  await paymentsCol.updateOne(
+                    { paymentIntentId: oldPaymentIntentId },
+                    {
+                      $set: {
+                        amount: newPrice,
+                        totalAmount: newPrice,
+                        updatedAt: new Date(),
+                      },
+                    }
+                  );
+                }
+              }
+            } else {
+              console.warn(
+                `Cannot update payment intent ${job.paymentIntentId}: status is ${paymentIntent.status}. Only updating DB.`
+              );
+
+              // Still update payment record in database even if we can't update Stripe
+              const paymentsCol = getCollectionPayments();
+              await paymentsCol.updateOne(
+                { paymentIntentId: job.paymentIntentId },
+                {
+                  $set: {
+                    amount: newPrice,
+                    totalAmount: newPrice,
+                    updatedAt: new Date(),
+                  },
+                }
+              );
+            }
           } catch (stripeError) {
+            console.error(
+              "Error updating payment intent:",
+              stripeError.message
+            );
             // Log error but don't fail the request
           }
         }
@@ -7043,7 +8696,7 @@ function findAvailablePort(startPort) {
                 paymentIntent.status === "succeeded") &&
               (job.clientApproved === true ||
                 job.status === "done" ||
-                job.status === "paid");
+                job.paymentStatus === "paid");
 
             if (!isReadyForTransfer) {
               // Don't attempt transfer - payment not ready or not approved
@@ -8703,6 +10356,9 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       // Get paymentMethodId from request (created by client with Stripe.js)
       const { paymentMethodId } = req.body;
 
+      // Get userId from request
+      const { userId } = req.body;
+
       // Get coordinates from location
       let userLng = null;
       let userLat = null;
@@ -8844,9 +10500,30 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         return false;
       };
 
-      // Find handymen who match ALL subcategories
+      // Get blocked handymen list from client
+      let blockedHandymanIds = [];
+      if (userId) {
+        try {
+          const clientObjectId = new ObjectId(userId);
+          const client = await collection.findOne({ _id: clientObjectId });
+          if (client && Array.isArray(client["handiman-Blocked"])) {
+            blockedHandymanIds = client["handiman-Blocked"].map((id) =>
+              String(id)
+            );
+          }
+        } catch (error) {
+          // Continue even if client fetch fails
+        }
+      }
 
+      // Find handymen who match ALL subcategories (excluding blocked handymen)
       const handymenMatchingAll = allHandymenInArea.filter((handyman) => {
+        // Skip blocked handymen
+        const handymanIdStr = String(handyman._id);
+        if (blockedHandymanIds.includes(handymanIdStr)) {
+          return false;
+        }
+
         return subcategoryInfoArray.every((subcatInfo) => {
           return handymanHasSpecialty(
             handyman,
@@ -8856,9 +10533,14 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         });
       });
 
-      // Find handymen who match SOME subcategories (for partial matches)
-
+      // Find handymen who match SOME subcategories (for partial matches) (excluding blocked)
       const handymenMatchingSome = allHandymenInArea.filter((handyman) => {
+        // Skip blocked handymen
+        const handymanIdStr = String(handyman._id);
+        if (blockedHandymanIds.includes(handymanIdStr)) {
+          return false;
+        }
+
         const matchingCount = subcategoryInfoArray.filter((subcatInfo) => {
           return handymanHasSpecialty(
             handyman,
@@ -8869,10 +10551,15 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         return matchingCount > 0 && matchingCount < subcategoryInfoArray.length;
       });
 
-      // Find handymen who match at least one subcategory (for split option)
-
+      // Find handymen who match at least one subcategory (for split option) (excluding blocked)
       const handymenMatchingAtLeastOne = allHandymenInArea.filter(
         (handyman) => {
+          // Skip blocked handymen
+          const handymanIdStr = String(handyman._id);
+          if (blockedHandymanIds.includes(handymanIdStr)) {
+            return false;
+          }
+
           return subcategoryInfoArray.some((subcatInfo) => {
             return handymanHasSpecialty(
               handyman,
@@ -8898,17 +10585,9 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
       // Scenario 1: Handyman(s) match ALL subcategories - create job
       if (handymenMatchingAll.length > 0) {
-        // Get client info
-        const {
-          userId,
-          desc,
-          workType,
-          when,
-          urgent,
-          imageUrls,
-          imageUrl,
-          location,
-        } = req.body;
+        // Get client info (userId already defined above)
+        const { desc, workType, when, urgent, imageUrls, imageUrl, location } =
+          req.body;
         // Support both array (new) and single string (old) for backward compatibility
         const imageUrlArray = imageUrls
           ? Array.isArray(imageUrls)
@@ -8920,12 +10599,28 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
             : [imageUrl]
           : [];
         let clientName = null;
+        let handimanBlocked = []; // Get blocked handymen list from client
         if (userId) {
           try {
             const clientObjectId = new ObjectId(userId);
             const client = await collection.findOne({ _id: clientObjectId });
             if (client) {
               clientName = client.username || null;
+              // Copy handiman-Blocked array from client to job
+              handimanBlocked = Array.isArray(client["handiman-Blocked"])
+                ? client["handiman-Blocked"].map((id) => {
+                    if (id instanceof ObjectId) {
+                      return id;
+                    } else if (typeof id === "string") {
+                      try {
+                        return new ObjectId(id);
+                      } catch (e) {
+                        return id; // Return as-is if conversion fails
+                      }
+                    }
+                    return id;
+                  })
+                : [];
             }
           } catch (error) {
             // Client fetch failed, continue without clientName
@@ -8949,6 +10644,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           status: "open",
           paymentIntentId: req.body.paymentIntentId || null, // Stripe Payment Intent ID
           paymentMethodId: paymentMethodId || null, // Stripe Payment Method ID (token, not card details)
+          "handiman-Blocked": handimanBlocked, // Copy blocked handymen from client
           createdAt: new Date(),
           updatedAt: new Date(),
           location: {
@@ -9915,7 +11611,6 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       }
 
       const jobsCol = getCollectionJobs();
-      const paymentsCol = getCollectionPayments();
       const usersCol = getCollection();
 
       // Get job details
@@ -9935,10 +11630,13 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       }
 
       // Check if payment was already transferred
-      const existingPayment = await paymentsCol.findOne({
+      const existingPaymentForTransferCheck = await paymentsCol.findOne({
         jobId: new ObjectId(jobId),
       });
-      if (existingPayment && existingPayment.status === "transferred") {
+      if (
+        existingPaymentForTransferCheck &&
+        existingPaymentForTransferCheck.status === "transferred"
+      ) {
         return res.status(400).json({
           success: false,
           message: "Payment already transferred",
@@ -9982,16 +11680,37 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       }
 
       // Calculate amounts
-      const totalAmount = capturedPayment.amount / 100; // Convert from agorot to ILS (basePrice + urgentFee if any)
+      const totalAmount = capturedPayment.amount / 100; // Convert from agorot to ILS (basePrice + urgentFee if any) - זה המחיר שהלקוח שילם כולל מע"מ
+
+      // Calculate VAT (MAAM) - המע"מ נגבה מהלקוח
+      const maamPercent = getMaamPercent();
+      const vatCalculation = calculateVAT(totalAmount, maamPercent);
+
+      // המחיר בלי מע"מ - עליו מחשבים את הרווחים
+      const amountWithoutVAT = vatCalculation.amountWithoutVAT;
       const urgentFee = job.urgent ? 10 : 0;
       const commissionRate = 0.1; // 10%
-      const commission = Math.round(totalAmount * commissionRate * 100) / 100; // Commission calculated on total amount (including urgent fee)
+      // העמלה מחושבת על המחיר בלי מע"מ (כי המע"מ נגבה מהלקוח)
+      const commission =
+        Math.round(amountWithoutVAT * commissionRate * 100) / 100;
       const systemRevenue = commission + urgentFee; // System gets commission + urgent fee
-      const handymanRevenue = totalAmount - commission - urgentFee; // Handyman gets total amount minus commission minus urgent fee
+      // הנדימן מקבל: המחיר בלי מע"מ פחות עמלה פחות קריאה דחופה
+      const handymanRevenue = amountWithoutVAT - commission - urgentFee;
 
       // Get handyman ID
       const handymanId = job.handymanId?.toString() || job.handymanId;
       const clientId = job.clientId?.toString() || job.clientId;
+
+      // Get existing payment to preserve originalPrice and priceChangePercent if price was changed
+      const paymentsColForTransfer = getCollectionPayments();
+      const existingPaymentForTransfer = await paymentsColForTransfer.findOne({
+        paymentIntentId: job.paymentIntentId,
+      });
+
+      const originalPrice =
+        existingPaymentForTransfer?.originalPrice || totalAmount;
+      const priceChangePercent =
+        existingPaymentForTransfer?.priceChangePercent || 0;
 
       // Create payment record
       const paymentData = {
@@ -9999,7 +11718,13 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         handymanId: handymanId,
         clientId: clientId,
         paymentIntentId: job.paymentIntentId,
-        totalAmount: totalAmount,
+        totalAmount: totalAmount, // המחיר הכולל שהלקוח שילם (כולל מע"מ)
+        originalPrice: originalPrice, // המחיר המקורי (לפני שינוי אם היה)
+        priceChangePercent: priceChangePercent, // אחוז השינוי במחיר
+        amountWithoutVAT: vatCalculation.amountWithoutVAT,
+        amountWithVAT: vatCalculation.amountWithVAT,
+        vatAmount: vatCalculation.vatAmount,
+        vatPercent: maamPercent,
         spacious_H: handymanRevenue,
         spacious_M: systemRevenue,
         status: "transferred",
@@ -10017,6 +11742,15 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         Math.round((totalAmount * clearingFeeRate + clearingFeeFixed) * 100) /
         100;
 
+      // Calculate VAT for expenses (clearing fee has VAT)
+      const clearingFeeVAT = calculateVAT(clearingFee, maamPercent);
+      const commissionVAT = calculateVAT(commission, maamPercent);
+      const urgentFeeVAT = calculateVAT(urgentFee, maamPercent);
+      const totalVAT =
+        clearingFeeVAT.vatAmount +
+        commissionVAT.vatAmount +
+        urgentFeeVAT.vatAmount;
+
       // Update managers_financials with revenue tracking and expenses
       const financialsCol = getCollectionFinancials();
       const financialsDoc = {
@@ -10027,6 +11761,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         },
         expenses: {
           "clearing fee": clearingFee,
+          'מע"מ': Math.round(totalVAT * 100) / 100, // Total VAT on all expenses
         },
         paymentID: paymentID, // Reference to payment document _id
       };
@@ -10100,8 +11835,34 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       const jobsCol = getCollectionJobs();
       const usersCol = getCollection();
 
+      // Filter out payments with zero or missing amounts (likely incomplete/error records)
+      // Only show payments that have either:
+      // 1. A valid amount > 0 (either totalAmount or amount field)
+      // 2. A paymentIntentId (meaning it's a real payment, even if amount is 0 temporarily)
       const payments = await paymentsCol
-        .find({})
+        .find({
+          $or: [
+            { totalAmount: { $gt: 0 } },
+            { amount: { $gt: 0 } },
+            {
+              $and: [
+                {
+                  paymentIntentId: {
+                    $exists: true,
+                    $ne: null,
+                    $ne: "",
+                  },
+                },
+                {
+                  $or: [
+                    { status: { $exists: true, $ne: null } },
+                    { createdAt: { $exists: true } },
+                  ],
+                },
+              ],
+            },
+          ],
+        })
         .sort({ createdAt: -1 })
         .toArray();
 
@@ -10142,8 +11903,26 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
             // Client not found or invalid ID
           }
 
+          // Map old field names to new field names for compatibility
+          // Old: amount, platformFee, handymanRevenue
+          // New: totalAmount, spacious_M, spacious_H
+          const totalAmount = payment.totalAmount || payment.amount || 0;
+          const spacious_M = payment.spacious_M || payment.platformFee || 0;
+          const spacious_H =
+            payment.spacious_H ||
+            payment.handymanRevenue ||
+            totalAmount - spacious_M;
+
           return {
             ...payment,
+            // Ensure new field names are always present
+            totalAmount: totalAmount,
+            spacious_M: spacious_M,
+            spacious_H: spacious_H,
+            // Keep old fields for backward compatibility
+            amount: payment.amount || totalAmount,
+            platformFee: payment.platformFee || spacious_M,
+            handymanRevenue: payment.handymanRevenue || spacious_H,
             job: job
               ? {
                   _id: job._id,
@@ -10177,6 +11956,550 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       return res.status(500).json({
         success: false,
         message: "Error fetching payments",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Get active subscriptions
+  app.get("/admin/subscriptions", async (req, res) => {
+    try {
+      const paymentsCol = getCollectionPayments();
+      const usersCol = getCollection();
+
+      // Get all subscription payments
+      const subscriptionPayments = await paymentsCol
+        .find({
+          type: "subscription",
+          status: { $in: ["active", "succeeded"] },
+        })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      // Get unique active subscriptions (group by userId)
+      const subscriptionsMap = new Map();
+      for (const payment of subscriptionPayments) {
+        const userId = payment.userId?.toString();
+        if (userId && !subscriptionsMap.has(userId)) {
+          try {
+            const user = await usersCol.findOne({
+              _id: new ObjectId(userId),
+            });
+            // Only show users with active subscription (not handimanFree)
+            if (user && user.hasActiveSubscription === true) {
+              const vatPercent = getMaamPercent();
+              const vatAmount = (payment.amount * vatPercent) / 100;
+
+              subscriptionsMap.set(userId, {
+                _id: payment._id,
+                userId: userId,
+                userName: user.username || "ללא שם",
+                amount: payment.amount || 0,
+                vatAmount: vatAmount,
+                createdAt: payment.createdAt,
+              });
+            }
+          } catch (err) {
+            // User not found, skip
+          }
+        }
+      }
+
+      const subscriptions = Array.from(subscriptionsMap.values());
+
+      return res.json({
+        success: true,
+        subscriptions: subscriptions,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching subscriptions",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Generate monthly PDF report
+  app.get("/admin/payments/monthly-pdf", async (req, res) => {
+    try {
+      const { chromium } = require("playwright");
+      const paymentsCol = getCollectionPayments();
+      const financialsCol = getCollectionFinancials();
+
+      // Get current month's data
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(
+        now.getFullYear(),
+        now.getMonth() + 1,
+        0,
+        23,
+        59,
+        59
+      );
+
+      // Get payments for current month
+      const payments = await paymentsCol
+        .find({
+          createdAt: {
+            $gte: startOfMonth,
+            $lte: endOfMonth,
+          },
+          status: "transferred", // Only transferred payments
+        })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      // Enrich payments with user names
+      const usersCol = getCollection();
+      const enrichedPaymentsForPDF = await Promise.all(
+        payments.map(async (payment) => {
+          let clientName = "ללא שם";
+          let handymanName = "ללא שם";
+
+          try {
+            if (payment.clientId) {
+              const client = await usersCol.findOne({
+                _id: new ObjectId(payment.clientId),
+              });
+              if (client) {
+                clientName = client.username || "ללא שם";
+              }
+            }
+          } catch (err) {
+            // Client not found
+          }
+
+          try {
+            if (payment.handymanId) {
+              const handyman = await usersCol.findOne({
+                _id: new ObjectId(payment.handymanId),
+              });
+              if (handyman) {
+                handymanName = handyman.username || "ללא שם";
+              }
+            }
+          } catch (err) {
+            // Handyman not found
+          }
+
+          return {
+            ...payment,
+            clientName,
+            handymanName,
+          };
+        })
+      );
+
+      // Get financials for current month
+      const financials = await financialsCol
+        .aggregate([
+          {
+            $match: {
+              createdAt: {
+                $gte: startOfMonth,
+                $lte: endOfMonth,
+              },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              totalRevenue: {
+                $sum: {
+                  $add: [
+                    { $ifNull: ["$Revenue.Fees", 0] },
+                    { $ifNull: ["$Revenue.Drawings", 0] },
+                    { $ifNull: ["$Revenue.Urgent call", 0] },
+                  ],
+                },
+              },
+              totalExpenses: {
+                $sum: {
+                  $add: [
+                    { $ifNull: ["$expenses.AI expenses", 0] },
+                    { $ifNull: ["$expenses.DB expenses", 0] },
+                    { $ifNull: ["$expenses.API expenses", 0] },
+                    { $ifNull: ["$expenses.Marketing expenses", 0] },
+                    { $ifNull: ["$expenses.clearing fee", 0] },
+                    { $ifNull: ["$expenses.VAT", 0] },
+                  ],
+                },
+              },
+              totalVAT: {
+                $sum: { $ifNull: ["$expenses.VAT", 0] },
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      const summary = financials[0] || {
+        totalRevenue: 0,
+        totalExpenses: 0,
+        totalVAT: 0,
+      };
+
+      // Calculate totals from payments
+      const paymentsTotal = enrichedPaymentsForPDF.reduce(
+        (sum, p) => sum + (p.totalAmount || 0),
+        0
+      );
+      const vatTotal = enrichedPaymentsForPDF.reduce(
+        (sum, p) => sum + (p.vatAmount || 0),
+        0
+      );
+      const handymanRevenue = enrichedPaymentsForPDF.reduce(
+        (sum, p) => sum + (p.spacious_H || 0),
+        0
+      );
+      const systemRevenue = enrichedPaymentsForPDF.reduce(
+        (sum, p) => sum + (p.spacious_M || 0),
+        0
+      );
+
+      // Generate HTML for PDF
+      const monthNames = [
+        "ינואר",
+        "פברואר",
+        "מרץ",
+        "אפריל",
+        "מאי",
+        "יוני",
+        "יולי",
+        "אוגוסט",
+        "ספטמבר",
+        "אוקטובר",
+        "נובמבר",
+        "דצמבר",
+      ];
+      const monthName = monthNames[now.getMonth()];
+      const year = now.getFullYear();
+
+      const htmlContent = `
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      font-family: 'Arial', 'Heebo', sans-serif;
+      direction: rtl;
+      padding: 40px;
+      background: white;
+      color: #000;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+      border-bottom: 3px solid #ff6a00;
+      padding-bottom: 20px;
+    }
+    .header h1 {
+      color: #ff6a00;
+      margin: 0;
+      font-size: 32px;
+    }
+    .header h2 {
+      color: #333;
+      margin: 10px 0 0 0;
+      font-size: 20px;
+    }
+    .summary {
+      background: #f5f5f5;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 30px;
+    }
+    .summary h3 {
+      color: #ff6a00;
+      margin-top: 0;
+      font-size: 18px;
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #ddd;
+    }
+    .summary-row:last-child {
+      border-bottom: none;
+      font-weight: bold;
+      font-size: 16px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 2px solid #ff6a00;
+    }
+    .summary-label {
+      color: #666;
+    }
+    .summary-value {
+      color: #000;
+      font-weight: bold;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      font-size: 12px;
+    }
+    th {
+      background: #ff6a00;
+      color: white;
+      padding: 12px;
+      text-align: right;
+      font-weight: bold;
+    }
+    td {
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+      text-align: right;
+    }
+    tr:nth-child(even) {
+      background: #f9f9f9;
+    }
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      color: #666;
+      font-size: 12px;
+      border-top: 1px solid #ddd;
+      padding-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>דוח חודשי - הנדימן</h1>
+    <h2>${monthName} ${year}</h2>
+  </div>
+
+  <div class="summary">
+    <h3>סיכום כספי</h3>
+    <div class="summary-row">
+      <span class="summary-label">סך כל התשלומים:</span>
+      <span class="summary-value">${paymentsTotal.toFixed(2)} ₪</span>
+    </div>
+    <div class="summary-row">
+      <span class="summary-label">סך מע"מ:</span>
+      <span class="summary-value">${vatTotal.toFixed(2)} ₪</span>
+    </div>
+    <div class="summary-row">
+      <span class="summary-label">סך הכנסות:</span>
+      <span class="summary-value">${summary.totalRevenue.toFixed(2)} ₪</span>
+    </div>
+    <div class="summary-row">
+      <span class="summary-label">סך הוצאות:</span>
+      <span class="summary-value">${summary.totalExpenses.toFixed(2)} ₪</span>
+    </div>
+    <div class="summary-row">
+      <span class="summary-label">רווח נקי:</span>
+      <span class="summary-value">${(
+        summary.totalRevenue - summary.totalExpenses
+      ).toFixed(2)} ₪</span>
+    </div>
+  </div>
+
+  <h3>פירוט תשלומים (${enrichedPaymentsForPDF.length} תשלומים)</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>תאריך</th>
+        <th>לקוח</th>
+        <th>הנדימן</th>
+        <th>סכום כולל</th>
+        <th>מע"מ</th>
+        <th>רווח הנדימן</th>
+        <th>רווח המערכת</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${enrichedPaymentsForPDF
+        .map(
+          (payment) => `
+        <tr>
+          <td>${new Date(payment.createdAt).toLocaleDateString("he-IL")}</td>
+          <td>${payment.clientName || "ללא"}</td>
+          <td>${payment.handymanName || "ללא"}</td>
+          <td>${(payment.totalAmount || 0).toFixed(2)} ₪</td>
+          <td>${(payment.vatAmount || 0).toFixed(2)} ₪</td>
+          <td>${(payment.spacious_H || 0).toFixed(2)} ₪</td>
+          <td>${(payment.spacious_M || 0).toFixed(2)} ₪</td>
+        </tr>
+      `
+        )
+        .join("")}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <p>דוח זה נוצר אוטומטית על ידי מערכת הנדימן</p>
+    <p>תאריך יצירה: ${new Date().toLocaleDateString(
+      "he-IL"
+    )} ${new Date().toLocaleTimeString("he-IL")}</p>
+  </div>
+</body>
+</html>
+      `;
+
+      // Launch browser and generate PDF
+      const browser = await chromium.launch();
+      const page = await browser.newPage();
+      await page.setContent(htmlContent, { waitUntil: "networkidle" });
+
+      const pdfBuffer = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        margin: {
+          top: "20mm",
+          right: "15mm",
+          bottom: "20mm",
+          left: "15mm",
+        },
+      });
+
+      await browser.close();
+
+      // Send PDF as response
+      res.setHeader("Content-Type", "application/pdf");
+      // Use RFC 5987 encoding for Hebrew filename
+      const monthNum = String(now.getMonth() + 1).padStart(2, "0");
+      const filename = `monthly_report_${monthNum}_${year}.pdf`;
+      const filenameUtf8 = encodeURIComponent(
+        `דוח_חודשי_${monthNum}_${year}.pdf`
+      );
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}"; filename*=UTF-8''${filenameUtf8}`
+      );
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה ביצירת הדוח",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Capture payment (bypasses client approval requirement)
+  app.post("/admin/payments/capture", async (req, res) => {
+    try {
+      const { paymentId, jobId, paymentIntentId } = req.body;
+
+      // Accept either paymentId (to look up) or jobId+paymentIntentId
+      let targetPaymentIntentId = paymentIntentId;
+      let targetJobId = jobId;
+
+      const paymentsCol = getCollectionPayments();
+      const jobsCol = getCollectionJobs();
+
+      if (paymentId && !targetPaymentIntentId) {
+        // Look up payment by ID
+        const payment = await paymentsCol.findOne({
+          _id: new ObjectId(paymentId),
+        });
+        if (!payment) {
+          return res.status(404).json({
+            success: false,
+            message: "Payment not found",
+          });
+        }
+        targetPaymentIntentId = payment.paymentIntentId;
+        targetJobId = payment.jobId;
+      }
+
+      if (!targetPaymentIntentId || !targetJobId) {
+        return res.status(400).json({
+          success: false,
+          message: "paymentId or (jobId and paymentIntentId) required",
+        });
+      }
+
+      // Get job (for verification, but don't require clientApproved for admin)
+      const job = await jobsCol.findOne({ _id: new ObjectId(targetJobId) });
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
+
+      // Get payment intent from Stripe to verify status
+      let paymentIntent;
+      try {
+        paymentIntent = await stripe.paymentIntents.retrieve(
+          targetPaymentIntentId
+        );
+      } catch (stripeError) {
+        return res.status(400).json({
+          success: false,
+          message: "Payment Intent not found in Stripe",
+          error: stripeError.message,
+        });
+      }
+
+      // Verify payment is in requires_capture state
+      if (paymentIntent.status !== "requires_capture") {
+        return res.status(400).json({
+          success: false,
+          message: `Payment is not ready to be captured. Current status: ${paymentIntent.status}`,
+          currentStatus: paymentIntent.status,
+        });
+      }
+
+      // Capture the payment (admin can bypass client approval)
+      console.log(
+        `[Admin Capture] Capturing payment: ${targetPaymentIntentId} for job: ${targetJobId}`
+      );
+      const capturedPayment = await captureEscrow(targetPaymentIntentId);
+      console.log(
+        `[Admin Capture] Payment captured successfully. New status: ${capturedPayment.status}`
+      );
+
+      // Update payment record
+      const paymentUpdateResult = await paymentsCol.updateOne(
+        { paymentIntentId: targetPaymentIntentId },
+        {
+          $set: {
+            status: "captured",
+            updatedAt: new Date(),
+          },
+        }
+      );
+      console.log(
+        `[Admin Capture] Payment record updated: ${paymentUpdateResult.modifiedCount} document(s) modified`
+      );
+
+      // Update job payment status
+      const jobUpdateResult = await jobsCol.updateOne(
+        { _id: new ObjectId(targetJobId) },
+        {
+          $set: {
+            paymentStatus: "paid",
+            clientApproved: true, // Mark as approved since admin released it
+          },
+        }
+      );
+      console.log(
+        `[Admin Capture] Job record updated: ${jobUpdateResult.modifiedCount} document(s) modified`
+      );
+
+      return res.json({
+        success: true,
+        status: capturedPayment.status,
+        message: "התשלום שוחרר בהצלחה על ידי מנהל המערכת",
+        capturedAmount: capturedPayment.amount
+          ? capturedPayment.amount / 100
+          : null, // Return amount in ILS
+      });
+    } catch (error) {
+      console.error("Error capturing payment (admin):", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה בשחרור התשלום",
         error: error.message,
       });
     }
@@ -10257,6 +12580,80 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       return res.status(500).json({
         success: false,
         message: "Error fetching users",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Get user by ID with details
+  app.get("/admin/users/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        return res
+          .status(400)
+          .json({ success: false, message: "User ID required" });
+      }
+
+      const collection = getCollection();
+      const paymentsCol = getCollectionPayments();
+
+      if (!collection || !paymentsCol) {
+        return res.status(500).json({
+          success: false,
+          message: "Database not connected",
+        });
+      }
+
+      const userId = new ObjectId(id);
+      const user = await collection.findOne(
+        { _id: userId },
+        {
+          projection: {
+            password: 0,
+            googleId: 0,
+          },
+        }
+      );
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Calculate total earnings for handymen
+      let totalEarnings = 0;
+      if (user.isHandyman) {
+        const payments = await paymentsCol
+          .find({
+            "handyman._id": userId,
+            status: { $in: ["transferred", "succeeded", "captured"] },
+          })
+          .toArray();
+
+        totalEarnings = payments.reduce((sum, payment) => {
+          return sum + (payment.spacious_H || 0);
+        }, 0);
+      }
+
+      // Add total earnings to user object
+      const userWithDetails = {
+        ...user,
+        totalEarnings,
+      };
+
+      return res.json({
+        success: true,
+        user: userWithDetails,
+      });
+    } catch (error) {
+      console.error("Error fetching user details:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching user details",
         error: error.message,
       });
     }
@@ -10412,7 +12809,8 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         { _id: userId },
         {
           $set: {
-            isBlocked: isBlocked,
+            IsBlocked: isBlocked,
+            isBlocked: isBlocked, // שמירה גם ב-isBlocked לתאימות לאחור
             updatedAt: new Date(),
           },
         }
@@ -10531,6 +12929,9 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
               totalClearingFee: {
                 $sum: { $ifNull: ["$expenses.clearing fee", 0] },
               },
+              totalVAT: {
+                $sum: { $ifNull: ['$expenses.מע"מ', 0] },
+              },
               totalFees: {
                 $sum: { $ifNull: ["$Revenue.Fees", 0] },
               },
@@ -10556,6 +12957,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
             "API expenses": totals.totalAPIExpenses || 0,
             "Marketing expenses": totals.totalMarketingExpenses || 0,
             "clearing fee": totals.totalClearingFee || 0,
+            'מע"מ': totals.totalVAT || 0,
           },
           Revenue: {
             Fees: totals.totalFees || 0,
@@ -10708,6 +13110,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         "expenses.API expenses",
         "expenses.Marketing expenses",
         "expenses.clearing fee",
+        'expenses.מע"מ',
         "Revenue.Fees",
         "Revenue.Drawings",
         "Revenue.Urgent call",
@@ -11038,6 +13441,451 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
     }
   });
 
+  // Admin endpoint - Get MAAM (VAT) percentage
+  app.get("/admin/maam", async (req, res) => {
+    try {
+      const maam = getMaamPercent();
+      return res.json({
+        success: true,
+        maam: maam,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching MAAM percentage",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Update MAAM (VAT) percentage
+  app.post("/admin/maam", async (req, res) => {
+    try {
+      const { maam } = req.body;
+      if (maam === undefined || maam === null) {
+        return res.status(400).json({
+          success: false,
+          message: "MAAM is required",
+        });
+      }
+
+      const maamNumber = parseFloat(maam);
+      if (isNaN(maamNumber) || maamNumber < 0 || maamNumber > 100) {
+        return res.status(400).json({
+          success: false,
+          message: "MAAM must be a number between 0 and 100",
+        });
+      }
+
+      // Update dry-data.json
+      try {
+        const dryDataPath = path.join(__dirname, "API", "dry-data.json");
+        const dryData = JSON.parse(fs.readFileSync(dryDataPath, "utf8"));
+        dryData.maam = maamNumber;
+        fs.writeFileSync(dryDataPath, JSON.stringify(dryData, null, 2));
+
+        return res.json({
+          success: true,
+          maam: maamNumber,
+          message: "MAAM percentage updated successfully",
+        });
+      } catch (fileError) {
+        return res.status(500).json({
+          success: false,
+          message: "Error updating MAAM percentage",
+          error: fileError.message,
+        });
+      }
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error updating MAAM percentage",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Get Monthly-subscriptions amount
+  app.get("/admin/monthly-subscription", async (req, res) => {
+    try {
+      const amount = getMonthlySubscription();
+      return res.json({
+        success: true,
+        amount: amount,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching Monthly-subscriptions amount",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Update Monthly-subscriptions amount
+  app.post("/admin/monthly-subscription", async (req, res) => {
+    try {
+      const { amount } = req.body;
+      if (amount === undefined || amount === null) {
+        return res.status(400).json({
+          success: false,
+          message: "Amount is required",
+        });
+      }
+
+      const amountNumber = parseFloat(amount);
+      if (isNaN(amountNumber) || amountNumber < 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Amount must be a positive number",
+        });
+      }
+
+      const updated = updateMonthlySubscription(amountNumber);
+      if (updated) {
+        return res.json({
+          success: true,
+          amount: amountNumber,
+          message: "Monthly-subscriptions amount updated successfully",
+        });
+      } else {
+        return res.status(500).json({
+          success: false,
+          message: "Error updating Monthly-subscriptions amount",
+        });
+      }
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error updating Monthly-subscriptions amount",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Get all cancellations
+  app.get("/admin/cancellations", async (req, res) => {
+    try {
+      const jobsCol = getCollectionJobs();
+      if (!jobsCol) {
+        return res.status(500).json({
+          success: false,
+          message: "Database not connected",
+        });
+      }
+
+      // Find all jobs with cancel object
+      const cancelledJobs = await jobsCol
+        .find({
+          cancel: { $exists: true },
+        })
+        .sort({ "cancel.cancelledAt": -1 }) // Sort by cancellation date, newest first
+        .toArray();
+
+      return res.json({
+        success: true,
+        cancellations: cancelledJobs,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching cancellations",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin endpoint - Collect fine from cancellation
+  app.post("/admin/cancellations/collect-fine", async (req, res) => {
+    try {
+      const { jobId, fineAmount } = req.body;
+
+      if (!jobId || !fineAmount) {
+        return res.status(400).json({
+          success: false,
+          message: "Job ID and fine amount are required",
+        });
+      }
+
+      if (fineAmount <= 0 || fineAmount > 200) {
+        return res.status(400).json({
+          success: false,
+          message: "Fine amount must be between 1 and 200",
+        });
+      }
+
+      const jobsCol = getCollectionJobs();
+      const usersCol = getCollection();
+      const financialsCol = getCollectionFinancials();
+
+      // Find the job
+      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
+
+      // Check if fine already collected
+      if (job.cancel?.fineCollected === true) {
+        return res.status(400).json({
+          success: false,
+          message: "Fine already collected for this cancellation",
+        });
+      }
+
+      // Get client and handyman - try multiple possible field names
+      let clientId = job.clientId || job.client?._id || job.userId;
+      let handymanId = job.handymanId
+        ? Array.isArray(job.handymanId)
+          ? job.handymanId[0]
+          : job.handymanId
+        : job.handyman?._id || job.handymanIdSpecial || null;
+
+      // If still not found, try to get from payment if exists
+      if (!clientId || !handymanId) {
+        const paymentsCol = getCollectionPayments();
+        const payment = await paymentsCol.findOne({
+          jobId: new ObjectId(jobId),
+        });
+        if (payment) {
+          if (!clientId && payment.clientId) {
+            clientId = payment.clientId;
+          }
+          if (!handymanId && payment.handymanId) {
+            handymanId = payment.handymanId;
+          }
+        }
+      }
+
+      if (!clientId || !handymanId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Client or handyman not found for this job. Job ID: " + jobId,
+        });
+      }
+
+      // Convert to ObjectId if needed
+      let clientObjectId;
+      let handymanObjectId;
+
+      try {
+        clientObjectId =
+          clientId instanceof ObjectId ? clientId : new ObjectId(clientId);
+      } catch (e) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid client ID format: " + clientId,
+        });
+      }
+
+      try {
+        handymanObjectId =
+          handymanId instanceof ObjectId
+            ? handymanId
+            : new ObjectId(handymanId);
+      } catch (e) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid handyman ID format: " + handymanId,
+        });
+      }
+
+      const client = await usersCol.findOne({ _id: clientObjectId });
+      const handyman = await usersCol.findOne({
+        _id: handymanObjectId,
+      });
+
+      if (!client || !handyman) {
+        return res.status(404).json({
+          success: false,
+          message: "Client or handyman not found",
+        });
+      }
+
+      // Check if job has paymentIntentId - needed to charge the client
+      if (!job.paymentIntentId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Job has no paymentIntentId. Cannot collect fine from client.",
+        });
+      }
+
+      // Get the original payment intent to retrieve payment method
+      let originalPaymentIntent;
+      try {
+        originalPaymentIntent = await stripe.paymentIntents.retrieve(
+          job.paymentIntentId
+        );
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: "Failed to retrieve payment intent for this job",
+          error: error.message,
+        });
+      }
+
+      // Check if payment intent has a payment method attached
+      if (!originalPaymentIntent.payment_method) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Payment intent has no payment method. Cannot charge client.",
+        });
+      }
+
+      // Calculate platform fee
+      const platformFeePercent = getPlatformFeePercent();
+      const platformFeeAmount = (fineAmount * platformFeePercent) / 100;
+      const handymanAmount = fineAmount - platformFeeAmount;
+
+      // Get or create handyman's Stripe Connect account
+      const handymanAccountId = await getOrCreateConnectedAccount(
+        handyman,
+        usersCol
+      );
+
+      if (!handymanAccountId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Handyman does not have a Stripe account. Please complete onboarding first.",
+        });
+      }
+
+      // Convert amounts to agorot (Stripe uses smallest currency unit)
+      const fineAmountAgorot = Math.round(fineAmount * 100);
+      const handymanAmountAgorot = Math.round(handymanAmount * 100);
+      const platformFeeAgorot = Math.round(platformFeeAmount * 100);
+
+      // Create a new payment intent for the fine using the same payment method
+      let finePaymentIntent;
+      try {
+        finePaymentIntent = await stripe.paymentIntents.create({
+          amount: fineAmountAgorot,
+          currency: "ils",
+          payment_method: originalPaymentIntent.payment_method,
+          confirm: true,
+          metadata: {
+            jobId: String(jobId),
+            type: "cancellation_fine",
+            fineAmount: String(fineAmount),
+            platformFeeAmount: String(platformFeeAmount),
+            handymanAmount: String(handymanAmount),
+          },
+        });
+
+        // If payment intent is not immediately succeeded, try to confirm it
+        if (finePaymentIntent.status !== "succeeded") {
+          finePaymentIntent = await stripe.paymentIntents.confirm(
+            finePaymentIntent.id
+          );
+        }
+      } catch (chargeError) {
+        console.error("Stripe charge error for fine:", chargeError);
+        return res.status(500).json({
+          success: false,
+          message: "שגיאה בגביית הקנס מהלקוח",
+          error: chargeError.message,
+          code: chargeError.code || "unknown",
+        });
+      }
+
+      // Verify payment was successful
+      if (finePaymentIntent.status !== "succeeded") {
+        return res.status(500).json({
+          success: false,
+          message: "תשלום הקנס לא הושלם. סטטוס: " + finePaymentIntent.status,
+        });
+      }
+
+      // Create transfer to handyman using Stripe Connect
+      // Since we already charged the client, the money is in our platform account
+      // Now we transfer the handyman's portion to their account
+      let transfer = null;
+      try {
+        transfer = await stripe.transfers.create({
+          amount: handymanAmountAgorot,
+          currency: "ils",
+          destination: handymanAccountId,
+          metadata: {
+            jobId: String(jobId),
+            type: "cancellation_fine",
+            fineAmount: String(fineAmount),
+            platformFeeAmount: String(platformFeeAmount),
+            finePaymentIntentId: finePaymentIntent.id,
+          },
+        });
+      } catch (stripeError) {
+        console.error("Stripe transfer error:", stripeError);
+
+        // Handle specific error cases
+        if (stripeError.code === "balance_insufficient") {
+          // This should not happen since we just charged the client, but handle it anyway
+          return res.status(400).json({
+            success: false,
+            message:
+              "אין מספיק כסף בחשבון Stripe לביצוע ההעברה. ב-test mode, יש להוסיף כסף לחשבון באמצעות כרטיס הבדיקה 4000000000000077",
+            error: stripeError.message,
+            code: "balance_insufficient",
+            isTestMode: process.env.STRIPE_SECRET_KEY?.includes("sk_test"),
+          });
+        }
+
+        return res.status(500).json({
+          success: false,
+          message: "שגיאה בהעברת כסף להנדימן",
+          error: stripeError.message,
+          code: stripeError.code || "unknown",
+        });
+      }
+
+      // Update job with fine information
+      await jobsCol.updateOne(
+        { _id: new ObjectId(jobId) },
+        {
+          $set: {
+            "cancel.fineCollected": true,
+            "cancel.fineAmount": fineAmount,
+            "cancel.fineCollectedAt": new Date(),
+            "cancel.platformFeeAmount": platformFeeAmount,
+            "cancel.handymanAmount": handymanAmount,
+            "cancel.stripeTransferId": transfer.id,
+            "cancel.finePaymentIntentId": finePaymentIntent.id,
+          },
+        }
+      );
+
+      // Update financials - add platform fee to Revenue.Fees
+      await financialsCol.updateOne(
+        {},
+        {
+          $inc: {
+            "Revenue.Fees": platformFeeAmount,
+          },
+        },
+        { upsert: true }
+      );
+
+      return res.json({
+        success: true,
+        message: "Fine collected successfully",
+        fineAmount: fineAmount,
+        platformFeeAmount: platformFeeAmount,
+        handymanAmount: handymanAmount,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error collecting fine",
+        error: error.message,
+      });
+    }
+  });
+
   app.delete("/users/:id", async (req, res) => {
     try {
       const { id } = req.params;
@@ -11223,10 +14071,633 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         });
       }
     });
+
+    // Handle price change request from handyman
+    socket.on("price-change-request", async (data) => {
+      const { jobId, handymanId, percent, oldPrice, newPrice, changeAmount } =
+        data;
+      if (!jobId || !handymanId || percent === undefined) return;
+
+      try {
+        const jobsCol = getCollectionJobs();
+        const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+
+        if (!job) {
+          socket.emit("error", { message: "עבודה לא נמצאה" });
+          return;
+        }
+
+        // Verify handyman is assigned to this job
+        let isHandymanAssigned = false;
+        if (job.handymanId) {
+          if (Array.isArray(job.handymanId)) {
+            isHandymanAssigned = job.handymanId.some(
+              (id) => String(id) === String(handymanId)
+            );
+          } else {
+            isHandymanAssigned = String(job.handymanId) === String(handymanId);
+          }
+        }
+
+        if (!isHandymanAssigned) {
+          socket.emit("error", { message: "אין הרשאה לעדכן מחיר עבודה זו" });
+          return;
+        }
+
+        // Verify percent is within -20% to +20%
+        if (Math.abs(percent) > 20) {
+          socket.emit("error", {
+            message: "שינוי המחיר חייב להיות בין -20% ל-+20%",
+          });
+          return;
+        }
+
+        // Get client ID from job
+        const clientId = job.clientId;
+        if (!clientId) {
+          socket.emit("error", { message: "לקוח לא נמצא" });
+          return;
+        }
+
+        // Emit price change request to client
+        io.to(`job-${jobId}`).emit("price-change-request", {
+          jobId,
+          handymanId,
+          percent,
+          oldPrice,
+          newPrice,
+          changeAmount,
+        });
+      } catch (error) {
+        console.error("Error handling price change request:", error);
+        socket.emit("error", { message: "שגיאה בעיבוד בקשת שינוי המחיר" });
+      }
+    });
+
+    // Handle price change response from client
+    socket.on("price-change-response", async (data) => {
+      const { jobId, approved, percent, oldPrice, newPrice } = data;
+      if (!jobId || approved === undefined) return;
+
+      try {
+        const jobsCol = getCollectionJobs();
+        const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+
+        if (!job) {
+          socket.emit("error", { message: "עבודה לא נמצאה" });
+          return;
+        }
+
+        if (approved) {
+          // Update price in job document
+          const updateFields = {};
+
+          // Handle subcategoryInfo as array
+          if (
+            job.subcategoryInfo &&
+            Array.isArray(job.subcategoryInfo) &&
+            job.subcategoryInfo.length > 0
+          ) {
+            // Update each subcategory price proportionally
+            const totalOldPrice = job.subcategoryInfo.reduce((sum, subcat) => {
+              const price = subcat?.price || 0;
+              return (
+                sum +
+                (typeof price === "number" ? price : parseFloat(price) || 0)
+              );
+            }, 0);
+
+            if (totalOldPrice > 0) {
+              const newSubcategoryInfo = job.subcategoryInfo.map((subcat) => {
+                const oldSubcatPrice =
+                  typeof subcat.price === "number"
+                    ? subcat.price
+                    : parseFloat(subcat.price) || 0;
+                const proportion = oldSubcatPrice / totalOldPrice;
+                const newSubcatPrice =
+                  Math.round(newPrice * proportion * 100) / 100;
+                return {
+                  ...subcat,
+                  price: newSubcatPrice,
+                };
+              });
+              updateFields.subcategoryInfo = newSubcategoryInfo;
+            }
+          } else if (job.subcategoryInfo?.price) {
+            // Handle subcategoryInfo as object
+            updateFields["subcategoryInfo.price"] = newPrice;
+          } else {
+            // Fallback to job.price
+            updateFields.price = newPrice;
+          }
+
+          // Update job in database
+          await jobsCol.updateOne(
+            { _id: new ObjectId(jobId) },
+            { $set: updateFields }
+          );
+
+          // Update Payment Intent if exists
+          if (job.paymentIntentId) {
+            try {
+              const paymentIntent = await stripe.paymentIntents.retrieve(
+                job.paymentIntentId
+              );
+
+              // Only update if payment intent is in a state that allows updates
+              // According to Stripe: Can update: requires_payment_method, requires_confirmation, requires_action
+              // Cannot update: requires_capture, succeeded, canceled, processing
+              const updatableStatuses = [
+                "requires_payment_method",
+                "requires_confirmation",
+                "requires_action",
+              ];
+
+              if (updatableStatuses.includes(paymentIntent.status)) {
+                const newAmountAgorot = Math.round(newPrice * 100);
+                const platformFeeAgorot = Math.round(
+                  (newAmountAgorot * getPlatformFeePercent()) / 100
+                );
+
+                // Update amount and application fee in payment intent
+                await stripe.paymentIntents.update(job.paymentIntentId, {
+                  amount: newAmountAgorot,
+                  application_fee_amount: platformFeeAgorot,
+                });
+
+                // Also update payment record in database
+                const paymentsCol = getCollectionPayments();
+                await paymentsCol.updateOne(
+                  { paymentIntentId: job.paymentIntentId },
+                  {
+                    $set: {
+                      amount: newPrice,
+                      totalAmount: newPrice,
+                      updatedAt: new Date(),
+                    },
+                  }
+                );
+              } else if (paymentIntent.status === "requires_capture") {
+                // Payment intent is already confirmed but not captured
+                // We can't update the amount in Stripe, so we need to:
+                // 1. Cancel the old payment intent
+                // 2. Create a new payment intent with the new price
+                // 3. Update the job and payment records
+
+                const oldPaymentIntentId = job.paymentIntentId;
+                const oldPrice = paymentIntent.amount / 100;
+
+                // Get handyman account ID from payment intent
+                const handymanAccountId =
+                  paymentIntent.transfer_data?.destination;
+
+                if (!handymanAccountId) {
+                  console.error(
+                    `Cannot recreate payment intent: no handyman account ID found`
+                  );
+                  // Fallback: just update DB
+                  const paymentsCol = getCollectionPayments();
+                  await paymentsCol.updateOne(
+                    { paymentIntentId: oldPaymentIntentId },
+                    {
+                      $set: {
+                        amount: newPrice,
+                        totalAmount: newPrice,
+                        updatedAt: new Date(),
+                      },
+                    }
+                  );
+                } else {
+                  // Cancel the old payment intent
+                  try {
+                    await cancelEscrow(oldPaymentIntentId);
+                    console.log(
+                      `Cancelled old payment intent ${oldPaymentIntentId} due to price change`
+                    );
+                  } catch (cancelError) {
+                    console.error(
+                      `Error cancelling old payment intent:`,
+                      cancelError.message
+                    );
+                    // Continue anyway - try to create new one
+                  }
+
+                  // Create new payment intent with new price
+                  const newAmountAgorot = Math.round(newPrice * 100);
+                  const platformFeeAgorot = Math.round(
+                    (newAmountAgorot * getPlatformFeePercent()) / 100
+                  );
+
+                  try {
+                    const newPaymentIntent = await createEscrowPaymentIntent({
+                      amountAgorot: newAmountAgorot,
+                      currency: "ils",
+                      handymanAccountId: handymanAccountId,
+                      platformFeeAgorot: platformFeeAgorot,
+                      metadata: {
+                        jobId: jobId,
+                        clientId: job.clientId?.toString() || "",
+                        handymanId:
+                          job.handymanId?.toString() ||
+                          (Array.isArray(job.handymanId) &&
+                            job.handymanId[0]?.toString()) ||
+                          "",
+                      },
+                    });
+
+                    // Update job with new payment intent ID
+                    await jobsCol.updateOne(
+                      { _id: new ObjectId(jobId) },
+                      {
+                        $set: {
+                          paymentIntentId: newPaymentIntent.paymentIntentId,
+                          updatedAt: new Date(),
+                        },
+                      }
+                    );
+
+                    // Update payment record with new payment intent
+                    const paymentsCol = getCollectionPayments();
+                    await paymentsCol.updateOne(
+                      { paymentIntentId: oldPaymentIntentId },
+                      {
+                        $set: {
+                          paymentIntentId: newPaymentIntent.paymentIntentId,
+                          amount: newPrice,
+                          totalAmount: newPrice,
+                          status: newPaymentIntent.status,
+                          updatedAt: new Date(),
+                        },
+                      }
+                    );
+
+                    // If there's a saved payment method, attach it to the new payment intent
+                    if (job.paymentMethodId) {
+                      try {
+                        // Get customer ID
+                        const usersCol = getCollection();
+                        const client = await usersCol.findOne({
+                          _id: new ObjectId(job.clientId),
+                        });
+                        let customerId = client?.stripeCustomerId;
+
+                        if (!customerId && client?.email) {
+                          const customer = await stripe.customers.create({
+                            email: client.email,
+                            metadata: {
+                              userId: job.clientId?.toString() || "",
+                            },
+                          });
+                          customerId = customer.id;
+                          await usersCol.updateOne(
+                            { _id: new ObjectId(job.clientId) },
+                            { $set: { stripeCustomerId: customerId } }
+                          );
+                        }
+
+                        if (customerId) {
+                          // Attach payment method to customer if needed
+                          try {
+                            await stripe.paymentMethods.attach(
+                              job.paymentMethodId,
+                              { customer: customerId }
+                            );
+                          } catch (attachError) {
+                            // Might already be attached, continue
+                          }
+
+                          // Update new payment intent with customer and payment method
+                          await stripe.paymentIntents.update(
+                            newPaymentIntent.paymentIntentId,
+                            {
+                              customer: customerId,
+                              payment_method: job.paymentMethodId,
+                            }
+                          );
+
+                          // Confirm the new payment intent
+                          await stripe.paymentIntents.confirm(
+                            newPaymentIntent.paymentIntentId
+                          );
+                        }
+                      } catch (confirmError) {
+                        console.error(
+                          `Error confirming new payment intent:`,
+                          confirmError.message
+                        );
+                        // Continue - payment intent is created, can be confirmed later
+                      }
+                    }
+
+                    console.log(
+                      `Created new payment intent ${newPaymentIntent.paymentIntentId} with price ${newPrice} ₪ (old: ${oldPrice} ₪)`
+                    );
+                  } catch (createError) {
+                    console.error(
+                      `Error creating new payment intent:`,
+                      createError.message
+                    );
+                    // Fallback: just update DB
+                    const paymentsCol = getCollectionPayments();
+                    await paymentsCol.updateOne(
+                      { paymentIntentId: oldPaymentIntentId },
+                      {
+                        $set: {
+                          amount: newPrice,
+                          totalAmount: newPrice,
+                          updatedAt: new Date(),
+                        },
+                      }
+                    );
+                  }
+                }
+              } else {
+                console.warn(
+                  `Cannot update payment intent ${job.paymentIntentId}: status is ${paymentIntent.status}. Only updating DB.`
+                );
+
+                // Still update payment record in database even if we can't update Stripe
+                const paymentsCol = getCollectionPayments();
+                await paymentsCol.updateOne(
+                  { paymentIntentId: job.paymentIntentId },
+                  {
+                    $set: {
+                      amount: newPrice,
+                      totalAmount: newPrice,
+                      updatedAt: new Date(),
+                    },
+                  }
+                );
+              }
+            } catch (stripeError) {
+              console.error("Error updating payment intent:", stripeError);
+              // Continue even if payment intent update fails
+            }
+          }
+
+          // Emit success to both handyman and client
+          io.to(`job-${jobId}`).emit("price-change-response", {
+            jobId,
+            approved: true,
+            percent,
+            oldPrice,
+            newPrice,
+          });
+        } else {
+          // Client rejected - just notify handyman
+          io.to(`job-${jobId}`).emit("price-change-response", {
+            jobId,
+            approved: false,
+            percent,
+            oldPrice,
+            newPrice,
+          });
+        }
+      } catch (error) {
+        console.error("Error handling price change response:", error);
+        socket.emit("error", { message: "שגיאה בעדכון המחיר" });
+      }
+    });
   });
 
   // Make io available globally for use in routes
   app.set("io", io);
+
+  // ========== INQUIRIES ENDPOINTS ==========
+
+  // Search users for mentions
+  app.get("/api/users/search", async (req, res) => {
+    try {
+      const { q, limit = 10 } = req.query;
+      if (!q || q.trim().length < 1) {
+        return res.json({ success: true, users: [] });
+      }
+
+      const usersCol = getCollection();
+      const searchQuery = q.trim().toLowerCase();
+
+      const users = await usersCol
+        .find({
+          $or: [
+            { username: { $regex: searchQuery, $options: "i" } },
+            { name: { $regex: searchQuery, $options: "i" } },
+            { email: { $regex: searchQuery, $options: "i" } },
+          ],
+        })
+        .limit(parseInt(limit))
+        .toArray();
+
+      // Return only necessary fields
+      const sanitizedUsers = users.map((user) => ({
+        _id: user._id,
+        id: user._id?.toString(),
+        username: user.username || user.name || "",
+        name: user.name || user.username || "",
+        email: user.email || "",
+      }));
+
+      res.json({ success: true, users: sanitizedUsers });
+    } catch (error) {
+      console.error("Error searching users:", error);
+      res.status(500).json({ success: false, message: "שגיאה בחיפוש משתמשים" });
+    }
+  });
+
+  // Create inquiry
+  app.post("/api/inquiries/create", async (req, res) => {
+    try {
+      const { title, content, senderName, userId, ArrIDS } = req.body;
+
+      if (!title || !content || !senderName) {
+        return res
+          .status(400)
+          .json({ success: false, message: "נושא, תוכן ושם שולח נדרשים" });
+      }
+
+      const inquiriesCol = getCollectionInquiries();
+      const inquiry = {
+        Title: title,
+        Content: content,
+        SenderName: senderName,
+        userId: userId ? new ObjectId(userId) : null,
+        ArrIDS:
+          ArrIDS && Array.isArray(ArrIDS)
+            ? ArrIDS.map((id) => new ObjectId(id))
+            : [],
+        createdAt: new Date(),
+        status: "pending", // pending, responded, resolved, deleted
+      };
+
+      const result = await inquiriesCol.insertOne(inquiry);
+
+      res.json({
+        success: true,
+        inquiryId: result.insertedId,
+        message: "הפנייה נשלחה בהצלחה",
+      });
+    } catch (error) {
+      console.error("Error creating inquiry:", error);
+      res.status(500).json({ success: false, message: "שגיאה ביצירת הפנייה" });
+    }
+  });
+
+  // Get all inquiries (admin only)
+  app.get("/api/inquiries", async (req, res) => {
+    try {
+      const { status } = req.query;
+      const inquiriesCol = getCollectionInquiries();
+
+      const query = {};
+      if (status && status !== "all") {
+        query.status = status;
+      }
+
+      const inquiries = await inquiriesCol
+        .find(query)
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      // Populate user info
+      const usersCol = getCollection();
+      const populatedInquiries = await Promise.all(
+        inquiries.map(async (inquiry) => {
+          let user = null;
+          if (inquiry.userId) {
+            user = await usersCol.findOne({ _id: inquiry.userId });
+          }
+
+          const mentionedUsers = [];
+          if (inquiry.ArrIDS && inquiry.ArrIDS.length > 0) {
+            const userIds = inquiry.ArrIDS.map((id) => new ObjectId(id));
+            const users = await usersCol
+              .find({ _id: { $in: userIds } })
+              .toArray();
+            mentionedUsers.push(...users);
+          }
+
+          return {
+            ...inquiry,
+            user: user
+              ? {
+                  _id: user._id,
+                  username: user.username || user.name,
+                  email: user.email,
+                }
+              : null,
+            mentionedUsers: mentionedUsers.map((u) => ({
+              _id: u._id,
+              username: u.username || u.name,
+              email: u.email,
+            })),
+          };
+        })
+      );
+
+      res.json({ success: true, inquiries: populatedInquiries });
+    } catch (error) {
+      console.error("Error fetching inquiries:", error);
+      res.status(500).json({ success: false, message: "שגיאה בטעינת הפניות" });
+    }
+  });
+
+  // Delete inquiry
+  app.delete("/api/inquiries/:inquiryId", async (req, res) => {
+    try {
+      const { inquiryId } = req.params;
+      const inquiriesCol = getCollectionInquiries();
+
+      await inquiriesCol.updateOne(
+        { _id: new ObjectId(inquiryId) },
+        { $set: { status: "deleted", deletedAt: new Date() } }
+      );
+
+      res.json({ success: true, message: "הפנייה נמחקה" });
+    } catch (error) {
+      console.error("Error deleting inquiry:", error);
+      res.status(500).json({ success: false, message: "שגיאה במחיקת הפנייה" });
+    }
+  });
+
+  // Send push notification for inquiry
+  app.post("/api/inquiries/:inquiryId/send-push", async (req, res) => {
+    try {
+      const { inquiryId } = req.params;
+      const { message, userId } = req.body;
+
+      if (!message || !userId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "הודעה ומזהה משתמש נדרשים" });
+      }
+
+      const inquiriesCol = getCollectionInquiries();
+      const inquiry = await inquiriesCol.findOne({
+        _id: new ObjectId(inquiryId),
+      });
+
+      if (!inquiry) {
+        return res
+          .status(404)
+          .json({ success: false, message: "פנייה לא נמצאה" });
+      }
+
+      // Send push notification
+      try {
+        await sendPushNotification(userId, message, {
+          type: "inquiry-response",
+          inquiryId: inquiryId,
+        });
+      } catch (pushError) {
+        console.error("Error sending push notification:", pushError);
+      }
+
+      res.json({ success: true, message: "ההודעה נשלחה" });
+    } catch (error) {
+      console.error("Error sending push for inquiry:", error);
+      res.status(500).json({ success: false, message: "שגיאה בשליחת ההודעה" });
+    }
+  });
+
+  // Send email for inquiry (placeholder - endpoint empty as requested)
+  app.post("/api/inquiries/:inquiryId/send-email", async (req, res) => {
+    try {
+      const { inquiryId } = req.params;
+      const { emailContent, recipientEmail } = req.body;
+
+      // TODO: Implement email sending when email service is ready
+      // For now, just return success
+      res.json({
+        success: true,
+        message: "שליחת מייל תתמוך בקרוב",
+      });
+    } catch (error) {
+      console.error("Error sending email for inquiry:", error);
+      res.status(500).json({ success: false, message: "שגיאה בשליחת המייל" });
+    }
+  });
+
+  // Update inquiry status (e.g., mark as responded)
+  app.patch("/api/inquiries/:inquiryId/status", async (req, res) => {
+    try {
+      const { inquiryId } = req.params;
+      const { status } = req.body;
+
+      if (!status) {
+        return res.status(400).json({ success: false, message: "סטטוס נדרש" });
+      }
+
+      const inquiriesCol = getCollectionInquiries();
+      await inquiriesCol.updateOne(
+        { _id: new ObjectId(inquiryId) },
+        { $set: { status, updatedAt: new Date() } }
+      );
+
+      res.json({ success: true, message: "הסטטוס עודכן" });
+    } catch (error) {
+      console.error("Error updating inquiry status:", error);
+      res.status(500).json({ success: false, message: "שגיאה בעדכון הסטטוס" });
+    }
+  });
 
   // Start server
   httpServer

@@ -184,22 +184,22 @@
                       <button
                         class="block-user-btn"
                         :class="{
-                          'block-user-btn--blocked': user.isBlocked === true,
+                          'block-user-btn--blocked': user.IsBlocked === true,
                         }"
                         type="button"
                         @click="toggleBlockUser(user)"
                         :title="
-                          user.isBlocked === true ? 'ביטול חסימה' : 'חסום'
+                          user.IsBlocked === true ? 'ביטול חסימה' : 'חסום'
                         "
                       >
                         <font-awesome-icon
                           :icon="
-                            user.isBlocked === true
+                            user.IsBlocked === true
                               ? ['fas', 'ban']
                               : ['fas', 'check']
                           "
                         />
-                        {{ user.isBlocked === true ? "חסום" : "פעיל" }}
+                        {{ user.IsBlocked === true ? "חסום" : "פעיל" }}
                       </button>
                     </td>
                     <td>
@@ -367,8 +367,169 @@
 
         <!-- Contact Tab -->
         <div v-if="activeTab === 'contact'" class="tab-panel">
-          <div class="empty-state">
-            <p>פניות - בעתיד</p>
+          <div class="inquiries-section">
+            <div class="inquiries-section__header">
+              <h2 class="inquiries-section__title">פניות</h2>
+              <div class="inquiries-section__controls">
+                <select v-model="inquiryFilters.status" class="filter-select">
+                  <option value="all">כל הסטטוסים</option>
+                  <option value="pending">ממתין</option>
+                  <option value="responded">נענה</option>
+                  <option value="resolved">טופל</option>
+                </select>
+                <button
+                  class="refresh-inquiries-btn"
+                  type="button"
+                  @click="loadInquiries"
+                >
+                  ↻ רענן
+                </button>
+              </div>
+            </div>
+
+            <div v-if="isLoadingInquiries" class="loading-state">
+              טוען פניות...
+            </div>
+
+            <div v-else class="inquiries-table-wrapper">
+              <table class="inquiries-table">
+                <thead>
+                  <tr>
+                    <th>תאריך</th>
+                    <th>נושא</th>
+                    <th>תוכן</th>
+                    <th>משתמש</th>
+                    <th>תגיות משתמשים</th>
+                    <th>סטטוס</th>
+                    <th>פעולות</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="inquiry in filteredInquiries"
+                    :key="inquiry._id"
+                    class="inquiries-table__row"
+                  >
+                    <td>
+                      <div class="inquiry-date">
+                        {{ formatDate(inquiry.createdAt) }}
+                      </div>
+                      <div class="inquiry-time">
+                        {{ formatTime(inquiry.createdAt) }}
+                      </div>
+                    </td>
+                    <td>
+                      <div class="inquiry-title">{{ inquiry.Title }}</div>
+                    </td>
+                    <td>
+                      <div class="inquiry-content">
+                        <template
+                          v-for="(token, idx) in parseInquiryContent(inquiry)"
+                          :key="idx"
+                        >
+                          <span v-if="token.type === 'text'">{{
+                            token.content
+                          }}</span>
+                          <button
+                            v-else-if="token.type === 'mention'"
+                            type="button"
+                            class="inquiry-content-mention"
+                            @click="openUserDetailsModal(token.user)"
+                            :title="`לחץ לצפייה בפרטי ${token.userName}`"
+                          >
+                            {{ token.userName }}
+                          </button>
+                        </template>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="inquiry-user">
+                        {{
+                          inquiry.SenderName ||
+                          inquiry.user?.username ||
+                          inquiry.user?.email ||
+                          "-"
+                        }}
+                      </div>
+                    </td>
+                    <td>
+                      <div
+                        v-if="
+                          inquiry.mentionedUsers &&
+                          inquiry.mentionedUsers.length > 0
+                        "
+                        class="inquiry-mentions"
+                      >
+                        <button
+                          v-for="(user, idx) in inquiry.mentionedUsers"
+                          :key="user._id"
+                          type="button"
+                          class="inquiry-mention-tag inquiry-mention-tag--clickable"
+                          @click="openUserDetailsModal(user)"
+                          :title="`לחץ לצפייה בפרטי ${
+                            user.username || user.email
+                          }`"
+                        >
+                          {{ user.username || user.email }}
+                          <span v-if="idx < inquiry.mentionedUsers.length - 1"
+                            >,
+                          </span>
+                        </button>
+                      </div>
+                      <span v-else class="inquiry-no-mentions">-</span>
+                    </td>
+                    <td>
+                      <span
+                        class="inquiry-status-badge"
+                        :class="`inquiry-status-badge--${inquiry.status}`"
+                      >
+                        {{ getStatusLabel(inquiry.status) }}
+                      </span>
+                    </td>
+                    <td>
+                      <div class="inquiry-actions">
+                        <button
+                          class="inquiry-action-btn inquiry-action-btn--push"
+                          type="button"
+                          @click="openPushModal(inquiry)"
+                          title="שלח פוש"
+                        >
+                          📱
+                        </button>
+                        <button
+                          class="inquiry-action-btn inquiry-action-btn--email"
+                          type="button"
+                          @click="openEmailModal(inquiry)"
+                          title="שלח מייל"
+                        >
+                          ✉️
+                        </button>
+                        <button
+                          class="inquiry-action-btn inquiry-action-btn--respond"
+                          type="button"
+                          @click="markAsResponded(inquiry)"
+                          :disabled="inquiry.status === 'responded'"
+                          title="סמן כנענה"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          class="inquiry-action-btn inquiry-action-btn--delete"
+                          type="button"
+                          @click="confirmDeleteInquiry(inquiry)"
+                          title="מחק"
+                        >
+                          <font-awesome-icon :icon="['fas', 'trash']" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr v-if="filteredInquiries.length === 0">
+                    <td colspan="7" class="no-data">אין פניות להצגה</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -377,13 +538,23 @@
           <div class="payments-section">
             <div class="payments-section__header">
               <h2 class="payments-section__title">תשלומים</h2>
-              <button
-                class="refresh-payments-btn"
-                type="button"
-                @click="loadPayments"
-              >
-                ↻ רענן
-              </button>
+              <div class="payments-section__actions">
+                <button
+                  class="download-pdf-btn"
+                  type="button"
+                  @click="downloadMonthlyPDF"
+                  :disabled="isGeneratingPDF"
+                >
+                  {{ isGeneratingPDF ? "מייצר PDF..." : "📄 הורד דוח חודשי" }}
+                </button>
+                <button
+                  class="refresh-payments-btn"
+                  type="button"
+                  @click="loadPayments"
+                >
+                  ↻ רענן
+                </button>
+              </div>
             </div>
 
             <!-- Filters -->
@@ -402,8 +573,6 @@
               >
                 <option value="">כל הסטטוסים</option>
                 <option value="transferred">הועבר</option>
-                <option value="succeeded">בוצע</option>
-                <option value="captured">נלכד</option>
                 <option value="pending">ממתין</option>
                 <option value="processing">מעבד</option>
                 <option value="requires_payment_method">נדרש תשלום</option>
@@ -428,91 +597,177 @@
               טוען תשלומים...
             </div>
 
-            <div v-else class="payments-table-wrapper">
-              <table class="payments-table">
-                <thead>
-                  <tr>
-                    <th>תאריך</th>
-                    <th>לקוח</th>
-                    <th>הנדימן</th>
-                    <th>עבודה</th>
-                    <th>סכום כולל</th>
-                    <th>רווח הנדימן</th>
-                    <th>רווח המערכת</th>
-                    <th>סטטוס</th>
-                    <th>פעולות</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="payment in filteredPayments"
-                    :key="payment._id"
-                    class="payments-table__row"
-                  >
-                    <td>
-                      <div class="date-cell">
-                        <div class="date-value">
-                          {{ formatDate(payment.createdAt) }}
+            <div v-else class="payments-tables-container">
+              <!-- Subscriptions Table -->
+              <div class="subscriptions-table-wrapper">
+                <h3 class="subscriptions-table-title">מנויים פעילים</h3>
+                <div v-if="isLoadingSubscriptions" class="loading-state">
+                  טוען מנויים...
+                </div>
+                <table v-else class="subscriptions-table">
+                  <thead>
+                    <tr>
+                      <th>שם המנוי</th>
+                      <th>סכום החיוב</th>
+                      <th>סכום המעמ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="subscription in subscriptions"
+                      :key="subscription._id"
+                    >
+                      <td>{{ subscription.userName || "ללא שם" }}</td>
+                      <td>
+                        {{ formatCurrencySimple(subscription.amount || 0) }} ₪
+                      </td>
+                      <td>
+                        {{
+                          formatCurrencySimple(subscription.vatAmount || 0)
+                        }}
+                        ₪
+                      </td>
+                    </tr>
+                    <tr v-if="subscriptions.length === 0">
+                      <td colspan="3" class="no-data">אין מנויים פעילים</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Main Payments Table -->
+              <div class="payments-table-wrapper">
+                <table class="payments-table">
+                  <thead>
+                    <tr>
+                      <th>תאריך</th>
+                      <th>שעה</th>
+                      <th>לקוח</th>
+                      <th>הנדימן</th>
+                      <th>עבודה</th>
+                      <th>מחיר נוכחי</th>
+                      <th>מחיר שנגבה מהלקוח</th>
+                      <th>סכום בלי מע"מ</th>
+                      <th>מע"מ</th>
+                      <th>רווח הנדימן</th>
+                      <th>רווח המערכת</th>
+                      <th>סטטוס</th>
+                      <th>פעולות</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="payment in filteredPayments"
+                      :key="payment._id"
+                      class="payments-table__row"
+                    >
+                      <td>
+                        <div class="date-cell">
+                          <div class="date-value">
+                            {{ formatDate(payment.createdAt) }}
+                          </div>
+                          <div
+                            v-if="payment.createdAt"
+                            class="date-tooltip"
+                            :title="getTimeAgo(payment.createdAt)"
+                          >
+                            {{ getTimeAgo(payment.createdAt) }}
+                          </div>
                         </div>
-                        <div
-                          v-if="payment.createdAt"
-                          class="date-tooltip"
-                          :title="getTimeAgo(payment.createdAt)"
-                        >
-                          {{ getTimeAgo(payment.createdAt) }}
+                      </td>
+                      <td>
+                        <div class="time-cell">
+                          {{ formatTime(payment.createdAt) }}
                         </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div class="user-cell">
-                        <span>{{ payment.client?.username || "ללא שם" }}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <div class="user-cell">
-                        <span>{{
-                          payment.handyman?.username || "ללא שם"
+                      </td>
+                      <td>
+                        <div class="user-cell">
+                          <span>{{
+                            payment.client?.username || "ללא שם"
+                          }}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="user-cell">
+                          <span>{{
+                            payment.handyman?.username || "ללא שם"
+                          }}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <span class="job-desc">{{
+                          getJobNames(payment.job) || "-"
                         }}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span class="job-desc">{{
-                        getJobNames(payment.job) || "-"
-                      }}</span>
-                    </td>
-                    <td class="amount-cell">
-                      {{ formatCurrencySimple(payment.totalAmount || 0) }} ₪
-                    </td>
-                    <td class="amount-cell amount-cell--handyman">
-                      {{ formatCurrencySimple(payment.spacious_H || 0) }} ₪
-                    </td>
-                    <td class="amount-cell amount-cell--system">
-                      {{ formatCurrencySimple(payment.spacious_M || 0) }} ₪
-                    </td>
-                    <td>
-                      <span
-                        class="status-badge"
-                        :class="getStatusBadgeClass(payment.status)"
-                      >
-                        {{ getStatusLabel(payment.status) }}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        class="delete-payment-btn"
-                        type="button"
-                        @click="confirmDeletePayment(payment)"
-                        title="מחק תשלום"
-                      >
-                        <font-awesome-icon :icon="['fas', 'trash']" />
-                      </button>
-                    </td>
-                  </tr>
-                  <tr v-if="filteredPayments.length === 0">
-                    <td colspan="9" class="no-data">אין תשלומים להצגה</td>
-                  </tr>
-                </tbody>
-              </table>
+                      </td>
+                      <td class="amount-cell amount-cell--price">
+                        {{ formatCurrencySimple(payment.totalAmount || 0) }}
+                        ₪
+                      </td>
+                      <td class="amount-cell amount-cell--client">
+                        {{
+                          formatCurrencySimple(
+                            payment.amountWithVAT || payment.totalAmount || 0
+                          )
+                        }}
+                        ₪
+                      </td>
+                      <td class="amount-cell amount-cell--vat">
+                        {{
+                          formatCurrencySimple(
+                            payment.amountWithoutVAT || payment.totalAmount || 0
+                          )
+                        }}
+                        ₪
+                      </td>
+                      <td class="amount-cell amount-cell--vat">
+                        {{ formatCurrencySimple(payment.vatAmount || 0) }} ₪
+                      </td>
+                      <td class="amount-cell amount-cell--handyman">
+                        {{ formatCurrencySimple(payment.spacious_H || 0) }} ₪
+                      </td>
+                      <td class="amount-cell amount-cell--system">
+                        {{ formatCurrencySimple(payment.spacious_M || 0) }} ₪
+                      </td>
+                      <td>
+                        <span
+                          class="status-badge"
+                          :class="getStatusBadgeClass(payment.status)"
+                        >
+                          {{ getStatusLabel(payment.status) }}
+                        </span>
+                      </td>
+                      <td>
+                        <div class="actions-buttons">
+                          <button
+                            v-if="payment.status === 'requires_capture'"
+                            class="capture-payment-btn"
+                            type="button"
+                            @click="capturePayment(payment)"
+                            :disabled="isCapturingPayment"
+                            title="שחרר תשלום"
+                          >
+                            <font-awesome-icon
+                              :icon="['fas', 'money-bill-wave']"
+                            />
+                            {{ isCapturingPayment ? "משחרר..." : "שחרר תשלום" }}
+                          </button>
+                          <button
+                            class="delete-payment-btn"
+                            type="button"
+                            @click="confirmDeletePayment(payment)"
+                            title="מחק תשלום"
+                          >
+                            <font-awesome-icon :icon="['fas', 'trash']" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr v-if="filteredPayments.length === 0">
+                      <td colspan="16" class="no-data">אין תשלומים להצגה</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -752,7 +1007,9 @@
                     <button
                       class="btn btn--primary"
                       @click="updatePlatformFee"
-                      :disabled="isUpdatingFee || platformFee === currentPlatformFee"
+                      :disabled="
+                        isUpdatingFee || platformFee === currentPlatformFee
+                      "
                     >
                       <span v-if="isUpdatingFee">מעדכן...</span>
                       <span v-else>עדכן עמלה</span>
@@ -760,6 +1017,243 @@
                   </div>
                 </div>
               </div>
+
+              <div class="settings-card">
+                <div class="settings-card__header">
+                  <h3 class="settings-card__title">אחוז מע"מ</h3>
+                  <p class="settings-card__description">
+                    אחוז המע"מ (מס ערך מוסף) שמחושב על כל תשלום
+                  </p>
+                </div>
+                <div class="settings-card__body">
+                  <div class="form-field">
+                    <label class="form-label">אחוז מע"מ (%)</label>
+                    <input
+                      v-model.number="maamPercent"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      class="form-input"
+                      placeholder="לדוגמה: 18"
+                    />
+                    <div class="current-fee-display">
+                      ערך נוכחי: {{ currentMaamPercent }}%
+                    </div>
+                  </div>
+                  <div class="settings-card__actions">
+                    <button
+                      class="btn btn--primary"
+                      @click="updateMaamPercent"
+                      :disabled="
+                        isUpdatingMaam || maamPercent === currentMaamPercent
+                      "
+                    >
+                      <span v-if="isUpdatingMaam">מעדכן...</span>
+                      <span v-else>עדכן מע"מ</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-card">
+                <div class="settings-card__header">
+                  <h3 class="settings-card__title">מנוי חודשי</h3>
+                  <p class="settings-card__description">
+                    סכום המנוי החודשי להנדימנים
+                  </p>
+                </div>
+                <div class="settings-card__body">
+                  <div class="form-field">
+                    <label class="form-label">סכום מנוי חודשי (₪)</label>
+                    <input
+                      v-model.number="monthlySubscription"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      class="form-input"
+                      placeholder="לדוגמה: 49.9"
+                    />
+                    <div class="current-fee-display">
+                      ערך נוכחי: {{ currentMonthlySubscription }} ₪
+                    </div>
+                  </div>
+                  <div class="settings-card__actions">
+                    <button
+                      class="btn btn--primary"
+                      @click="updateMonthlySubscription"
+                      :disabled="
+                        isUpdatingMonthlySubscription ||
+                        monthlySubscription === currentMonthlySubscription
+                      "
+                    >
+                      <span v-if="isUpdatingMonthlySubscription">מעדכן...</span>
+                      <span v-else>עדכן מנוי חודשי</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cancellations Tab -->
+        <div v-if="activeTab === 'cancellations'" class="tab-panel">
+          <div class="cancellations-section">
+            <div class="cancellations-section__header">
+              <h2 class="cancellations-section__title">ביטולים</h2>
+              <button
+                class="refresh-cancellations-btn"
+                type="button"
+                @click="loadCancellations"
+              >
+                ↻ רענן
+              </button>
+            </div>
+
+            <div v-if="isLoadingCancellations" class="loading-state">
+              טוען ביטולים...
+            </div>
+
+            <div v-else class="cancellations-table-wrapper">
+              <table class="cancellations-table">
+                <thead>
+                  <tr>
+                    <th>תאריך ביטול</th>
+                    <th>עבודה</th>
+                    <th>לקוח</th>
+                    <th>הנדימן</th>
+                    <th>מי ביטל</th>
+                    <th>סיבת הביטול</th>
+                    <th>בוטל לגמרי</th>
+                    <th>קנס נגבה</th>
+                    <th>סכום קנס</th>
+                    <th>פעולות</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="cancellation in cancellations"
+                    :key="cancellation._id || cancellation.id"
+                    class="cancellations-table__row"
+                  >
+                    <td>
+                      <div class="date-cell">
+                        <div class="date-value">
+                          {{
+                            cancellation.cancel?.cancelledAt
+                              ? formatDate(cancellation.cancel.cancelledAt)
+                              : "-"
+                          }}
+                        </div>
+                        <div
+                          v-if="cancellation.cancel?.cancelledAt"
+                          class="date-tooltip"
+                          :title="getTimeAgo(cancellation.cancel.cancelledAt)"
+                        >
+                          {{ getTimeAgo(cancellation.cancel.cancelledAt) }}
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="job-desc">{{
+                        getJobNames(cancellation) || "-"
+                      }}</span>
+                    </td>
+                    <td>
+                      <div class="user-cell">
+                        <span>{{ cancellation.clientName || "ללא שם" }}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="user-cell">
+                        <span>{{ cancellation.handymanName || "ללא שם" }}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span
+                        class="person-badge"
+                        :class="{
+                          'person-badge--handyman':
+                            cancellation.cancel?.personcancel === 'handyman',
+                          'person-badge--customer':
+                            cancellation.cancel?.personcancel === 'customer',
+                        }"
+                      >
+                        {{
+                          cancellation.cancel?.personcancel === "handyman"
+                            ? "הנדימן"
+                            : "לקוח"
+                        }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="reason-text">{{
+                        cancellation.cancel?.["reason-for-cancellation"] || "-"
+                      }}</span>
+                    </td>
+                    <td>
+                      <span
+                        class="status-badge"
+                        :class="{
+                          'status-badge--yes':
+                            cancellation.cancel?.['Totally-cancels'] === true,
+                          'status-badge--no':
+                            cancellation.cancel?.['Totally-cancels'] === false,
+                        }"
+                      >
+                        {{
+                          cancellation.cancel?.["Totally-cancels"] === true
+                            ? "כן"
+                            : "לא"
+                        }}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        class="status-badge"
+                        :class="{
+                          'status-badge--collected':
+                            cancellation.cancel?.fineCollected === true,
+                          'status-badge--not-collected':
+                            cancellation.cancel?.fineCollected !== true,
+                        }"
+                      >
+                        {{
+                          cancellation.cancel?.fineCollected === true
+                            ? "כן"
+                            : "לא"
+                        }}
+                      </span>
+                    </td>
+                    <td class="amount-cell">
+                      {{
+                        cancellation.cancel?.fineAmount
+                          ? formatCurrencySimple(
+                              cancellation.cancel.fineAmount
+                            ) + " ₪"
+                          : "-"
+                      }}
+                    </td>
+                    <td>
+                      <button
+                        v-if="cancellation.cancel?.fineCollected !== true"
+                        class="collect-fine-btn"
+                        type="button"
+                        @click="openFineModal(cancellation)"
+                        title="גבה קנס"
+                      >
+                        <font-awesome-icon :icon="['fas', 'money-bill']" />
+                        גבה קנס
+                      </button>
+                      <span v-else class="fine-collected-text">נגבה</span>
+                    </td>
+                  </tr>
+                  <tr v-if="cancellations.length === 0">
+                    <td colspan="10" class="no-data">אין ביטולים להצגה</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -881,9 +1375,13 @@
                     <div
                       class="financial-item__value financial-item__value--expense"
                     >
-                      ${{
+                      {{ getCurrencySymbol("expenses.Marketing expenses")
+                      }}{{
                         formatCurrency(
-                          financials.expenses["Marketing expenses"]
+                          getDisplayValue(
+                            "expenses.Marketing expenses",
+                            financials.expenses["Marketing expenses"]
+                          )
                         )
                       }}
                     </div>
@@ -935,13 +1433,28 @@
                     <div
                       class="financial-item__value financial-item__value--total-expense"
                     >
-                      ${{
+                      ₪{{
                         formatCurrency(
-                          financials.expenses["AI expenses"] +
-                            financials.expenses["DB expenses"] +
-                            financials.expenses["API expenses"] +
-                            financials.expenses["Marketing expenses"] +
-                            financials.expenses["clearing fee"]
+                          getDisplayValue(
+                            "expenses.AI expenses",
+                            financials.expenses["AI expenses"]
+                          ) +
+                            getDisplayValue(
+                              "expenses.DB expenses",
+                              financials.expenses["DB expenses"]
+                            ) +
+                            getDisplayValue(
+                              "expenses.API expenses",
+                              financials.expenses["API expenses"]
+                            ) +
+                            getDisplayValue(
+                              "expenses.Marketing expenses",
+                              financials.expenses["Marketing expenses"]
+                            ) +
+                            getDisplayValue(
+                              "expenses.clearing fee",
+                              financials.expenses["clearing fee"]
+                            )
                         )
                       }}
                     </div>
@@ -960,7 +1473,15 @@
                     <div
                       class="financial-item__value financial-item__value--revenue"
                     >
-                      ${{ formatCurrency(financials.Revenue.Fees) }}
+                      {{ getCurrencySymbol("Revenue.Fees")
+                      }}{{
+                        formatCurrency(
+                          getDisplayValue(
+                            "Revenue.Fees",
+                            financials.Revenue.Fees
+                          )
+                        )
+                      }}
                     </div>
                     <div class="financial-item__actions">
                       <button
@@ -981,7 +1502,15 @@
                     <div
                       class="financial-item__value financial-item__value--revenue"
                     >
-                      ${{ formatCurrency(financials.Revenue.Drawings) }}
+                      {{ getCurrencySymbol("Revenue.Drawings")
+                      }}{{
+                        formatCurrency(
+                          getDisplayValue(
+                            "Revenue.Drawings",
+                            financials.Revenue.Drawings
+                          )
+                        )
+                      }}
                     </div>
                     <div class="financial-item__actions">
                       <button
@@ -1002,7 +1531,15 @@
                     <div
                       class="financial-item__value financial-item__value--revenue"
                     >
-                      ${{ formatCurrency(financials.Revenue["Urgent call"]) }}
+                      {{ getCurrencySymbol("Revenue.Urgent call")
+                      }}{{
+                        formatCurrency(
+                          getDisplayValue(
+                            "Revenue.Urgent call",
+                            financials.Revenue["Urgent call"]
+                          )
+                        )
+                      }}
                     </div>
                     <div class="financial-item__actions">
                       <button
@@ -1023,11 +1560,20 @@
                     <div
                       class="financial-item__value financial-item__value--total-revenue"
                     >
-                      ${{
+                      ₪{{
                         formatCurrency(
-                          financials.Revenue.Fees +
-                            financials.Revenue.Drawings +
-                            financials.Revenue["Urgent call"]
+                          getDisplayValue(
+                            "Revenue.Fees",
+                            financials.Revenue.Fees
+                          ) +
+                            getDisplayValue(
+                              "Revenue.Drawings",
+                              financials.Revenue.Drawings
+                            ) +
+                            getDisplayValue(
+                              "Revenue.Urgent call",
+                              financials.Revenue["Urgent call"]
+                            )
                         )
                       }}
                     </div>
@@ -1046,7 +1592,7 @@
                       'summary-card__value--loss': netProfit < 0,
                     }"
                   >
-                    ${{ formatCurrency(Math.abs(netProfit)) }}
+                    ₪{{ formatCurrency(Math.abs(netProfit)) }}
                     <span class="summary-card__indicator">{{
                       netProfit >= 0 ? "רווח" : "הפסד"
                     }}</span>
@@ -1057,8 +1603,17 @@
               <!-- Chart -->
               <div class="financials-chart">
                 <div class="chart-header">
-                  <h3 class="chart-title">גרף הכנסות והוצאות</h3>
+                  <h3 class="chart-title">גרף רווח/הפסד</h3>
                   <div class="chart-period-selector">
+                    <button
+                      class="period-btn"
+                      :class="{
+                        'period-btn--active': chartPeriod === 'hourly',
+                      }"
+                      @click="loadChartData('hourly')"
+                    >
+                      שעתי
+                    </button>
                     <button
                       class="period-btn"
                       :class="{ 'period-btn--active': chartPeriod === 'daily' }"
@@ -1147,11 +1702,18 @@
             <div class="form-field">
               <label class="form-label">{{ editFinancialFieldLabel }}</label>
               <div class="current-value">
-                ערך נוכחי: ${{ formatCurrency(editFinancialCurrentValue) }}
+                ערך נוכחי: ₪{{
+                  formatCurrency(
+                    getDisplayValue(
+                      editFinancialField,
+                      editFinancialCurrentValue
+                    )
+                  )
+                }}
               </div>
             </div>
             <div class="form-field">
-              <label class="form-label">סכום לשינוי ($)</label>
+              <label class="form-label">סכום לשינוי (₪)</label>
               <input
                 v-model.number="editFinancialAmount"
                 type="number"
@@ -1412,6 +1974,177 @@
           </div>
         </div>
       </div>
+
+      <!-- Collect Fine Modal -->
+      <div v-if="showFineModal" class="modal-overlay" @click="closeFineModal">
+        <div class="modal-content modal-content--confirm" @click.stop>
+          <div class="modal-header">
+            <h3 class="modal-title">גביית קנס</h3>
+            <button class="modal-close" @click="closeFineModal">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="confirm-message">
+              <p>
+                עבודה: <strong>{{ getJobNames(fineJob) || "-" }}</strong>
+              </p>
+              <p>
+                לקוח: <strong>{{ fineJob?.clientName || "ללא שם" }}</strong>
+              </p>
+              <p>
+                הנדימן: <strong>{{ fineJob?.handymanName || "ללא שם" }}</strong>
+              </p>
+              <p>
+                סיבת ביטול:
+                <strong>{{
+                  fineJob?.cancel?.["reason-for-cancellation"] || "-"
+                }}</strong>
+              </p>
+            </div>
+            <div class="form-field">
+              <label class="form-label">סכום קנס (₪)</label>
+              <input
+                v-model.number="fineAmount"
+                type="number"
+                step="1"
+                min="0"
+                max="200"
+                class="form-input"
+                placeholder="הכנס סכום (עד 200 ₪)"
+              />
+              <div class="fine-hint">סכום מקסימלי: 200 ₪</div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn--ghost" @click="closeFineModal">
+              ביטול
+            </button>
+            <button
+              class="btn btn--primary"
+              :disabled="
+                !fineAmount ||
+                fineAmount <= 0 ||
+                fineAmount > 200 ||
+                isCollectingFine
+              "
+              @click="collectFine"
+            >
+              <span v-if="isCollectingFine">גובה...</span>
+              <span v-else>גבה קנס</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Push Modal -->
+    <div
+      v-if="showPushModal"
+      class="modal-overlay"
+      @click.self="closePushModal"
+    >
+      <div class="modal-content" dir="rtl">
+        <div class="modal-header">
+          <h3 class="modal-title">שלח הודעת פוש</h3>
+          <button
+            class="modal-close"
+            type="button"
+            @click="closePushModal"
+            aria-label="סגור"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-field">
+            <label class="form-label">הודעה</label>
+            <textarea
+              v-model="pushMessage"
+              class="form-textarea"
+              rows="4"
+              placeholder="הזן את תוכן ההודעה..."
+            ></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button
+            class="btn btn--cancel"
+            type="button"
+            @click="closePushModal"
+            :disabled="isSendingPush"
+          >
+            ביטול
+          </button>
+          <button
+            class="btn btn--primary"
+            type="button"
+            @click="sendPush"
+            :disabled="!pushMessage.trim() || isSendingPush"
+          >
+            {{ isSendingPush ? "שולח..." : "שלח" }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Email Modal -->
+    <div
+      v-if="showEmailModal"
+      class="modal-overlay"
+      @click.self="closeEmailModal"
+    >
+      <div class="modal-content" dir="rtl">
+        <div class="modal-header">
+          <h3 class="modal-title">שלח מייל</h3>
+          <button
+            class="modal-close"
+            type="button"
+            @click="closeEmailModal"
+            aria-label="סגור"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-field">
+            <label class="form-label">כתובת מייל</label>
+            <input
+              v-model="emailRecipient"
+              type="email"
+              class="form-input"
+              placeholder="הזן כתובת מייל..."
+            />
+          </div>
+          <div class="form-field">
+            <label class="form-label">תוכן המייל</label>
+            <textarea
+              v-model="emailContent"
+              class="form-textarea"
+              rows="6"
+              placeholder="הזן את תוכן המייל..."
+            ></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button
+            class="btn btn--cancel"
+            type="button"
+            @click="closeEmailModal"
+            :disabled="isSendingEmail"
+          >
+            ביטול
+          </button>
+          <button
+            class="btn btn--primary"
+            type="button"
+            @click="sendEmail"
+            :disabled="
+              !emailContent.trim() || !emailRecipient.trim() || isSendingEmail
+            "
+          >
+            {{ isSendingEmail ? "שולח..." : "שלח" }}
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -1438,6 +2171,7 @@ export default {
         { id: "expenses", label: "פירוט הוצאות" },
         { id: "status", label: "סטטוסים" },
         { id: "settings", label: "הגדרות" },
+        { id: "cancellations", label: "ביטולים" },
       ],
       users: [],
       filteredUsers: [],
@@ -1541,11 +2275,15 @@ export default {
       // Payments
       payments: [],
       isLoadingPayments: false,
+      isGeneratingPDF: false,
       paymentFilters: {
         search: "",
         status: "",
         sortBy: "",
       },
+      // Subscriptions
+      subscriptions: [],
+      isLoadingSubscriptions: false,
       // Delete payment modal
       showDeletePaymentModal: false,
       paymentToDelete: null,
@@ -1553,6 +2291,40 @@ export default {
       platformFee: 7,
       currentPlatformFee: 7,
       isUpdatingFee: false,
+      maamPercent: 18,
+      currentMaamPercent: 18,
+      isUpdatingMaam: false,
+      monthlySubscription: 49.9,
+      currentMonthlySubscription: 49.9,
+      isUpdatingMonthlySubscription: false,
+      // Cancellations
+      cancellations: [],
+      isLoadingCancellations: false,
+      showFineModal: false,
+      fineJob: null,
+      fineAmount: 0,
+      isCollectingFine: false,
+      isCapturingPayment: false,
+      // Inquiries
+      inquiries: [],
+      isLoadingInquiries: false,
+      inquiryFilters: {
+        status: "all",
+      },
+      showPushModal: false,
+      pushInquiry: null,
+      pushMessage: "",
+      isSendingPush: false,
+      showEmailModal: false,
+      emailInquiry: null,
+      emailRecipient: "",
+      emailContent: "",
+      isSendingEmail: false,
+      // User Details Modal
+      showUserDetailsModal: false,
+      selectedUser: null,
+      userDetails: null,
+      isLoadingUserDetails: false,
     };
   },
   created() {
@@ -1560,16 +2332,38 @@ export default {
   },
   computed: {
     netProfit() {
+      // כל הערכים מחושבים בשקלים תוך התחשבות בשדות שכבר בשקלים
       const totalRevenue =
-        this.financials.Revenue.Fees +
-        this.financials.Revenue.Drawings +
-        this.financials.Revenue["Urgent call"];
+        this.getDisplayValue("Revenue.Fees", this.financials.Revenue.Fees) +
+        this.getDisplayValue(
+          "Revenue.Drawings",
+          this.financials.Revenue.Drawings
+        ) +
+        this.getDisplayValue(
+          "Revenue.Urgent call",
+          this.financials.Revenue["Urgent call"]
+        );
       const totalExpenses =
-        this.financials.expenses["AI expenses"] +
-        this.financials.expenses["DB expenses"] +
-        this.financials.expenses["API expenses"] +
-        this.financials.expenses["Marketing expenses"] +
-        this.financials.expenses["clearing fee"];
+        this.getDisplayValue(
+          "expenses.AI expenses",
+          this.financials.expenses["AI expenses"]
+        ) +
+        this.getDisplayValue(
+          "expenses.DB expenses",
+          this.financials.expenses["DB expenses"]
+        ) +
+        this.getDisplayValue(
+          "expenses.API expenses",
+          this.financials.expenses["API expenses"]
+        ) +
+        this.getDisplayValue(
+          "expenses.Marketing expenses",
+          this.financials.expenses["Marketing expenses"]
+        ) +
+        this.getDisplayValue(
+          "expenses.clearing fee",
+          this.financials.expenses["clearing fee"]
+        );
       return totalRevenue - totalExpenses;
     },
     handymenCount() {
@@ -1612,9 +2406,20 @@ export default {
 
       // Filter by status
       if (this.paymentFilters.status) {
-        filtered = filtered.filter(
-          (payment) => payment.status === this.paymentFilters.status
-        );
+        // Group similar statuses together
+        if (this.paymentFilters.status === "transferred") {
+          // "הועבר" includes: transferred, succeeded, and captured (all represent completed/transferred payments)
+          filtered = filtered.filter(
+            (payment) =>
+              payment.status === "transferred" ||
+              payment.status === "succeeded" ||
+              payment.status === "captured"
+          );
+        } else {
+          filtered = filtered.filter(
+            (payment) => payment.status === this.paymentFilters.status
+          );
+        }
       }
 
       // Sort
@@ -1637,6 +2442,15 @@ export default {
 
       return filtered;
     },
+    filteredInquiries() {
+      let filtered = [...this.inquiries];
+      if (this.inquiryFilters.status && this.inquiryFilters.status !== "all") {
+        filtered = filtered.filter(
+          (inquiry) => inquiry.status === this.inquiryFilters.status
+        );
+      }
+      return filtered;
+    },
   },
   async mounted() {
     await this.loadUsers();
@@ -1644,7 +2458,9 @@ export default {
     await this.loadExchangeRate();
     if (this.activeTab === "expenses") {
       await this.loadFinancials();
-      await this.loadChartData("daily");
+      // טען את הגרף אוטומטית עם התקופה הנוכחית (או daily כברירת מחדל)
+      await this.$nextTick();
+      await this.loadChartData(this.chartPeriod || "daily");
     }
     if (this.activeTab === "status") {
       await this.loadStatus();
@@ -1653,13 +2469,17 @@ export default {
     }
     if (this.activeTab === "settings") {
       await this.loadPlatformFee();
+      await this.loadMaamPercent();
+      await this.loadMonthlySubscription();
     }
   },
   watch: {
-    activeTab(newTab) {
+    async activeTab(newTab) {
       if (newTab === "expenses") {
-        this.loadFinancials();
-        this.loadChartData(this.chartPeriod);
+        await this.loadFinancials();
+        // טען את הגרף אוטומטית עם התקופה הנוכחית (או daily כברירת מחדל)
+        await this.$nextTick();
+        await this.loadChartData(this.chartPeriod || "daily");
       }
       if (newTab === "status") {
         this.loadStatus();
@@ -1671,6 +2491,14 @@ export default {
       }
       if (newTab === "settings") {
         this.loadPlatformFee();
+        this.loadMaamPercent();
+        this.loadMonthlySubscription();
+      }
+      if (newTab === "cancellations") {
+        this.loadCancellations();
+      }
+      if (newTab === "contact") {
+        this.loadInquiries();
       }
     },
   },
@@ -1802,7 +2630,7 @@ export default {
         return;
       }
 
-      const newBlockStatus = !(user.isBlocked === true);
+      const newBlockStatus = !(user.IsBlocked === true);
 
       try {
         const userId = user._id || user.id;
@@ -1825,7 +2653,6 @@ export default {
       event.target.style.display = "none";
     },
     sendMessage(user) {
-      console.log("[sendMessage] Opening message modal for user:", user);
       this.messageUser = user;
       this.messageText = "";
       this.showSendMessageModal = true;
@@ -1837,13 +2664,7 @@ export default {
       this.isSubmittingMessage = false;
     },
     async submitMessage() {
-      console.log("[submitMessage] Starting message submission");
-      console.log("[submitMessage] Toast initialized:", !!this.toast);
-      console.log("[submitMessage] Message user:", this.messageUser);
-      console.log("[submitMessage] Message text:", this.messageText);
-
       if (!this.toast) {
-        console.error("[submitMessage] ERROR: Toast not initialized");
         return;
       }
 
@@ -1873,18 +2694,9 @@ export default {
           message: this.messageText.trim(),
         };
 
-        console.log("[submitMessage] Payload:", payload);
-        console.log("[submitMessage] URL:", `${URL}/admin/send-message`);
-        console.log("[submitMessage] Sending POST request...");
-
         const response = await axios.post(`${URL}/admin/send-message`, payload);
 
-        console.log("[submitMessage] Response received:", response);
-        console.log("[submitMessage] Response status:", response?.status);
-        console.log("[submitMessage] Response data:", response?.data);
-
         if (response && response.data && response.data.success) {
-          console.log("[submitMessage] SUCCESS: Message sent successfully");
           this.toast.showSuccess("הודעה נשלחה בהצלחה");
           this.closeSendMessageModal();
         } else {
@@ -2186,6 +2998,14 @@ export default {
         day: "numeric",
       });
     },
+    formatTime(date) {
+      if (!date) return "-";
+      const d = new Date(date);
+      return d.toLocaleTimeString("he-IL", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    },
     getTimeAgo(date) {
       if (!date) return "";
       const now = new Date();
@@ -2216,23 +3036,27 @@ export default {
       const value = this.status.howDidYouHearStats[key] || 0;
       return Math.round((value / total) * 100);
     },
-    shouldConvertToILS(field) {
-      const fieldsToConvert = [
-        "expenses.AI expenses",
-        "expenses.DB expenses",
-        "expenses.API expenses",
-        "expenses.clearing fee",
+    isAlreadyInILS(field) {
+      // שדות שכבר מאוחסנים בשקלים ולא צריך להמיר אותם
+      const fieldsInILS = [
+        "Revenue.Urgent call", // קריאת חירום
+        "Revenue.Drawings", // רישומים
+        "Revenue.Fees", // עמלות
+        "expenses.clearing fee", // עמלת סליקה
       ];
-      return fieldsToConvert.includes(field);
+      return fieldsInILS.includes(field);
     },
     getDisplayValue(field, value) {
-      if (this.shouldConvertToILS(field)) {
-        return value * this.usdToIlsRate;
+      // אם השדה כבר בשקלים, מחזיר את הערך כמו שהוא
+      // אחרת, ממיר מדולרים לשקלים
+      if (this.isAlreadyInILS(field)) {
+        return value;
       }
-      return value;
+      return value * this.usdToIlsRate;
     },
     getCurrencySymbol(field) {
-      return this.shouldConvertToILS(field) ? "₪" : "$";
+      // כל הערכים מוצגים בשקלים
+      return "₪";
     },
     async loadFinancials() {
       this.isLoadingFinancials = true;
@@ -2246,6 +3070,7 @@ export default {
               "API expenses": 0,
               "Marketing expenses": 0,
               "clearing fee": 0,
+              'מע"מ': 0,
             },
             Revenue: {
               Fees: 0,
@@ -2565,6 +3390,8 @@ export default {
         );
         if (response.data.success) {
           this.chartData = response.data.chartData || [];
+          // המתן שהדום יעודכן לפני שרטוט הגרף
+          await this.$nextTick();
           this.renderChart();
         }
       } catch (error) {
@@ -2586,6 +3413,13 @@ export default {
       const labels = this.chartData.map((item) => {
         const date = new Date(item.date);
         switch (this.chartPeriod) {
+          case "hourly":
+            return date.toLocaleTimeString("he-IL", {
+              hour: "2-digit",
+              minute: "2-digit",
+              day: "numeric",
+              month: "short",
+            });
           case "weekly":
             return `שבוע ${item.dateLabel.split("-")[1]}, ${
               item.dateLabel.split("-")[0]
@@ -2621,26 +3455,12 @@ export default {
           labels: labels.reverse(), // Reverse for RTL
           datasets: [
             {
-              label: "הכנסות",
-              data: this.chartData.map((item) => item.revenue).reverse(),
+              label: "רווח/הפסד",
+              data: this.chartData
+                .map((item) => (item.profit || 0) * this.usdToIlsRate)
+                .reverse(),
               borderColor: "#10b981",
               backgroundColor: "rgba(16, 185, 129, 0.1)",
-              tension: 0.4,
-              fill: true,
-            },
-            {
-              label: "הוצאות",
-              data: this.chartData.map((item) => item.expenses).reverse(),
-              borderColor: "#ef4444",
-              backgroundColor: "rgba(239, 68, 68, 0.1)",
-              tension: 0.4,
-              fill: true,
-            },
-            {
-              label: "רווח/הפסד",
-              data: this.chartData.map((item) => item.profit).reverse(),
-              borderColor: "#ff8a2b",
-              backgroundColor: "rgba(255, 138, 43, 0.1)",
               tension: 0.4,
               fill: true,
             },
@@ -2665,38 +3485,17 @@ export default {
             },
             tooltip: {
               backgroundColor: "rgba(11, 11, 15, 0.95)",
-              borderColor: "rgba(255, 138, 43, 0.3)",
+              borderColor: "rgba(16, 185, 129, 0.3)",
               borderWidth: 1,
-              titleColor: "#ff8a2b",
+              titleColor: "#10b981",
               bodyColor: "rgba(255, 255, 255, 0.92)",
               padding: 12,
               displayColors: true,
               callbacks: {
                 label: function (context) {
-                  return `${context.dataset.label}: $${context.parsed.y.toFixed(
-                    2
-                  )}`;
-                },
-                afterBody: (context) => {
-                  if (!context || context.length === 0) return "";
-                  const index = context[0].dataIndex;
-                  // Get data from chartData array (reversed for RTL)
-                  const reversedIndex = this.chartData.length - 1 - index;
-                  const dataItem = this.chartData[reversedIndex];
-                  if (!dataItem) return "";
-
-                  const profit = dataItem.profit || 0;
-                  const revenue = dataItem.revenue || 0;
-                  const expenses = dataItem.expenses || 0;
-
+                  const profit = context.parsed.y;
                   const profitLabel = profit >= 0 ? "רווח" : "הפסד";
-
-                  return [
-                    "",
-                    `רווח: $${Math.abs(profit).toFixed(2)} (${profitLabel})`,
-                    `הפסד: $${expenses.toFixed(2)}`,
-                    `סה"כ: $${revenue.toFixed(2)}`,
-                  ];
+                  return `${profitLabel}: ₪${Math.abs(profit).toFixed(2)}`;
                 },
               },
             },
@@ -2727,7 +3526,7 @@ export default {
                   weight: "bold",
                 },
                 callback: function (value) {
-                  return "$" + value.toFixed(2);
+                  return "₪" + value.toFixed(2);
                 },
               },
             },
@@ -2742,6 +3541,8 @@ export default {
         if (response.data.success) {
           this.payments = response.data.payments || [];
         }
+        // Load subscriptions as well
+        await this.loadSubscriptions();
       } catch (error) {
         console.error("Error loading payments:", error);
         this.toast?.showError("שגיאה בטעינת התשלומים");
@@ -2749,27 +3550,319 @@ export default {
         this.isLoadingPayments = false;
       }
     },
+    async loadSubscriptions() {
+      this.isLoadingSubscriptions = true;
+      try {
+        const response = await axios.get(`${URL}/admin/subscriptions`);
+        if (response.data.success) {
+          this.subscriptions = response.data.subscriptions || [];
+        }
+      } catch (error) {
+        console.error("Error loading subscriptions:", error);
+        // Don't show error toast - subscriptions are optional
+      } finally {
+        this.isLoadingSubscriptions = false;
+      }
+    },
+    async loadInquiries() {
+      this.isLoadingInquiries = true;
+      try {
+        const response = await axios.get(`${URL}/api/inquiries`);
+        if (response.data.success) {
+          this.inquiries = response.data.inquiries || [];
+        }
+      } catch (error) {
+        console.error("Error loading inquiries:", error);
+        this.toast?.showError("שגיאה בטעינת הפניות");
+      } finally {
+        this.isLoadingInquiries = false;
+      }
+    },
+    getStatusLabel(status) {
+      const statusMap = {
+        pending: "ממתין",
+        responded: "נענה",
+        resolved: "טופל",
+        deleted: "נמחק",
+      };
+      return statusMap[status] || status;
+    },
+    truncateText(text, maxLength) {
+      if (!text) return "";
+      if (text.length <= maxLength) return text;
+      return text.substring(0, maxLength) + "...";
+    },
+    openPushModal(inquiry) {
+      this.pushInquiry = inquiry;
+      this.pushMessage = "";
+      this.showPushModal = true;
+    },
+    closePushModal() {
+      this.showPushModal = false;
+      this.pushInquiry = null;
+      this.pushMessage = "";
+    },
+    async sendPush() {
+      if (!this.pushMessage.trim() || !this.pushInquiry || this.isSendingPush)
+        return;
+
+      this.isSendingPush = true;
+      try {
+        const userId =
+          this.pushInquiry.userId?.toString() ||
+          this.pushInquiry.user?._id?.toString();
+        if (!userId) {
+          this.toast?.showError("לא ניתן לשלוח פוש - אין מזהה משתמש");
+          return;
+        }
+
+        await axios.post(
+          `${URL}/api/inquiries/${this.pushInquiry._id}/send-push`,
+          {
+            message: this.pushMessage,
+            userId: userId,
+          }
+        );
+
+        this.toast?.showSuccess("ההודעה נשלחה בהצלחה");
+        this.closePushModal();
+      } catch (error) {
+        console.error("Error sending push:", error);
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה בשליחת ההודעה"
+        );
+      } finally {
+        this.isSendingPush = false;
+      }
+    },
+    openEmailModal(inquiry) {
+      this.emailInquiry = inquiry;
+      this.emailContent = "";
+      this.emailRecipient = inquiry.user?.email || "";
+      this.showEmailModal = true;
+    },
+    closeEmailModal() {
+      this.showEmailModal = false;
+      this.emailInquiry = null;
+      this.emailContent = "";
+      this.emailRecipient = "";
+    },
+    async sendEmail() {
+      if (
+        !this.emailContent.trim() ||
+        !this.emailRecipient.trim() ||
+        !this.emailInquiry ||
+        this.isSendingEmail
+      )
+        return;
+
+      this.isSendingEmail = true;
+      try {
+        await axios.post(
+          `${URL}/api/inquiries/${this.emailInquiry._id}/send-email`,
+          {
+            emailContent: this.emailContent,
+            recipientEmail: this.emailRecipient,
+          }
+        );
+
+        this.toast?.showSuccess("המייל נשלח בהצלחה");
+        this.closeEmailModal();
+      } catch (error) {
+        console.error("Error sending email:", error);
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה בשליחת המייל"
+        );
+      } finally {
+        this.isSendingEmail = false;
+      }
+    },
+    async markAsResponded(inquiry) {
+      try {
+        await axios.patch(`${URL}/api/inquiries/${inquiry._id}/status`, {
+          status: "responded",
+        });
+        this.toast?.showSuccess("הפנייה סומנה כנענה");
+        await this.loadInquiries();
+      } catch (error) {
+        console.error("Error updating inquiry status:", error);
+        this.toast?.showError("שגיאה בעדכון הסטטוס");
+      }
+    },
+    confirmDeleteInquiry(inquiry) {
+      this.showDeleteConfirm(
+        "מחיקת פנייה",
+        "האם אתה בטוח שאתה רוצה למחוק את הפנייה הזו?",
+        async () => {
+          await this.deleteInquiry(inquiry);
+        }
+      );
+    },
+    async deleteInquiry(inquiry) {
+      try {
+        await axios.delete(`${URL}/api/inquiries/${inquiry._id}`);
+        this.toast?.showSuccess("הפנייה נמחקה בהצלחה");
+        await this.loadInquiries();
+      } catch (error) {
+        console.error("Error deleting inquiry:", error);
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה במחיקת הפנייה"
+        );
+      }
+    },
+    async openUserDetailsModal(user) {
+      this.selectedUser = user;
+      this.showUserDetailsModal = true;
+      await this.loadUserDetails(user._id || user.id);
+    },
+    closeUserDetailsModal() {
+      this.showUserDetailsModal = false;
+      this.selectedUser = null;
+      this.userDetails = null;
+    },
+    async loadUserDetails(userId) {
+      this.isLoadingUserDetails = true;
+      try {
+        const response = await axios.get(`${URL}/admin/users/${userId}`);
+        if (response.data.success) {
+          this.userDetails = response.data.user;
+        } else {
+          this.toast?.showError("שגיאה בטעינת פרטי המשתמש");
+        }
+      } catch (error) {
+        console.error("Error loading user details:", error);
+        this.toast?.showError("שגיאה בטעינת פרטי המשתמש");
+      } finally {
+        this.isLoadingUserDetails = false;
+      }
+    },
+    parseInquiryContent(inquiry) {
+      if (!inquiry.Content) return [];
+
+      let content = inquiry.Content;
+
+      // Create a map of userId to user details
+      const userMap = new Map();
+      if (inquiry.mentionedUsers && Array.isArray(inquiry.mentionedUsers)) {
+        inquiry.mentionedUsers.forEach((user) => {
+          const userId = user._id?.toString() || user.id?.toString();
+          if (userId) {
+            userMap.set(userId, user);
+          }
+        });
+      }
+
+      // Parse content into tokens (text or mention)
+      // Pattern: @ followed by ObjectId (24 hex characters)
+      const mentionPattern = /@([a-fA-F0-9]{24})/g;
+      const tokens = [];
+      let lastIndex = 0;
+      let match;
+
+      while ((match = mentionPattern.exec(content)) !== null) {
+        // Add text before mention
+        if (match.index > lastIndex) {
+          tokens.push({
+            type: "text",
+            content: content.substring(lastIndex, match.index),
+          });
+        }
+
+        // Add mention
+        const userId = match[1];
+        const user = userMap.get(userId);
+        if (user) {
+          const userName = user.username || user.name || user.email || userId;
+          tokens.push({
+            type: "mention",
+            userId: userId,
+            userName: userName,
+            user: user,
+          });
+        } else {
+          // If user not found, keep as text
+          tokens.push({
+            type: "text",
+            content: match[0],
+          });
+        }
+
+        lastIndex = mentionPattern.lastIndex;
+      }
+
+      // Add remaining text
+      if (lastIndex < content.length) {
+        tokens.push({
+          type: "text",
+          content: content.substring(lastIndex),
+        });
+      }
+
+      // If no mentions found, return the whole content as text
+      if (tokens.length === 0) {
+        tokens.push({
+          type: "text",
+          content: content,
+        });
+      }
+
+      return tokens;
+    },
+    async downloadMonthlyPDF() {
+      this.isGeneratingPDF = true;
+      try {
+        const response = await axios.get(`${URL}/admin/payments/monthly-pdf`, {
+          responseType: "blob",
+        });
+
+        // Create blob URL and download
+        const blob = new Blob([response.data], { type: "application/pdf" });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+
+        // Generate filename with current month
+        const now = new Date();
+        const month = String(now.getMonth() + 1).padStart(2, "0");
+        const year = now.getFullYear();
+        link.download = `דוח_חודשי_${month}_${year}.pdf`;
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        this.toast?.showSuccess("הדוח הורד בהצלחה");
+      } catch (error) {
+        console.error("Error generating PDF:", error);
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה ביצירת הדוח"
+        );
+      } finally {
+        this.isGeneratingPDF = false;
+      }
+    },
     getStatusLabel(status) {
       const statusMap = {
         transferred: "הועבר",
         pending: "ממתין",
         failed: "נכשל",
-        succeeded: "בוצע",
+        succeeded: "הועבר", // Unified with transferred and captured
         requires_payment_method: "נדרש תשלום",
         requires_capture: "נדרש לכידה",
         requires_confirmation: "נדרש אישור",
         requires_action: "נדרש פעולה",
         processing: "מעבד",
         canceled: "בוטל",
-        captured: "נלכד",
+        captured: "הועבר", // Unified with transferred and succeeded
       };
       return statusMap[status] || status || "לא ידוע";
     },
     getStatusBadgeClass(status) {
       const classMap = {
         transferred: "status-badge--transferred",
-        succeeded: "status-badge--succeeded",
-        captured: "status-badge--captured",
+        succeeded: "status-badge--transferred", // Use same class as transferred
+        captured: "status-badge--transferred", // Use same class as transferred
         pending: "status-badge--pending",
         processing: "status-badge--processing",
         requires_payment_method: "status-badge--requires-payment",
@@ -2821,6 +3914,64 @@ export default {
         );
       }
     },
+    async capturePayment(payment) {
+      if (!payment || !payment.paymentIntentId) {
+        this.toast?.showError("שגיאה: פרטי תשלום לא תקינים");
+        return;
+      }
+
+      // Get jobId - handle both ObjectId and string formats
+      let jobId = null;
+      if (payment.jobId) {
+        if (typeof payment.jobId === "object" && payment.jobId._id) {
+          jobId = payment.jobId._id;
+        } else if (typeof payment.jobId === "string") {
+          jobId = payment.jobId;
+        } else {
+          jobId = payment.jobId;
+        }
+      }
+
+      if (!jobId) {
+        this.toast?.showError("שגיאה: לא נמצא מזהה עבודה");
+        return;
+      }
+
+      // Confirm before capturing
+      const confirmed = confirm(
+        `האם אתה בטוח שברצונך לשחרר את התשלום?\n\n` +
+          `לקוח: ${payment.client?.username || "ללא שם"}\n` +
+          `הנדימן: ${payment.handyman?.username || "ללא שם"}\n` +
+          `סכום: ${this.formatCurrencySimple(payment.totalAmount || 0)} ₪`
+      );
+
+      if (!confirmed) return;
+
+      this.isCapturingPayment = true;
+      try {
+        const paymentIntentId = payment.paymentIntentId;
+
+        const response = await axios.post(`${URL}/admin/payments/capture`, {
+          paymentId: payment._id,
+          jobId: jobId,
+          paymentIntentId: paymentIntentId,
+        });
+
+        if (response.data.success) {
+          this.toast?.showSuccess("התשלום שוחרר בהצלחה");
+          await this.loadPayments();
+        } else {
+          this.toast?.showError(response.data.message || "שגיאה בשחרור התשלום");
+        }
+      } catch (error) {
+        console.error("Error capturing payment:", error);
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה בשחרור התשלום"
+        );
+      } finally {
+        this.isCapturingPayment = false;
+      }
+    },
     async loadPlatformFee() {
       try {
         const response = await axios.get(`${URL}/admin/fee`);
@@ -2865,6 +4016,174 @@ export default {
         );
       } finally {
         this.isUpdatingFee = false;
+      }
+    },
+    async loadMaamPercent() {
+      try {
+        const response = await axios.get(`${URL}/admin/maam`);
+        if (response.data.success) {
+          this.currentMaamPercent = response.data.maam;
+          this.maamPercent = response.data.maam;
+        }
+      } catch (error) {
+        console.error("Error loading maam percent:", error);
+        this.toast?.showError('שגיאה בטעינת אחוז המע"מ');
+      }
+    },
+    async updateMaamPercent() {
+      if (this.maamPercent === null || this.maamPercent === undefined) {
+        this.toast?.showError('יש להזין אחוז מע"מ תקין');
+        return;
+      }
+
+      if (this.maamPercent < 0 || this.maamPercent > 100) {
+        this.toast?.showError('אחוז המע"מ חייב להיות בין 0 ל-100');
+        return;
+      }
+
+      this.isUpdatingMaam = true;
+      try {
+        const response = await axios.post(`${URL}/admin/maam`, {
+          maam: this.maamPercent,
+        });
+
+        if (response.data.success) {
+          this.currentMaamPercent = response.data.maam;
+          this.toast?.showSuccess('אחוז המע"מ עודכן בהצלחה');
+        } else {
+          this.toast?.showError(
+            response.data.message || 'שגיאה בעדכון אחוז המע"מ'
+          );
+        }
+      } catch (error) {
+        console.error("Error updating maam percent:", error);
+        this.toast?.showError(
+          error.response?.data?.message || 'שגיאה בעדכון אחוז המע"מ'
+        );
+      } finally {
+        this.isUpdatingMaam = false;
+      }
+    },
+    async loadMonthlySubscription() {
+      try {
+        const response = await axios.get(`${URL}/admin/monthly-subscription`);
+        if (response.data.success) {
+          this.currentMonthlySubscription = response.data.amount;
+          this.monthlySubscription = response.data.amount;
+        }
+      } catch (error) {
+        console.error("Error loading monthly subscription:", error);
+        this.toast?.showError("שגיאה בטעינת סכום המנוי החודשי");
+      }
+    },
+    async updateMonthlySubscription() {
+      if (
+        this.monthlySubscription === null ||
+        this.monthlySubscription === undefined
+      ) {
+        this.toast?.showError("יש להזין סכום מנוי חודשי תקין");
+        return;
+      }
+
+      if (this.monthlySubscription < 0) {
+        this.toast?.showError("סכום המנוי החודשי חייב להיות מספר חיובי");
+        return;
+      }
+
+      this.isUpdatingMonthlySubscription = true;
+      try {
+        const response = await axios.post(`${URL}/admin/monthly-subscription`, {
+          amount: this.monthlySubscription,
+        });
+
+        if (response.data.success) {
+          this.currentMonthlySubscription = response.data.amount;
+          this.toast?.showSuccess("סכום המנוי החודשי עודכן בהצלחה");
+        } else {
+          this.toast?.showError(
+            response.data.message || "שגיאה בעדכון סכום המנוי החודשי"
+          );
+        }
+      } catch (error) {
+        console.error("Error updating monthly subscription:", error);
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה בעדכון סכום המנוי החודשי"
+        );
+      } finally {
+        this.isUpdatingMonthlySubscription = false;
+      }
+    },
+    async loadCancellations() {
+      this.isLoadingCancellations = true;
+      try {
+        const response = await axios.get(`${URL}/admin/cancellations`);
+        if (response.data.success) {
+          this.cancellations = response.data.cancellations || [];
+        }
+      } catch (error) {
+        console.error("Error loading cancellations:", error);
+        this.toast?.showError("שגיאה בטעינת הביטולים");
+      } finally {
+        this.isLoadingCancellations = false;
+      }
+    },
+    openFineModal(job) {
+      this.fineJob = job;
+      this.fineAmount = 0;
+      this.showFineModal = true;
+    },
+    closeFineModal() {
+      this.showFineModal = false;
+      this.fineJob = null;
+      this.fineAmount = 0;
+      this.isCollectingFine = false;
+    },
+    async collectFine() {
+      if (
+        !this.fineJob ||
+        !this.fineAmount ||
+        this.fineAmount <= 0 ||
+        this.fineAmount > 200
+      ) {
+        this.toast?.showError("יש להזין סכום קנס תקין (עד 200 ₪)");
+        return;
+      }
+
+      // Confirm before collecting
+      const confirmed = confirm(
+        `האם אתה בטוח שברצונך לגבות קנס של ${this.fineAmount} ₪?\n\n` +
+          `לקוח: ${this.fineJob.clientName || "ללא שם"}\n` +
+          `הנדימן: ${this.fineJob.handymanName || "ללא שם"}\n` +
+          `עבודה: ${this.getJobNames(this.fineJob) || "-"}`
+      );
+
+      if (!confirmed) return;
+
+      this.isCollectingFine = true;
+      try {
+        const jobId = this.fineJob._id || this.fineJob.id;
+        const response = await axios.post(
+          `${URL}/admin/cancellations/collect-fine`,
+          {
+            jobId,
+            fineAmount: this.fineAmount,
+          }
+        );
+
+        if (response.data.success) {
+          this.toast?.showSuccess("הקנס נגבה בהצלחה");
+          await this.loadCancellations();
+          this.closeFineModal();
+        } else {
+          this.toast?.showError(response.data.message || "שגיאה בגביית הקנס");
+        }
+      } catch (error) {
+        console.error("Error collecting fine:", error);
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה בגביית הקנס"
+        );
+      } finally {
+        this.isCollectingFine = false;
       }
     },
   },
@@ -3185,6 +4504,12 @@ $muted: rgba(255, 255, 255, 0.62);
   cursor: help;
 }
 
+.time-cell {
+  font-weight: 800;
+  font-size: 13px;
+  color: $text;
+}
+
 .edit-user-btn {
   width: 32px;
   height: 32px;
@@ -3299,6 +4624,34 @@ $muted: rgba(255, 255, 255, 0.62);
   }
 }
 
+.capture-payment-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: $font-family;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    background: rgba(16, 185, 129, 0.25);
+    border-color: rgba(16, 185, 129, 0.5);
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
 .no-rating {
   color: $muted;
   font-style: italic;
@@ -3322,6 +4675,12 @@ $muted: rgba(255, 255, 255, 0.62);
   flex-wrap: wrap;
 }
 
+.payments-section__actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
 .payments-section__filters {
   display: flex;
   gap: 12px;
@@ -3333,6 +4692,30 @@ $muted: rgba(255, 255, 255, 0.62);
   font-size: 20px;
   font-weight: 1000;
   color: $orange2;
+}
+
+.download-pdf-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba($orange, 0.15);
+  color: $orange2;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: $font-family;
+
+  &:hover:not(:disabled) {
+    background: rgba($orange, 0.25);
+    border-color: rgba($orange, 0.5);
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 }
 
 .refresh-payments-btn {
@@ -3351,6 +4734,73 @@ $muted: rgba(255, 255, 255, 0.62);
     background: rgba($orange, 0.25);
     border-color: rgba($orange, 0.5);
     transform: translateY(-1px);
+  }
+}
+
+.payments-tables-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: start;
+
+  @media (max-width: 1200px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.subscriptions-table-wrapper {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba($orange, 0.2);
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.subscriptions-table-title {
+  font-size: 18px;
+  font-weight: 1000;
+  color: $orange2;
+  margin: 0 0 16px 0;
+  text-align: center;
+}
+
+.subscriptions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  thead {
+    background: rgba(255, 106, 0, 0.1);
+    border-bottom: 2px solid rgba($orange, 0.3);
+  }
+
+  th {
+    padding: 12px;
+    text-align: right;
+    font-weight: 1000;
+    color: $orange2;
+    font-size: 13px;
+  }
+
+  tbody {
+    tr {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      transition: background 0.2s ease;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      &:last-child {
+        border-bottom: none;
+      }
+    }
+
+    td {
+      padding: 12px;
+      text-align: right;
+      color: $text;
+      font-weight: 800;
+    }
   }
 }
 
@@ -3407,12 +4857,72 @@ $muted: rgba(255, 255, 255, 0.62);
   font-family: "Courier New", monospace;
   color: $orange2;
 
-  &--handyman {
-    color: #10b981;
+  // מחיר - כתום/צהוב
+  &--price {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+    padding: 3px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(245, 158, 11, 0.2);
   }
 
-  &--system {
+  // מע"מ - כחול
+  &--vat {
     color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+    padding: 3px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+
+  // רווח הנדימן - ירוק
+  &--handyman {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+    padding: 3px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+
+  // רווח המערכת - סגול
+  &--system {
+    color: #8b5cf6;
+    background: rgba(139, 92, 246, 0.1);
+    padding: 3px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(139, 92, 246, 0.2);
+  }
+
+  // מחיר שנגבה מהלקוח - כתום חזק
+  &--client {
+    color: #ff6a00;
+    background: rgba(255, 106, 0, 0.15);
+    padding: 3px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 106, 0, 0.3);
+    font-weight: 1100;
+  }
+
+  // שינוי מחיר
+  &--change {
+    font-weight: 1000;
+    padding: 3px 6px;
+    border-radius: 4px;
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+
+    &-positive {
+      color: #10b981;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    &-negative {
+      color: #ef4444;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
   }
 }
 
@@ -4788,6 +6298,8 @@ $muted: rgba(255, 255, 255, 0.62);
 
 .form-field {
   margin-bottom: 20px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .form-label {
@@ -4808,6 +6320,7 @@ $muted: rgba(255, 255, 255, 0.62);
   font-size: 14px;
   font-weight: 800;
   font-family: $font-family;
+  box-sizing: border-box;
 
   &:focus {
     outline: none;
@@ -5023,7 +6536,12 @@ select.form-input {
 
 .settings-content {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 24px;
+
+  @media (min-width: 1200px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 .settings-card {
@@ -5060,6 +6578,8 @@ select.form-input {
 
 .settings-card__body {
   padding: 20px;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .settings-card__actions {
@@ -5076,5 +6596,643 @@ select.form-input {
   padding: 8px 12px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 6px;
+}
+
+/* Cancellations Section */
+.cancellations-section__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.cancellations-section__title {
+  font-size: 20px;
+  font-weight: 1000;
+  color: $orange2;
+}
+
+.refresh-cancellations-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba($orange, 0.15);
+  color: $orange2;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: $font-family;
+
+  &:hover {
+    background: rgba($orange, 0.25);
+    border-color: rgba($orange, 0.5);
+    transform: translateY(-1px);
+  }
+}
+
+.cancellations-table-wrapper {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid rgba($orange, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.cancellations-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  thead {
+    background: rgba($orange, 0.1);
+  }
+
+  th {
+    padding: 14px 12px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 1000;
+    color: $orange2;
+    border-bottom: 1px solid rgba($orange, 0.2);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 12px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 800;
+    color: $text;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    vertical-align: middle;
+  }
+
+  tbody tr {
+    transition: background 0.2s ease;
+
+    &:hover {
+      background: rgba($orange, 0.05);
+    }
+
+    &:last-child td {
+      border-bottom: none;
+    }
+  }
+}
+
+.person-badge {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  display: inline-block;
+  border: 1px solid;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+
+  &--handyman {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+
+  &--customer {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+}
+
+.reason-text {
+  font-size: 13px;
+  color: $text;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+}
+
+.status-badge--yes {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.status-badge--no {
+  background: rgba(107, 114, 128, 0.15);
+  color: #6b7280;
+  border-color: rgba(107, 114, 128, 0.3);
+}
+
+.status-badge--collected {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.status-badge--not-collected {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.collect-fine-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  background: rgba(255, 193, 7, 0.15);
+  color: #ffc107;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: $font-family;
+
+  &:hover {
+    background: rgba(255, 193, 7, 0.25);
+    border-color: rgba(255, 193, 7, 0.5);
+    transform: translateY(-1px);
+  }
+}
+
+.fine-collected-text {
+  font-size: 13px;
+  color: #10b981;
+  font-weight: 900;
+}
+
+.fine-hint {
+  font-size: 12px;
+  font-weight: 800;
+  color: $muted;
+  margin-top: 4px;
+}
+
+/* Inquiries Section */
+.inquiries-section__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.inquiries-section__title {
+  font-size: 20px;
+  font-weight: 1000;
+  color: $orange2;
+}
+
+.inquiries-section__controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.refresh-inquiries-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba($orange, 0.15);
+  color: $orange2;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: $font-family;
+
+  &:hover {
+    background: rgba($orange, 0.25);
+    border-color: rgba($orange, 0.5);
+    transform: translateY(-1px);
+  }
+}
+
+.inquiries-table-wrapper {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid rgba($orange, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.inquiries-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  thead {
+    background: rgba($orange, 0.1);
+  }
+
+  th {
+    padding: 14px 12px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 1000;
+    color: $orange2;
+    border-bottom: 1px solid rgba($orange, 0.2);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 12px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 800;
+    color: $text;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    vertical-align: middle;
+  }
+
+  tbody tr {
+    transition: background 0.2s ease;
+
+    &:hover {
+      background: rgba($orange, 0.05);
+    }
+
+    &:last-child td {
+      border-bottom: none;
+    }
+  }
+}
+
+.inquiry-date {
+  font-weight: 800;
+  color: $text;
+  font-size: 13px;
+}
+
+.inquiry-time {
+  font-size: 11px;
+  color: $muted;
+  margin-top: 4px;
+}
+
+.inquiry-title {
+  font-weight: 900;
+  color: $text;
+  font-size: 13px;
+}
+
+.inquiry-content {
+  color: $text;
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 300px;
+  word-wrap: break-word;
+}
+
+.inquiry-content-mention {
+  display: inline;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba($orange, 0.2);
+  border: 1px solid rgba($orange, 0.4);
+  color: $orange2;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  margin: 0 2px;
+  font-family: $font-family;
+  vertical-align: baseline;
+
+  &:hover {
+    background: rgba($orange, 0.3);
+    border-color: rgba($orange, 0.6);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba($orange, 0.3);
+  }
+}
+
+.inquiry-user {
+  font-weight: 800;
+  color: $text;
+  font-size: 13px;
+
+  &--anonymous {
+    color: $muted;
+    font-style: italic;
+  }
+}
+
+.inquiry-mentions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.inquiry-mention-tag {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba($orange, 0.15);
+  border: 1px solid rgba($orange, 0.3);
+  font-size: 11px;
+  font-weight: 800;
+  color: $orange2;
+  white-space: nowrap;
+  display: inline-block;
+
+  &--clickable {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid rgba($orange, 0.3);
+    background: rgba($orange, 0.15);
+
+    &:hover {
+      background: rgba($orange, 0.25);
+      border-color: rgba($orange, 0.5);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba($orange, 0.3);
+    }
+  }
+}
+
+.inquiry-no-mentions {
+  color: $muted;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.inquiry-status-badge {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  display: inline-block;
+  border: 1px solid;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+
+  &--pending {
+    background: rgba(255, 193, 7, 0.15);
+    color: #ffc107;
+    border-color: rgba(255, 193, 7, 0.3);
+  }
+
+  &--responded {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border-color: rgba(16, 185, 129, 0.3);
+  }
+
+  &--resolved {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+
+  &--deleted {
+    background: rgba(107, 114, 128, 0.15);
+    color: #6b7280;
+    border-color: rgba(107, 114, 128, 0.3);
+  }
+}
+
+.inquiry-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.inquiry-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid;
+  background: transparent;
+  color: $text;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 16px;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &--push {
+    border-color: rgba(59, 130, 246, 0.3);
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+
+    &:hover:not(:disabled) {
+      background: rgba(59, 130, 246, 0.25);
+      border-color: rgba(59, 130, 246, 0.5);
+    }
+  }
+
+  &--email {
+    border-color: rgba(234, 67, 53, 0.3);
+    background: rgba(234, 67, 53, 0.15);
+    color: #ea4335;
+
+    &:hover:not(:disabled) {
+      background: rgba(234, 67, 53, 0.25);
+      border-color: rgba(234, 67, 53, 0.5);
+    }
+  }
+
+  &--respond {
+    border-color: rgba(16, 185, 129, 0.3);
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+
+    &:hover:not(:disabled) {
+      background: rgba(16, 185, 129, 0.25);
+      border-color: rgba(16, 185, 129, 0.5);
+    }
+  }
+
+  &--delete {
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+
+    &:hover:not(:disabled) {
+      background: rgba(239, 68, 68, 0.25);
+      border-color: rgba(239, 68, 68, 0.5);
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .inquiries-section__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .inquiries-section__controls {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .refresh-inquiries-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .inquiries-table-wrapper {
+    font-size: 12px;
+  }
+
+  .inquiries-table {
+    th,
+    td {
+      padding: 8px 6px;
+      font-size: 11px;
+    }
+  }
+
+  .inquiry-content {
+    max-width: 150px;
+  }
+
+  .inquiry-action-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+}
+
+/* User Details Modal */
+.modal-content--large {
+  max-width: 700px;
+}
+
+.user-details-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.user-details-section {
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+
+  &:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+}
+
+.user-details-section__title {
+  font-size: 18px;
+  font-weight: 1000;
+  color: $orange2;
+  margin: 0 0 16px 0;
+}
+
+.user-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.user-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-detail-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: $muted;
+}
+
+.user-detail-value {
+  font-size: 14px;
+  font-weight: 900;
+  color: $text;
+}
+
+.user-status--active {
+  color: #10b981;
+}
+
+.user-status--blocked {
+  color: #ef4444;
+}
+
+.user-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+}
+
+.user-stat-card {
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba($orange, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba($orange, 0.4);
+    transform: translateY(-2px);
+  }
+}
+
+.user-stat-icon {
+  font-size: 32px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.user-stat-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-stat-value {
+  font-size: 20px;
+  font-weight: 1000;
+  color: $orange2;
+  font-family: "Courier New", monospace;
+}
+
+.user-stat-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: $muted;
+}
+
+@media (max-width: 768px) {
+  .modal-content--large {
+    max-width: 95%;
+  }
+
+  .user-details-grid,
+  .user-stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .user-stat-card {
+    padding: 12px;
+  }
 }
 </style>

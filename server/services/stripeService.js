@@ -26,7 +26,7 @@ const CACHE_DURATION = 5000; // Cache for 5 seconds to avoid reading file too of
 
 function getCachedPlatformFeePercent() {
   const now = Date.now();
-  if (_cachedFee !== null && (now - _lastReadTime) < CACHE_DURATION) {
+  if (_cachedFee !== null && now - _lastReadTime < CACHE_DURATION) {
     return _cachedFee;
   }
   _cachedFee = getPlatformFeePercent();
@@ -164,37 +164,6 @@ async function createEscrowPaymentIntent({
   metadata = {},
 }) {
   try {
-    console.log(`[stripeService] createEscrowPaymentIntent called with:`, {
-      amountAgorot,
-      currency,
-      handymanAccountId,
-      platformFeeAgorot,
-      metadata,
-    });
-
-    console.log(`[stripeService] Creating Payment Intent via Stripe API...`);
-    console.log(
-      `[stripeService] Stripe key exists: ${!!process.env.STRIPE_SECRET_KEY}`
-    );
-    console.log(
-      `[stripeService] Stripe key prefix: ${
-        process.env.STRIPE_SECRET_KEY?.substring(0, 7) || "N/A"
-      }`
-    );
-
-    console.log(
-      `[stripeService] Validating parameters before Stripe API call...`
-    );
-    console.log(
-      `[stripeService] - amountAgorot: ${amountAgorot} (type: ${typeof amountAgorot})`
-    );
-    console.log(
-      `[stripeService] - handymanAccountId: ${handymanAccountId} (type: ${typeof handymanAccountId})`
-    );
-    console.log(
-      `[stripeService] - platformFeeAgorot: ${platformFeeAgorot} (type: ${typeof platformFeeAgorot})`
-    );
-
     if (!handymanAccountId || !handymanAccountId.startsWith("acct_")) {
       const error = new Error(
         `Invalid handymanAccountId: ${handymanAccountId}`
@@ -208,11 +177,6 @@ async function createEscrowPaymentIntent({
       console.error(`[stripeService] ❌ ${error.message}`);
       throw error;
     }
-
-    console.log(
-      `[stripeService] Parameters validated, calling Stripe API now...`
-    );
-    console.log(`[stripeService] This may take a few seconds...`);
 
     // Add timeout to prevent hanging (15 seconds - more reasonable)
     const createPromise = stripe.paymentIntents.create({
@@ -237,17 +201,7 @@ async function createEscrowPaymentIntent({
       }, 15000);
     });
 
-    console.log(`[stripeService] Starting Promise.race with timeout...`);
     const paymentIntent = await Promise.race([createPromise, timeoutPromise]);
-    console.log(`[stripeService] Promise.race completed!`);
-
-    console.log(`[stripeService] ✅ Stripe API responded successfully!`);
-
-    console.log(`[stripeService] Payment Intent created successfully:`, {
-      id: paymentIntent.id,
-      status: paymentIntent.status,
-      clientSecret: paymentIntent.client_secret ? "exists" : "missing",
-    });
 
     return {
       clientSecret: paymentIntent.client_secret,

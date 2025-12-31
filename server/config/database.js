@@ -6,6 +6,7 @@ let collectionRatings;
 let collectionPayments;
 let collectionChats;
 let collectionFinancials;
+let collectionInquiries;
 let db;
 
 async function connectDatabase() {
@@ -20,6 +21,7 @@ async function connectDatabase() {
     collectionPayments = db.collection("payment");
     collectionChats = db.collection("chats");
     collectionFinancials = db.collection("managers_financials");
+    collectionInquiries = db.collection("inquiries");
     // צור index על location עבור geospatial queries
     try {
       await collection.createIndex({ location: "2dsphere" });
@@ -58,6 +60,10 @@ function getCollectionFinancials() {
   return collectionFinancials;
 }
 
+function getCollectionInquiries() {
+  return collectionInquiries;
+}
+
 module.exports = {
   connectDatabase,
   getCollection,
@@ -66,4 +72,5 @@ module.exports = {
   getCollectionPayments,
   getCollectionChats,
   getCollectionFinancials,
+  getCollectionInquiries,
 };

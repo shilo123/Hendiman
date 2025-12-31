@@ -94,6 +94,16 @@
         </button>
       </div>
 
+      <!-- Handyman: price update button -->
+      <button
+        v-if="isHandyman && showPriceUpdateButton"
+        class="chip chip--ghost"
+        type="button"
+        @click.stop="showPriceUpdateModal = true"
+      >
+        💰 עדכן מחיר
+      </button>
+
       <!-- Client: location buttons -->
       <template v-if="!isHandyman && showStatusButtons">
         <button class="chip chip--primary" type="button" @click="sendLocation">
@@ -377,30 +387,110 @@
       </div>
     </div>
 
-    <!-- Cancel confirmation -->
+    <!-- Cancel Reason Modal -->
     <div
-      v-if="showCancelConfirmModal"
+      v-if="showCancelReasonModal"
       class="modal"
       dir="rtl"
-      @click.self="showCancelConfirmModal = false"
+      @click.self="showCancelReasonModal = false"
     >
-      <div class="confirm">
-        <div class="confirm__title">ביטול עבודה</div>
-        <div class="confirm__text">האם אתה בטוח שברצונך לבטל את העבודה?</div>
-        <div class="confirm__actions">
+      <div class="cancelReasonModal">
+        <div class="cancelReasonModal__title">ביטול עבודה</div>
+        <div class="cancelReasonModal__form">
+          <div class="cancelReasonModal__field">
+            <label class="cancelReasonModal__label">סיבת הביטול</label>
+            <textarea
+              v-model="cancelReasonText"
+              class="cancelReasonModal__textarea"
+              placeholder="הסבר את סיבת הביטול..."
+              rows="4"
+            ></textarea>
+          </div>
+          <div class="cancelReasonModal__warning">
+            <span class="cancelReasonModal__warningIcon">⚠️</span>
+            <span class="cancelReasonModal__warningText">
+              שים לב: ביטול לא מוצדק יוביל לקנס של עד 200 ₪
+            </span>
+          </div>
+          <div class="cancelReasonModal__options">
+            <button
+              class="cancelReasonModal__option"
+              :class="{
+                'cancelReasonModal__option--selected':
+                  cancelAction === 'cancel-handyman' && cancelReasonText.trim(),
+              }"
+              type="button"
+              @click="cancelAction = 'cancel-handyman'"
+              :disabled="!cancelReasonText.trim()"
+            >
+              <span class="cancelReasonModal__optionIcon">👤</span>
+              <span class="cancelReasonModal__optionText"
+                >בטל עבור הנדימן הזה</span
+              >
+              <span
+                v-if="
+                  cancelAction === 'cancel-handyman' && cancelReasonText.trim()
+                "
+                class="cancelReasonModal__checkIcon"
+                >✓</span
+              >
+            </button>
+            <button
+              class="cancelReasonModal__option"
+              :class="{
+                'cancelReasonModal__option--selected':
+                  cancelAction === 'cancel-complete' && cancelReasonText.trim(),
+              }"
+              type="button"
+              @click="cancelAction = 'cancel-complete'"
+              :disabled="!cancelReasonText.trim()"
+            >
+              <span class="cancelReasonModal__optionIcon">🚫</span>
+              <span class="cancelReasonModal__optionText">בטל עבודה לגמרי</span>
+              <span
+                v-if="
+                  cancelAction === 'cancel-complete' && cancelReasonText.trim()
+                "
+                class="cancelReasonModal__checkIcon"
+                >✓</span
+              >
+            </button>
+            <button
+              v-if="!isHandyman"
+              class="cancelReasonModal__option cancelReasonModal__option--delete"
+              :class="{
+                'cancelReasonModal__option--selected':
+                  cancelAction === 'delete' && cancelReasonText.trim(),
+              }"
+              type="button"
+              @click="cancelAction = 'delete'"
+              :disabled="!cancelReasonText.trim()"
+            >
+              <span class="cancelReasonModal__optionIcon">🗑️</span>
+              <span class="cancelReasonModal__optionText">מחק עבודה</span>
+              <span
+                v-if="cancelAction === 'delete' && cancelReasonText.trim()"
+                class="cancelReasonModal__checkIcon"
+                >✓</span
+              >
+            </button>
+          </div>
+        </div>
+        <div class="cancelReasonModal__actions">
           <button
-            class="confirm__btn"
+            class="cancelReasonModal__btn cancelReasonModal__btn--cancel"
             type="button"
-            @click="showCancelConfirmModal = false"
+            @click="closeCancelReasonModal"
           >
-            לא
+            ביטול
           </button>
           <button
-            class="confirm__btn confirm__btn--danger"
+            class="cancelReasonModal__btn cancelReasonModal__btn--submit"
             type="button"
-            @click="handleCancelJob"
+            :disabled="!cancelReasonText.trim() || isCancellingJob"
+            @click="submitCancelJob"
           >
-            כן, בטל
+            {{ isCancellingJob ? "מבטל..." : "אשר ביטול" }}
           </button>
         </div>
       </div>
@@ -442,6 +532,179 @@
             class="locCard__btn locCard__btn--gm"
             >גוגל מפות</a
           >
+        </div>
+      </div>
+    </div>
+
+    <!-- Price Update Modal (for handyman) -->
+    <div
+      v-if="showPriceUpdateModal"
+      class="modal"
+      dir="rtl"
+      @click.self="showPriceUpdateModal = false"
+    >
+      <div class="priceUpdateModal">
+        <div class="priceUpdateModal__header">
+          <h3 class="priceUpdateModal__title">עדכון מחיר</h3>
+          <button
+            class="priceUpdateModal__close"
+            type="button"
+            @click="showPriceUpdateModal = false"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="priceUpdateModal__body">
+          <div class="priceUpdateModal__currentPrice">
+            <span class="priceUpdateModal__label">מחיר נוכחי:</span>
+            <span class="priceUpdateModal__value">{{ currentJobPrice }} ₪</span>
+          </div>
+          <div class="priceUpdateModal__change">
+            <label class="priceUpdateModal__label" for="priceChangePercent"
+              >שינוי באחוזים (עד 20%):</label
+            >
+            <div class="priceUpdateModal__inputGroup">
+              <input
+                id="priceChangePercent"
+                v-model.number="priceChangePercent"
+                type="number"
+                min="-20"
+                max="20"
+                step="0.1"
+                class="priceUpdateModal__input"
+                placeholder="0"
+                @input="calculateNewPrice"
+              />
+              <span class="priceUpdateModal__percent">%</span>
+            </div>
+            <div class="priceUpdateModal__newPrice">
+              <span class="priceUpdateModal__label">מחיר חדש:</span>
+              <span class="priceUpdateModal__value priceUpdateModal__value--new"
+                >{{ newPrice }} ₪</span
+              >
+            </div>
+            <div
+              v-if="priceChangePercent !== 0"
+              class="priceUpdateModal__changeAmount"
+            >
+              <span
+                class="priceUpdateModal__changeText"
+                :class="{
+                  'priceUpdateModal__changeText--increase':
+                    priceChangePercent > 0,
+                  'priceUpdateModal__changeText--decrease':
+                    priceChangePercent < 0,
+                }"
+              >
+                {{
+                  priceChangePercent > 0
+                    ? `+${priceChangeAmount.toFixed(2)} ₪`
+                    : `${priceChangeAmount.toFixed(2)} ₪`
+                }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="priceUpdateModal__footer">
+          <button
+            class="priceUpdateModal__btn priceUpdateModal__btn--cancel"
+            type="button"
+            @click="showPriceUpdateModal = false"
+          >
+            ביטול
+          </button>
+          <button
+            class="priceUpdateModal__btn priceUpdateModal__btn--submit"
+            type="button"
+            :disabled="priceChangePercent === 0 || isUpdatingPrice"
+            @click="submitPriceChange"
+          >
+            {{ isUpdatingPrice ? "שולח..." : "שלח בקשה" }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Price Change Approval Modal (for client) -->
+    <div
+      v-if="showPriceApprovalModal"
+      class="modal"
+      dir="rtl"
+      @click.self="showPriceApprovalModal = false"
+    >
+      <div class="priceApprovalModal">
+        <div class="priceApprovalModal__header">
+          <h3 class="priceApprovalModal__title">בקשת שינוי מחיר</h3>
+        </div>
+        <div class="priceApprovalModal__body">
+          <div class="priceApprovalModal__message">
+            ההנדימן ביקש
+            <span
+              class="priceApprovalModal__changePercent"
+              :class="{
+                'priceApprovalModal__changePercent--increase':
+                  pendingPriceChange.percent > 0,
+                'priceApprovalModal__changePercent--decrease':
+                  pendingPriceChange.percent < 0,
+              }"
+            >
+              {{ pendingPriceChange.percent > 0 ? "להעלות" : "להוריד" }}
+              {{ Math.abs(pendingPriceChange.percent).toFixed(1) }}%
+            </span>
+            מהמחיר. האם אתה מאשר?
+          </div>
+          <div class="priceApprovalModal__details">
+            <div class="priceApprovalModal__detailRow">
+              <span class="priceApprovalModal__detailLabel">מחיר נוכחי:</span>
+              <span class="priceApprovalModal__detailValue"
+                >{{ pendingPriceChange.oldPrice }} ₪</span
+              >
+            </div>
+            <div class="priceApprovalModal__detailRow">
+              <span class="priceApprovalModal__detailLabel">מחיר חדש:</span>
+              <span
+                class="priceApprovalModal__detailValue priceApprovalModal__detailValue--new"
+                >{{ pendingPriceChange.newPrice }} ₪</span
+              >
+            </div>
+            <div class="priceApprovalModal__detailRow">
+              <span class="priceApprovalModal__detailLabel">שינוי:</span>
+              <span
+                class="priceApprovalModal__detailValue"
+                :class="{
+                  'priceApprovalModal__detailValue--increase':
+                    pendingPriceChange.percent > 0,
+                  'priceApprovalModal__detailValue--decrease':
+                    pendingPriceChange.percent < 0,
+                }"
+              >
+                {{
+                  pendingPriceChange.percent > 0
+                    ? `+${pendingPriceChange.changeAmount.toFixed(2)}`
+                    : `${pendingPriceChange.changeAmount.toFixed(2)}`
+                }}
+                ₪
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="priceApprovalModal__footer">
+          <button
+            class="priceApprovalModal__btn priceApprovalModal__btn--reject"
+            type="button"
+            :disabled="isRespondingToPriceChange"
+            @click="rejectPriceChange"
+          >
+            {{ isRespondingToPriceChange ? "שולח..." : "דחה" }}
+          </button>
+          <button
+            class="priceApprovalModal__btn priceApprovalModal__btn--approve"
+            type="button"
+            :disabled="isRespondingToPriceChange"
+            @click="approvePriceChange"
+          >
+            {{ isRespondingToPriceChange ? "שולח..." : "אשר" }}
+          </button>
         </div>
       </div>
     </div>
@@ -558,6 +821,7 @@ export default {
     "status-updated",
     "rating-submitted",
     "cancel-job",
+    "price-updated",
   ],
   setup() {
     const store = useMainStore();
@@ -576,6 +840,10 @@ export default {
       socket: null,
       localJobStatus: null,
       showCancelConfirmModal: false,
+      showCancelReasonModal: false, // Show cancel reason selection modal
+      cancelReasonText: "", // Free text reason for cancellation
+      cancelAction: "cancel-handyman", // 'cancel-handyman', 'cancel-complete', or 'delete'
+      isCancellingJob: false, // Track cancel job state
       imagePreview: null,
       imagePreviewText: "",
       imagePreviewFile: null,
@@ -601,6 +869,22 @@ export default {
       routeLoading: false, // Loading state for route
       travelTimeMinutes: null, // Travel time in minutes
       handymanMarker: null, // Mapbox marker for handyman location
+
+      // Price update state
+      showPriceUpdateModal: false,
+      priceChangePercent: 0,
+      newPrice: 0,
+      priceChangeAmount: 0,
+      isUpdatingPrice: false,
+      showPriceApprovalModal: false,
+      pendingPriceChange: {
+        percent: 0,
+        oldPrice: 0,
+        newPrice: 0,
+        changeAmount: 0,
+        jobId: null,
+      },
+      isRespondingToPriceChange: false,
     };
   },
   computed: {
@@ -622,9 +906,54 @@ export default {
       return (
         (this.isHandyman && this.jobLocation) ||
         (this.isHandyman && !!this.nextStatus) ||
+        (this.isHandyman && this.showPriceUpdateButton) ||
         (!this.isHandyman && this.showStatusButtons) ||
         true
       );
+    },
+    showPriceUpdateButton() {
+      // Show price update button only when job is assigned or in progress
+      return (
+        this.isHandyman &&
+        (this.jobStatus === "assigned" ||
+          this.jobStatus === "on_the_way" ||
+          this.jobStatus === "in_progress")
+      );
+    },
+    currentJobPrice() {
+      const job = this.currentJob;
+      if (!job) return 0;
+
+      // Handle subcategoryInfo as array
+      if (
+        job.subcategoryInfo &&
+        Array.isArray(job.subcategoryInfo) &&
+        job.subcategoryInfo.length > 0
+      ) {
+        // Sum all prices from subcategoryInfo array
+        return job.subcategoryInfo.reduce((sum, subcat) => {
+          const price = subcat?.price || 0;
+          return (
+            sum + (typeof price === "number" ? price : parseFloat(price) || 0)
+          );
+        }, 0);
+      }
+
+      // Handle subcategoryInfo as object
+      if (job.subcategoryInfo?.price) {
+        return typeof job.subcategoryInfo.price === "number"
+          ? job.subcategoryInfo.price
+          : parseFloat(job.subcategoryInfo.price) || 0;
+      }
+
+      // Fallback to job.price
+      if (job.price) {
+        return typeof job.price === "number"
+          ? job.price
+          : parseFloat(job.price) || 0;
+      }
+
+      return 0;
     },
     clientName() {
       return this.currentJob?.clientName || "לקוח";
@@ -895,6 +1224,23 @@ export default {
         this.scrollToBottom();
       },
     },
+    currentJobPrice() {
+      // Recalculate new price when current price changes
+      if (this.priceChangePercent !== 0) {
+        this.calculateNewPrice();
+      } else {
+        this.newPrice = this.currentJobPrice;
+        this.priceChangeAmount = 0;
+      }
+    },
+    showPriceUpdateModal(newVal) {
+      // When modal opens, initialize price calculation
+      if (newVal) {
+        this.priceChangePercent = 0;
+        this.newPrice = this.currentJobPrice;
+        this.priceChangeAmount = 0;
+      }
+    },
   },
   methods: {
     async getCurrentLocation() {
@@ -1076,7 +1422,9 @@ export default {
     },
     openCancel() {
       this.showMenu = false;
-      this.showCancelConfirmModal = true;
+      this.cancelReasonText = "";
+      this.cancelAction = "cancel-handyman";
+      this.showCancelReasonModal = true;
     },
 
     initWebSocket() {
@@ -1201,6 +1549,89 @@ export default {
           // Update marker on map if route modal is open (marker is dynamic, route line stays fixed)
           if (this.showHandymanRouteModal && this.routeMap) {
             this.updateHandymanMarkerOnMap(data.location);
+          }
+        }
+      });
+
+      // Listen for price change requests (for client)
+      this.socket.on("price-change-request", (data) => {
+        const receivedJobId = String(data.jobId || "");
+        const currentJobId = String(jobId || "");
+        if (receivedJobId === currentJobId && !this.isHandyman) {
+          this.pendingPriceChange = {
+            percent: data.percent,
+            oldPrice: data.oldPrice,
+            newPrice: data.newPrice,
+            changeAmount: data.changeAmount,
+            jobId: receivedJobId,
+          };
+          this.showPriceApprovalModal = true;
+
+          // Add system message for client
+          const systemMessage = {
+            sender: "system",
+            text: `הנדימן ביקש ${
+              data.percent > 0 ? "להעלות" : "להוריד"
+            } את המחיר ב-${Math.abs(data.percent).toFixed(1)}%`,
+            time: new Date().toLocaleTimeString("he-IL", {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            createdAt: new Date(),
+            isSystem: true,
+          };
+          this.messages.push(systemMessage);
+          this.updateMessagesCache();
+          this.scrollToBottom();
+        }
+      });
+
+      // Listen for price change response (for handyman)
+      this.socket.on("price-change-response", (data) => {
+        const receivedJobId = String(data.jobId || "");
+        const currentJobId = String(jobId || "");
+        if (receivedJobId === currentJobId && this.isHandyman) {
+          if (data.approved) {
+            this.toast?.showSuccess(
+              `המחיר עודכן בהצלחה. המחיר החדש: ${data.newPrice} ₪`
+            );
+            // Emit event to parent to refresh job data
+            this.$emit("price-updated", {
+              jobId: receivedJobId,
+              newPrice: data.newPrice,
+            });
+
+            // Add system message for handyman
+            const systemMessage = {
+              sender: "system",
+              text: `הלקוח אישר את שינוי המחיר. המחיר החדש: ${data.newPrice} ₪`,
+              time: new Date().toLocaleTimeString("he-IL", {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              createdAt: new Date(),
+              isSystem: true,
+            };
+            this.messages.push(systemMessage);
+            this.updateMessagesCache();
+            this.scrollToBottom();
+          } else {
+            this.toast?.showWarning("הלקוח דחה את בקשת שינוי המחיר");
+
+            // Add system message for handyman when rejected
+            const systemMessage = {
+              sender: "system",
+              text: "הלקוח דחה את בקשת שינוי המחיר",
+              time: new Date().toLocaleTimeString("he-IL", {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              createdAt: new Date(),
+              isSystem: true,
+            };
+            this.messages.push(systemMessage);
+            this.updateMessagesCache();
+            this.scrollToBottom();
           }
         }
       });
@@ -2387,7 +2818,21 @@ export default {
       });
     },
 
-    async handleCancelJob() {
+    openCancel() {
+      this.showMenu = false;
+      this.cancelReasonText = "";
+      this.cancelAction = "cancel-handyman";
+      this.showCancelReasonModal = true;
+    },
+    closeCancelReasonModal() {
+      this.showCancelReasonModal = false;
+      this.cancelReasonText = "";
+      this.cancelAction = "cancel-handyman";
+    },
+    async submitCancelJob() {
+      if (!this.cancelReasonText.trim() || this.isCancellingJob) return;
+
+      this.isCancellingJob = true;
       try {
         const job = this.currentJob;
         const jobId = job._id || job.id;
@@ -2399,14 +2844,65 @@ export default {
           return;
         }
 
-        await axios.post(`${URL}/jobs/cancel`, { jobId, userId });
+        // Determine if user is handyman or client
+        const isHandyman = this.isHandyman;
+        const personCancel = isHandyman ? "handyman" : "customer";
 
-        this.toast.showSuccess("העבודה בוטלה והשביוץ בוטל");
-        this.showCancelConfirmModal = false;
+        if (this.cancelAction === "delete") {
+          // Delete job completely
+          await axios.delete(`${URL}/jobs/${jobId}/delete`, {
+            data: {
+              userId,
+              cancel: {
+                personcancel: personCancel,
+                "reason-for-cancellation": this.cancelReasonText.trim(),
+                "Totally-cancels": true,
+                JobId: jobId,
+                isDeleted: true,
+              },
+            },
+          });
+
+          this.toast.showSuccess("העבודה נמחקה");
+        } else if (this.cancelAction === "cancel-complete") {
+          // Complete cancellation
+          await axios.delete(`${URL}/jobs/${jobId}`, {
+            data: {
+              userId,
+              cancel: {
+                personcancel: personCancel,
+                "reason-for-cancellation": this.cancelReasonText.trim(),
+                "Totally-cancels": true,
+                JobId: jobId,
+              },
+            },
+          });
+
+          this.toast.showSuccess("העבודה בוטלה לגמרי");
+        } else {
+          // Cancel for this handyman only
+          await axios.post(`${URL}/jobs/cancel`, {
+            jobId,
+            userId,
+            cancel: {
+              personcancel: personCancel,
+              "reason-for-cancellation": this.cancelReasonText.trim(),
+              "Totally-cancels": false,
+              JobId: jobId,
+            },
+          });
+
+          this.toast.showSuccess("העבודה בוטלה להנדימן הזה");
+        }
+
+        this.closeCancelReasonModal();
         this.$emit("cancel-job");
       } catch (e) {
-        this.toast.showError("שגיאה בביטול העבודה");
-        this.showCancelConfirmModal = false;
+        this.toast.showError(
+          e.response?.data?.message || "שגיאה בביטול העבודה"
+        );
+      } finally {
+        this.isCancellingJob = false;
       }
     },
     handleVisibilityChange() {
@@ -2435,6 +2931,168 @@ export default {
         this.messagesCache[jobIdStr] = [...this.messages];
       } catch (e) {
         // Silently fail if sessionStorage is not available
+      }
+    },
+    calculateNewPrice() {
+      const currentPrice = this.currentJobPrice;
+      if (!currentPrice || this.priceChangePercent === 0) {
+        this.newPrice = currentPrice;
+        this.priceChangeAmount = 0;
+        return;
+      }
+
+      // Limit to -20% to +20%
+      const percent = Math.max(-20, Math.min(20, this.priceChangePercent));
+      this.priceChangePercent = percent;
+
+      // Calculate new price
+      const changeMultiplier = 1 + percent / 100;
+      this.newPrice = Math.round(currentPrice * changeMultiplier * 100) / 100;
+      this.priceChangeAmount = this.newPrice - currentPrice;
+    },
+    async submitPriceChange() {
+      if (this.priceChangePercent === 0 || this.isUpdatingPrice) return;
+
+      const job = this.currentJob;
+      const jobId = job?.id || job?._id;
+      if (!jobId) return;
+
+      const userId = this.store?.user?._id;
+      if (!userId) {
+        this.toast?.showError("לא ניתן לזהות את המשתמש");
+        return;
+      }
+
+      this.isUpdatingPrice = true;
+
+      try {
+        // Send price change request via WebSocket
+        if (this.socket && this.socket.connected) {
+          this.socket.emit("price-change-request", {
+            jobId: String(jobId),
+            handymanId: String(userId),
+            percent: this.priceChangePercent,
+            oldPrice: this.currentJobPrice,
+            newPrice: this.newPrice,
+            changeAmount: this.priceChangeAmount,
+          });
+
+          // Add system message to chat (for handyman - he sees his own request)
+          const systemMessage = {
+            sender: "system",
+            text: `שלחת בקשה ${
+              this.priceChangePercent > 0 ? "להעלות" : "להוריד"
+            } את המחיר ב-${Math.abs(this.priceChangePercent).toFixed(1)}%`,
+            time: new Date().toLocaleTimeString("he-IL", {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            createdAt: new Date(),
+            isSystem: true,
+          };
+          this.messages.push(systemMessage);
+          this.updateMessagesCache();
+          this.scrollToBottom();
+
+          this.toast?.showSuccess("בקשת שינוי המחיר נשלחה ללקוח");
+          this.showPriceUpdateModal = false;
+          this.priceChangePercent = 0;
+          this.newPrice = this.currentJobPrice;
+          this.priceChangeAmount = 0;
+        } else {
+          this.toast?.showError("אין חיבור לשרת. אנא נסה שוב.");
+        }
+      } catch (error) {
+        this.toast?.showError("שגיאה בשליחת בקשת שינוי המחיר");
+      } finally {
+        this.isUpdatingPrice = false;
+      }
+    },
+    approvePriceChange() {
+      if (this.isRespondingToPriceChange) return;
+
+      this.isRespondingToPriceChange = true;
+
+      try {
+        if (this.socket && this.socket.connected) {
+          this.socket.emit("price-change-response", {
+            jobId: String(this.pendingPriceChange.jobId),
+            approved: true,
+            percent: this.pendingPriceChange.percent,
+            oldPrice: this.pendingPriceChange.oldPrice,
+            newPrice: this.pendingPriceChange.newPrice,
+          });
+
+          // Add system message (for client - he sees his own approval)
+          const systemMessage = {
+            sender: "system",
+            text: `אישרת את שינוי המחיר. המחיר החדש: ${this.pendingPriceChange.newPrice} ₪`,
+            time: new Date().toLocaleTimeString("he-IL", {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            createdAt: new Date(),
+            isSystem: true,
+          };
+          this.messages.push(systemMessage);
+          this.updateMessagesCache();
+          this.scrollToBottom();
+
+          this.toast?.showSuccess("שינוי המחיר אושר");
+          this.showPriceApprovalModal = false;
+          // Emit event to parent to refresh job data
+          this.$emit("price-updated", {
+            jobId: String(this.pendingPriceChange.jobId),
+            newPrice: this.pendingPriceChange.newPrice,
+          });
+        } else {
+          this.toast?.showError("אין חיבור לשרת. אנא נסה שוב.");
+        }
+      } catch (error) {
+        this.toast?.showError("שגיאה באישור שינוי המחיר");
+      } finally {
+        this.isRespondingToPriceChange = false;
+      }
+    },
+    rejectPriceChange() {
+      if (this.isRespondingToPriceChange) return;
+
+      this.isRespondingToPriceChange = true;
+
+      try {
+        if (this.socket && this.socket.connected) {
+          this.socket.emit("price-change-response", {
+            jobId: String(this.pendingPriceChange.jobId),
+            approved: false,
+            percent: this.pendingPriceChange.percent,
+            oldPrice: this.pendingPriceChange.oldPrice,
+            newPrice: this.pendingPriceChange.newPrice,
+          });
+
+          // Add system message (for client - he sees his own rejection)
+          const systemMessage = {
+            sender: "system",
+            text: "דחית את בקשת שינוי המחיר",
+            time: new Date().toLocaleTimeString("he-IL", {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            createdAt: new Date(),
+            isSystem: true,
+          };
+          this.messages.push(systemMessage);
+          this.updateMessagesCache();
+          this.scrollToBottom();
+
+          this.toast?.showSuccess("בקשת שינוי המחיר נדחתה");
+          this.showPriceApprovalModal = false;
+        } else {
+          this.toast?.showError("אין חיבור לשרת. אנא נסה שוב.");
+        }
+      } catch (error) {
+        this.toast?.showError("שגיאה בדחיית שינוי המחיר");
+      } finally {
+        this.isRespondingToPriceChange = false;
       }
     },
   },
@@ -3217,6 +3875,22 @@ $orange2: #ff8a2b;
   gap: 10px;
   justify-content: center;
 }
+
+.confirm__actions--vertical {
+  flex-direction: column;
+}
+
+.confirm__btn--cancel-handyman {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #3b82f6;
+}
+
+.confirm__btn--cancel-complete {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
 .confirm__btn {
   padding: 12px 16px;
   border-radius: 14px;
@@ -3229,6 +3903,238 @@ $orange2: #ff8a2b;
   border-color: rgba(239, 68, 68, 0.35);
   background: rgba(239, 68, 68, 0.14);
   color: #ef4444;
+}
+
+/* Cancel Reason Modal */
+.cancelReasonModal {
+  width: 100%;
+  max-width: 450px;
+  border-radius: 18px;
+  background: rgba(15, 16, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.cancelReasonModal__title {
+  color: #fff;
+  font-weight: 1000;
+  font-size: 18px;
+  text-align: center;
+  margin: 0 0 16px 0;
+}
+
+.cancelReasonModal__form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cancelReasonModal__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cancelReasonModal__label {
+  font-size: 14px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.9);
+  text-align: right;
+}
+
+.cancelReasonModal__textarea {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 800;
+  font-size: 14px;
+  font-family: "Heebo", sans-serif;
+  resize: vertical;
+  min-height: 100px;
+  text-align: right;
+  direction: rtl;
+  transition: all 0.2s ease;
+}
+
+.cancelReasonModal__textarea:focus {
+  outline: none;
+  border-color: rgba(255, 106, 0, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.cancelReasonModal__textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.cancelReasonModal__options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cancelReasonModal__option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: right;
+  position: relative;
+}
+
+.cancelReasonModal__option:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateX(-2px);
+}
+
+.cancelReasonModal__option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cancelReasonModal__option--selected {
+  background: rgba(255, 106, 0, 0.25);
+  border-color: #ff6a00;
+  border-width: 3px;
+  color: #ff6a00;
+  box-shadow: 0 0 0 2px rgba(255, 106, 0, 0.2),
+    0 4px 12px rgba(255, 106, 0, 0.3);
+  transform: scale(1.02);
+  font-weight: 900;
+}
+
+.cancelReasonModal__option--delete {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.cancelReasonModal__option--delete:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.cancelReasonModal__option--delete.cancelReasonModal__option--selected {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: #ef4444;
+  border-width: 3px;
+  color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2),
+    0 4px 12px rgba(239, 68, 68, 0.4);
+  transform: scale(1.02);
+  font-weight: 900;
+}
+
+.cancelReasonModal__optionIcon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.cancelReasonModal__optionText {
+  flex: 1;
+  text-align: right;
+}
+
+.cancelReasonModal__checkIcon {
+  font-size: 18px;
+  font-weight: 900;
+  color: inherit;
+  margin-right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cancelReasonModal__warning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(255, 193, 7, 0.15);
+  border: 2px solid rgba(255, 193, 7, 0.4);
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+
+.cancelReasonModal__warningIcon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.cancelReasonModal__warningText {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffc107;
+  text-align: right;
+  flex: 1;
+  line-height: 1.4;
+}
+
+.cancelReasonModal__actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.cancelReasonModal__btn {
+  flex: 1;
+  padding: 14px 20px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 900;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancelReasonModal__btn--cancel {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.cancelReasonModal__btn--cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.cancelReasonModal__btn--submit {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+  border-color: rgba(239, 68, 68, 0.5);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.cancelReasonModal__btn--submit:hover:not(:disabled) {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+  transform: translateY(-1px);
+}
+
+.cancelReasonModal__btn--submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Navigation Modal */
@@ -3597,5 +4503,314 @@ $orange2: #ff8a2b;
 
 .routeCard__backBtn:active {
   transform: scale(0.98);
+}
+
+/* Price Update Modal */
+.priceUpdateModal {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 18px;
+  background: rgba(15, 16, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.priceUpdateModal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.priceUpdateModal__title {
+  font-size: 18px;
+  font-weight: 1000;
+  color: $orange2;
+  margin: 0;
+}
+
+.priceUpdateModal__close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-weight: 1000;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.priceUpdateModal__body {
+  padding: 18px;
+}
+
+.priceUpdateModal__currentPrice {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  margin-bottom: 18px;
+}
+
+.priceUpdateModal__label {
+  font-size: 14px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.priceUpdateModal__value {
+  font-size: 18px;
+  font-weight: 1000;
+  color: $text;
+}
+
+.priceUpdateModal__value--new {
+  color: $orange2;
+  font-size: 20px;
+}
+
+.priceUpdateModal__change {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.priceUpdateModal__inputGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba($orange, 0.2);
+  border-radius: 12px;
+  padding: 0 14px;
+}
+
+.priceUpdateModal__input {
+  flex: 1;
+  height: 48px;
+  border: none;
+  background: transparent;
+  color: $text;
+  font-size: 18px;
+  font-weight: 1000;
+  outline: none;
+  text-align: center;
+  font-family: inherit;
+}
+
+.priceUpdateModal__input::-webkit-inner-spin-button,
+.priceUpdateModal__input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.priceUpdateModal__input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.priceUpdateModal__percent {
+  font-size: 18px;
+  font-weight: 1000;
+  color: $orange2;
+}
+
+.priceUpdateModal__newPrice {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: rgba($orange, 0.1);
+  border-radius: 12px;
+  border: 1px solid rgba($orange, 0.2);
+}
+
+.priceUpdateModal__changeAmount {
+  text-align: center;
+  padding: 8px;
+}
+
+.priceUpdateModal__changeText {
+  font-size: 16px;
+  font-weight: 1000;
+}
+
+.priceUpdateModal__changeText--increase {
+  color: #22c55e;
+}
+
+.priceUpdateModal__changeText--decrease {
+  color: #ef4444;
+}
+
+.priceUpdateModal__footer {
+  display: flex;
+  gap: 10px;
+  padding: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.priceUpdateModal__btn {
+  flex: 1;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  font-size: 14px;
+  font-weight: 1000;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.priceUpdateModal__btn--cancel {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: $text;
+}
+
+.priceUpdateModal__btn--submit {
+  background: linear-gradient(135deg, $orange, $orange2);
+  color: #0b0c10;
+  box-shadow: 0 0 20px rgba($orange, 0.3);
+}
+
+.priceUpdateModal__btn--submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Price Approval Modal */
+.priceApprovalModal {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 18px;
+  background: rgba(15, 16, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.priceApprovalModal__header {
+  padding: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.priceApprovalModal__title {
+  font-size: 18px;
+  font-weight: 1000;
+  color: $orange2;
+  margin: 0;
+  text-align: center;
+}
+
+.priceApprovalModal__body {
+  padding: 18px;
+}
+
+.priceApprovalModal__message {
+  font-size: 16px;
+  font-weight: 900;
+  color: $text;
+  text-align: center;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.priceApprovalModal__changePercent {
+  font-weight: 1000;
+  font-size: 18px;
+}
+
+.priceApprovalModal__changePercent--increase {
+  color: #22c55e;
+}
+
+.priceApprovalModal__changePercent--decrease {
+  color: #ef4444;
+}
+
+.priceApprovalModal__details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.priceApprovalModal__detailRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.priceApprovalModal__detailRow:last-child {
+  border-bottom: none;
+}
+
+.priceApprovalModal__detailLabel {
+  font-size: 14px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.priceApprovalModal__detailValue {
+  font-size: 16px;
+  font-weight: 1000;
+  color: $text;
+}
+
+.priceApprovalModal__detailValue--new {
+  color: $orange2;
+  font-size: 18px;
+}
+
+.priceApprovalModal__detailValue--increase {
+  color: #22c55e;
+}
+
+.priceApprovalModal__detailValue--decrease {
+  color: #ef4444;
+}
+
+.priceApprovalModal__footer {
+  display: flex;
+  gap: 10px;
+  padding: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.priceApprovalModal__btn {
+  flex: 1;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  font-size: 14px;
+  font-weight: 1000;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.priceApprovalModal__btn--reject {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+}
+
+.priceApprovalModal__btn--approve {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #0b0c10;
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+}
+
+.priceApprovalModal__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

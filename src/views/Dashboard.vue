@@ -37,6 +37,7 @@
         @status-updated="onJobStatusUpdated"
         @rating-submitted="onRatingSubmitted"
         @cancel-job="onCancelJob"
+        @job-approved="onJobApproved"
       />
 
       <!-- Regular Dashboard (when no assigned job) -->
@@ -89,6 +90,7 @@
               @view-details="onViewHandymanDetails"
               @open-chat="onOpenUserChat"
               @personal-request="onPersonalRequest"
+              @block-handyman="onBlockHandyman"
               @next-page="onNextPage"
               @prev-page="onPrevPage"
             />
@@ -96,6 +98,194 @@
         </aside>
 
         <!-- HANDYMAN: quick profile & notes (removed from aside, will be at bottom) -->
+
+        <!-- HANDYMAN: Filters on the right (desktop only) -->
+        <aside v-if="isHendiman" class="side side--handyman-filters">
+          <section class="panel">
+            <div class="panel__head">
+              <h2 class="h2">סנן עבודות</h2>
+            </div>
+
+            <div class="handyman-filters-desktop">
+              <!-- Location Filter -->
+              <div class="panel panel--filter-desktop">
+                <div class="panel__label">מיקום</div>
+                <div class="radio-group radio-group--horizontal">
+                  <label class="radio-item radio-item--inline">
+                    <input
+                      type="radio"
+                      name="locationFilterDesktop"
+                      value="myLocation"
+                      :checked="handymanFilters.locationType === 'myLocation'"
+                      @change="onChangeLocationType('myLocation')"
+                    />
+                    <span class="radio-label">המיקום שלי</span>
+                  </label>
+                  <label class="radio-item radio-item--inline">
+                    <input
+                      type="radio"
+                      name="locationFilterDesktop"
+                      value="residence"
+                      :checked="handymanFilters.locationType === 'residence'"
+                      @change="onChangeLocationType('residence')"
+                    />
+                    <span class="radio-label">מקום המגורים שלי</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Distance Filter -->
+              <div class="panel panel--filter-desktop">
+                <div class="panel__label">
+                  מרחק (ק"מ)
+                  <button
+                    class="link link--small"
+                    type="button"
+                    @click="onResetKm"
+                  >
+                    איפוס
+                  </button>
+                </div>
+                <div class="range-display">
+                  <span class="range-value">עד {{ displayMaxKm }} ק״מ</span>
+                </div>
+                <input
+                  class="range-input"
+                  type="range"
+                  min="1"
+                  max="50"
+                  step="1"
+                  :value="handymanFilters.maxKm"
+                  @input="handleKmInput($event.target.value)"
+                  @change="handleKmChange($event.target.value)"
+                />
+              </div>
+
+              <!-- Price Filter -->
+              <div class="panel panel--filter-desktop">
+                <div class="panel__label">
+                  מחיר (₪)
+                  <button
+                    class="link link--small"
+                    type="button"
+                    @click="
+                      onChangePriceRange({ minPrice: null, maxPrice: null })
+                    "
+                  >
+                    איפוס
+                  </button>
+                </div>
+                <div class="price-range price-range--horizontal">
+                  <div class="price-input-group">
+                    <label class="price-label">מינימום:</label>
+                    <input
+                      class="price-input"
+                      type="number"
+                      min="0"
+                      :value="handymanFilters.minPrice"
+                      @input="
+                        onChangePriceRange({
+                          minPrice: $event.target.value
+                            ? Number($event.target.value)
+                            : null,
+                          maxPrice: handymanFilters.maxPrice,
+                        })
+                      "
+                      placeholder="0"
+                    />
+                  </div>
+                  <div class="price-input-group">
+                    <label class="price-label">מקסימום:</label>
+                    <input
+                      class="price-input"
+                      type="number"
+                      min="0"
+                      :value="handymanFilters.maxPrice"
+                      @input="
+                        onChangePriceRange({
+                          minPrice: handymanFilters.minPrice,
+                          maxPrice: $event.target.value
+                            ? Number($event.target.value)
+                            : null,
+                        })
+                      "
+                      placeholder="ללא הגבלה"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Work Type Filter -->
+              <div class="panel panel--filter-desktop">
+                <div class="panel__label">סוג קריאה</div>
+                <div class="radio-group radio-group--horizontal">
+                  <label class="radio-item radio-item--inline">
+                    <input
+                      type="radio"
+                      name="workTypeFilterDesktop"
+                      value=""
+                      :checked="handymanFilters.workType === ''"
+                      @change="onChangeWorkType('')"
+                    />
+                    <span class="radio-label">הכל</span>
+                  </label>
+                  <label class="radio-item radio-item--inline">
+                    <input
+                      type="radio"
+                      name="workTypeFilterDesktop"
+                      value="קלה"
+                      :checked="handymanFilters.workType === 'קלה'"
+                      @change="onChangeWorkType('קלה')"
+                    />
+                    <span class="radio-label">קלה</span>
+                  </label>
+                  <label class="radio-item radio-item--inline">
+                    <input
+                      type="radio"
+                      name="workTypeFilterDesktop"
+                      value="מורכבת"
+                      :checked="handymanFilters.workType === 'מורכבת'"
+                      @change="onChangeWorkType('מורכבת')"
+                    />
+                    <span class="radio-label">מורכבת</span>
+                  </label>
+                  <label class="radio-item radio-item--inline">
+                    <input
+                      type="radio"
+                      name="workTypeFilterDesktop"
+                      value="קשה"
+                      :checked="handymanFilters.workType === 'קשה'"
+                      @change="onChangeWorkType('קשה')"
+                    />
+                    <span class="radio-label">קשה</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </section>
+        </aside>
+
+        <!-- Rating Prompt for Client (when job is done and approved but not rated) -->
+        <div
+          v-if="
+            !isHendiman && pendingRatingJob && !pendingRatingJob.ratingSubmitted
+          "
+          class="rating-prompt-dashboard"
+        >
+          <div class="rating-prompt-dashboard__content">
+            <h3 class="rating-prompt-dashboard__title">דרג את ההנדימן</h3>
+            <p class="rating-prompt-dashboard__subtitle">
+              עבודה: {{ getJobDisplayName(pendingRatingJob) }}
+            </p>
+            <button
+              class="rating-prompt-dashboard__button"
+              type="button"
+              @click="submitPendingRating"
+            >
+              המשך לדירוג
+            </button>
+          </div>
+        </div>
 
         <!-- LEFT ~60% JOBS -->
         <JobsSection
@@ -118,6 +308,7 @@
           :currentUserId="
             store.user?._id?.toString() || me?._id?.toString() || null
           "
+          :hideFiltersOnDesktop="isHendiman && !isMobile"
           @refresh="onRefresh"
           @pick-status="onPickStatus"
           @change-km="onChangeKm"
@@ -202,9 +393,11 @@
               <button
                 class="clientApprovalModal__btn clientApprovalModal__btn--approve"
                 type="button"
+                :disabled="isApprovingPayment"
                 @click="handleClientApprove"
               >
-                כן, אשר ושחרר תשלום
+                <span v-if="!isApprovingPayment">כן, אשר ושחרר תשלום</span>
+                <span v-else>מאשר...</span>
               </button>
               <button
                 class="clientApprovalModal__btn clientApprovalModal__btn--reject"
@@ -302,6 +495,61 @@
         </div>
       </template>
     </main>
+
+    <!-- Block Handyman Confirmation Modal -->
+    <div
+      v-if="showBlockHandymanModal"
+      class="blockHandymanModal"
+      dir="rtl"
+      @click.self="closeBlockHandymanModal"
+    >
+      <div class="blockHandymanModal__content">
+        <button
+          class="blockHandymanModal__close"
+          type="button"
+          @click="closeBlockHandymanModal"
+          aria-label="סגור"
+        >
+          ✕
+        </button>
+        <div class="blockHandymanModal__icon">
+          {{ isUnblockingHandyman ? "🔓" : "🚫" }}
+        </div>
+        <h2 class="blockHandymanModal__title">
+          {{ isUnblockingHandyman ? "בטל חסימת הנדימן" : "חסום הנדימן" }}
+        </h2>
+        <p class="blockHandymanModal__message">
+          {{
+            isUnblockingHandyman
+              ? `האם אתה בטוח שאתה רוצה לבטל את החסימה של ${handymanToBlockName}?`
+              : `האם אתה בטוח שאתה רוצה לחסום את ${handymanToBlockName}?`
+          }}
+        </p>
+        <div class="blockHandymanModal__actions">
+          <button
+            class="blockHandymanModal__btn blockHandymanModal__btn--confirm"
+            type="button"
+            :disabled="isBlockingHandyman"
+            @click="confirmBlockHandyman"
+          >
+            <span v-if="!isBlockingHandyman">
+              {{ isUnblockingHandyman ? "כן, בטל חסימה" : "כן, חסום" }}
+            </span>
+            <span v-else>{{
+              isUnblockingHandyman ? "מבטל..." : "חוסם..."
+            }}</span>
+          </button>
+          <button
+            class="blockHandymanModal__btn blockHandymanModal__btn--cancel"
+            type="button"
+            :disabled="isBlockingHandyman"
+            @click="closeBlockHandymanModal"
+          >
+            ביטול
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Mobile Bottom Navigation & CTA -->
     <!-- Removed: Create Call button moved to top -->
@@ -633,6 +881,49 @@
         </div>
       </div>
     </div>
+
+    <!-- Minimizable Notifications -->
+    <!-- Handyman: Waiting for client approval after marking job as done -->
+    <MinimizableNotification
+      v-if="showHandymanDoneNotification"
+      :visible="showHandymanDoneNotification"
+      title="ממתין לאישור הלקוח"
+      message="מחכים לאישור הלקוח שסיימת את העבודה והכסף יגיע אליך"
+      :icon="['fas', 'clock']"
+      action-button="הלקוח לא אישר? פנה אלינו"
+      @close="showHandymanDoneNotification = false"
+      @action="handleContactSupport"
+    />
+
+    <!-- Handyman: Client approved and payment released -->
+    <MinimizableNotification
+      v-if="showHandymanApprovedNotification"
+      :visible="showHandymanApprovedNotification"
+      title="התשלום אושר"
+      message="קיבלת את הכסף חשבונית נשלחה במייל"
+      :icon="['fas', 'check-circle']"
+      @close="showHandymanApprovedNotification = false"
+    />
+
+    <!-- Handyman: Client cancelled the job -->
+    <MinimizableNotification
+      v-if="showHandymanCancelledNotification"
+      :visible="showHandymanCancelledNotification"
+      title="עבודה בוטלה"
+      message="אנחנו מצטערים אך הלקוח ביטל את העבודה במידת הצורך תקבל פיצוי"
+      :icon="['fas', 'exclamation-triangle']"
+      @close="showHandymanCancelledNotification = false"
+    />
+
+    <!-- Client: Payment transferred -->
+    <MinimizableNotification
+      v-if="showClientPaymentNotification"
+      :visible="showClientPaymentNotification"
+      title="התשלום הועבר"
+      message="התשלום הועבר חשבונית נשלחה במייל"
+      :icon="['fas', 'check-circle']"
+      @close="showClientPaymentNotification = false"
+    />
   </div>
 </template>
 
@@ -648,6 +939,7 @@ import ViewJob from "@/components/Dashboard/ViewJob.vue";
 import ProfileSheet from "@/components/Dashboard/ProfileSheet.vue";
 import JobChat from "@/components/Dashboard/JobChat.vue";
 import JobChatMobile from "@/components/Dashboard/JobChatMobile.vue";
+import MinimizableNotification from "@/components/Global/MinimizableNotification.vue";
 import axios from "axios";
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
@@ -671,6 +963,7 @@ export default {
     JobChat,
     JobChatMobile,
     AddressAutocomplete,
+    MinimizableNotification,
   },
   data() {
     return {
@@ -719,6 +1012,7 @@ export default {
         maxPrice: null,
       }, // "myLocation" or "residence", workType: "", "קלה", "מורכבת", "קשה"
       geoCoordinates: null, // For "myLocation" option
+      localMaxKm: null, // For display while dragging the range input
       handymanDetails: null,
       dirFilters: { q: "", minRating: 0, minJobs: 0 },
       activeAssignedJob: null,
@@ -730,7 +1024,13 @@ export default {
       onboardingUrl: null, // Onboarding URL to display
       showClientApprovalModal: false, // Show approval popup for client
       pendingApprovalJob: null, // Job that needs client approval
+      isApprovingPayment: false, // Loading state for payment approval
       isMobile: window.innerWidth <= 768,
+      // Rating for client
+      pendingRatingValue: 0,
+      pendingRatingHover: 0,
+      pendingRatingReview: "",
+      isSubmittingRating: false,
       jobToEdit: null,
       showEditJobModal: false,
       jobToDelete: null,
@@ -757,6 +1057,17 @@ export default {
       editMapPicker: null,
       editMapMarker: null,
       cities: [],
+      // Notification popups
+      showHandymanDoneNotification: false,
+      showHandymanApprovedNotification: false,
+      showClientPaymentNotification: false,
+      showHandymanCancelledNotification: false,
+      // Block handyman modal
+      showBlockHandymanModal: false,
+      handymanToBlock: null,
+      handymanToBlockName: null,
+      isBlockingHandyman: false,
+      isUnblockingHandyman: false,
     };
   },
 
@@ -775,6 +1086,12 @@ export default {
       : [];
   },
   computed: {
+    displayMaxKm() {
+      // Show local value while dragging, otherwise show the actual value
+      return this.localMaxKm !== null
+        ? this.localMaxKm
+        : this.handymanFilters.maxKm;
+    },
     jobs() {
       return this.store.jobs;
     },
@@ -882,6 +1199,52 @@ export default {
         return { ...tab, count };
       });
     },
+    pendingRatingJob() {
+      // Find job that needs rating (for client only)
+      if (this.isHendiman) return null;
+
+      const userId = this.store.user?._id || this.me?._id;
+      if (!userId) return null;
+
+      const userIdStr = String(userId);
+      const allJobs = this.store.jobs || [];
+
+      // Find job that is done, approved, but not rated
+      return (
+        allJobs.find((job) => {
+          return (
+            job.clientId &&
+            String(job.clientId) === userIdStr &&
+            job.status === "done" &&
+            job.clientApproved === true &&
+            !job.ratingSubmitted
+          );
+        }) || null
+      );
+    },
+    pendingRatingJob() {
+      // Find job that needs rating (for client only)
+      if (this.isHendiman) return null;
+
+      const userId = this.store.user?._id || this.me?._id;
+      if (!userId) return null;
+
+      const userIdStr = String(userId);
+      const allJobs = this.store.jobs || [];
+
+      // Find job that is done, approved, but not rated
+      return (
+        allJobs.find((job) => {
+          return (
+            job.clientId &&
+            String(job.clientId) === userIdStr &&
+            job.status === "done" &&
+            job.clientApproved === true &&
+            !job.ratingSubmitted
+          );
+        }) || null
+      );
+    },
     currentAssignedJobs() {
       // Get all active assigned jobs
       const userId = this.store.user?._id || this.me?._id;
@@ -918,26 +1281,27 @@ export default {
               isHandymanInJob = String(job.handymanId) === userIdStr;
             }
           }
-          // כל עבודה שלא בסטטוס "open", "done" או "paid" צריכה להיפתח
+          // כל עבודה שלא בסטטוס "open" או "done" צריכה להיפתח
           // לא עבודות שדורגו (ratingSubmitted: true)
+          // לא עבודות שהתשלום שוחרר (paymentStatus: "paid")
           return (
             isHandymanInJob &&
             job.status !== "open" && // לא עבודות פתוחות
             job.status !== "done" && // לא עבודות שהושלמו
-            job.status !== "paid" && // לא עבודות משולמות
+            job.paymentStatus !== "paid" && // לא עבודות שהתשלום שוחרר
             !job.ratingSubmitted // לא עבודות שדורגו
           );
         } else {
           // עבור לקוח - בודק אם clientId תואם
           // עבור לקוח: עבודה ב-"done" עם clientApproved: false צריכה להיפתח (לאשר)
-          // עבור לקוח: עבודה ב-"paid" לא צריכה להיפתח (העבודה הסתיימה והתשלום שוחרר)
+          // עבור לקוח: עבודה שהתשלום שוחרר (paymentStatus: "paid") לא צריכה להיפתח
           // עבור לקוח: עבודה שדורגה (ratingSubmitted: true) לא צריכה להיפתח
           return (
             job.clientId &&
             String(job.clientId) === userIdStr &&
             job.handymanId && // רק עבודות ששובצו
             job.status !== "open" && // לא עבודות פתוחות
-            job.status !== "paid" && // לא עבודות משולמות
+            job.paymentStatus !== "paid" && // לא עבודות שהתשלום שוחרר
             !job.ratingSubmitted && // לא עבודות שדורגו
             (job.status !== "done" || // לא עבודות שהושלמו (או...)
               (job.status === "done" && !job.clientApproved)) // אלא אם כן צריך אישור לקוח
@@ -954,20 +1318,11 @@ export default {
         this.activeAssignedJob &&
         (this.activeAssignedJob._id || this.activeAssignedJob.id)
       ) {
-        // עבור הנדימן - לא מציגים עבודות שהושלמו, משולמות או שדורגו
+        // כל עבודה שהסטטוס שלה הוא לא "open" או "done" תציג את הצ'אט
+        // לא נבדוק paymentStatus או ratingSubmitted - רק status
         if (
-          this.isHendiman &&
-          (this.activeAssignedJob.status === "done" ||
-            this.activeAssignedJob.status === "paid" ||
-            this.activeAssignedJob.ratingSubmitted)
-        ) {
-          return null;
-        }
-        // עבור לקוח - לא מציגים עבודות משולמות (paid) או שדורגו
-        if (
-          !this.isHendiman &&
-          (this.activeAssignedJob.status === "paid" ||
-            this.activeAssignedJob.ratingSubmitted)
+          this.activeAssignedJob.status === "open" ||
+          this.activeAssignedJob.status === "done"
         ) {
           return null;
         }
@@ -988,9 +1343,43 @@ export default {
       this.isMobile = window.innerWidth <= 768;
     },
     async onRefresh() {
+      // שמור את ה-jobId הנוכחי לפני refresh (אם יש)
+      const currentJobId =
+        this.activeAssignedJob?._id || this.activeAssignedJob?.id;
+
       const coords = this.userCoordinates;
-      await this.store.fetchDashboardData(this.$route.params.id, coords);
+      const data = await this.store.fetchDashboardData(
+        this.$route.params.id,
+        coords
+      );
+      // בדוק אם המשתמש נחסם בזמן שהוא בדף
+      if (data && data.User && data.User.isBlocked === true) {
+        this.$router.push({
+          name: "logIn",
+          query: { blocked: "true" },
+        });
+        return;
+      }
       this.jobsPage = 1;
+
+      // אחרי refresh, בדוק אם יש עבודה משובצת ופתח את הצ'אט
+      await this.$nextTick();
+
+      // אם היה job פעיל לפני ה-refresh, נסה למצוא אותו מחדש
+      if (currentJobId) {
+        const job = this.store.jobs?.find(
+          (j) => String(j._id || j.id) === String(currentJobId)
+        );
+        if (job && job.status !== "open" && job.status !== "done") {
+          // העבודה עדיין פעילה - פתח את הצ'אט מחדש
+          this.activeAssignedJob = job;
+          this.isChatMinimized = false;
+          return;
+        }
+      }
+
+      // אם לא היה job פעיל או שהוא לא נמצא, בדוק עבודה משובצת חדשה
+      await this.checkForAssignedJob();
     },
 
     async fetchHandymanJobs(userData = null) {
@@ -1075,6 +1464,15 @@ export default {
       }
     },
 
+    handleKmInput(value) {
+      // Update local value for display while dragging (no filtering)
+      this.localMaxKm = Number(value);
+    },
+    handleKmChange(value) {
+      // Reset local value and apply the change (actual filtering happens here)
+      this.localMaxKm = null;
+      this.onChangeKm(value);
+    },
     onChangeKm(value) {
       this.handymanFilters.maxKm = parseInt(value);
       this.jobsPage = 1;
@@ -1818,16 +2216,22 @@ export default {
         }
       }
 
-      // If job is marked as done and user is handyman, close the chat (even if minimized)
+      // If job is marked as done and user is handyman, show notification and close the chat
       if (newStatus === "done" && this.isHendiman) {
+        // Show notification popup after 2 seconds delay
+        setTimeout(() => {
+          this.showHandymanDoneNotification = true;
+        }, 2000);
+        // Close chat and refresh
         this.activeAssignedJob = null;
         this.isChatMinimized = false;
         // Refresh to update job list
         await this.onRefresh();
       }
 
-      // If job is marked as paid (payment released), close the chat for both client and handyman
-      if (newStatus === "paid") {
+      // If job payment is released (paymentStatus: "paid"), close the chat for both client and handyman
+      // Note: We check paymentStatus from the job object, not from newStatus
+      if (this.activeAssignedJob?.paymentStatus === "paid") {
         this.activeAssignedJob = null;
         this.isChatMinimized = false;
         // Refresh to update job list
@@ -1884,6 +2288,15 @@ export default {
       // Refresh after rating to update job data
       await this.onRefresh();
 
+      // For client: Show payment notification
+      if (!this.isHendiman) {
+        this.showClientPaymentNotification = true;
+      }
+
+      // Clear pending rating
+      this.pendingRatingValue = 0;
+      this.pendingRatingReview = "";
+
       // Ensure chat stays closed after refresh (in case checkForAssignedJob tries to reopen it)
       this.$nextTick(() => {
         if (this.activeAssignedJob) {
@@ -1898,61 +2311,88 @@ export default {
         }
       });
     },
+    getJobDisplayName(job) {
+      if (!job) return "עבודה";
+      if (
+        job.subcategoryInfo &&
+        Array.isArray(job.subcategoryInfo) &&
+        job.subcategoryInfo.length > 0
+      ) {
+        return job.subcategoryInfo
+          .map((sub) => sub.subcategory || sub.name)
+          .join(", ");
+      }
+      return job.desc || "עבודה";
+    },
+    submitPendingRating() {
+      // Navigate to rating page instead of handling rating here
+      if (!this.pendingRatingJob) {
+        return;
+      }
+      const jobId = this.pendingRatingJob._id || this.pendingRatingJob.id;
+      if (jobId) {
+        this.$router.push(`/rating/${jobId}`);
+      }
+    },
     // בדוק עבודה משובצת ישירות מנתונים שנטענו (לשימוש ב-mounted)
     checkForAssignedJobFromData(data) {
       const userId = this.store.user?._id || this.me?._id;
-      if (!userId || !data) return;
+      if (!userId || !data) {
+        return;
+      }
 
       // בדוק ישירות בנתונים הראשוניים (data.Jobs) שמכילים את כל העבודות
       const allJobs = data.Jobs || [];
       const userIdStr = String(userId);
+
       const assignedJob = allJobs.find((job) => {
         if (this.isHendiman) {
           // עבור הנדימן - בודק אם handymanId תואם (תמיכה במערך)
           let isHandymanInJob = false;
           if (job.handymanId) {
             if (Array.isArray(job.handymanId)) {
-              isHandymanInJob = job.handymanId.some(
-                (id) => String(id) === userIdStr
-              );
+              isHandymanInJob = job.handymanId.some((id) => {
+                // Handle both ObjectId and string
+                const idStr = id?._id ? String(id._id) : String(id);
+                return idStr === userIdStr;
+              });
             } else {
-              isHandymanInJob = String(job.handymanId) === userIdStr;
+              const handymanIdStr = job.handymanId?._id
+                ? String(job.handymanId._id)
+                : String(job.handymanId);
+              isHandymanInJob = handymanIdStr === userIdStr;
             }
           }
-          // כל עבודה שלא בסטטוס "open", "done" או "paid" צריכה להיפתח
-          // לא עבודות שדורגו (ratingSubmitted: true)
+          // כל עבודה שלא בסטטוס "open" או "done" צריכה להיפתח
           return (
-            isHandymanInJob &&
-            job.status !== "open" && // לא עבודות פתוחות
-            job.status !== "done" && // לא עבודות שהושלמו
-            job.status !== "paid" && // לא עבודות משולמות
-            !job.ratingSubmitted // לא עבודות שדורגו
+            isHandymanInJob && job.status !== "open" && job.status !== "done"
           );
         } else {
           // עבור לקוח - בודק אם clientId תואם
-          // כל עבודה שלא בסטטוס "open", "done" או "paid" צריכה להיפתח
-          // לא עבודות שדורגו (ratingSubmitted: true)
+          const clientIdStr = job.clientId?._id
+            ? String(job.clientId._id)
+            : String(job.clientId || "");
+          const isClientMatch = clientIdStr === userIdStr;
+          const hasHandyman = !!job.handymanId;
+          // כל עבודה שלא בסטטוס "open" או "done" צריכה להיפתח
           return (
-            job.clientId &&
-            String(job.clientId) === userIdStr &&
-            job.handymanId && // רק עבודות ששובצו
-            job.status !== "open" && // לא עבודות פתוחות
-            job.status !== "done" && // לא עבודות שהושלמו
-            job.status !== "paid" && // לא עבודות משולמות
-            !job.ratingSubmitted // לא עבודות שדורגו
+            isClientMatch &&
+            hasHandyman &&
+            job.status !== "open" &&
+            job.status !== "done"
           );
         }
       });
 
       // Only set activeAssignedJob if it's a valid active job
-      // Don't set if it's a done, paid, or rated job (even if rating not submitted, it shouldn't auto-open)
-      if (assignedJob && !this.activeAssignedJob) {
-        // Don't auto-open done, paid, or rated jobs - client should open them manually from the list
-        if (
-          assignedJob.status !== "done" &&
-          assignedJob.status !== "paid" &&
-          !assignedJob.ratingSubmitted
-        ) {
+      // כל עבודה שהסטטוס שלה הוא לא "open" או "done" תפתח את הצ'אט
+      if (assignedJob) {
+        // שמור את ה-activeAssignedJob רק אם הוא לא כבר מוגדר או שהוא עבודה אחרת
+        const shouldSet =
+          !this.activeAssignedJob ||
+          String(this.activeAssignedJob._id || this.activeAssignedJob.id) !==
+            String(assignedJob._id || assignedJob.id);
+        if (shouldSet) {
           this.activeAssignedJob = assignedJob;
           this.isChatMinimized = false; // Ensure chat is not minimized when auto-opening
         }
@@ -1961,45 +2401,49 @@ export default {
     async checkForAssignedJob() {
       // בדוק ישירות ב-store.jobs אם יש עבודה משובצת
       const userId = this.store.user?._id || this.me?._id;
-      if (!userId) return;
+      if (!userId) {
+        return;
+      }
 
       // קודם נבדוק ב-store.jobs הקיים
       let allJobs = this.store.jobs || [];
       const userIdStr = String(userId);
+
       let assignedJob = allJobs.find((job) => {
         if (this.isHendiman) {
           // עבור הנדימן - בודק אם handymanId תואם (תמיכה במערך)
           let isHandymanInJob = false;
           if (job.handymanId) {
             if (Array.isArray(job.handymanId)) {
-              isHandymanInJob = job.handymanId.some(
-                (id) => String(id) === userIdStr
-              );
+              isHandymanInJob = job.handymanId.some((id) => {
+                // Handle both ObjectId and string
+                const idStr = id?._id ? String(id._id) : String(id);
+                return idStr === userIdStr;
+              });
             } else {
-              isHandymanInJob = String(job.handymanId) === userIdStr;
+              const handymanIdStr = job.handymanId?._id
+                ? String(job.handymanId._id)
+                : String(job.handymanId);
+              isHandymanInJob = handymanIdStr === userIdStr;
             }
           }
-          // כל עבודה שלא בסטטוס "open", "done" או "paid" צריכה להיפתח
-          // לא עבודות שדורגו (ratingSubmitted: true)
+          // כל עבודה שלא בסטטוס "open" או "done" צריכה להיפתח
           return (
             isHandymanInJob &&
             job.status !== "open" && // לא עבודות פתוחות
-            job.status !== "done" && // לא עבודות שהושלמו
-            job.status !== "paid" && // לא עבודות משולמות
-            !job.ratingSubmitted // לא עבודות שדורגו
+            job.status !== "done" // לא עבודות שהושלמו
           );
         } else {
           // עבור לקוח - בודק אם clientId תואם
-          // כל עבודה שלא בסטטוס "open", "done" או "paid" צריכה להיפתח
-          // לא עבודות שדורגו (ratingSubmitted: true)
+          const clientIdStr = job.clientId?._id
+            ? String(job.clientId._id)
+            : String(job.clientId || "");
+          // כל עבודה שלא בסטטוס "open" או "done" צריכה להיפתח
           return (
-            job.clientId &&
-            String(job.clientId) === userIdStr &&
+            clientIdStr === userIdStr &&
             job.handymanId && // רק עבודות ששובצו
             job.status !== "open" && // לא עבודות פתוחות
-            job.status !== "done" && // לא עבודות שהושלמו
-            job.status !== "paid" && // לא עבודות משולמות
-            !job.ratingSubmitted // לא עבודות שדורגו
+            job.status !== "done" // לא עבודות שהושלמו
           );
         }
       });
@@ -2025,42 +2469,52 @@ export default {
                   let isHandymanInJob = false;
                   if (job.handymanId) {
                     if (Array.isArray(job.handymanId)) {
-                      isHandymanInJob = job.handymanId.some(
-                        (id) => String(id) === userIdStr
-                      );
+                      isHandymanInJob = job.handymanId.some((id) => {
+                        // Handle both ObjectId and string
+                        const idStr = id?._id
+                          ? String(id._id)
+                          : id?.$oid
+                          ? String(id.$oid)
+                          : String(id);
+                        return idStr === userIdStr;
+                      });
                     } else {
-                      isHandymanInJob = String(job.handymanId) === userIdStr;
+                      const handymanIdStr = job.handymanId?._id
+                        ? String(job.handymanId._id)
+                        : job.handymanId?.$oid
+                        ? String(job.handymanId.$oid)
+                        : String(job.handymanId);
+                      isHandymanInJob = handymanIdStr === userIdStr;
                     }
                   }
                   return (
                     isHandymanInJob &&
-                    (job.status === "assigned" ||
-                      job.status === "on_the_way" ||
-                      job.status === "in_progress") &&
-                    !job.ratingSubmitted
-                    // עבור הנדימן - לא מציגים עבודות עם status "done" או שדורגו
+                    job.status !== "open" &&
+                    job.status !== "done"
+                    // עבור הנדימן - לא מציגים עבודות עם status "done"
                   );
                 });
               }
             }
-          } catch (error) {}
+          } catch (error) {
+            // Error fetching dashboard data
+          }
         }
       }
 
       // Only set activeAssignedJob if it's a valid active job
-      // Don't set if it's a done, paid, or rated job (even if rating not submitted, it shouldn't auto-open)
-      if (assignedJob && !this.activeAssignedJob) {
-        // Don't auto-open done, paid, or rated jobs - client should open them manually from the list
-        if (
-          assignedJob.status !== "done" &&
-          assignedJob.status !== "paid" &&
-          !assignedJob.ratingSubmitted
-        ) {
+      // כל עבודה שהסטטוס שלה הוא לא "open" או "done" תפתח את הצ'אט
+      if (assignedJob) {
+        // שמור את ה-activeAssignedJob רק אם הוא לא כבר מוגדר או שהוא עבודה אחרת
+        const shouldSet =
+          !this.activeAssignedJob ||
+          String(this.activeAssignedJob._id || this.activeAssignedJob.id) !==
+            String(assignedJob._id || assignedJob.id);
+        if (shouldSet) {
           this.activeAssignedJob = assignedJob;
+          this.isChatMinimized = false;
         }
       }
-      // Note: We don't clear activeAssignedJob here to prevent clearing it
-      // right after setting it in onAccept
     },
     initWebSocket() {
       // Connect to WebSocket server
@@ -2093,61 +2547,78 @@ export default {
         const jobId = String(data.jobId || "");
         const userId = this.store.user?._id || this.me?.id;
 
-        if (!userId) return;
+        if (!userId || !jobId) return;
 
-        if (!this.isHendiman) {
-          // For client: check if this is their job
-          // Refresh to get updated job data
-          await this.onRefresh();
-          // Find the accepted job
-          const acceptedJob = this.store.jobs?.find(
-            (j) => String(j._id || j.id) === jobId
-          );
-          // Only open chat if this job belongs to the current client
-          if (
-            acceptedJob &&
-            !this.activeAssignedJob &&
-            String(acceptedJob.clientId || acceptedJob.client?._id || "") ===
-              String(userId)
-          ) {
-            this.activeAssignedJob = acceptedJob;
-            this.isChatMinimized = false; // Ensure chat is not minimized
-          }
-        } else {
-          // For handyman: check if this is their job
-          // Refresh to get updated job data
-          await this.onRefresh();
-          // Find the accepted job
-          const acceptedJob = this.store.jobs?.find((j) => {
-            const jId = j._id || j.id;
-            if (!jId) return false;
+        // Refresh to get updated job data
+        await this.onRefresh();
+        // Wait for next tick to ensure store.jobs is updated
+        await this.$nextTick();
 
-            // Check if handymanId matches (support array)
-            if (j.handymanId) {
-              if (Array.isArray(j.handymanId)) {
-                return j.handymanId.some((id) => String(id) === String(userId));
-              } else {
-                return String(j.handymanId) === String(userId);
+        // Try to find the job directly by ID first
+        let acceptedJob = this.store.jobs?.find(
+          (j) => String(j._id || j.id) === jobId
+        );
+
+        // If not found in store.jobs, try to fetch it directly from server
+        if (!acceptedJob) {
+          try {
+            const { URL } = await import("@/Url/url");
+            const response = await axios.get(`${URL}/jobs/${jobId}`);
+            if (response.data && response.data.success && response.data.job) {
+              acceptedJob = response.data.job;
+              // Add to store.jobs if not already there
+              if (
+                this.store.jobs &&
+                !this.store.jobs.find((j) => String(j._id || j.id) === jobId)
+              ) {
+                this.store.jobs.push(acceptedJob);
               }
             }
-            return false;
-          });
-
-          // Open chat if this job belongs to the current handyman
-          // כל עבודה שלא בסטטוס "open" ולא בסטטוס "done" צריכה להיפתח
-          if (
-            acceptedJob &&
-            !this.activeAssignedJob &&
-            acceptedJob.status !== "open" &&
-            acceptedJob.status !== "done"
-          ) {
-            this.activeAssignedJob = acceptedJob;
-            this.isChatMinimized = false; // Ensure chat is not minimized
+          } catch (err) {
+            // Error fetching job
           }
         }
+
+        // Check if this job belongs to the current user
+        if (acceptedJob) {
+          const userIdStr = String(userId);
+          let belongsToUser = false;
+
+          if (!this.isHendiman) {
+            // For client: check if this is their job
+            belongsToUser =
+              String(acceptedJob.clientId || acceptedJob.client?._id || "") ===
+              userIdStr;
+          } else {
+            // For handyman: check if handymanId matches (support array)
+            if (acceptedJob.handymanId) {
+              if (Array.isArray(acceptedJob.handymanId)) {
+                belongsToUser = acceptedJob.handymanId.some(
+                  (id) => String(id) === userIdStr
+                );
+              } else {
+                belongsToUser = String(acceptedJob.handymanId) === userIdStr;
+              }
+            }
+          }
+
+          // Open chat if this job belongs to the current user and is not "open" or "done"
+          if (
+            belongsToUser &&
+            acceptedJob.status !== "open" &&
+            acceptedJob.status !== "done" &&
+            !this.activeAssignedJob
+          ) {
+            this.activeAssignedJob = acceptedJob;
+            this.isChatMinimized = false;
+          }
+        }
+
+        // Also use checkForAssignedJob as fallback to catch any other assigned jobs
+        await this.checkForAssignedJob();
       });
 
-      // Listen for job done event (for clients)
+      // Listen for job done event (for clients) - redirect to rating page
       // Track processed job-done events to prevent duplicate processing
       const processedJobDoneEvents = new Set();
       this.socket.on("job-done", async (data) => {
@@ -2166,70 +2637,9 @@ export default {
         }
 
         if (!this.isHendiman) {
-          // For client: check if this is their job
-          const userId = this.store.user?._id || this.me?.id;
-          if (userId) {
-            // Refresh to get updated job data
-            await this.onRefresh();
-
-            // First check cache, then store
-            let doneJob = this.doneJobsCache?.find(
-              (j) => String(j._id || j.id) === jobId
-            );
-            if (!doneJob) {
-              doneJob = this.store.jobs?.find(
-                (j) => String(j._id || j.id) === jobId
-              );
-            }
-
-            // If job not found (because it's filtered out as "done" in GetDataDeshboard), fetch it directly from server
-            if (!doneJob) {
-              try {
-                const { URL } = await import("@/Url/url");
-                const response = await axios.get(`${URL}/jobs/${jobId}`);
-                if (
-                  response.data &&
-                  response.data.success &&
-                  response.data.job
-                ) {
-                  doneJob = response.data.job;
-                  // Add to store temporarily so it's available
-                  if (!this.store.jobs) {
-                    this.store.jobs = [];
-                  }
-                  // Check if job already exists in store before adding
-                  const exists = this.store.jobs.some(
-                    (j) => String(j._id || j.id) === jobId
-                  );
-                  if (!exists) {
-                    this.store.jobs.push(doneJob);
-                  }
-                  // Also save in component data to persist after refresh
-                  if (!this.doneJobsCache) {
-                    this.doneJobsCache = [];
-                  }
-                  const existsInCache = this.doneJobsCache.some(
-                    (j) => String(j._id || j.id) === jobId
-                  );
-                  if (!existsInCache) {
-                    this.doneJobsCache.push(doneJob);
-                  }
-                }
-              } catch (fetchError) {
-                // Error fetching job
-              }
-            }
-
-            // Only open chat if this job belongs to the current client
-            if (
-              doneJob &&
-              String(doneJob.clientId || doneJob.client?._id || "") ===
-                String(userId)
-            ) {
-              // Open chat to show approval button
-              this.activeAssignedJob = doneJob;
-              this.isChatMinimized = false;
-            }
+          // For client: redirect directly to rating page
+          if (jobId) {
+            this.$router.push(`/rating/${jobId}`);
           }
         }
       });
@@ -2239,45 +2649,6 @@ export default {
         if (this.isHendiman && data.needsOnboarding) {
           this.onboardingUrl = data.onboardingUrl;
           this.showOnboardingModal = true;
-        }
-      });
-
-      // Listen for job-done event to show approval modal for client
-      this.socket.on("job-done", async (data) => {
-        if (!this.isHendiman) {
-          const jobId = String(data.jobId || "");
-          // Refresh jobs to get latest data
-          await this.onRefresh();
-          // Check if this job needs approval
-          const job = this.store.jobs?.find(
-            (j) => String(j._id || j.id) === jobId
-          );
-          if (
-            job &&
-            job.status === "done" &&
-            (job.clientApproved === false || job.clientApproved == null)
-          ) {
-            this.pendingApprovalJob = job;
-            this.showClientApprovalModal = true;
-          } else if (!job) {
-            // If job not found in store, try to fetch it directly
-            try {
-              const { URL } = await import("@/Url/url");
-              const response = await axios.get(`${URL}/jobs/${jobId}`);
-              if (response.data && response.data.success && response.data.job) {
-                const fetchedJob = response.data.job;
-                const needsApproval =
-                  fetchedJob.clientApproved === false ||
-                  fetchedJob.clientApproved == null;
-                if (fetchedJob.status === "done" && needsApproval) {
-                  this.pendingApprovalJob = fetchedJob;
-                  this.showClientApprovalModal = true;
-                }
-              }
-            } catch (fetchError) {
-              // Error fetching job
-            }
-          }
         }
       });
 
@@ -2320,13 +2691,13 @@ export default {
       // Listen for job-approved event (when client approves job)
       this.socket.on("job-approved", async (data) => {
         const jobId = String(data.jobId || "");
-        const newStatus = data.status || "paid";
+        const paymentStatus = data.paymentStatus;
 
         // Refresh jobs to get latest data
         await this.onRefresh();
 
-        // If status is "paid", close the chat for both client and handyman
-        if (newStatus === "paid") {
+        // If payment is released (paymentStatus: "paid"), close the chat for both client and handyman
+        if (paymentStatus === "paid" || data.paymentReleased) {
           // Check if this is the currently active job
           const currentJobId = String(
             this.activeAssignedJob?._id || this.activeAssignedJob?.id || ""
@@ -2338,6 +2709,11 @@ export default {
         }
 
         if (this.isHendiman) {
+          // Show notification that payment was approved and released
+          if (paymentStatus === "paid" || data.paymentReleased) {
+            this.showHandymanApprovedNotification = true;
+          }
+
           // Check if this job needs onboarding
           const job = this.store.jobs?.find(
             (j) => String(j._id || j.id) === jobId
@@ -2350,6 +2726,15 @@ export default {
           ) {
             await this.fetchOnboardingLinkForJob(job);
           }
+        }
+      });
+
+      // Listen for job-cancelled-by-client event (when client cancels job)
+      this.socket.on("job-cancelled-by-client", async (data) => {
+        if (this.isHendiman && data.message) {
+          this.showHandymanCancelledNotification = true;
+          // Refresh jobs to get latest data
+          await this.onRefresh();
         }
       });
     },
@@ -2426,10 +2811,7 @@ export default {
           return;
         }
       } catch (statusError) {
-        console.error(
-          "[Dashboard] Error checking onboarding status:",
-          statusError
-        );
+        // Error checking onboarding status
         // Continue to show modal if status check fails
       }
 
@@ -2510,7 +2892,7 @@ export default {
       }
     },
     async handleClientApprove() {
-      if (!this.pendingApprovalJob) return;
+      if (!this.pendingApprovalJob || this.isApprovingPayment) return;
 
       const jobId = this.pendingApprovalJob._id || this.pendingApprovalJob.id;
       // Use clientId from the job itself (more reliable than store.user)
@@ -2525,6 +2907,8 @@ export default {
         return;
       }
 
+      this.isApprovingPayment = true;
+
       try {
         const { URL } = await import("@/Url/url");
         const response = await axios.post(`${URL}/api/jobs/approve`, {
@@ -2536,6 +2920,7 @@ export default {
           this.toast?.showSuccess("העבודה אושרה והתשלום שוחרר");
           this.showClientApprovalModal = false;
           this.pendingApprovalJob = null;
+
           // Refresh jobs data
           await this.onRefresh();
         } else {
@@ -2544,12 +2929,10 @@ export default {
           );
         }
       } catch (error) {
-        console.error("[Dashboard] Error approving job:", error);
         const errorMessage =
           error.response?.data?.message ||
           error.message ||
           "שגיאה באישור העבודה";
-        console.log("[Dashboard] Showing error message:", errorMessage);
 
         // If payment method is required, redirect to CreateCall to add a new card
         if (error.response?.data?.requiresPaymentMethod) {
@@ -2567,7 +2950,8 @@ export default {
         } else {
           this.toast?.showError(errorMessage);
         }
-        console.log("[Dashboard] Error message should be displayed");
+      } finally {
+        this.isApprovingPayment = false;
       }
     },
     handleClientReject() {
@@ -2761,7 +3145,62 @@ export default {
       } catch (error) {}
     },
 
-    onBlockHandyman(id) {},
+    onBlockHandyman(id, isBlocked) {
+      // Find handyman name from filteredHandymen
+      const handyman = this.filteredHandymen?.find(
+        (h) => String(h._id || h.id) === String(id)
+      );
+      const handymanName = handyman?.username || "ההנדימן";
+
+      this.handymanToBlock = id;
+      this.handymanToBlockName = handymanName;
+      this.isUnblockingHandyman = isBlocked === true;
+      this.showBlockHandymanModal = true;
+    },
+
+    closeBlockHandymanModal() {
+      if (this.isBlockingHandyman) return; // Prevent closing during blocking
+      this.showBlockHandymanModal = false;
+      this.handymanToBlock = null;
+      this.handymanToBlockName = null;
+      this.isUnblockingHandyman = false;
+    },
+
+    async confirmBlockHandyman() {
+      if (!this.handymanToBlock || this.isBlockingHandyman) return;
+
+      this.isBlockingHandyman = true;
+      try {
+        const userId = this.store.user?._id || this.$route.params.id;
+        if (!userId || !this.handymanToBlock) {
+          this.toast?.showError("שגיאה: חסרים פרטים לחסימת הנדימן");
+          return;
+        }
+
+        const { URL } = await import("@/Url/url");
+        const response = await axios.post(`${URL}/api/users/block-handyman`, {
+          userId,
+          handymanId: this.handymanToBlock,
+        });
+
+        if (response.data && response.data.success) {
+          this.toast?.showSuccess("הנדימן נחסם בהצלחה");
+          this.closeBlockHandymanModal();
+          // Refresh handymen list
+          await this.onRefresh();
+        } else {
+          this.toast?.showError(
+            response.data?.message || "שגיאה בחסימת הנדימן"
+          );
+        }
+      } catch (error) {
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה בחסימת הנדימן"
+        );
+      } finally {
+        this.isBlockingHandyman = false;
+      }
+    },
 
     onPersonalRequest(id) {
       // Navigate to personal request page with handyman ID
@@ -2876,9 +3315,11 @@ export default {
           }
         }
 
+        const userId = this.store.user?._id || this.$route.params.id;
         await this.store.fetchHandymen(
           this.handymenPagination.page + 1,
-          coordinates
+          coordinates,
+          userId
         );
       }
     },
@@ -2904,9 +3345,11 @@ export default {
           }
         }
 
+        const userId = this.store.user?._id || this.$route.params.id;
         await this.store.fetchHandymen(
           this.handymenPagination.page - 1,
-          coordinates
+          coordinates,
+          userId
         );
       }
     },
@@ -2942,8 +3385,8 @@ export default {
     },
   },
   async mounted() {
-    // Clear activeAssignedJob on mount to ensure fresh state
-    this.activeAssignedJob = null;
+    // Don't clear activeAssignedJob on mount - let checkForAssignedJob handle it
+    // this.activeAssignedJob = null;
 
     // Listen for window resize to update mobile state
     window.addEventListener("resize", this.handleResize);
@@ -2968,6 +3411,15 @@ export default {
       // אם המשתמש לא נמצא, החזר ל-דף הבית
       if (!initialData || !initialData.User) {
         this.$router.push("/");
+        return;
+      }
+
+      // בדוק אם המשתמש חסום (אחרי הבקשה הראשונה)
+      if (initialData.User.isBlocked === true) {
+        this.$router.push({
+          name: "logIn",
+          query: { blocked: "true" },
+        });
         return;
       }
 
@@ -3012,6 +3464,31 @@ export default {
         return;
       }
 
+      // בדוק אם המשתמש חסום
+      if (data.User.isBlocked === true) {
+        this.$router.push({
+          name: "logIn",
+          query: { blocked: "true" },
+        });
+        return;
+      }
+
+      // בדוק אם הנדימן צריך מנוי פעיל
+      if (data.User.isHandyman === true) {
+        const hasAccess =
+          data.User.handimanFree === true ||
+          data.User.hasActiveSubscription === true;
+
+        if (!hasAccess) {
+          // הנדימן לא יכול להישאר - העבר לדף הבית
+          this.toast?.showError(
+            "אין לך מנוי פעיל. אנא הירשם למנוי כדי להמשיך להשתמש בפלטפורמה."
+          );
+          this.$router.push({ name: "home" });
+          return;
+        }
+      }
+
       if (data.User) {
         this.me.name = data.User.username;
         this.me.specialties = data.User.specialties;
@@ -3038,7 +3515,8 @@ export default {
         // טען handymen עם pagination (רק אם זה לקוח)
         if (!this.isHendiman) {
           // שלח את הקואורדינטות גם ל-fetchHandymen
-          await this.store.fetchHandymen(1, this.userCoordinates);
+          const userId = this.store.user?._id || this.$route.params.id;
+          await this.store.fetchHandymen(1, this.userCoordinates, userId);
         } else {
           // עבור הנדימן - טען עבודות מסוננות
           await this.fetchHandymanJobs(data.User);
@@ -3060,18 +3538,76 @@ export default {
           }, 500);
         }
 
-        // Check for jobs that need client approval (status: 'done', clientApproved: false or null/undefined)
+        // Check if we need to show approval modal for client
         if (!this.isHendiman && data?.Jobs) {
-          const doneJobsNeedingApproval = data.Jobs.filter((job) => {
-            const isDone = job.status === "done";
-            const needsApproval =
-              job.clientApproved === false || job.clientApproved == null;
-            return isDone && needsApproval;
-          });
-          if (doneJobsNeedingApproval.length > 0) {
-            // Show approval modal for the first job
-            this.pendingApprovalJob = doneJobsNeedingApproval[0];
-            this.showClientApprovalModal = true;
+          const fromJobSummary = this.$route.query.fromJobSummary === "true";
+          const jobIdFromQuery = this.$route.query.jobId;
+
+          if (fromJobSummary && jobIdFromQuery) {
+            // Coming from JobSummary - check specific job
+            const job = data.Jobs.find(
+              (j) => String(j._id || j.id) === String(jobIdFromQuery)
+            );
+            if (job) {
+              const isDone = job.status === "done";
+              const needsApproval =
+                job.clientApproved === false || job.clientApproved == null;
+              if (isDone && needsApproval) {
+                this.pendingApprovalJob = job;
+                this.showClientApprovalModal = true;
+                // Remove query parameters after showing modal
+                this.$router.replace({
+                  path: this.$route.path,
+                  query: {},
+                });
+              }
+            } else {
+              // Job not found in data, try to fetch it
+              try {
+                const { URL } = await import("@/Url/url");
+                const response = await axios.get(
+                  `${URL}/jobs/${jobIdFromQuery}`
+                );
+                if (
+                  response.data &&
+                  response.data.success &&
+                  response.data.job
+                ) {
+                  const fetchedJob = response.data.job;
+                  const isDone = fetchedJob.status === "done";
+                  const needsApproval =
+                    fetchedJob.clientApproved === false ||
+                    fetchedJob.clientApproved == null;
+                  if (isDone && needsApproval) {
+                    this.pendingApprovalJob = fetchedJob;
+                    this.showClientApprovalModal = true;
+                  }
+                }
+              } catch (fetchError) {
+                // Error fetching job, ignore
+              }
+              // Remove query parameters
+              this.$router.replace({
+                path: this.$route.path,
+                query: {},
+              });
+            }
+          } else {
+            // Not coming from JobSummary - check all jobs for any that need approval
+            const jobsNeedingApproval = data.Jobs.filter((job) => {
+              const isDone = job.status === "done";
+              const needsApproval =
+                job.clientApproved === false || job.clientApproved == null;
+              return isDone && needsApproval;
+            });
+            if (
+              jobsNeedingApproval.length > 0 &&
+              !this.showClientApprovalModal
+            ) {
+              // Show approval modal for the first job that needs approval
+              this.pendingApprovalJob = jobsNeedingApproval[0];
+              this.showClientApprovalModal = true;
+            }
           }
         }
 
@@ -3140,18 +3676,46 @@ export default {
     this.disconnectWebSocket();
   },
   watch: {
+    "handymanFilters.maxKm"(newVal) {
+      // Reset local value when actual value changes
+      if (this.localMaxKm !== null && this.localMaxKm === newVal) {
+        this.localMaxKm = null;
+      }
+    },
     // צפה בשינויים ב-jobs כדי לבדוק עבודה משובצת
     "store.jobs": {
       handler(newJobs, oldJobs) {
+        // שמור את ה-jobId הנוכחי לפני בדיקה
+        const currentJobId =
+          this.activeAssignedJob?._id || this.activeAssignedJob?.id;
+
         // רק אם יש שינוי אמיתי ב-jobs, נבדוק עבודה משובצת
         // נמנע מקריאות מיותרות אם ה-jobs לא השתנו
-        if (
-          newJobs &&
-          newJobs.length > 0 &&
-          (!oldJobs || newJobs.length !== oldJobs.length)
-        ) {
+        if (newJobs && newJobs.length > 0) {
           this.$nextTick(() => {
+            // בדוק עבודה משובצת
             this.checkForAssignedJob();
+
+            // אם היה job פעיל, וודא שהוא עדיין פעיל אחרי ה-update
+            if (currentJobId) {
+              this.$nextTick(() => {
+                const job = newJobs.find(
+                  (j) => String(j._id || j.id) === String(currentJobId)
+                );
+                if (job && job.status !== "open" && job.status !== "done") {
+                  // העבודה עדיין פעילה - וודא שהצ'אט פתוח
+                  if (
+                    !this.activeAssignedJob ||
+                    String(
+                      this.activeAssignedJob._id || this.activeAssignedJob.id
+                    ) !== String(currentJobId)
+                  ) {
+                    this.activeAssignedJob = job;
+                    this.isChatMinimized = false;
+                  }
+                }
+              });
+            }
           });
         }
       },
@@ -3226,6 +3790,14 @@ $r2: 26px;
   grid-template-rows: 1fr auto; /* Jobs section takes available space, tools at bottom */
   gap: 14px;
   align-items: stretch; // זה יגרום לשני הבלוקים להיות באותו גובה
+
+  // For handyman on desktop: jobs on left, filters on right
+  @media (min-width: 981px) {
+    &:has(.side--handyman-filters) {
+      grid-template-columns: 1.6fr 1fr; /* ~60/40 - jobs first (left), filters second (right) */
+      grid-template-rows: 1fr auto;
+    }
+  }
 
   @media (max-width: 980px) {
     grid-template-columns: 1fr;
@@ -4554,6 +5126,12 @@ $r2: 26px;
       grid-column: 1; /* Single column on mobile */
     }
   }
+
+  &--handyman-filters {
+    @media (max-width: 980px) {
+      display: none; /* Hide filters aside on mobile/tablet */
+    }
+  }
 }
 
 /* Loading Overlay */
@@ -5099,6 +5677,156 @@ $r2: 26px;
     background: rgba(255, 255, 255, 0.1);
     border-color: rgba(255, 255, 255, 0.3);
     transform: translateY(-1px);
+  }
+}
+
+// Block Handyman Modal Styles
+.blockHandymanModal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: $font-family;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.blockHandymanModal__content {
+  position: relative;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.95),
+    rgba(15, 16, 22, 0.98)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 32px;
+  max-width: 450px;
+  width: calc(100% - 40px);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  text-align: center;
+
+  @media (max-width: 768px) {
+    padding: 24px;
+    border-radius: 16px;
+    max-width: 100%;
+  }
+}
+
+.blockHandymanModal__close {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  background: transparent;
+  border: 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 8px;
+  line-height: 1;
+  transition: color 0.2s;
+
+  &:hover {
+    color: rgba(255, 255, 255, 0.9);
+  }
+}
+
+.blockHandymanModal__icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  line-height: 1;
+
+  @media (max-width: 768px) {
+    font-size: 48px;
+    margin-bottom: 12px;
+  }
+}
+
+.blockHandymanModal__title {
+  font-size: 24px;
+  font-weight: 900;
+  color: #fff;
+  margin: 0 0 16px 0;
+  line-height: 1.3;
+
+  @media (max-width: 768px) {
+    font-size: 20px;
+    margin-bottom: 12px;
+  }
+}
+
+.blockHandymanModal__message {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0 0 24px 0;
+  line-height: 1.6;
+
+  @media (max-width: 768px) {
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+}
+
+.blockHandymanModal__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+  }
+}
+
+.blockHandymanModal__btn {
+  padding: 14px 28px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 800;
+  border: 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: $font-family;
+  min-width: 140px;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    padding: 12px 24px;
+    font-size: 14px;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+}
+
+.blockHandymanModal__btn--confirm {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #dc2626, #ef4444);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+  }
+}
+
+.blockHandymanModal__btn--cancel {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
   }
 }
 
@@ -5824,5 +6552,344 @@ $r2: 26px;
   font-size: 12px;
   color: $danger;
   font-weight: 800;
+}
+
+/* Handyman Filters Desktop */
+.handyman-filters-desktop {
+  display: grid;
+  gap: 12px;
+
+  .panel--filter-desktop {
+    display: block;
+  }
+}
+
+/* Import filter styles from JobsSection (need to duplicate since scoped) */
+.panel--filter-desktop {
+  border-radius: $r;
+  border: 1px solid rgba($orange, 0.18);
+  background: rgba($orange, 0.08);
+  padding: 12px;
+
+  .panel__label {
+    font-size: 12px;
+    font-weight: 1000;
+    color: rgba(255, 255, 255, 0.78);
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .link--small {
+    font-size: 11px;
+    color: $orange3;
+    text-decoration: none;
+    cursor: pointer;
+    font-weight: 900;
+
+    &:hover {
+      color: $orange2;
+    }
+  }
+}
+
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.radio-group--horizontal {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.radio-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba($orange, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba($orange, 0.3);
+  }
+
+  input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: $orange;
+  }
+}
+
+.radio-item--inline {
+  flex: 1;
+  min-width: 120px;
+}
+
+.radio-label {
+  font-size: 14px;
+  font-weight: 900;
+  color: $text;
+  flex: 1;
+  cursor: pointer;
+  user-select: none;
+}
+
+.range-display {
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.range-value {
+  font-size: 16px;
+  font-weight: 1000;
+  color: $orange2;
+  padding: 8px 16px;
+  display: inline-block;
+  border-radius: 8px;
+  background: rgba($orange, 0.1);
+  border: 1px solid rgba($orange, 0.2);
+}
+
+.range-input {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: $orange;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
+
+  &::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: $orange;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.price-range--horizontal {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+
+  .price-input-group {
+    flex: 1;
+  }
+}
+
+.price-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 6px;
+}
+
+.price-input {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 1px solid rgba($orange, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: $text;
+  padding: 10px 12px;
+  font-weight: 900;
+  font-size: 14px;
+
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.45);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: rgba($orange, 0.45);
+    box-shadow: 0 0 0 3px rgba($orange, 0.1);
+  }
+}
+
+/* Rating Prompt Dashboard */
+.rating-prompt-dashboard {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba($orange, 0.3);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  animation: slideIn 0.3s ease;
+}
+
+.rating-prompt-dashboard__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.rating-prompt-dashboard__title {
+  font-size: 20px;
+  font-weight: 1000;
+  color: $orange2;
+  margin: 0;
+  text-align: center;
+}
+
+.rating-prompt-dashboard__subtitle {
+  font-size: 14px;
+  color: $muted;
+  margin: 0;
+  text-align: center;
+}
+
+.rating-prompt-dashboard__button {
+  padding: 12px 32px;
+  border-radius: 8px;
+  border: 1px solid rgba($orange, 0.3);
+  background: linear-gradient(135deg, rgba($orange, 0.2), rgba($orange2, 0.15));
+  color: $orange2;
+  font-size: 16px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: linear-gradient(
+      135deg,
+      rgba($orange, 0.3),
+      rgba($orange2, 0.25)
+    );
+    border-color: rgba($orange, 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba($orange, 0.3);
+  }
+}
+
+/* Rating Card Dashboard */
+.rating-card-dashboard {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba($orange, 0.3);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  animation: slideIn 0.3s ease;
+}
+
+.rating-card-dashboard__header {
+  margin-bottom: 20px;
+}
+
+.rating-card-dashboard__title {
+  font-size: 20px;
+  font-weight: 1000;
+  color: $orange2;
+  margin: 0 0 8px 0;
+}
+
+.rating-card-dashboard__subtitle {
+  font-size: 14px;
+  color: $muted;
+  margin: 0;
+}
+
+.rating-card-dashboard__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rating-card-dashboard__stars {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-direction: row-reverse;
+}
+
+.rating-star {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 32px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    transform: scale(1.1);
+  }
+
+  &--active,
+  &--filled {
+    color: #ffd700;
+  }
+}
+
+.rating-card-dashboard__review {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: $text;
+  font-size: 14px;
+  font-family: $font-family;
+  resize: vertical;
+  min-height: 80px;
+
+  &:focus {
+    outline: none;
+    border-color: rgba($orange, 0.5);
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.rating-card-dashboard__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rating-card-dashboard__submit {
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba($orange, 0.15);
+  color: $orange2;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba($orange, 0.25);
+    border-color: rgba($orange, 0.5);
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 }
 </style>

@@ -22,6 +22,9 @@ import {
   faEdit,
   faTrash,
   faPlus,
+  faEnvelope,
+  faBan,
+  faUnlock,
 } from "@fortawesome/free-solid-svg-icons";
 
 library.add(
@@ -37,7 +40,10 @@ library.add(
   faCalendar,
   faStar,
   faStarHalfStroke,
-  faShare
+  faShare,
+  faEnvelope,
+  faBan,
+  faUnlock
 );
 
 const app = createApp(App);

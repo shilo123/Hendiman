@@ -480,28 +480,19 @@
                   +10 ₪ <span class="chev">›</span>
                 </span>
               </button>
+              <div v-if="call.urgent" class="urgent-note">
+                הקריאות שלך יהיו מוצגות מעל קריאות אחרות
+              </div>
             </section>
 
             <section class="block">
-              <div class="twoCols">
-                <div class="field">
-                  <div class="field__label">סוג עבודה</div>
-                  <select class="select" v-model="call.workType">
-                    <option value="קלה">קלה</option>
-                    <option value="מורכבת">מורכבת</option>
-                    <option value="קשה">קשה</option>
-                  </select>
-                </div>
-
-                <div class="field">
-                  <div class="field__label">זמן הגעה</div>
-                  <select class="select" v-model="call.when">
-                    <option value="asap">כמה שיותר מהר</option>
-                    <option value="today">היום</option>
-                    <option value="tomorrow">מחר</option>
-                    <option value="pick">בחר זמן</option>
-                  </select>
-                </div>
+              <div class="field">
+                <div class="field__label">סוג עבודה</div>
+                <select class="select" v-model="call.workType">
+                  <option value="קלה">קלה</option>
+                  <option value="מורכבת">מורכבת</option>
+                  <option value="קשה">קשה</option>
+                </select>
               </div>
             </section>
 
@@ -616,8 +607,8 @@
                       ></image>
                     </svg>
                     <p class="number">
-                      **** **** ****
                       {{ savedPaymentMethod.card?.last4 || "****" }}
+                      **** **** ****
                     </p>
                     <p class="valid_thru">VALID THRU</p>
                     <p class="date_8264">
@@ -880,7 +871,6 @@ export default {
         requests: [""], // Array of requests
         desc: "",
         location: "המיקום שלי",
-        when: "asap",
         urgent: false,
         images: [], // Array of image files
         imageUrls: [], // Array of uploaded image URLs
@@ -932,6 +922,7 @@ export default {
       isCreditCardValid: false, // Track credit card validation status
       savedPaymentMethod: null, // Saved payment method from DB
       showChangePaymentMethod: false, // Show option to change payment method
+      _checkingPaymentMethod: false, // Flag to prevent multiple simultaneous calls
     };
   },
   computed: {
@@ -988,13 +979,43 @@ export default {
     "store.user": {
       handler(newUser) {
         if (newUser && this.currentStep === 4) {
+          // Prevent multiple calls
+          if (this._checkingPaymentMethod) {
+            console.log(
+              "[CreateCall] Already checking payment method (from store.user watcher), skipping..."
+            );
+            return;
+          }
+          this._checkingPaymentMethod = true;
           // User data loaded, check for saved payment method
           this.$nextTick(() => {
-            this.checkSavedPaymentMethod();
+            this.checkSavedPaymentMethod().finally(() => {
+              this._checkingPaymentMethod = false;
+            });
           });
         }
       },
       immediate: false,
+    },
+    currentStep(newStep) {
+      // When step changes to 4, check for saved payment method
+      if (newStep === 4) {
+        // Prevent multiple calls
+        if (this._checkingPaymentMethod) {
+          console.log(
+            "[CreateCall] Already checking payment method, skipping..."
+          );
+          return;
+        }
+        this._checkingPaymentMethod = true;
+        this.$nextTick(() => {
+          setTimeout(() => {
+            this.checkSavedPaymentMethod().finally(() => {
+              this._checkingPaymentMethod = false;
+            });
+          }, 300);
+        });
+      }
     },
   },
   methods: {
@@ -1083,15 +1104,29 @@ export default {
 
         // When moving to step 4, check if user has saved payment method
         if (this.currentStep === 4) {
+          // Prevent multiple calls
+          if (this._checkingPaymentMethod) {
+            console.log(
+              "[CreateCall] Already checking payment method (from nextStep), skipping..."
+            );
+            return;
+          }
+          this._checkingPaymentMethod = true;
           // Wait a bit for store to be ready, then check
           await this.$nextTick();
           // Try multiple times if user is not loaded yet
           let attempts = 0;
-          while (attempts < 5 && !this.store?.user) {
-            await new Promise((resolve) => setTimeout(resolve, 100));
+          while (attempts < 10 && !this.store?.user) {
+            await new Promise((resolve) => setTimeout(resolve, 200));
             attempts++;
           }
-          await this.checkSavedPaymentMethod();
+          // Always try to check payment method, even if user is not in store
+          // (we can get userId from route params)
+          try {
+            await this.checkSavedPaymentMethod();
+          } finally {
+            this._checkingPaymentMethod = false;
+          }
         }
       }
     },
@@ -1172,76 +1207,95 @@ export default {
           }
         }
 
-        console.log("[CreateCall] 🔍 Checking store:", {
-          store: this.store,
-          user: this.store?.user,
-          userId: userId,
-          routeParams: this.$route?.params,
-        });
-
         if (!userId) {
-          console.log(
-            "[CreateCall] ⚠️ Cannot check saved payment method - no userId",
-            {
-              store: this.store,
-              user: this.store?.user,
-              routeParams: this.$route?.params,
-            }
+          console.warn(
+            "[CreateCall] No userId found, cannot check payment method"
           );
+          this.showChangePaymentMethod = false;
+          this.savedPaymentMethod = null;
           return;
         }
 
-        console.log(
-          `[CreateCall] 🔍 Checking for saved payment method for user ${userId}`
-        );
+        // Import URL dynamically
         const { URL } = await import("@/Url/url");
+        const apiUrl = `${URL}/api/users/${userId}/payment-method`;
+
+        console.log(
+          "[CreateCall] Checking saved payment method for userId:",
+          userId
+        );
+        console.log("[CreateCall] API URL:", apiUrl);
 
         try {
-          const response = await axios.get(
-            `${URL}/api/users/${userId}/payment-method`,
-            {
-              timeout: 10000, // 10 second timeout
-            }
-          );
+          console.log("[CreateCall] Sending request to:", apiUrl);
+          const response = await axios.get(apiUrl, {
+            timeout: 15000, // 15 second timeout
+          });
 
           console.log(
-            "[CreateCall] Payment method check response:",
+            "[CreateCall] Payment method response status:",
+            response.status
+          );
+          console.log(
+            "[CreateCall] Payment method response data:",
             response.data
           );
 
           if (response.data && response.data.success) {
             if (response.data.hasPaymentMethod) {
               console.log(
-                "[CreateCall] ✅ Found saved payment method:",
-                response.data
+                "[CreateCall] Found saved payment method:",
+                response.data.paymentMethodId
               );
               this.savedPaymentMethod = response.data;
               this.paymentMethodId = response.data.paymentMethodId;
               // Use saved payment method automatically, don't show form
               this.showChangePaymentMethod = false;
               this.isCreditCardValid = true; // Mark as valid since we have saved payment method
-              console.log("[CreateCall] Saved payment method set:", {
-                savedPaymentMethod: this.savedPaymentMethod,
-                paymentMethodId: this.paymentMethodId,
-                showChangePaymentMethod: this.showChangePaymentMethod,
-              });
             } else {
-              console.log("[CreateCall] ℹ️ No saved payment method found");
+              console.log("[CreateCall] No saved payment method found");
               // No saved payment method, show form to create one
               this.showChangePaymentMethod = false;
               this.savedPaymentMethod = null;
             }
           } else {
-            console.log(
-              "[CreateCall] ⚠️ Server response indicates no payment method"
+            console.warn(
+              "[CreateCall] Response success is false:",
+              response.data
             );
             this.savedPaymentMethod = null;
+            this.showChangePaymentMethod = false;
           }
         } catch (axiosError) {
           // Handle axios errors specifically
+          console.error("[CreateCall] ❌ Axios error:", {
+            message: axiosError.message,
+            code: axiosError.code,
+            response: axiosError.response?.data,
+            status: axiosError.response?.status,
+            config: {
+              url: axiosError.config?.url,
+              method: axiosError.config?.method,
+            },
+          });
+
+          // Log full error for debugging
+          if (axiosError.response) {
+            console.error(
+              "[CreateCall] ❌ Full response:",
+              axiosError.response
+            );
+          } else if (axiosError.request) {
+            console.error(
+              "[CreateCall] ❌ Request was made but no response received:",
+              axiosError.request
+            );
+          }
+
           if (
             axiosError.code === "ECONNREFUSED" ||
-            axiosError.code === "ERR_CONNECTION_REFUSED"
+            axiosError.code === "ERR_CONNECTION_REFUSED" ||
+            axiosError.code === "ECONNABORTED"
           ) {
             console.error(
               "[CreateCall] ❌ Server connection refused - is the server running?",
@@ -1259,7 +1313,13 @@ export default {
               console.error(
                 "[CreateCall] ❌ Endpoint not found - check server routes"
               );
+              this.toast?.showError("השרת לא מצא את המשתמש. אנא נסה שוב.");
+            } else if (axiosError.response.status === 500) {
+              this.toast?.showError("שגיאה בשרת. אנא נסה שוב מאוחר יותר.");
             }
+          } else if (axiosError.code === "ECONNABORTED") {
+            console.error("[CreateCall] ❌ Request timeout");
+            this.toast?.showError("הבקשה לשרת ארכה זמן רב מדי. אנא נסה שוב.");
           } else {
             console.error(
               "[CreateCall] ❌ Error checking payment method:",
@@ -1281,19 +1341,9 @@ export default {
       try {
         const userId = this.store?.user?._id || this.store?.user?.id;
         if (!userId || !paymentMethodId) {
-          console.log(
-            "[CreateCall] ⚠️ Cannot save payment method - missing userId or paymentMethodId",
-            {
-              userId: userId || "null",
-              paymentMethodId: paymentMethodId || "null",
-            }
-          );
           return;
         }
 
-        console.log(
-          `[CreateCall] 💾 Saving payment method ${paymentMethodId} to DB for user ${userId}`
-        );
         const { URL } = await import("@/Url/url");
         const response = await axios.post(
           `${URL}/api/users/${userId}/payment-method`,
@@ -1301,9 +1351,6 @@ export default {
         );
 
         if (response.data && response.data.success) {
-          console.log(
-            "[CreateCall] ✅ Payment method saved successfully to DB"
-          );
           this.savedPaymentMethod = response.data;
         } else {
           console.error(
@@ -1873,7 +1920,6 @@ export default {
           requests: this.call.requests.filter((r) => r && r.trim().length > 0),
           desc: this.call.desc,
           location: finalLocation,
-          when: this.call.when,
           urgent: this.call.urgent,
           workType: this.call.workType,
           userId: this.$route.params.id || null,
@@ -1923,21 +1969,10 @@ export default {
 
         // Create Payment Method with Stripe Elements before sending to server
         // This way we only send the paymentMethodId (token) to server, not card details
-        console.log(
-          "[CreateCall] 🔍 Checking if payment method needs to be created:",
-          {
-            totalPrice: this.totalPrice,
-            hasCreditCardForm: !!this.$refs.creditCardForm,
-            hasPaymentMethodId: !!this.paymentMethodId,
-            shouldCreate: this.totalPrice > 0 && !this.paymentMethodId,
-          }
-        );
 
         // Create payment method using CreditCardForm component (only if no saved payment method)
         if (this.totalPrice > 0 && !this.paymentMethodId) {
           try {
-            console.log("[CreateCall] Creating payment method with Stripe...");
-
             // Check if CreditCardForm component is available
             if (!this.$refs.creditCardForm) {
               console.error("[CreateCall] CreditCardForm ref not found");
@@ -1957,18 +1992,9 @@ export default {
               return;
             }
 
-            console.log(
-              "[CreateCall] Payment method created successfully:",
-              paymentMethodId
-            );
-
             // Store payment method ID to send to server (not card details!)
             this.paymentMethodId = paymentMethodId;
             callData.paymentMethodId = paymentMethodId;
-            console.log(
-              "[CreateCall] ✅ Added paymentMethodId to callData:",
-              callData.paymentMethodId
-            );
           } catch (paymentError) {
             console.error(
               "[CreateCall] Error creating payment method:",
@@ -1982,32 +2008,14 @@ export default {
           }
         } else if (this.totalPrice > 0 && this.paymentMethodId) {
           // Use saved payment method
-          console.log(
-            "[CreateCall] Using saved payment method:",
-            this.paymentMethodId
-          );
           callData.paymentMethodId = this.paymentMethodId;
-          console.log(
-            "[CreateCall] ✅ Added saved paymentMethodId to callData:",
-            callData.paymentMethodId
-          );
         } else {
-          console.log("[CreateCall] ⚠️ Skipping payment method creation:", {
-            reason: "totalPrice is 0",
-            totalPrice: this.totalPrice,
-          });
         }
 
         // Send to new endpoint
         const createCallUrl = `${URL}/create-call-v2`;
 
         // Log what we're sending to server
-        console.log("[CreateCall] 📤 Sending callData to server:", {
-          paymentMethodId: callData.paymentMethodId || "null",
-          hasPaymentMethodId: !!callData.paymentMethodId,
-          totalPrice: this.totalPrice,
-          callDataKeys: Object.keys(callData),
-        });
 
         // Start patience message interval
         this.requestStartTime = Date.now();
@@ -4741,6 +4749,26 @@ $danger: #ff3b3b;
       background: rgba(255, 255, 255, 0.1);
       border-color: rgba(255, 255, 255, 0.2);
     }
+  }
+}
+
+.urgent-note {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: rgba(255, 159, 28, 0.1);
+  border: 1px solid rgba(255, 159, 28, 0.3);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+  line-height: 1.4;
+}
+
+@media (max-width: 768px) {
+  .urgent-note {
+    font-size: 12px;
+    padding: 8px 12px;
   }
 }
 </style>

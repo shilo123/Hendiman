@@ -1,5 +1,18 @@
 <template>
   <div class="login" dir="rtl">
+    <!-- רקע וידאו או GIF -->
+    <video
+      v-if="useVideo"
+      class="login__bg-video"
+      autoplay
+      muted
+      loop
+      playsinline
+    >
+      <source src="/img/backgroundApp.mp4" type="video/mp4" />
+      <source src="/img/backgroundApp.webm" type="video/webm" />
+    </video>
+    <div class="login__bg-image" v-else></div>
     <div class="login__wrap">
       <!-- Desktop/Tablet sidebar -->
       <aside class="login__side">
@@ -40,6 +53,12 @@
             עדיין לא רשום?
             <a href="#" @click.prevent="goToRegister">הרשם כאן</a>
           </p>
+
+          <!-- Blocked User Message -->
+          <div v-if="isBlocked" class="blocked-message">
+            <font-awesome-icon :icon="['fas', 'ban']" />
+            <span>המשתמש הזה חסום על ידי הנהלת הנדימן</span>
+          </div>
 
           <form class="form" @submit.prevent="handleLogin">
             <label class="field">
@@ -146,16 +165,28 @@ export default {
       toast: null,
       showPassword: false,
       googleId: null,
+      isBlocked: false,
+      useVideo: false, // שנה ל-true אם יש לך קובץ וידאו
     };
   },
   created() {
     this.toast = useToast();
     this.handleGoogleCallback();
+    // בדוק אם המשתמש הועבר לכאן כי הוא חסום
+    if (this.$route.query.blocked === "true") {
+      this.isBlocked = true;
+      this.toast?.showError("המשתמש הזה חסום על ידי הנהלת הנדימן");
+    }
   },
   watch: {
     "$route.query": {
-      handler() {
+      handler(newQuery) {
         if (this.toast) this.handleGoogleCallback();
+        // בדוק אם המשתמש הועבר לכאן כי הוא חסום
+        if (newQuery.blocked === "true") {
+          this.isBlocked = true;
+          this.toast?.showError("המשתמש הזה חסום על ידי הנהלת הנדימן");
+        }
       },
     },
   },
@@ -224,7 +255,7 @@ export default {
         } else if (data.message === "NoEmail") {
           this.toast.showError("מייל לא נכון");
         } else if (data.message === "Blocked") {
-          this.toast.showError("החשבון שלך חסום. אנא פנה לתמיכה");
+          this.isBlocked = true;
         }
       } catch (error) {
         const errorMessage =
@@ -277,18 +308,51 @@ $orange2: #ff8a2b;
 
 .login {
   min-height: 100vh;
-  background: radial-gradient(
-      1200px 700px at 50% -100px,
-      rgba(255, 106, 0, 0.18),
-      transparent 60%
-    ),
-    linear-gradient(135deg, $bg1 0%, $bg2 100%);
+  position: relative;
   padding: 16px;
   font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     Arial, sans-serif;
+  overflow: hidden;
+}
+
+.login__bg-video,
+.login__bg-image {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.login__bg-image {
+  background-image: url("~@/../public/img/backgroundApp.webp");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: brightness(0.8);
+}
+
+.login__bg-image::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 1;
+}
+
+.login__bg-video {
+  filter: brightness(0.5);
 }
 
 .login__wrap {
+  position: relative;
+  z-index: 1;
   max-width: 1200px;
   margin: 0 auto;
   min-height: calc(100vh - 32px);
@@ -605,5 +669,25 @@ $orange2: #ff8a2b;
   .registerTop {
     margin-bottom: 10px;
   }
+}
+
+.blocked-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 2px solid rgba(239, 68, 68, 0.5);
+  color: #ef4444;
+  font-weight: 900;
+  font-size: 14px;
+  margin-bottom: 16px;
+  text-align: right;
+}
+
+.blocked-message svg {
+  font-size: 18px;
+  flex-shrink: 0;
 }
 </style>

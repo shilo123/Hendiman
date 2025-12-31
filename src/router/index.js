@@ -13,6 +13,7 @@ import Register from "@/views/Login/register.vue";
 import Dashboard from "@/views/Dashboard.vue";
 import CreateCall from "@/views/CreateCall.vue";
 import JobSummary from "@/views/JobSummary.vue";
+import RatingPage from "@/views/RatingPage.vue";
 import HandymanRatings from "@/views/HandymanRatings.vue";
 import Payments from "@/views/Payments.vue";
 import PersonalRequestCall from "@/views/PersonalRequestCall.vue";
@@ -73,9 +74,21 @@ const routes = [
     props: true,
   },
   {
-    path: "/Dashboard/:id/job-summary/:jobId",
+    path: "/job-summary/:jobId",
     name: "JobSummary",
     component: JobSummary,
+    props: true,
+  },
+  {
+    path: "/Dashboard/:id/job-summary/:jobId",
+    name: "JobSummaryLegacy",
+    component: JobSummary,
+    props: true,
+  },
+  {
+    path: "/rating/:jobId",
+    name: "RatingPage",
+    component: RatingPage,
     props: true,
   },
   {

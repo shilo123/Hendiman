@@ -358,7 +358,7 @@ export const useMainStore = defineStore("main", {
         this.isLoading = false;
       }
     },
-    async fetchHandymen(page = 1, coordinates = null) {
+    async fetchHandymen(page = 1, coordinates = null, userId = null) {
       try {
         this.isLoading = true;
 
@@ -366,6 +366,10 @@ export const useMainStore = defineStore("main", {
         let url = `${URL}/handymen?page=${page}`;
         if (coordinates && coordinates.lng && coordinates.lat) {
           url += `&lng=${coordinates.lng}&lat=${coordinates.lat}`;
+        }
+        // Add userId to mark blocked handymen
+        if (userId) {
+          url += `&userId=${userId}`;
         }
 
         const { data } = await axios.get(url);

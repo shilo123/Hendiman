@@ -378,9 +378,6 @@ export default {
 
       // Skip wallet initialization if country is not supported
       if (!supportedCountries.includes(this.country)) {
-        console.log(
-          `[CreditCardForm] Skipping wallet initialization - country ${this.country} not supported by Payment Request API`
-        );
         this.walletReady = false;
         this.walletLoading = false;
         return;

@@ -6,97 +6,48 @@
         <button
           class="payments-back"
           type="button"
-          @click="$router.push(`/Dashboard/${userId}`)"
+          @click="handleBack"
         >
           ← חזור
         </button>
-        <h1 class="payments-title">תשלום</h1>
-        <p class="payments-subtitle">הזן פרטי כרטיס אשראי</p>
+        <h1 class="payments-title">
+          {{ isSubscription ? "הרשמה למנוי חודשי" : "תשלום" }}
+        </h1>
+        <p class="payments-subtitle">
+          {{ isSubscription ? "הזן פרטי כרטיס אשראי להרשמה למנוי חודשי" : "הזן פרטי כרטיס אשראי" }}
+        </p>
+      </div>
+
+      <!-- Subscription Notice -->
+      <div v-if="isSubscription" class="subscription-notice">
+        <div class="subscription-notice__icon">📅</div>
+        <div class="subscription-notice__content">
+          <div class="subscription-notice__title">מנוי חודשי</div>
+          <div class="subscription-notice__text">
+            התשלום יתבצע מדי חודש אוטומטית. תוכל לבטל את המנוי בכל עת.
+          </div>
+        </div>
       </div>
 
       <!-- Payment Form -->
       <div class="payment-form-wrapper">
         <form class="payment-form" @submit.prevent="handlePayment">
-          <!-- Card Number -->
-          <div class="form-field">
-            <label class="form-label" for="cardNumber">
-              מספר כרטיס אשראי
-            </label>
-            <input
-              id="cardNumber"
-              v-model="paymentForm.cardNumber"
-              type="text"
-              class="form-input"
-              placeholder="1234 5678 9012 3456"
-              maxlength="19"
-              required
-              @input="formatCardNumber"
-            />
-            <div v-if="errors.cardNumber" class="form-error">
-              {{ errors.cardNumber }}
-            </div>
-          </div>
-
-          <!-- Card Holder Name -->
-          <div class="form-field">
-            <label class="form-label" for="cardHolder"> שם בעל הכרטיס </label>
-            <input
-              id="cardHolder"
-              v-model="paymentForm.cardHolder"
-              type="text"
-              class="form-input"
-              placeholder="שם מלא כפי שמופיע על הכרטיס"
-              required
-              @input="validateCardHolder"
-            />
-            <div v-if="errors.cardHolder" class="form-error">
-              {{ errors.cardHolder }}
-            </div>
-          </div>
-
-          <!-- Expiry Date and CVV -->
-          <div class="form-row">
-            <div class="form-field">
-              <label class="form-label" for="expiryDate"> תאריך תפוגה </label>
-              <input
-                id="expiryDate"
-                v-model="paymentForm.expiryDate"
-                type="text"
-                class="form-input"
-                placeholder="MM/YY"
-                maxlength="5"
-                required
-                @input="formatExpiryDate"
-              />
-              <div v-if="errors.expiryDate" class="form-error">
-                {{ errors.expiryDate }}
-              </div>
-            </div>
-
-            <div class="form-field">
-              <label class="form-label" for="cvv"> CVV </label>
-              <input
-                id="cvv"
-                v-model="paymentForm.cvv"
-                type="text"
-                class="form-input"
-                placeholder="123"
-                maxlength="4"
-                required
-                @input="validateCVV"
-              />
-              <div v-if="errors.cvv" class="form-error">
-                {{ errors.cvv }}
-              </div>
-            </div>
-          </div>
-
-          <!-- Amount (if needed) -->
+          <!-- Amount Display -->
           <div v-if="currentAmount || amount" class="form-field">
             <label class="form-label">סכום לתשלום</label>
             <div class="amount-display">
               {{ formatCurrency(currentAmount || amount) }}
+              <span v-if="isSubscription" class="amount-display__period">/חודש</span>
             </div>
+          </div>
+
+          <!-- Stripe Elements Container -->
+          <div class="form-field">
+            <label class="form-label">פרטי כרטיס אשראי</label>
+            <div id="card-element" class="stripe-element-container">
+              <!-- Stripe Elements will mount here -->
+            </div>
+            <div id="card-errors" class="form-error" role="alert"></div>
           </div>
 
           <!-- Billing Address (optional) -->
@@ -151,17 +102,20 @@
           <button
             type="submit"
             class="payment-submit-btn"
-            :disabled="isProcessing || !isFormValid"
+            :disabled="isProcessing || !isStripeReady"
           >
-            <span v-if="isProcessing">מעבד תשלום...</span>
-            <span v-else
-              >שלם
+            <span v-if="isProcessing">
+              {{ isSubscription ? "מעבד הרשמה..." : "מעבד תשלום..." }}
+            </span>
+            <span v-else>
+              {{ isSubscription ? "הרשם למנוי" : "שלם" }}
               {{
                 currentAmount || amount
-                  ? formatCurrency(currentAmount || amount)
+                  ? ` ${formatCurrency(currentAmount || amount)}`
                   : ""
-              }}</span
-            >
+              }}
+              <span v-if="isSubscription && (currentAmount || amount)">/חודש</span>
+            </span>
           </button>
 
           <!-- Error Message -->
@@ -200,49 +154,50 @@ export default {
       toast: null,
       userId: this.id,
       stripe: null,
+      elements: null,
+      cardElement: null,
       stripePublishableKey: null,
       currentJobId: null,
       currentAmount: null,
+      isSubscription: false,
       paymentForm: {
-        cardNumber: "",
-        cardHolder: "",
-        expiryDate: "",
-        cvv: "",
         billingAddress: "",
         city: "",
         zipCode: "",
       },
-      errors: {},
       isProcessing: false,
       submitError: "",
+      isStripeReady: false,
     };
-  },
-  computed: {
-    isFormValid() {
-      return (
-        this.paymentForm.cardNumber.replace(/\s/g, "").length >= 13 &&
-        this.paymentForm.cardHolder.trim().length >= 2 &&
-        this.paymentForm.expiryDate.length === 5 &&
-        this.paymentForm.cvv.length >= 3 &&
-        !this.errors.cardNumber &&
-        !this.errors.cardHolder &&
-        !this.errors.expiryDate &&
-        !this.errors.cvv
-      );
-    },
   },
   async created() {
     this.toast = useToast();
+    
+    // Check if this is a subscription payment
+    this.isSubscription = this.$route.query.subscription === "true";
+    
     // Get jobId and amount from query params if not provided as props
     if (this.$route.query.jobId) {
       this.currentJobId = this.$route.query.jobId;
     } else if (this.jobId) {
       this.currentJobId = this.jobId;
     }
+    
     if (this.$route.query.amount) {
       this.currentAmount = parseFloat(this.$route.query.amount);
     } else if (this.amount) {
       this.currentAmount = this.amount;
+    } else if (this.isSubscription) {
+      // Fetch subscription amount from server
+      try {
+        const response = await fetch(`${URL}/api/subscription/amount`);
+        const data = await response.json();
+        if (data.success && data.amount) {
+          this.currentAmount = data.amount;
+        }
+      } catch (error) {
+        console.error("Error fetching subscription amount:", error);
+      }
     }
 
     // Get Stripe publishable key from server
@@ -252,107 +207,68 @@ export default {
       if (data.publishableKey) {
         this.stripePublishableKey = data.publishableKey;
         this.stripe = await loadStripe(data.publishableKey);
+        
+        if (this.stripe) {
+          this.elements = this.stripe.elements();
+          this.setupCardElement();
+        }
       }
     } catch (error) {
       console.error("Error loading Stripe:", error);
       this.submitError = "שגיאה בטעינת מערכת התשלומים. אנא נסה שוב.";
     }
   },
+  beforeUnmount() {
+    if (this.cardElement) {
+      this.cardElement.unmount();
+    }
+  },
   methods: {
-    formatCardNumber(event) {
-      let value = event.target.value.replace(/\s/g, "");
-      value = value.replace(/\D/g, ""); // Remove non-digits
-
-      // Format with spaces every 4 digits
-      const formatted = value.match(/.{1,4}/g)?.join(" ") || value;
-      this.paymentForm.cardNumber = formatted;
-
-      // Validate card number (basic Luhn check)
-      if (value.length >= 13) {
-        this.validateCardNumber(value);
+    handleBack() {
+      if (this.isSubscription && this.userId === "pending") {
+        this.$router.push({ name: "Register" });
       } else {
-        this.errors.cardNumber = "";
+        this.$router.push(`/Dashboard/${this.userId}`);
       }
     },
-    validateCardNumber(cardNumber) {
-      // Luhn algorithm validation
-      let sum = 0;
-      let isEven = false;
-      for (let i = cardNumber.length - 1; i >= 0; i--) {
-        let digit = parseInt(cardNumber[i]);
-        if (isEven) {
-          digit *= 2;
-          if (digit > 9) digit -= 9;
-        }
-        sum += digit;
-        isEven = !isEven;
-      }
+    setupCardElement() {
+      if (!this.elements) return;
 
-      if (sum % 10 !== 0) {
-        this.errors.cardNumber = "מספר כרטיס לא תקין";
-        return false;
-      }
-      this.errors.cardNumber = "";
-      return true;
-    },
-    validateCardHolder() {
-      const value = this.paymentForm.cardHolder.trim();
-      if (value.length < 2) {
-        this.errors.cardHolder = "שם חייב להכיל לפחות 2 תווים";
-      } else if (
-        !/^[\u0590-\u05FF\s]+$/.test(value) &&
-        !/^[a-zA-Z\s]+$/.test(value)
-      ) {
-        this.errors.cardHolder = "שם יכול להכיל רק אותיות";
-      } else {
-        this.errors.cardHolder = "";
-      }
-    },
-    formatExpiryDate(event) {
-      let value = event.target.value.replace(/\D/g, "");
+      // Create card element
+      this.cardElement = this.elements.create("card", {
+        style: {
+          base: {
+            color: "rgba(255, 255, 255, 0.92)",
+            fontFamily: '"Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+            fontSmoothing: "antialiased",
+            fontSize: "15px",
+            fontWeight: "800",
+            "::placeholder": {
+              color: "rgba(255, 255, 255, 0.4)",
+            },
+          },
+          invalid: {
+            color: "#ef4444",
+            iconColor: "#ef4444",
+          },
+        },
+      });
 
-      if (value.length >= 2) {
-        value = value.substring(0, 2) + "/" + value.substring(2, 4);
-      }
+      // Mount card element
+      const cardElementContainer = document.getElementById("card-element");
+      if (cardElementContainer) {
+        this.cardElement.mount("#card-element");
+        this.isStripeReady = true;
 
-      this.paymentForm.expiryDate = value;
-
-      // Validate expiry date
-      if (value.length === 5) {
-        this.validateExpiryDate(value);
-      } else {
-        this.errors.expiryDate = "";
-      }
-    },
-    validateExpiryDate(expiryDate) {
-      const [month, year] = expiryDate.split("/");
-      const monthNum = parseInt(month);
-      const yearNum = parseInt("20" + year);
-      const currentDate = new Date();
-      const currentYear = currentDate.getFullYear();
-      const currentMonth = currentDate.getMonth() + 1;
-
-      if (monthNum < 1 || monthNum > 12) {
-        this.errors.expiryDate = "חודש לא תקין";
-      } else if (
-        yearNum < currentYear ||
-        (yearNum === currentYear && monthNum < currentMonth)
-      ) {
-        this.errors.expiryDate = "כרטיס פג תוקף";
-      } else {
-        this.errors.expiryDate = "";
-      }
-    },
-    validateCVV() {
-      const value = this.paymentForm.cvv.replace(/\D/g, "");
-      this.paymentForm.cvv = value;
-
-      if (value.length < 3) {
-        this.errors.cvv = "CVV חייב להכיל לפחות 3 ספרות";
-      } else if (value.length > 4) {
-        this.errors.cvv = "CVV יכול להכיל עד 4 ספרות";
-      } else {
-        this.errors.cvv = "";
+        // Handle real-time validation errors
+        this.cardElement.on("change", (event) => {
+          const displayError = document.getElementById("card-errors");
+          if (event.error) {
+            displayError.textContent = event.error.message;
+          } else {
+            displayError.textContent = "";
+          }
+        });
       }
     },
     formatCurrency(amount) {
@@ -362,19 +278,8 @@ export default {
       }).format(amount || 0);
     },
     async handlePayment() {
-      if (!this.isFormValid) {
-        this.submitError = "אנא מלא את כל השדות הנדרשים";
-        return;
-      }
-
-      if (!this.stripe) {
+      if (!this.isStripeReady || !this.cardElement) {
         this.submitError = "מערכת התשלומים לא נטענה. אנא רענן את הדף.";
-        return;
-      }
-
-      const jobIdToUse = this.currentJobId;
-      if (!jobIdToUse) {
-        this.submitError = "מספר עבודה לא נמצא. אנא חזור לדשבורד.";
         return;
       }
 
@@ -382,102 +287,10 @@ export default {
       this.submitError = "";
 
       try {
-        // Step 1: Create Payment Intent on server
-        const createIntentResponse = await fetch(
-          `${URL}/api/payments/create-intent`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              jobId: jobIdToUse,
-            }),
-          }
-        );
-
-        const intentData = await createIntentResponse.json();
-
-        if (!intentData.success || !intentData.clientSecret) {
-          this.submitError =
-            intentData.message || "שגיאה ביצירת כוונת תשלום. אנא נסה שוב.";
-          return;
-        }
-
-        // Step 2: Create payment method first
-        const cardNumberDigits = this.paymentForm.cardNumber.replace(/\s/g, "");
-        const [month, year] = this.paymentForm.expiryDate.split("/");
-
-        const { error: pmError, paymentMethod } =
-          await this.stripe.createPaymentMethod({
-            type: "card",
-            card: {
-              number: cardNumberDigits,
-              exp_month: parseInt(month),
-              exp_year: parseInt("20" + year),
-              cvc: this.paymentForm.cvv,
-            },
-            billing_details: {
-              name: this.paymentForm.cardHolder,
-              address: {
-                line1: this.paymentForm.billingAddress || undefined,
-                city: this.paymentForm.city || undefined,
-                postal_code: this.paymentForm.zipCode || undefined,
-              },
-            },
-          });
-
-        if (pmError || !paymentMethod) {
-          this.submitError =
-            pmError?.message || "שגיאה ביצירת אמצעי תשלום. אנא נסה שוב.";
-          return;
-        }
-
-        // Step 3: Confirm payment with Stripe.js using the payment method
-        const { error, paymentIntent } = await this.stripe.confirmCardPayment(
-          intentData.clientSecret,
-          {
-            payment_method: paymentMethod.id,
-          }
-        );
-
-        if (error) {
-          this.submitError =
-            error.message || "שגיאה באישור התשלום. אנא נסה שוב.";
-          return;
-        }
-
-        // Step 4: Update server with payment confirmation
-        if (paymentIntent && paymentIntent.status === "requires_capture") {
-          const confirmResponse = await fetch(`${URL}/api/payments/confirm`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              jobId: jobIdToUse,
-              paymentIntentId: paymentIntent.id,
-              stripeStatus: paymentIntent.status,
-            }),
-          });
-
-          const confirmData = await confirmResponse.json();
-
-          if (confirmData.success) {
-            this.toast?.showSuccess(
-              "התשלום אושר בהצלחה! הכסף יועבר לאחר אישור סיום העבודה."
-            );
-            // Redirect to dashboard
-            setTimeout(() => {
-              this.$router.push(`/Dashboard/${this.userId}`);
-            }, 2000);
-          } else {
-            this.submitError =
-              confirmData.message ||
-              "התשלום אושר אך יש בעיה בעדכון השרת. אנא פנה לתמיכה.";
-          }
+        if (this.isSubscription) {
+          await this.handleSubscriptionPayment();
         } else {
-          this.submitError = "מצב תשלום לא צפוי. אנא פנה לתמיכה.";
+          await this.handleRegularPayment();
         }
       } catch (error) {
         console.error("Payment error:", error);
@@ -485,6 +298,204 @@ export default {
       } finally {
         this.isProcessing = false;
       }
+    },
+    async handleSubscriptionPayment() {
+      // Step 1: Create subscription on server
+      const createSubscriptionResponse = await fetch(
+        `${URL}/api/subscription/create`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            registrationData: this.getPendingRegistrationData(),
+          }),
+        }
+      );
+
+      const subscriptionData = await createSubscriptionResponse.json();
+
+      if (!subscriptionData.success || !subscriptionData.clientSecret) {
+        this.submitError =
+          subscriptionData.message || "שגיאה ביצירת מנוי. אנא נסה שוב.";
+        return;
+      }
+
+      // Step 2: Create payment method from card element
+      const { error: pmError, paymentMethod } =
+        await this.stripe.createPaymentMethod({
+          type: "card",
+          card: this.cardElement,
+          billing_details: {
+            address: {
+              line1: this.paymentForm.billingAddress || undefined,
+              city: this.paymentForm.city || undefined,
+              postal_code: this.paymentForm.zipCode || undefined,
+            },
+          },
+        });
+
+      if (pmError || !paymentMethod) {
+        this.submitError =
+          pmError?.message || "שגיאה ביצירת אמצעי תשלום. אנא נסה שוב.";
+        return;
+      }
+
+      // Step 3: Confirm setup intent with payment method
+      const { error, setupIntent } = await this.stripe.confirmCardSetup(
+        subscriptionData.clientSecret,
+        {
+          payment_method: paymentMethod.id,
+        }
+      );
+
+      if (error) {
+        this.submitError = error.message || "שגיאה באישור המנוי. אנא נסה שוב.";
+        return;
+      }
+
+      if (setupIntent && setupIntent.status === "succeeded") {
+        // Step 4: Complete registration on server
+        const completeResponse = await fetch(
+          `${URL}/api/subscription/complete`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              setupIntentId: setupIntent.id,
+              paymentMethodId: paymentMethod.id,
+            }),
+          }
+        );
+
+        const completeData = await completeResponse.json();
+
+        if (completeData.success) {
+          // Clear pending registration
+          localStorage.removeItem("pendingHandymanRegistration");
+          
+          this.toast?.showSuccess(
+            "הרשמה למנוי בוצעה בהצלחה! ברוך הבא להנדימן."
+          );
+          
+          // Redirect to dashboard
+          setTimeout(() => {
+            if (completeData.user?._id) {
+              this.$router.push({
+                name: "Dashboard",
+                params: { id: completeData.user._id },
+              });
+            } else {
+              this.$router.push({ name: "logIn" });
+            }
+          }, 2000);
+        } else {
+          this.submitError =
+            completeData.message ||
+            "המנוי אושר אך יש בעיה בעדכון השרת. אנא פנה לתמיכה.";
+        }
+      } else {
+        this.submitError = "מצב מנוי לא צפוי. אנא פנה לתמיכה.";
+      }
+    },
+    async handleRegularPayment() {
+      const jobIdToUse = this.currentJobId;
+      if (!jobIdToUse) {
+        this.submitError = "מספר עבודה לא נמצא. אנא חזור לדשבורד.";
+        return;
+      }
+
+      // Step 1: Create Payment Intent on server
+      const createIntentResponse = await fetch(
+        `${URL}/api/payments/create-intent`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            jobId: jobIdToUse,
+          }),
+        }
+      );
+
+      const intentData = await createIntentResponse.json();
+
+      if (!intentData.success || !intentData.clientSecret) {
+        this.submitError =
+          intentData.message || "שגיאה ביצירת כוונת תשלום. אנא נסה שוב.";
+        return;
+      }
+
+      // Step 2: Confirm payment with Stripe Elements
+      const { error, paymentIntent } = await this.stripe.confirmCardPayment(
+        intentData.clientSecret,
+        {
+          payment_method: {
+            card: this.cardElement,
+            billing_details: {
+              address: {
+                line1: this.paymentForm.billingAddress || undefined,
+                city: this.paymentForm.city || undefined,
+                postal_code: this.paymentForm.zipCode || undefined,
+              },
+            },
+          },
+        }
+      );
+
+      if (error) {
+        this.submitError =
+          error.message || "שגיאה באישור התשלום. אנא נסה שוב.";
+        return;
+      }
+
+      // Step 3: Update server with payment confirmation
+      if (paymentIntent && paymentIntent.status === "requires_capture") {
+        const confirmResponse = await fetch(`${URL}/api/payments/confirm`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            jobId: jobIdToUse,
+            paymentIntentId: paymentIntent.id,
+            stripeStatus: paymentIntent.status,
+          }),
+        });
+
+        const confirmData = await confirmResponse.json();
+
+        if (confirmData.success) {
+          this.toast?.showSuccess(
+            "התשלום אושר בהצלחה! הכסף יועבר לאחר אישור סיום העבודה."
+          );
+          // Redirect to dashboard
+          setTimeout(() => {
+            this.$router.push(`/Dashboard/${this.userId}`);
+          }, 2000);
+        } else {
+          this.submitError =
+            confirmData.message ||
+            "התשלום אושר אך יש בעיה בעדכון השרת. אנא פנה לתמיכה.";
+        }
+      } else {
+        this.submitError = "מצב תשלום לא צפוי. אנא פנה לתמיכה.";
+      }
+    },
+    getPendingRegistrationData() {
+      try {
+        const data = localStorage.getItem("pendingHandymanRegistration");
+        if (data) {
+          return JSON.parse(data);
+        }
+      } catch (error) {
+        console.error("Error reading pending registration:", error);
+      }
+      return null;
     },
   },
 };
@@ -496,7 +507,8 @@ $text: rgba(255, 255, 255, 0.92);
 $muted: rgba(255, 255, 255, 0.6);
 $orange: #ff6a00;
 $orange2: #ff8a2b;
-$font-family: "Assistant", sans-serif;
+$font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+  Arial, sans-serif;
 
 .payments-page {
   min-height: 100vh;
@@ -550,6 +562,40 @@ $font-family: "Assistant", sans-serif;
   text-align: center;
 }
 
+.subscription-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border-radius: 12px;
+  background: rgba(255, 106, 0, 0.1);
+  border: 1px solid rgba(255, 106, 0, 0.3);
+}
+
+.subscription-notice__icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.subscription-notice__content {
+  flex: 1;
+}
+
+.subscription-notice__title {
+  font-size: 16px;
+  font-weight: 1000;
+  color: $orange2;
+  margin-bottom: 4px;
+}
+
+.subscription-notice__text {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.5;
+}
+
 .payment-form-wrapper {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba($orange, 0.2);
@@ -579,6 +625,20 @@ $font-family: "Assistant", sans-serif;
   font-size: 13px;
   font-weight: 900;
   color: $text;
+}
+
+.stripe-element-container {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+  transition: all 0.2s ease;
+
+  &:focus-within {
+    border-color: $orange;
+    box-shadow: 0 0 0 3px rgba($orange, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+  }
 }
 
 .form-input {
@@ -636,6 +696,16 @@ $font-family: "Assistant", sans-serif;
   font-weight: 1000;
   color: $orange2;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.amount-display__period {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .security-notice {

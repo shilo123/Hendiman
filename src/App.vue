@@ -1,9 +1,34 @@
 <template>
-  <router-view />
+  <div>
+    <router-view />
+    <ContactButton @open-contact-modal="showContactModal = true" />
+    <ContactModal
+      :visible="showContactModal"
+      @close="showContactModal = false"
+      @submitted="handleInquirySubmitted"
+    />
+  </div>
 </template>
 <script>
+import ContactButton from "@/components/Global/ContactButton.vue";
+import ContactModal from "@/components/Global/ContactModal.vue";
+
 export default {
   name: "AppVue",
+  components: {
+    ContactButton,
+    ContactModal,
+  },
+  data() {
+    return {
+      showContactModal: false,
+    };
+  },
+  methods: {
+    handleInquirySubmitted() {
+      this.showContactModal = false;
+    },
+  },
 };
 </script>
 

@@ -19,7 +19,11 @@
     </div>
 
     <!-- Filters (handyman only) -->
-    <div v-if="isHendiman" class="filters">
+    <div
+      v-if="isHendiman"
+      class="filters"
+      :class="{ 'filters--hidden-desktop': hideFiltersOnDesktop }"
+    >
       <div class="filters__grid">
         <!-- Desktop Filters (visible only on desktop) -->
         <div class="panel panel--filter-desktop">
@@ -550,6 +554,7 @@ export default {
     },
     handymanCoords: { type: Object, default: () => null },
     currentUserId: { type: String, default: null },
+    hideFiltersOnDesktop: { type: Boolean, default: false }, // Hide filters on desktop when filters are shown in aside
   },
   emits: [
     "refresh",
@@ -931,6 +936,12 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   padding: 10px 12px 0;
   @media (max-width: 768px) {
     padding: 8px 10px 0;
+  }
+
+  &--hidden-desktop {
+    @media (min-width: 981px) {
+      display: none;
+    }
   }
 }
 
@@ -1361,120 +1372,52 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     gap: 8px;
   }
 
-  // עבודה דחופה - אפקט אדום מהבהב
+  // עבודה דחופה - border-bottom עדין עם אנימציה
   &--urgent {
-    border: 2px solid rgba($danger, 0.6);
-    background: linear-gradient(
-      135deg,
-      rgba($danger, 0.15),
-      rgba(255, 255, 255, 0.08)
-    );
-    box-shadow: 0 0 20px rgba($danger, 0.3), inset 0 0 20px rgba($danger, 0.1);
-    animation: urgentPulse 2s ease-in-out infinite;
-
-    &::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(
-        90deg,
-        transparent,
-        rgba($danger, 0.2),
-        transparent
-      );
-      animation: urgentShine 3s ease-in-out infinite;
-    }
-
-    .job__title {
-      color: #ffd4d4;
-      font-weight: 1100;
-    }
+    border-bottom: 3px solid rgba($danger, 0.6);
+    animation: urgentBorderPulse 2s ease-in-out infinite;
   }
 
-  // עבודה ספיישל - אפקט זהב/סגול
+  // עבודה ספיישל - border-bottom עדין עם אנימציה
   &--special {
-    border: 2px solid rgba(255, 215, 0, 0.5);
-    background: linear-gradient(
-      135deg,
-      rgba(255, 215, 0, 0.12),
-      rgba(138, 43, 226, 0.12),
-      rgba(255, 255, 255, 0.08)
-    );
-    box-shadow: 0 0 25px rgba(255, 215, 0, 0.25),
-      inset 0 0 20px rgba(255, 215, 0, 0.08);
-    position: relative;
-
-    &::after {
-      content: "⭐";
-      position: absolute;
-      top: 8px;
-      left: 8px;
-      font-size: 20px;
-      animation: starTwinkle 2s ease-in-out infinite;
-      z-index: 1;
-
-      @media (max-width: 768px) {
-        font-size: 16px;
-        top: 6px;
-        left: 6px;
-      }
-    }
-
-    .job__title {
-      color: #ffd700;
-      font-weight: 1100;
-      text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
-    }
+    border-bottom: 3px solid rgba(255, 215, 0, 0.6);
+    animation: specialBorderPulse 2s ease-in-out infinite;
   }
 
   // אם גם דחוף וגם ספיישל
   &--urgent.job--special {
-    border: 2px solid rgba(255, 69, 0, 0.7);
-    background: linear-gradient(
-      135deg,
-      rgba($danger, 0.2),
-      rgba(255, 215, 0, 0.15),
-      rgba(138, 43, 226, 0.15)
-    );
-    box-shadow: 0 0 30px rgba(255, 69, 0, 0.4),
-      inset 0 0 25px rgba(255, 215, 0, 0.15);
+    border-bottom: 3px solid rgba(255, 140, 0, 0.7);
+    animation: urgentSpecialBorderPulse 2s ease-in-out infinite;
   }
 }
 
-@keyframes urgentPulse {
+@keyframes urgentBorderPulse {
   0%,
   100% {
-    box-shadow: 0 0 20px rgba($danger, 0.3), inset 0 0 20px rgba($danger, 0.1);
+    border-bottom-color: rgba($danger, 0.6);
   }
   50% {
-    box-shadow: 0 0 30px rgba($danger, 0.5), inset 0 0 25px rgba($danger, 0.2);
+    border-bottom-color: rgba($danger, 0.9);
   }
 }
 
-@keyframes urgentShine {
-  0% {
-    left: -100%;
-  }
-  50% {
-    left: 100%;
-  }
-  100% {
-    left: 100%;
-  }
-}
-
-@keyframes starTwinkle {
+@keyframes specialBorderPulse {
   0%,
   100% {
-    opacity: 1;
-    transform: scale(1);
+    border-bottom-color: rgba(255, 215, 0, 0.6);
   }
   50% {
-    opacity: 0.7;
-    transform: scale(1.1);
+    border-bottom-color: rgba(255, 215, 0, 0.9);
+  }
+}
+
+@keyframes urgentSpecialBorderPulse {
+  0%,
+  100% {
+    border-bottom-color: rgba(255, 140, 0, 0.7);
+  }
+  50% {
+    border-bottom-color: rgba(255, 140, 0, 1);
   }
 }
 
