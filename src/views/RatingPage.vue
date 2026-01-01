@@ -320,7 +320,6 @@ export default {
         if (this.store?.toast) this.store.toast.showSuccess("הדירוג נשלח");
         this.$router.push(`/job-summary/${this.jobId}`);
       } catch (err) {
-        console.error("[RatingPageV3] submitRating error:", err);
         this.uiError = "שגיאה בשליחת הדירוג.";
         if (this.store?.toast) this.store.toast.showError(this.uiError);
       } finally {

@@ -170,7 +170,6 @@ export default {
           this.currentAmount = data.amount;
         }
       } catch (error) {
-        console.error("Error fetching subscription amount:", error);
       }
     }
 
@@ -188,7 +187,6 @@ export default {
         }
       }
     } catch (error) {
-      console.error("Error loading Stripe:", error);
       this.submitError = "שגיאה בטעינת מערכת התשלומים. אנא נסה שוב.";
     }
   },
@@ -268,7 +266,6 @@ export default {
           await this.handleRegularPayment();
         }
       } catch (error) {
-        console.error("Payment error:", error);
         this.submitError = "שגיאה בחיבור לשרת. אנא נסה שוב.";
       } finally {
         this.isProcessing = false;
@@ -453,7 +450,6 @@ export default {
           return JSON.parse(data);
         }
       } catch (error) {
-        console.error("Error reading pending registration:", error);
       }
       return null;
     },

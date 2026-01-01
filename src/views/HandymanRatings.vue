@@ -243,7 +243,6 @@ export default {
           this.renderChart();
         }
       } catch (error) {
-        console.error("Error loading chart data:", error);
       }
     },
     renderChart() {

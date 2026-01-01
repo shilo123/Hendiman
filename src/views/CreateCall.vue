@@ -499,7 +499,10 @@
             <section class="block block--last">
               <div class="note note--warn">
                 <span class="note__icon">⚠️</span>
-                <span>קנס על ביטול: <b>250</b> שקלות</span>
+                <span
+                  >קנס על ביטול אחרי שקבלו את העבודה יכול להגיע עד:
+                  <b>200</b> שקלות</span
+                >
               </div>
             </section>
           </div>
@@ -799,13 +802,13 @@
     >
       <div class="modal-content">
         <div class="modal-header">
-          <h3>לא מצאנו הנדימן אחד לתחומים שרצית</h3>
+          <h3>אויי חבל, לא מצאנו בשבילך הנדימן אחד לתחומים שרצית</h3>
           <button class="modal-close" @click="showPartialMatchModal = false">
             ×
           </button>
         </div>
         <div class="modal-body">
-          <p style="margin-bottom: 16px">לא מצאנו הנדימן אחד לתחומים שרצית.</p>
+          <p style="margin-bottom: 16px">אויי חבל, לא מצאנו בשבילך הנדימן אחד לתחומים שרצית.</p>
           <div class="matched-subcategories-list">
             <p
               v-for="(subcat, index) in partialMatchData.matchedSubcategories"
@@ -981,9 +984,6 @@ export default {
         if (newUser && this.currentStep === 4) {
           // Prevent multiple calls
           if (this._checkingPaymentMethod) {
-            console.log(
-              "[CreateCall] Already checking payment method (from store.user watcher), skipping..."
-            );
             return;
           }
           this._checkingPaymentMethod = true;
@@ -1002,9 +1002,6 @@ export default {
       if (newStep === 4) {
         // Prevent multiple calls
         if (this._checkingPaymentMethod) {
-          console.log(
-            "[CreateCall] Already checking payment method, skipping..."
-          );
           return;
         }
         this._checkingPaymentMethod = true;
@@ -1106,9 +1103,6 @@ export default {
         if (this.currentStep === 4) {
           // Prevent multiple calls
           if (this._checkingPaymentMethod) {
-            console.log(
-              "[CreateCall] Already checking payment method (from nextStep), skipping..."
-            );
             return;
           }
           this._checkingPaymentMethod = true;
@@ -1142,7 +1136,7 @@ export default {
           const data = await loadCategories();
           this.allCategories = data.categories || [];
         } catch (error) {
-          this.toast?.showError("שגיאה בטעינת הקטגוריות");
+          this.toast?.showError("אויי חבל, לא הצלחנו לטעון את הקטגוריות");
           return;
         }
       }
@@ -1201,16 +1195,11 @@ export default {
             try {
               await this.store.fetchDashboardData(userId);
               userId = this.store?.user?._id || this.store?.user?.id || userId;
-            } catch (error) {
-              console.error("[CreateCall] Error loading user data:", error);
-            }
+            } catch (error) {}
           }
         }
 
         if (!userId) {
-          console.warn(
-            "[CreateCall] No userId found, cannot check payment method"
-          );
           this.showChangePaymentMethod = false;
           this.savedPaymentMethod = null;
           return;
@@ -1220,118 +1209,50 @@ export default {
         const { URL } = await import("@/Url/url");
         const apiUrl = `${URL}/api/users/${userId}/payment-method`;
 
-        console.log(
-          "[CreateCall] Checking saved payment method for userId:",
-          userId
-        );
-        console.log("[CreateCall] API URL:", apiUrl);
-
         try {
-          console.log("[CreateCall] Sending request to:", apiUrl);
           const response = await axios.get(apiUrl, {
             timeout: 15000, // 15 second timeout
           });
 
-          console.log(
-            "[CreateCall] Payment method response status:",
-            response.status
-          );
-          console.log(
-            "[CreateCall] Payment method response data:",
-            response.data
-          );
-
           if (response.data && response.data.success) {
             if (response.data.hasPaymentMethod) {
-              console.log(
-                "[CreateCall] Found saved payment method:",
-                response.data.paymentMethodId
-              );
               this.savedPaymentMethod = response.data;
               this.paymentMethodId = response.data.paymentMethodId;
               // Use saved payment method automatically, don't show form
               this.showChangePaymentMethod = false;
               this.isCreditCardValid = true; // Mark as valid since we have saved payment method
             } else {
-              console.log("[CreateCall] No saved payment method found");
               // No saved payment method, show form to create one
               this.showChangePaymentMethod = false;
               this.savedPaymentMethod = null;
             }
           } else {
-            console.warn(
-              "[CreateCall] Response success is false:",
-              response.data
-            );
             this.savedPaymentMethod = null;
             this.showChangePaymentMethod = false;
           }
         } catch (axiosError) {
           // Handle axios errors specifically
-          console.error("[CreateCall] ❌ Axios error:", {
-            message: axiosError.message,
-            code: axiosError.code,
-            response: axiosError.response?.data,
-            status: axiosError.response?.status,
-            config: {
-              url: axiosError.config?.url,
-              method: axiosError.config?.method,
-            },
-          });
-
-          // Log full error for debugging
-          if (axiosError.response) {
-            console.error(
-              "[CreateCall] ❌ Full response:",
-              axiosError.response
-            );
-          } else if (axiosError.request) {
-            console.error(
-              "[CreateCall] ❌ Request was made but no response received:",
-              axiosError.request
-            );
-          }
-
           if (
             axiosError.code === "ECONNREFUSED" ||
             axiosError.code === "ERR_CONNECTION_REFUSED" ||
             axiosError.code === "ECONNABORTED"
           ) {
-            console.error(
-              "[CreateCall] ❌ Server connection refused - is the server running?",
-              axiosError.message
-            );
-            this.toast?.showError("לא ניתן להתחבר לשרת. אנא ודא שהשרת רץ.");
+            this.toast?.showError("אויי חבל, לא הצלחנו להתחבר לשרת. אנא ודא שהשרת רץ.");
           } else if (axiosError.response) {
             // Server responded with error status
-            console.error(
-              "[CreateCall] ❌ Server error:",
-              axiosError.response.status,
-              axiosError.response.data
-            );
             if (axiosError.response.status === 404) {
-              console.error(
-                "[CreateCall] ❌ Endpoint not found - check server routes"
-              );
-              this.toast?.showError("השרת לא מצא את המשתמש. אנא נסה שוב.");
+              this.toast?.showError("אויי חבל, השרת לא מצא את המשתמש. אנא נסה שוב.");
             } else if (axiosError.response.status === 500) {
-              this.toast?.showError("שגיאה בשרת. אנא נסה שוב מאוחר יותר.");
+              this.toast?.showError("אויי חבל, יש בעיה בשרת. אנא נסה שוב מאוחר יותר.");
             }
           } else if (axiosError.code === "ECONNABORTED") {
-            console.error("[CreateCall] ❌ Request timeout");
-            this.toast?.showError("הבקשה לשרת ארכה זמן רב מדי. אנא נסה שוב.");
-          } else {
-            console.error(
-              "[CreateCall] ❌ Error checking payment method:",
-              axiosError.message
-            );
+            this.toast?.showError("אויי חבל, הבקשה לשרת ארכה זמן רב מדי. אנא נסה שוב.");
           }
           // Error checking payment method, show form anyway
           this.showChangePaymentMethod = false;
           this.savedPaymentMethod = null;
         }
       } catch (error) {
-        console.error("[CreateCall] ❌ Unexpected error:", error);
         // Error checking payment method, show form anyway
         this.showChangePaymentMethod = false;
         this.savedPaymentMethod = null;
@@ -1352,17 +1273,8 @@ export default {
 
         if (response.data && response.data.success) {
           this.savedPaymentMethod = response.data;
-        } else {
-          console.error(
-            "[CreateCall] ❌ Failed to save payment method - server returned:",
-            response.data
-          );
         }
       } catch (error) {
-        console.error(
-          "[CreateCall] ❌ Error saving payment method to DB:",
-          error
-        );
         // Error saving payment method, but continue anyway
       }
     },
@@ -1401,7 +1313,7 @@ export default {
     async processPayment(jobId) {
       if (!this.stripe) {
         this.isLoading = false;
-        this.toast?.showError("מערכת התשלומים לא נטענה. אנא רענן את הדף.");
+        this.toast?.showError("אויי חבל, מערכת התשלומים לא נטענה. אנא רענן את הדף.");
         return;
       }
 
@@ -1428,7 +1340,7 @@ export default {
           this.isLoading = false;
           this.isProcessingPayment = false;
           this.toast?.showError(
-            intentData.message || "שגיאה ביצירת כוונת תשלום. אנא נסה שוב."
+            intentData.message || "אויי חבל, לא הצלחנו ליצור כוונת תשלום. אנא נסה שוב."
           );
           return;
         }
@@ -1455,7 +1367,7 @@ export default {
           this.isLoading = false;
           this.isProcessingPayment = false;
           this.toast?.showError(
-            pmError?.message || "שגיאה ביצירת אמצעי תשלום. אנא נסה שוב."
+            pmError?.message || "אויי חבל, לא הצלחנו ליצור אמצעי תשלום. אנא נסה שוב."
           );
           return;
         }
@@ -1472,7 +1384,7 @@ export default {
           this.isLoading = false;
           this.isProcessingPayment = false;
           this.toast?.showError(
-            error.message || "שגיאה באישור התשלום. אנא נסה שוב."
+            error.message || "אויי חבל, לא הצלחנו לאשר את התשלום. אנא נסה שוב."
           );
           return;
         }
@@ -1510,13 +1422,12 @@ export default {
         } else {
           this.isLoading = false;
           this.isProcessingPayment = false;
-          this.toast?.showError("מצב תשלום לא צפוי. אנא פנה לתמיכה.");
+          this.toast?.showError("אויי חבל, מצב תשלום לא צפוי. אנא פנה לתמיכה.");
         }
       } catch (error) {
-        console.error("Payment error:", error);
         this.isLoading = false;
         this.isProcessingPayment = false;
-        this.toast?.showError("שגיאה בעיבוד התשלום. אנא נסה שוב.");
+        this.toast?.showError("אויי חבל, לא הצלחנו לעבד את התשלום. אנא נסה שוב.");
       }
     },
     setMyLocation() {
@@ -1680,7 +1591,7 @@ export default {
           this.clearError("image");
         } else {
           this.errors.image = errorMessage;
-          this.toast.showError(`שגיאה בהעלאת התמונה: ${errorMessage}`);
+          this.toast.showError(`אויי חבל, לא הצלחנו להעלות את התמונה: ${errorMessage}`);
         }
       } finally {
         this.isUploadingImage = false;
@@ -1743,12 +1654,12 @@ export default {
               if (typeof window.L !== "undefined") {
                 this.createMap();
               } else {
-                this.toast?.showError("שגיאה בטעינת המפה. נסה שוב.");
+                this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב.");
               }
             }, 100);
           };
           script.onerror = () => {
-            this.toast?.showError("שגיאה בטעינת המפה. נסה שוב.");
+            this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב.");
           };
           document.body.appendChild(script);
         } else {
@@ -1762,7 +1673,7 @@ export default {
           setTimeout(() => {
             clearInterval(checkInterval);
             if (typeof window.L === "undefined") {
-              this.toast?.showError("שגיאה בטעינת המפה. נסה שוב.");
+              this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב.");
             }
           }, 5000);
         }
@@ -1772,7 +1683,7 @@ export default {
     },
     createMap() {
       if (typeof window.L === "undefined") {
-        this.toast?.showError("שגיאה בטעינת המפה. נסה שוב.");
+        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב.");
         return;
       }
 
@@ -1832,12 +1743,12 @@ export default {
           }
         }, 100);
       } catch (error) {
-        this.toast?.showError("שגיאה ביצירת המפה. נסה שוב.");
+        this.toast?.showError("אויי חבל, לא הצלחנו ליצור את המפה. נסה שוב.");
       }
     },
     async confirmMapLocation() {
       if (!this.selectedMapLocation) {
-        this.toast?.showError("אנא בחר מיקום במפה");
+        this.toast?.showError("אויי חבל, אנא בחר מיקום במפה");
         return;
       }
 
@@ -1877,7 +1788,6 @@ export default {
         this.closeMapPicker();
         this.toast?.showSuccess("מיקום נבחר בהצלחה");
       } catch (error) {
-        console.error("Error in reverse geocoding:", error);
         this.call.location = "מיקום שנבחר במפה";
         this.call.coordinates = {
           lat: lat,
@@ -1975,9 +1885,8 @@ export default {
           try {
             // Check if CreditCardForm component is available
             if (!this.$refs.creditCardForm) {
-              console.error("[CreateCall] CreditCardForm ref not found");
               this.isLoading = false;
-              this.toast?.showError("טופס כרטיס האשראי לא זמין. אנא נסה שוב.");
+              this.toast?.showError("אויי חבל, טופס כרטיס האשראי לא זמין. אנא נסה שוב.");
               return;
             }
 
@@ -1986,9 +1895,8 @@ export default {
               await this.$refs.creditCardForm.createPaymentMethod();
 
             if (!paymentMethodId) {
-              console.error("[CreateCall] Payment method ID is null");
               this.isLoading = false;
-              this.toast?.showError("שגיאה ביצירת אמצעי תשלום. אנא נסה שוב.");
+              this.toast?.showError("אויי חבל, לא הצלחנו ליצור אמצעי תשלום. אנא נסה שוב.");
               return;
             }
 
@@ -1996,13 +1904,9 @@ export default {
             this.paymentMethodId = paymentMethodId;
             callData.paymentMethodId = paymentMethodId;
           } catch (paymentError) {
-            console.error(
-              "[CreateCall] Error creating payment method:",
-              paymentError
-            );
             this.isLoading = false;
-            this.toast?.showError(
-              paymentError.message || "שגיאה ביצירת אמצעי תשלום. אנא נסה שוב."
+              this.toast?.showError(
+              paymentError.message || "אויי חבל, לא הצלחנו ליצור אמצעי תשלום. אנא נסה שוב."
             );
             return;
           }
@@ -2078,24 +1982,225 @@ export default {
         this.stopPatienceMessageInterval();
 
         this.isLoading = false;
+          const errorMessage =
+          error.response?.data?.message ||
+          error.response?.data?.error ||
+          error.message ||
+          "אויי חבל, לא הצלחנו לשלוח את הקריאה. נסה שוב מאוחר יותר.";
+        this.toast.showError(`אויי חבל, לא הצלחנו לשלוח את הקריאה: ${errorMessage}`);
+      }
+    },
+    async handleSplitCall() {
+      this.showSplitCallModal = false;
+      this.isLoading = true;
+
+      try {
+        // Ensure coordinates are up to date before split
+        // If usingMyLocation is true, make sure we have valid coordinates with lon/lng
+        if (this.usingMyLocation) {
+          // Check if geoCoordinates has lon/lng
+          const hasValidGeoCoords =
+            this.geoCoordinates &&
+            this.geoCoordinates.lat !== undefined &&
+            (this.geoCoordinates.lon !== undefined ||
+              this.geoCoordinates.lng !== undefined);
+
+          // If geoCoordinates is missing or invalid, try to get fresh location
+          if (!hasValidGeoCoords) {
+            try {
+              const loc = await this.getCurrentLocation();
+              this.geoCoordinates = { lat: loc.lat, lon: loc.lon };
+            } catch (err) {}
+          }
+
+          // Update call.coordinates if needed
+          if (
+            this.geoCoordinates &&
+            !this.call.coordinates?.lng &&
+            !this.call.coordinates?.lon
+          ) {
+            this.call.coordinates = { ...this.geoCoordinates };
+          }
+        }
+
+        // Prepare call data (same as in onSubmitCall and handlePartialMatchApprove)
+        const callData = {
+          userId: this.$route.params.id,
+          desc: this.call.desc || "",
+          workType: this.call.workType || "קלה",
+          when: this.call.when || "asap",
+          urgent: this.call.urgent || false,
+          imageUrls:
+            this.call.imageUrls.length > 0
+              ? this.call.imageUrls
+              : this.call.imagePreviews.length > 0
+              ? this.call.imagePreviews
+              : [],
+          location: this.call.location || "מיקום",
+          locationEnglishName: this.locationEnglishName,
+          selectedCity: this.selectedCity,
+          usingMyLocation: this.usingMyLocation,
+        };
+
+        // Add coordinates (EXACT same logic as in onSubmitCall)
+        if (this.selectedMapLocation) {
+          callData.coordinates = {
+            lng: this.selectedMapLocation.lng,
+            lat: this.selectedMapLocation.lat,
+          };
+        } else if (this.usingMyLocation && this.geoCoordinates) {
+          // Use spread operator exactly like onSubmitCall
+          callData.coordinates = { ...this.geoCoordinates };
+        } else if (
+          this.call.coordinates &&
+          this.call.coordinates.lat &&
+          (this.call.coordinates.lng || this.call.coordinates.lon)
+        ) {
+          // Fallback: use coordinates from call.coordinates if selectedMapLocation is not set
+          callData.coordinates = {
+            lng: this.call.coordinates.lng ?? this.call.coordinates.lon,
+            lat: this.call.coordinates.lat,
+          };
+        }
+
+        // Normalize coordinates (EXACT same logic as in onSubmitCall)
+        if (this.usingMyLocation && callData.coordinates) {
+          const lng = callData.coordinates.lng ?? callData.coordinates.lon;
+          const lat = callData.coordinates.lat;
+          if (lng !== undefined && lat !== undefined) {
+            callData.coordinates = { lng: Number(lng), lat: Number(lat) };
+          } else {
+            // Last resort: try to get fresh coordinates from geoCoordinates
+            if (this.geoCoordinates) {
+              const fallbackLng =
+                this.geoCoordinates.lng ?? this.geoCoordinates.lon;
+              const fallbackLat = this.geoCoordinates.lat;
+              if (fallbackLng !== undefined && fallbackLat !== undefined) {
+                callData.coordinates = {
+                  lng: Number(fallbackLng),
+                  lat: Number(fallbackLat),
+                };
+              }
+            }
+          }
+        } else if (!this.usingMyLocation) {
+          delete callData.coordinates;
+        }
+
+        // Final check before sending - ensure coordinates have lng if usingMyLocation
+        if (this.usingMyLocation && callData.coordinates) {
+          if (!callData.coordinates.lng && callData.coordinates.lon) {
+            // Convert lon to lng if needed
+            callData.coordinates.lng = callData.coordinates.lon;
+            delete callData.coordinates.lon;
+          }
+          // Final validation - if still missing lng, try one more time from geoCoordinates
+          if (!callData.coordinates.lng && this.geoCoordinates) {
+            const finalLng = this.geoCoordinates.lng ?? this.geoCoordinates.lon;
+            if (finalLng !== undefined) {
+              callData.coordinates.lng = Number(finalLng);
+            }
+          }
+        }
+
+        // Build full subcategoryInfo array from subcategoryInfoArray
+        // For split call, we want to send ALL subcategories that the user selected
+        const fullMatchedSubcategories = [];
+        if (
+          this.subcategoryInfoArray &&
+          Array.isArray(this.subcategoryInfoArray) &&
+          this.subcategoryInfoArray.length > 0
+        ) {
+          // Create a Set to track which subcategories we've already added (to avoid duplicates)
+          const addedSubcategories = new Set();
+
+          for (const subcatInfo of this.subcategoryInfoArray) {
+            // Create a unique key for this subcategory
+            const key = `${subcatInfo.category || ""}_${
+              subcatInfo.subcategory || ""
+            }`;
+
+            // Skip if we've already added this subcategory (to avoid duplicates)
+            if (addedSubcategories.has(key)) {
+              continue;
+            }
+
+            // Add the full info with all fields (category, subcategory, price, workType)
+            const fullSubcatInfo = {
+              category: subcatInfo.category,
+              subcategory: subcatInfo.subcategory,
+              price: subcatInfo.price || null,
+              workType: subcatInfo.workType || null,
+            };
+            fullMatchedSubcategories.push(fullSubcatInfo);
+            addedSubcategories.add(key);
+          }
+        }
+
+        if (fullMatchedSubcategories.length === 0) {
+          this.toast.showError("אויי חבל, לא מצאנו בשבילך תחומים לפיצול");
+          this.isLoading = false;
+          return;
+        }
+
+        // Add handymen and full matched subcategories for server to process
+        callData.handymen = this.splitNeededData.handymen || [];
+        callData.matchedSubcategories = fullMatchedSubcategories;
+
+        if (!callData.handymen || callData.handymen.length === 0) {
+          this.toast.showError("אויי חבל, לא מצאנו בשבילך הנדימנים לפיצול");
+          this.isLoading = false;
+          return;
+        }
+
+        // CRITICAL: Last check before sending - if coordinates missing lng, fix it NOW
+        if (this.usingMyLocation && callData.coordinates) {
+          if (!callData.coordinates.lng) {
+            // Emergency fix: try all possible sources
+            if (callData.coordinates.lon) {
+              callData.coordinates.lng = Number(callData.coordinates.lon);
+              delete callData.coordinates.lon;
+            } else if (this.geoCoordinates?.lon) {
+              callData.coordinates.lng = Number(this.geoCoordinates.lon);
+            } else if (this.geoCoordinates?.lng) {
+              callData.coordinates.lng = Number(this.geoCoordinates.lng);
+            } else if (this.call.coordinates?.lon) {
+              callData.coordinates.lng = Number(this.call.coordinates.lon);
+            } else if (this.call.coordinates?.lng) {
+              callData.coordinates.lng = Number(this.call.coordinates.lng);
+            }
+          }
+        }
+
+        const response = await axios.post(`${URL}/split-call-v2`, callData, {
+          headers: { "Content-Type": "application/json" },
+        });
+
+        if (response.data.success) {
+          this.toast.showSuccess("הקריאה פוצלה בהצלחה");
+          // Clear store jobs to force fresh data load in Dashboard
+          if (this.store) {
+            this.store.jobs = [];
+          }
+          setTimeout(() => {
+            this.$router.push({
+              name: "Dashboard",
+              params: { id: this.$route.params.id },
+            });
+          }, 1000);
+        } else {
+          this.toast.showError(response.data.message || "אויי חבל, לא הצלחנו לפצל את הקריאה");
+        }
+      } catch (error) {
         const errorMessage =
           error.response?.data?.message ||
           error.response?.data?.error ||
           error.message ||
-          "שגיאה בשליחת הקריאה. נסה שוב מאוחר יותר.";
-        this.toast.showError(`שגיאה בשליחת הקריאה: ${errorMessage}`);
+          "שגיאה בפיצול הקריאה. נסה שוב מאוחר יותר.";
+        this.toast.showError(errorMessage);
+      } finally {
+        this.isLoading = false;
       }
-    },
-    handleSplitCall() {
-      this.showSplitCallModal = false;
-      this.toast.showInfo("הקריאה פוצלה. ממתין לאישור הנדימנים.");
-      // TODO: Implement actual split call logic
-      setTimeout(() => {
-        this.$router.push({
-          name: "Dashboard",
-          params: { id: this.$route.params.id },
-        });
-      }, 1000);
     },
     handleCancelSplit() {
       this.showSplitCallModal = false;
@@ -2141,26 +2246,53 @@ export default {
           usingMyLocation: this.usingMyLocation,
         };
 
-        // Add coordinates
+        // Add coordinates (EXACT same logic as in handleSplitCall)
         if (this.selectedMapLocation) {
           callData.coordinates = {
             lng: this.selectedMapLocation.lng,
             lat: this.selectedMapLocation.lat,
           };
         } else if (this.usingMyLocation && this.geoCoordinates) {
-          callData.coordinates = {
-            lng: this.geoCoordinates.lng,
-            lat: this.geoCoordinates.lat,
-          };
+          // Use spread operator and normalize lon to lng
+          callData.coordinates = { ...this.geoCoordinates };
+          // Normalize: convert lon to lng if needed
+          if (callData.coordinates.lon && !callData.coordinates.lng) {
+            callData.coordinates.lng = callData.coordinates.lon;
+            delete callData.coordinates.lon;
+          }
+          // Ensure lng and lat are numbers
+          if (
+            callData.coordinates.lng !== undefined &&
+            callData.coordinates.lat !== undefined
+          ) {
+            callData.coordinates = {
+              lng: Number(callData.coordinates.lng ?? callData.coordinates.lon),
+              lat: Number(callData.coordinates.lat),
+            };
+          }
         } else if (
           this.call.coordinates &&
           this.call.coordinates.lat &&
-          this.call.coordinates.lng
+          (this.call.coordinates.lng || this.call.coordinates.lon)
         ) {
           callData.coordinates = {
-            lng: this.call.coordinates.lng,
+            lng: this.call.coordinates.lng ?? this.call.coordinates.lon,
             lat: this.call.coordinates.lat,
           };
+        }
+
+        // Final check before sending
+        if (this.usingMyLocation && callData.coordinates) {
+          if (!callData.coordinates.lng && callData.coordinates.lon) {
+            callData.coordinates.lng = callData.coordinates.lon;
+            delete callData.coordinates.lon;
+          }
+          if (!callData.coordinates.lng && this.geoCoordinates) {
+            const finalLng = this.geoCoordinates.lng ?? this.geoCoordinates.lon;
+            if (finalLng !== undefined) {
+              callData.coordinates.lng = Number(finalLng);
+            }
+          }
         }
 
         // Build full subcategoryInfo array from matchedSubcategories
@@ -2239,10 +2371,10 @@ export default {
             });
           }, 1000);
         } else {
-          this.toast.showError(response.data.message || "שגיאה בפיצול הקריאה");
+          this.toast.showError(response.data.message || "אויי חבל, לא הצלחנו לפצל את הקריאה");
         }
       } catch (error) {
-        this.toast.showError("שגיאה בפיצול הקריאה. נסה שוב מאוחר יותר.");
+        this.toast.showError("אויי חבל, לא הצלחנו לפצל את הקריאה. נסה שוב מאוחר יותר.");
       } finally {
         this.isLoading = false;
       }
@@ -2320,11 +2452,11 @@ export default {
           this.foundCategories = response.data.subcategories;
         } else {
           this.toast?.showError(
-            response.data.message || "לא נמצאו תחומים מתאימים"
+            response.data.message || "אויי חבל, לא מצאנו בשבילך תחומים מתאימים"
           );
         }
       } catch (error) {
-        this.toast?.showError("שגיאה בחיפוש התחומים. נסה שוב מאוחר יותר.");
+        this.toast?.showError("אויי חבל, לא הצלחנו לחפש את התחומים. נסה שוב מאוחר יותר.");
       } finally {
         this.isLoadingCategories = false;
       }

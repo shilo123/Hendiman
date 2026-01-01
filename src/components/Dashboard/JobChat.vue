@@ -21,6 +21,18 @@
 
         <!-- Navigation buttons for handyman -->
         <div v-if="isHandyman" class="luxTop__nav">
+          <!-- View Images Button -->
+          <button
+            v-if="hasJobImages"
+            class="navBtn navBtn--images"
+            type="button"
+            @click="showImageGallery = true"
+            title="עיון בתמונות"
+            aria-label="עיון בתמונות"
+          >
+            <span class="navBtn__text">עיון בתמונות</span>
+            <span class="navBtn__icon">📷</span>
+          </button>
           <!-- Navigation to job location -->
           <template v-if="jobLocation">
             <a
@@ -417,6 +429,86 @@
       </main>
     </div>
 
+    <!-- Image Gallery Modal -->
+    <div
+      v-if="showImageGallery"
+      class="modal image-gallery-modal"
+      @click.self="closeImageGallery"
+      @touchstart="handleGalleryTouchStart"
+      @touchend="handleGalleryTouchEnd"
+    >
+      <div class="image-gallery">
+        <div class="image-gallery__header">
+          <button
+            class="image-gallery__close"
+            type="button"
+            @click="closeImageGallery"
+            aria-label="חזור"
+          >
+            ← חזור
+          </button>
+          <div class="image-gallery__counter">
+            {{ currentImageIndex + 1 }} / {{ jobImages.length }}
+          </div>
+        </div>
+
+        <div class="image-gallery__container" ref="galleryContainer">
+          <div
+            class="image-gallery__track"
+            :style="{ transform: `translateX(-${currentImageIndex * 100}%)` }"
+          >
+            <div
+              v-for="(image, index) in jobImages"
+              :key="index"
+              class="image-gallery__slide"
+            >
+              <img
+                :src="image"
+                :alt="`תמונה ${index + 1}`"
+                class="image-gallery__image"
+                @error="handleImageError"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="image-gallery__controls">
+          <button
+            class="image-gallery__navBtn image-gallery__navBtn--prev"
+            type="button"
+            @click="previousImage"
+            :disabled="currentImageIndex === 0"
+            aria-label="תמונה קודמת"
+          >
+            ←
+          </button>
+          <button
+            class="image-gallery__navBtn image-gallery__navBtn--next"
+            type="button"
+            @click="nextImage"
+            :disabled="currentImageIndex === jobImages.length - 1"
+            aria-label="תמונה הבאה"
+          >
+            →
+          </button>
+        </div>
+
+        <div class="image-gallery__dots">
+          <button
+            v-for="(image, index) in jobImages"
+            :key="index"
+            class="image-gallery__dot"
+            :class="{
+              'image-gallery__dot--active': currentImageIndex === index,
+            }"
+            type="button"
+            @click="goToImage(index)"
+            :aria-label="`עבור לתמונה ${index + 1}`"
+          ></button>
+        </div>
+      </div>
+    </div>
+
     <!-- Image modal -->
     <div v-if="imageModal" class="imgModal" @click.self="imageModal = null">
       <div class="imgModal__card">
@@ -485,8 +577,39 @@
           ✕
         </button>
         <h2 class="priceChangeModal__title">שינוי מחיר</h2>
+        <!-- Subcategory Selection (if multiple subcategories) -->
+        <div
+          v-if="
+            job?.subcategoryInfo &&
+            Array.isArray(job.subcategoryInfo) &&
+            job.subcategoryInfo.length > 1
+          "
+          class="priceChangeModal__subcategorySelect"
+        >
+          <label class="priceChangeModal__label" for="subcategorySelectJobChat"
+            >בחר עבודה:</label
+          >
+          <select
+            id="subcategorySelectJobChat"
+            v-model="selectedSubcategoryIndex"
+            class="priceChangeModal__select"
+            @change="onSubcategoryChangeJobChat"
+          >
+            <option :value="null">בחר עבודה</option>
+            <option
+              v-for="(subcat, index) in job.subcategoryInfo"
+              :key="index"
+              :value="index"
+            >
+              {{ subcat.subcategory }} - {{ subcat.price }} ₪
+            </option>
+          </select>
+        </div>
         <p class="priceChangeModal__message">
-          המחיר הנוכחי: <strong>{{ currentPrice }} ₪</strong>
+          המחיר הנוכחי:
+          <strong
+            >{{ selectedSubcategoryPriceJobChat || currentPrice }} ₪</strong
+          >
         </p>
         <p class="priceChangeModal__hint">
           ניתן לשנות את המחיר עד 20% (עד {{ maxPriceChange }} ₪)
@@ -527,7 +650,14 @@
             class="priceChangeModal__btn priceChangeModal__btn--submit"
             type="button"
             @click="requestPriceChange"
-            :disabled="!isPriceChangeValid || isRequestingPriceChange"
+            :disabled="
+              !isPriceChangeValid ||
+              isRequestingPriceChange ||
+              (job?.subcategoryInfo &&
+                Array.isArray(job.subcategoryInfo) &&
+                job.subcategoryInfo.length > 1 &&
+                selectedSubcategoryIndex === null)
+            "
           >
             {{ isRequestingPriceChange ? "שולח..." : "שלח בקשה" }}
           </button>
@@ -545,7 +675,33 @@
       <div class="priceChangeRequestModal__content">
         <h2 class="priceChangeRequestModal__title">בקשת שינוי מחיר</h2>
         <p class="priceChangeRequestModal__message">
-          ההנדימן מבקש לשנות את מחיר העבודה:
+          <template
+            v-if="
+              isSplitCall &&
+              relatedJobs.length > 1 &&
+              priceChangeRequest?.handymanName
+            "
+          >
+            ההנדימן <strong>{{ priceChangeRequest.handymanName }}</strong> מבקש
+            לשנות את מחיר העבודה
+            <template v-if="priceChangeRequest?.subcategoryInfo">
+              עבור:
+              <strong>{{
+                priceChangeRequest.subcategoryInfo.subcategory
+              }}</strong>
+            </template>
+            :
+          </template>
+          <template v-else>
+            ההנדימן מבקש לשנות את מחיר העבודה
+            <template v-if="priceChangeRequest?.subcategoryInfo">
+              עבור:
+              <strong>{{
+                priceChangeRequest.subcategoryInfo.subcategory
+              }}</strong>
+            </template>
+            :
+          </template>
         </p>
         <div class="priceChangeRequestModal__priceInfo">
           <div class="priceChangeRequestModal__priceRow">
@@ -591,9 +747,43 @@
       </div>
     </div>
 
-    <!-- Cancel Reason Modal -->
+    <!-- Cancel Confirmation Modal (for handyman - simple yes/no) -->
     <div
-      v-if="showCancelReasonModal"
+      v-if="showCancelReasonModal && isHandyman"
+      class="cancelReasonModal"
+      dir="rtl"
+      @click.self="showCancelReasonModal = false"
+    >
+      <div class="cancelReasonModal__content">
+        <h2 class="cancelReasonModal__title">ביטול עבודה</h2>
+        <div class="cancelReasonModal__form">
+          <div class="cancelReasonModal__message">
+            האם אתה בטוח שברצונך לבטל את העבודה?
+          </div>
+        </div>
+        <div class="cancelReasonModal__actions">
+          <button
+            class="cancelReasonModal__btn cancelReasonModal__btn--cancel"
+            type="button"
+            @click="closeCancelReasonModal"
+          >
+            לא
+          </button>
+          <button
+            class="cancelReasonModal__btn cancelReasonModal__btn--submit"
+            type="button"
+            :disabled="isCancellingJob"
+            @click="submitCancelJob"
+          >
+            {{ isCancellingJob ? "מבטל..." : "כן, בטל" }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cancel Reason Modal (for client - with reasons) -->
+    <div
+      v-if="showCancelReasonModal && !isHandyman"
       class="cancelReasonModal"
       dir="rtl"
       @click.self="showCancelReasonModal = false"
@@ -783,6 +973,7 @@ export default {
       showOnboardingModal: false, // Show onboarding popup
       onboardingUrl: null, // Onboarding URL to display
       showPriceChangeModal: false, // Show price change modal for handyman
+      selectedSubcategoryIndex: null, // Index of selected subcategory for price change
       newPrice: null, // New price input
       showPriceChangeRequestModal: false, // Show price change request modal for client
       priceChangeRequest: null, // Price change request data
@@ -792,6 +983,16 @@ export default {
       cancelReasonText: "", // Free text reason for cancellation
       cancelAction: "cancel-handyman", // 'cancel-handyman', 'cancel-complete', or 'delete'
       isCancellingJob: false, // Track cancel job state
+      // Image gallery
+      showImageGallery: false,
+      currentImageIndex: 0,
+      touchStartX: 0,
+      touchEndX: 0,
+      // Split call related
+      relatedJobs: [],
+      isSplitCall: false,
+      allRelatedJobsDone: false,
+      isLoadingRelatedJobs: false,
     };
   },
   computed: {
@@ -851,6 +1052,66 @@ export default {
       }
       return null;
     },
+    hasJobImages() {
+      const job = this.jobInfo;
+      if (!job) return false;
+
+      // Check imageUrl array
+      if (
+        job.imageUrl &&
+        Array.isArray(job.imageUrl) &&
+        job.imageUrl.length > 0
+      ) {
+        return true;
+      }
+
+      // Check imageUrl as string
+      if (job.imageUrl && typeof job.imageUrl === "string") {
+        return true;
+      }
+
+      // Check subcategoryInfo for images
+      if (job.subcategoryInfo && Array.isArray(job.subcategoryInfo)) {
+        return job.subcategoryInfo.some(
+          (subcat) =>
+            subcat?.imageUrl &&
+            (Array.isArray(subcat.imageUrl) ? subcat.imageUrl.length > 0 : true)
+        );
+      }
+
+      return false;
+    },
+    jobImages() {
+      const job = this.jobInfo;
+      if (!job) return [];
+
+      const images = [];
+
+      // Collect from imageUrl array
+      if (job.imageUrl) {
+        if (Array.isArray(job.imageUrl)) {
+          images.push(...job.imageUrl.filter((url) => url));
+        } else if (typeof job.imageUrl === "string") {
+          images.push(job.imageUrl);
+        }
+      }
+
+      // Collect from subcategoryInfo
+      if (job.subcategoryInfo && Array.isArray(job.subcategoryInfo)) {
+        job.subcategoryInfo.forEach((subcat) => {
+          if (subcat?.imageUrl) {
+            if (Array.isArray(subcat.imageUrl)) {
+              images.push(...subcat.imageUrl.filter((url) => url));
+            } else if (typeof subcat.imageUrl === "string") {
+              images.push(subcat.imageUrl);
+            }
+          }
+        });
+      }
+
+      // Remove duplicates
+      return [...new Set(images)];
+    },
     jobSteps() {
       return [
         { status: "assigned", label: "שובצה" },
@@ -878,22 +1139,63 @@ export default {
     currentPrice() {
       return this.jobInfo?.price || this.job?.price || 0;
     },
+    selectedSubcategoryPriceJobChat() {
+      const job = this.job || this.jobInfo;
+      if (
+        !job?.subcategoryInfo ||
+        !Array.isArray(job.subcategoryInfo) ||
+        job.subcategoryInfo.length <= 1
+      ) {
+        return null; // Not applicable if single or no subcategory
+      }
+      if (
+        this.selectedSubcategoryIndex === null ||
+        this.selectedSubcategoryIndex === undefined
+      ) {
+        return null;
+      }
+      const subcat = job.subcategoryInfo[this.selectedSubcategoryIndex];
+      if (!subcat) return null;
+      return typeof subcat.price === "number"
+        ? subcat.price
+        : parseFloat(subcat.price) || 0;
+    },
     maxPriceChange() {
-      return Math.round(this.currentPrice * 0.2);
+      const basePrice =
+        this.selectedSubcategoryPriceJobChat !== null
+          ? this.selectedSubcategoryPriceJobChat
+          : this.currentPrice;
+      return Math.round(basePrice * 0.2);
     },
     minAllowedPrice() {
-      return Math.round(this.currentPrice * 0.8);
+      const basePrice =
+        this.selectedSubcategoryPriceJobChat !== null
+          ? this.selectedSubcategoryPriceJobChat
+          : this.currentPrice;
+      return Math.round(basePrice * 0.8);
     },
     maxAllowedPrice() {
-      return Math.round(this.currentPrice * 1.2);
+      const basePrice =
+        this.selectedSubcategoryPriceJobChat !== null
+          ? this.selectedSubcategoryPriceJobChat
+          : this.currentPrice;
+      return Math.round(basePrice * 1.2);
     },
     priceChange() {
-      if (!this.newPrice || this.newPrice === this.currentPrice) return 0;
-      return this.newPrice - this.currentPrice;
+      const basePrice =
+        this.selectedSubcategoryPriceJobChat !== null
+          ? this.selectedSubcategoryPriceJobChat
+          : this.currentPrice;
+      if (!this.newPrice || this.newPrice === basePrice) return 0;
+      return this.newPrice - basePrice;
     },
     priceChangePercent() {
-      if (!this.currentPrice || this.currentPrice === 0) return 0;
-      return Math.round((this.priceChange / this.currentPrice) * 100);
+      const basePrice =
+        this.selectedSubcategoryPriceJobChat !== null
+          ? this.selectedSubcategoryPriceJobChat
+          : this.currentPrice;
+      if (!basePrice || basePrice === 0) return 0;
+      return Math.round((this.priceChange / basePrice) * 100);
     },
     isPriceChangeValid() {
       if (!this.newPrice) return false;
@@ -922,6 +1224,8 @@ export default {
     this.initWebSocket();
     await this.loadMessages();
     this.scrollToBottom();
+    // Load related jobs if this is a split call
+    await this.loadRelatedJobs();
   },
   beforeUnmount() {
     window.removeEventListener("click", this.onOutsideTools);
@@ -1012,26 +1316,65 @@ export default {
       });
 
       // Listen for price change requests (for client)
-      this.socket.on("price-change-request", (data) => {
+      this.socket.on("price-change-request", async (data) => {
         const receivedJobId = String(data.jobId || "");
         const currentJobId = String(jobId || "");
+
+        // Check if this request is for the current job or a related job in split call
+        let shouldShowModal = false;
+
         if (receivedJobId === currentJobId && !this.isHandyman) {
+          // Request is for current job
+          shouldShowModal = true;
+        } else if (!this.isHandyman) {
+          // Check if this is a split call and the request is for a related job
+          if (this.isSplitCall && this.relatedJobs.length > 0) {
+            const isRelatedJob = this.relatedJobs.some(
+              (rj) => String(rj._id) === receivedJobId
+            );
+            if (isRelatedJob) {
+              shouldShowModal = true;
+            }
+          }
+        }
+
+        if (shouldShowModal) {
+          // Get the job that requested the price change
+          const requestingJob = this.relatedJobs?.find(
+            (rj) => String(rj._id) === receivedJobId
+          );
+
           this.priceChangeRequest = {
             oldPrice: data.oldPrice,
             newPrice: data.newPrice,
             change: data.change || data.newPrice - data.oldPrice,
             changePercent: data.changePercent || data.percent,
+            handymanId: data.handymanId,
+            handymanName:
+              data.handymanName ||
+              requestingJob?.handymanName ||
+              this.getHandymanName(),
+            jobId: receivedJobId, // Store the jobId that requested the change
+            subcategoryIndex:
+              data.subcategoryIndex !== undefined
+                ? data.subcategoryIndex
+                : null,
+            subcategoryInfo: data.subcategoryInfo || null,
           };
           this.showPriceChangeRequestModal = true;
 
           // Add system message for client
+          const handymanNameText =
+            this.isSplitCall && this.relatedJobs.length > 1 && data.handymanName
+              ? `${data.handymanName} ביקש`
+              : "הנדימן ביקש";
           const systemMessage = {
             sender: "system",
-            text: `הנדימן ביקש ${
-              data.percent > 0 ? "להעלות" : "להוריד"
-            } את המחיר ב-${Math.abs(data.percent || data.changePercent).toFixed(
-              1
-            )}%`,
+            text: `${handymanNameText} ${
+              data.percent > 0 || data.changePercent > 0 ? "להעלות" : "להוריד"
+            } את המחיר ב-${Math.abs(
+              data.percent || data.changePercent || 0
+            ).toFixed(1)}%`,
             time: new Date().toLocaleTimeString("he-IL", {
               hour: "2-digit",
               minute: "2-digit",
@@ -1200,7 +1543,7 @@ export default {
           });
         }
       } catch (error) {
-        this.toast?.showError("שגיאה בטעינת הודעות");
+        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את ההודעות");
       }
     },
 
@@ -1410,7 +1753,7 @@ export default {
 
       const userId = this.store?.user?._id;
       if (!userId) {
-        this.toast?.showError("לא ניתן לזהות את המשתמש");
+        this.toast?.showError("אויי חבל, לא הצלחנו לזהות את המשתמש");
         return;
       }
 
@@ -1462,7 +1805,7 @@ export default {
         if (tempIndex !== -1) {
           this.messages.splice(tempIndex, 1);
         }
-        this.toast?.showError("שגיאה בשליחת המיקום");
+        this.toast?.showError("אויי חבל, לא הצלחנו לשלוח את המיקום");
       }
     },
 
@@ -1536,7 +1879,7 @@ export default {
       // Get current user ID from store
       const userId = this.store?.user?._id;
       if (!userId) {
-        this.toast?.showError("לא ניתן לזהות את המשתמש");
+        this.toast?.showError("אויי חבל, לא הצלחנו לזהות את המשתמש");
         return;
       }
 
@@ -1575,7 +1918,7 @@ export default {
         if (index !== -1) {
           this.messages.splice(index, 1);
         }
-        this.toast?.showError("שגיאה בשליחת ההודעה");
+        this.toast?.showError("אויי חבל, לא הצלחנו לשלוח את ההודעה");
       }
     },
 
@@ -1679,7 +2022,7 @@ export default {
         if (tempIndex !== -1) {
           this.messages.splice(tempIndex, 1);
         }
-        this.toast?.showError("שגיאה בהעלאת התמונה");
+        this.toast?.showError("אויי חבל, לא הצלחנו להעלות את התמונה");
       }
     },
 
@@ -1690,7 +2033,7 @@ export default {
       // Get current user ID from store
       const userId = this.store?.user?._id;
       if (!userId) {
-        this.toast?.showError("לא ניתן לזהות את המשתמש");
+        this.toast?.showError("אויי חבל, לא הצלחנו לזהות את המשתמש");
         return;
       }
 
@@ -1706,12 +2049,56 @@ export default {
         // Message will be added via WebSocket, but we already added it optimistically
         // The duplicate check in addMessageToUI will prevent showing it twice
       } catch (error) {
-        this.toast?.showError("שגיאה בשליחת התמונה");
+        this.toast?.showError("אויי חבל, לא הצלחנו לשלוח את התמונה");
       }
     },
 
     openImage(src) {
       this.imageModal = src;
+    },
+    closeImageGallery() {
+      this.showImageGallery = false;
+      this.currentImageIndex = 0;
+    },
+    nextImage() {
+      if (this.currentImageIndex < this.jobImages.length - 1) {
+        this.currentImageIndex++;
+      }
+    },
+    previousImage() {
+      if (this.currentImageIndex > 0) {
+        this.currentImageIndex--;
+      }
+    },
+    goToImage(index) {
+      if (index >= 0 && index < this.jobImages.length) {
+        this.currentImageIndex = index;
+      }
+    },
+    handleGalleryTouchStart(e) {
+      this.touchStartX = e.touches[0].clientX;
+    },
+    handleGalleryTouchEnd(e) {
+      this.touchEndX = e.changedTouches[0].clientX;
+      this.handleGallerySwipe();
+    },
+    handleGallerySwipe() {
+      const swipeThreshold = 50; // Minimum distance for swipe
+      const diff = this.touchStartX - this.touchEndX;
+
+      if (Math.abs(diff) > swipeThreshold) {
+        if (diff > 0) {
+          // Swipe left - next image
+          this.nextImage();
+        } else {
+          // Swipe right - previous image
+          this.previousImage();
+        }
+      }
+    },
+    handleImageError(e) {
+      // Handle image load error
+      e.target.style.display = "none";
     },
     async checkOnboardingStatus() {
       if (!this.isHandyman) return;
@@ -1751,7 +2138,9 @@ export default {
           this.onboardingUrl = response.data.url;
         }
       } catch (error) {
-        this.toast?.showError("שגיאה בקבלת קישור הגדרת תשלומים");
+        this.toast?.showError(
+          "אויי חבל, לא הצלחנו לקבל את קישור הגדרת תשלומים"
+        );
       } finally {
         this.isLoadingOnboarding = false;
       }
@@ -1783,7 +2172,7 @@ export default {
         });
         this.$emit("status-updated", newStatus);
       } catch (err) {
-        this.toast.showError("שגיאה בעדכון הסטטוס");
+        this.toast.showError("אויי חבל, לא הצלחנו לעדכן את הסטטוס");
       }
     },
 
@@ -1796,25 +2185,44 @@ export default {
         // Get current user ID (customer)
         const customerId = this.store?.user?._id || this.job?.clientId;
         if (!customerId) {
-          this.toast.showError("לא ניתן לזהות את הלקוח");
+          this.toast.showError("אויי חבל, לא הצלחנו לזהות את הלקוח");
           return;
         }
 
-        await axios.post(`${URL}/jobs/rate`, {
+        const requestData = {
           jobId: this.job._id || this.job.id,
           handymanId: this.job.handymanId,
           customerId: customerId,
           rating: this.rating,
           review: this.reviewText,
-        });
-        this.toast.showSuccess("הדירוג נשלח");
-        this.ratingSubmitted = true;
-        this.$emit("rating-submitted");
-        // Navigate directly to dashboard (not to job summary)
-        const userId = this.store?.user?._id || this.$route.params.id;
-        this.$router.push(`/Dashboard/${userId}`);
+        };
+
+        const response = await axios.post(`${URL}/jobs/rate`, requestData);
+
+        // Check if the response indicates success
+        if (response.data && response.data.success) {
+          this.toast.showSuccess("הדירוג נשלח");
+          this.ratingSubmitted = true;
+          this.$emit("rating-submitted");
+          // Navigate directly to dashboard (not to job summary)
+          const userId = this.store?.user?._id || this.$route.params.id;
+          this.$router.push(`/Dashboard/${userId}`);
+        } else {
+          this.toast.showError(response.data?.message || "אויי חבל, לא הצלחנו לשלוח את הדירוג");
+        }
       } catch (err) {
-        this.toast.showError("שגיאה בשליחת הדירוג");
+        if (err.response?.data?.message) {
+          this.toast.showError(err.response.data.message);
+        } else if (err.response?.data?.success) {
+          // Request succeeded despite error (network issue after response)
+          this.toast.showSuccess("הדירוג נשלח");
+          this.ratingSubmitted = true;
+          this.$emit("rating-submitted");
+          const userId = this.store?.user?._id || this.$route.params.id;
+          this.$router.push(`/Dashboard/${userId}`);
+        } else {
+          this.toast.showError("אויי חבל, לא הצלחנו לשלוח את הדירוג");
+        }
       }
     },
 
@@ -1823,6 +2231,46 @@ export default {
         const el = this.$refs.messagesContainer;
         if (el) el.scrollTop = el.scrollHeight;
       });
+    },
+
+    async loadRelatedJobs() {
+      const jobId = this.job?._id || this.job?.id;
+      if (!jobId) return;
+
+      this.isLoadingRelatedJobs = true;
+      try {
+        const response = await axios.get(`${URL}/api/jobs/${jobId}/related`);
+        if (response.data?.success) {
+          this.isSplitCall = response.data.isSplitCall;
+          this.relatedJobs = response.data.relatedJobs || [];
+          this.allRelatedJobsDone = response.data.allJobsDone || false;
+        }
+      } catch (error) {
+        // Silent fail - not critical
+      } finally {
+        this.isLoadingRelatedJobs = false;
+      }
+    },
+
+    getHandymanNameForPriceChange() {
+      if (!this.isSplitCall || !this.relatedJobs.length) {
+        return this.getHandymanName();
+      }
+
+      // Find which handyman requested the price change
+      const currentJobId = String(this.job?._id || this.job?.id || "");
+      const jobWithPriceChange = this.relatedJobs.find(
+        (rj) =>
+          String(rj._id) === currentJobId &&
+          rj.priceChangeRequest &&
+          rj.priceChangeRequest.status === "pending"
+      );
+
+      if (jobWithPriceChange && jobWithPriceChange.handymanName) {
+        return jobWithPriceChange.handymanName;
+      }
+
+      return this.getHandymanName();
     },
 
     async handleApproveJob() {
@@ -1840,7 +2288,7 @@ export default {
         this.store.user?.id;
 
       if (!jobId || !clientId) {
-        this.toast?.showError("שגיאה: חסרים פרטים לאישור העבודה");
+        this.toast?.showError("אויי חבל, חסרים פרטים לאישור העבודה");
         return;
       }
 
@@ -1902,7 +2350,13 @@ export default {
       this.cancelAction = "cancel-handyman";
     },
     async submitCancelJob() {
-      if (!this.cancelReasonText.trim() || this.isCancellingJob) return;
+      // For handyman, no reason required. For client, require reason.
+      if (
+        !this.isHandyman &&
+        (!this.cancelReasonText.trim() || this.isCancellingJob)
+      )
+        return;
+      if (this.isHandyman && this.isCancellingJob) return;
 
       this.isCancellingJob = true;
       try {
@@ -1911,7 +2365,7 @@ export default {
 
         const userId = this.store.user?._id || this.store.user?.id;
         if (!userId) {
-          this.toast.showError("שגיאה: לא נמצא מזהה משתמש");
+          this.toast.showError("אויי חבל, לא מצאנו מזהה משתמש");
           return;
         }
 
@@ -1919,8 +2373,22 @@ export default {
         const isHandyman = this.isHandyman;
         const personCancel = isHandyman ? "handyman" : "customer";
 
-        if (this.cancelAction === "cancel-complete") {
-          // Complete cancellation - delete job from DB
+        if (isHandyman) {
+          // For handyman: simple cancellation - job returns to open status
+          await axios.post(`${URL}/jobs/cancel`, {
+            jobId,
+            userId,
+            cancel: {
+              personcancel: personCancel,
+              "reason-for-cancellation": "",
+              "Totally-cancels": false,
+              JobId: jobId,
+            },
+          });
+
+          this.toast.showSuccess("העבודה בוטלה");
+        } else if (this.cancelAction === "cancel-complete") {
+          // Complete cancellation - delete job from DB (client only)
           await axios.delete(`${URL}/jobs/${jobId}/delete`, {
             data: {
               userId,
@@ -1936,7 +2404,7 @@ export default {
 
           this.toast.showSuccess("העבודה נמחקה");
         } else {
-          // Cancel for this handyman only
+          // Cancel for this handyman only (client only)
           await axios.post(`${URL}/jobs/cancel`, {
             jobId,
             userId,
@@ -1961,8 +2429,25 @@ export default {
         this.isCancellingJob = false;
       }
     },
+    onSubcategoryChangeJobChat() {
+      // Reset price when subcategory changes
+      this.newPrice = null;
+    },
     async requestPriceChange() {
       if (!this.isPriceChangeValid || this.isRequestingPriceChange) return;
+
+      // Check if subcategory selection is required
+      const job = this.job || this.jobInfo;
+      if (
+        job?.subcategoryInfo &&
+        Array.isArray(job.subcategoryInfo) &&
+        job.subcategoryInfo.length > 1 &&
+        (this.selectedSubcategoryIndex === null ||
+          this.selectedSubcategoryIndex === undefined)
+      ) {
+        this.toast?.showError("אויי חבל, אנא בחר עבודה");
+        return;
+      }
 
       this.isRequestingPriceChange = true;
       try {
@@ -1971,19 +2456,29 @@ export default {
 
         const handymanId = this.store.user?._id || this.store.user?.id;
         if (!handymanId) {
-          this.toast?.showError("שגיאה: לא נמצא מזהה משתמש");
+          this.toast?.showError("אויי חבל, לא מצאנו מזהה משתמש");
           return;
         }
+
+        // Determine old price (subcategory price or total job price)
+        const oldPrice =
+          this.selectedSubcategoryPriceJobChat !== null
+            ? this.selectedSubcategoryPriceJobChat
+            : this.jobInfo?.price || this.job?.price || 0;
 
         await axios.post(`${URL}/api/jobs/price-change-request`, {
           jobId,
           handymanId,
           newPrice: this.newPrice,
+          subcategoryIndex:
+            this.selectedSubcategoryIndex !== null
+              ? this.selectedSubcategoryIndex
+              : undefined,
         });
 
-        // Calculate percent change for message
-        const oldPrice = this.jobInfo?.price || this.job?.price || 0;
-        const percentChange = ((this.newPrice - oldPrice) / oldPrice) * 100;
+        // Calculate percent change for message (using oldPrice already calculated above)
+        const percentChange =
+          oldPrice > 0 ? ((this.newPrice - oldPrice) / oldPrice) * 100 : 0;
 
         // Add system message (for handyman - he sees his own request)
         const systemMessage = {
@@ -2004,6 +2499,7 @@ export default {
         this.toast?.showSuccess("בקשת שינוי מחיר נשלחה ללקוח");
         this.showPriceChangeModal = false;
         this.newPrice = null;
+        this.selectedSubcategoryIndex = null;
       } catch (error) {
         this.toast?.showError(
           error.response?.data?.message || "שגיאה בשליחת בקשת שינוי מחיר"
@@ -2017,12 +2513,15 @@ export default {
 
       this.isRespondingToPriceChange = true;
       try {
-        const jobId = this.job._id || this.job.id;
+        // Use jobId from the price change request if available (for split calls)
+        // Otherwise use current job ID
+        const jobId =
+          this.priceChangeRequest?.jobId || this.job._id || this.job.id;
         if (!jobId) return;
 
         const clientId = this.store.user?._id || this.store.user?.id;
         if (!clientId) {
-          this.toast?.showError("שגיאה: לא נמצא מזהה משתמש");
+          this.toast?.showError("אויי חבל, לא מצאנו מזהה משתמש");
           return;
         }
 
@@ -2034,8 +2533,30 @@ export default {
 
         if (accepted) {
           this.toast?.showSuccess("שינוי המחיר אושר");
-          this.jobInfo.price = this.priceChangeRequest.newPrice;
-          this.job.price = this.priceChangeRequest.newPrice;
+
+          // Update price for the job that requested the change
+          // If it's a different job (split call), update it in relatedJobs
+          if (
+            this.priceChangeRequest?.jobId &&
+            this.priceChangeRequest.jobId !==
+              String(this.job._id || this.job.id)
+          ) {
+            // This is a different job - update it in relatedJobs
+            const relatedJob = this.relatedJobs?.find(
+              (rj) => String(rj._id) === this.priceChangeRequest.jobId
+            );
+            if (relatedJob) {
+              relatedJob.price = this.priceChangeRequest.newPrice;
+            }
+          } else {
+            // Current job - update normally
+            if (this.jobInfo) {
+              this.jobInfo.price = this.priceChangeRequest.newPrice;
+            }
+            if (this.job) {
+              this.job.price = this.priceChangeRequest.newPrice;
+            }
+          }
 
           // Add system message (for client - he sees his own approval)
           const systemMessage = {
@@ -2960,6 +3481,18 @@ $orange2: #ff8a2b;
   color: rgba($text, 0.7);
   line-height: 1.6;
   margin-bottom: 8px;
+}
+
+.approvalCard__warning {
+  font-size: 15px;
+  color: rgba(255, 193, 7, 0.95);
+  line-height: 1.6;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  background: rgba(255, 193, 7, 0.1);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  font-weight: 500;
 }
 
 .approvalCard__btn {
@@ -4139,6 +4672,9 @@ $orange2: #ff8a2b;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .cancelReasonModal__label {
@@ -4146,6 +4682,15 @@ $orange2: #ff8a2b;
   font-weight: 900;
   color: rgba(255, 255, 255, 0.9);
   text-align: right;
+}
+
+.cancelReasonModal__message {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  text-align: center;
+  padding: 20px 0;
+  line-height: 1.5;
 }
 
 .cancelReasonModal__textarea {
@@ -4167,6 +4712,9 @@ $orange2: #ff8a2b;
   transition: all 0.2s ease;
   overflow-wrap: break-word;
   word-wrap: break-word;
+  word-break: break-word;
+  overflow-x: hidden;
+  white-space: pre-wrap;
 }
 
 .cancelReasonModal__textarea:focus {
@@ -4352,5 +4900,202 @@ $orange2: #ff8a2b;
 .seg__btn--price:hover {
   background: linear-gradient(135deg, rgba($orange, 0.3), rgba($orange2, 0.25));
   border-color: rgba($orange, 0.6);
+}
+
+/* Image Gallery Modal */
+.image-gallery-modal {
+  z-index: 10200;
+  background: rgba(0, 0, 0, 0.95);
+}
+
+.image-gallery {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+  position: relative;
+}
+
+.image-gallery__header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0));
+  z-index: 10;
+}
+
+.image-gallery__close {
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-weight: 900;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.image-gallery__close:active {
+  background: rgba(0, 0, 0, 0.8);
+  transform: scale(0.95);
+}
+
+.image-gallery__counter {
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-weight: 900;
+  font-size: 14px;
+}
+
+.image-gallery__container {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: pan-y;
+}
+
+.image-gallery__track {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.3s ease;
+}
+
+.image-gallery__slide {
+  min-width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 16px 100px;
+}
+
+.image-gallery__image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.image-gallery__controls {
+  position: absolute;
+  bottom: 80px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+  z-index: 10;
+}
+
+.image-gallery__navBtn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 24px;
+  font-weight: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.image-gallery__navBtn:active:not(:disabled) {
+  background: rgba(0, 0, 0, 0.8);
+  transform: scale(0.9);
+}
+
+.image-gallery__navBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.image-gallery__dots {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 24px;
+  z-index: 10;
+}
+
+.image-gallery__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.image-gallery__dot--active {
+  background: #ff6a00;
+  width: 24px;
+  border-radius: 4px;
+}
+
+.navBtn--images {
+  background: rgba(255, 106, 0, 0.15);
+  border-color: rgba(255, 106, 0, 0.3);
+  color: #ff8a2b;
+}
+
+@media (max-width: 768px) {
+  .image-gallery__slide {
+    padding: 80px 8px 120px;
+  }
+
+  .image-gallery__navBtn {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+  }
+
+  .image-gallery__controls {
+    bottom: 100px;
+    padding: 0 8px;
+  }
+
+  .image-gallery__dots {
+    bottom: 16px;
+    padding: 10px 12px;
+    gap: 6px;
+  }
+
+  .image-gallery__dot {
+    width: 6px;
+    height: 6px;
+  }
+
+  .image-gallery__dot--active {
+    width: 20px;
+  }
 }
 </style>

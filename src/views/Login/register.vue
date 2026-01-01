@@ -728,7 +728,7 @@ export default {
               query: {},
             });
           } catch (error) {
-            this.toast.showError("שגיאה בעיבוד נתוני המשתמש");
+            this.toast.showError("אויי חבל, לא הצלחנו לעבד את נתוני המשתמש");
           }
         }
       }
@@ -875,7 +875,7 @@ export default {
             this.$router.push({ name: "logIn" });
           }
         } else {
-          this.toast.showError(data?.message || "שגיאה בהרשמה");
+          this.toast.showError(data?.message || "אויי חבל, לא הצלחנו להרשם");
         }
       } catch (error) {
         // בדיקה אם המשתמש חסום
@@ -901,11 +901,11 @@ export default {
             6000
           );
         } else if (error.response?.status === 500) {
-          this.toast.showError("שגיאה בשרת. אנא נסה שוב מאוחר יותר.", 6000);
+          this.toast.showError("אויי חבל, יש בעיה בשרת. אנא נסה שוב מאוחר יותר.", 6000);
         } else if (error.message) {
-          this.toast.showError(`שגיאה בהרשמה: ${error.message}`, 6000);
+          this.toast.showError(`אויי חבל, לא הצלחנו להרשם: ${error.message}`, 6000);
         } else {
-          this.toast.showError("שגיאה בהרשמה. אנא נסה שוב.", 6000);
+          this.toast.showError("אויי חבל, לא הצלחנו להרשם. אנא נסה שוב.", 6000);
         }
       } finally {
         this.isSubmitting = false;
@@ -1061,7 +1061,7 @@ export default {
             this.$router.push({ name: "logIn" });
           }
         } else {
-          this.toast.showError(data?.message || "שגיאה בהרשמה");
+          this.toast.showError(data?.message || "אויי חבל, לא הצלחנו להרשם");
         }
       } catch (error) {
         // בדיקה אם המשתמש חסום
@@ -1087,11 +1087,11 @@ export default {
             6000
           );
         } else if (error.response?.status === 500) {
-          this.toast.showError("שגיאה בשרת. אנא נסה שוב מאוחר יותר.", 6000);
+          this.toast.showError("אויי חבל, יש בעיה בשרת. אנא נסה שוב מאוחר יותר.", 6000);
         } else if (error.message) {
-          this.toast.showError(`שגיאה בהרשמה: ${error.message}`, 6000);
+          this.toast.showError(`אויי חבל, לא הצלחנו להרשם: ${error.message}`, 6000);
         } else {
-          this.toast.showError("שגיאה בהרשמה. אנא נסה שוב.", 6000);
+          this.toast.showError("אויי חבל, לא הצלחנו להרשם. אנא נסה שוב.", 6000);
         }
       } finally {
         this.isSubmitting = false;

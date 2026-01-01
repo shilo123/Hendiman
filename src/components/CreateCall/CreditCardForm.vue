@@ -1,5 +1,6 @@
 <template>
   <div class="cc">
+    בדיקה
     <section class="panel">
       <header class="panel__head">
         <div class="panel__title">
@@ -266,7 +267,6 @@ export default {
       });
     } catch (e) {
       // אם Stripe לא נטען, ניפול ל-manual
-      console.error("[CreditCardForm] Stripe load error:", e);
     }
   },
 
@@ -275,7 +275,6 @@ export default {
       if (this.cardElement) this.cardElement.unmount();
       if (this.prButton) this.prButton.unmount();
     } catch (e) {
-      console.error("[CreditCardForm] unmount error:", e);
     }
   },
 
@@ -438,7 +437,6 @@ export default {
         this.prButton.mount(`#${this.walletElementId}`);
         this.walletReady = true;
       } catch (e) {
-        console.error("[CreditCardForm] wallet init error:", e);
         this.walletError = "לא הצלחתי לאתחל Apple Pay / Google Pay כרגע.";
         this.walletReady = false;
       } finally {
@@ -471,7 +469,6 @@ export default {
           this.lastWalletEvent = null;
         }
       } catch (e) {
-        console.error("[CreditCardForm] complete wallet error:", e);
       }
     },
 

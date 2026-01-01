@@ -27,7 +27,6 @@ export async function loadCategories() {
     })
     .catch((error) => {
       categoriesPromise = null; // Reset promise on error
-      console.error("Error loading categories:", error);
       return { categories: [] }; // Return empty array on error
     });
 

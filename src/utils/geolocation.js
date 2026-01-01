@@ -24,14 +24,12 @@ export async function getCurrentLocation() {
               resolve({ lat: latitude, lon: longitude, accuracy });
             },
             (fallbackErr) => {
-              console.error("Geolocation error:", fallbackErr.code, fallbackErr.message);
               reject(fallbackErr);
             },
             { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 }
           );
         } else {
           // For other errors (permission denied), reject immediately
-          console.error("Geolocation error:", err.code, err.message);
           reject(err);
         }
       },

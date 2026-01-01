@@ -95,6 +95,92 @@ function calculateVAT(amount, vatPercent) {
   };
 }
 
+// Helper function for Google Maps Geocoding (address to coordinates)
+async function geocodeAddress(address) {
+  if (!address || !address.trim()) {
+    return null;
+  }
+
+  if (!process.env.GOOGLE_MAPS_API_KEY) {
+    console.error("❌ [Geocoding] GOOGLE_MAPS_API_KEY not configured");
+    return null;
+  }
+
+  try {
+    const encoded = encodeURIComponent(address.trim());
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encoded}&key=${process.env.GOOGLE_MAPS_API_KEY}&region=il&language=he`;
+
+    const response = await axios.get(url, { timeout: 10000 });
+
+    if (
+      response.data &&
+      response.data.status === "OK" &&
+      response.data.results &&
+      response.data.results.length > 0
+    ) {
+      const result = response.data.results[0];
+      const location = result.geometry.location;
+      const geocodeResult = {
+        lat: location.lat,
+        lng: location.lng,
+        formatted_address: result.formatted_address,
+        address_components: result.address_components,
+      };
+
+      return geocodeResult;
+    } else {
+      return null;
+    }
+  } catch (error) {
+    console.error(
+      "❌ [Geocoding] Error in Google Maps geocoding:",
+      error.message
+    );
+    return null;
+  }
+}
+
+// Helper function for Google Maps Reverse Geocoding (coordinates to address)
+async function reverseGeocodeCoordinates(lat, lng) {
+  if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+    return null;
+  }
+
+  if (!process.env.GOOGLE_MAPS_API_KEY) {
+    console.error("❌ [Reverse Geocoding] GOOGLE_MAPS_API_KEY not configured");
+    return null;
+  }
+
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${process.env.GOOGLE_MAPS_API_KEY}&language=he&region=il`;
+
+    const response = await axios.get(url, { timeout: 10000 });
+
+    if (
+      response.data &&
+      response.data.status === "OK" &&
+      response.data.results &&
+      response.data.results.length > 0
+    ) {
+      const result = {
+        formatted_address: response.data.results[0].formatted_address,
+        address_components: response.data.results[0].address_components,
+        results: response.data.results,
+      };
+
+      return result;
+    } else {
+      return null;
+    }
+  } catch (error) {
+    console.error(
+      "❌ [Reverse Geocoding] Error in Google Maps reverse geocoding:",
+      error.message
+    );
+    return null;
+  }
+}
+
 //מרשמלו
 
 // Function to find available port
@@ -1137,13 +1223,13 @@ function findAvailablePort(startPort) {
         }
       }
 
-      // בדוק אם יש MAPBOX_TOKEN
-      if (!process.env.MAPBOX_TOKEN) {
-        // MAPBOX_TOKEN is not defined in .env file
+      // בדוק אם יש GOOGLE_MAPS_API_KEY
+      if (!process.env.GOOGLE_MAPS_API_KEY) {
+        // GOOGLE_MAPS_API_KEY is not defined in .env file
         return res.status(500).json({
           success: false,
           message:
-            "Mapbox token is not configured. Please add MAPBOX_TOKEN to your .env file.",
+            "Google Maps API key is not configured. Please add GOOGLE_MAPS_API_KEY to your .env file.",
         });
       }
 
@@ -1157,23 +1243,30 @@ function findAvailablePort(startPort) {
           .trim();
       };
 
-      // פונקציה לחיפוש כתובת ב-Mapbox
+      // פונקציה לחיפוש כתובת ב-Google Maps Geocoding API
       const searchAddress = async (addr, label = "") => {
         const cleaned = cleanAddress(addr);
         if (!cleaned) {
           return null;
         }
 
-        // Encode את הכתובת ל-URL (מטפל ברווחים ותווים מיוחדים)
-        const encoded = encodeURIComponent(cleaned);
-        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encoded}.json?country=il&access_token=${process.env.MAPBOX_TOKEN}`;
-
         try {
-          const response = await axios.get(url, {
-            timeout: 10000, // 10 seconds timeout
-          });
-          if (response.data.features && response.data.features.length > 0) {
-            return response.data;
+          const geocodeResult = await geocodeAddress(cleaned);
+          if (geocodeResult) {
+            // Convert Google Maps format to Mapbox-like format for compatibility
+            return {
+              features: [
+                {
+                  center: [geocodeResult.lng, geocodeResult.lat],
+                  geometry: {
+                    coordinates: [geocodeResult.lng, geocodeResult.lat],
+                  },
+                  properties: {
+                    formatted_address: geocodeResult.formatted_address,
+                  },
+                },
+              ],
+            };
           }
         } catch (error) {
           // אם זה timeout, נחזיר null כדי להמשיך בלי קואורדינטות
@@ -2641,14 +2734,47 @@ function findAvailablePort(startPort) {
     try {
       const { lat, lon } = req.query;
 
-      const response = await axios.get(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lon},${lat}.json?access_token=${process.env.MAPBOX_TOKEN}`
+      if (!lat || !lon) {
+        return res.status(400).json({
+          success: false,
+          message: "נדרש לספק lat ו-lon",
+        });
+      }
+
+      const parsedLat = parseFloat(lat);
+      const parsedLon = parseFloat(lon);
+
+      if (isNaN(parsedLat) || isNaN(parsedLon)) {
+        return res.status(400).json({
+          success: false,
+          message: "קואורדינטות לא תקינות",
+        });
+      }
+
+      const reverseGeocodeResult = await reverseGeocodeCoordinates(
+        parsedLat,
+        parsedLon
       );
+
+      if (
+        reverseGeocodeResult &&
+        reverseGeocodeResult.results &&
+        reverseGeocodeResult.results.length > 0
+      ) {
+        // Convert Google Maps format to Mapbox-like format for compatibility
+        const result = reverseGeocodeResult.results[0];
+        return res.json({
+          success: true,
+          response: {
+            formatted_address: result.formatted_address,
+            address_components: result.address_components,
+          },
+        });
+      }
+
       return res.json({
         success: true,
-        response: response.data.features
-          ? response.data.features.find((item) => item.context)
-          : null,
+        response: null,
       });
     } catch (error) {
       return res.status(500).json({
@@ -4854,13 +4980,20 @@ function findAvailablePort(startPort) {
         try {
           const searchAddress = async (addr) => {
             if (!addr || !addr.trim()) return null;
-            const cleaned = addr.trim().replace(/\s+/g, " ");
-            const encoded = encodeURIComponent(cleaned);
-            const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encoded}.json?country=il&access_token=${process.env.MAPBOX_TOKEN}`;
             try {
-              const response = await axios.get(url, { timeout: 10000 });
-              if (response.data.features && response.data.features.length > 0) {
-                return response.data;
+              const geocodeResult = await geocodeAddress(addr.trim());
+              if (geocodeResult) {
+                // Convert Google Maps format to Mapbox-like format for compatibility
+                return {
+                  features: [
+                    {
+                      center: [geocodeResult.lng, geocodeResult.lat],
+                      geometry: {
+                        coordinates: [geocodeResult.lng, geocodeResult.lat],
+                      },
+                    },
+                  ],
+                };
               }
             } catch (error) {
               // Silent fail
@@ -4984,17 +5117,14 @@ function findAvailablePort(startPort) {
       }
 
       // Insert user
-      console.log("💾 Inserting user to database...");
       const result = await usersCol.insertOne(userData);
 
       if (!result.insertedId) {
-        console.log("❌ Failed to insert user");
         return res.status(500).json({
           success: false,
           message: "Failed to register user",
         });
       }
-      console.log("✅ User inserted with ID:", result.insertedId.toString());
 
       // Update Stripe customer metadata with actual userId
       await stripe.customers.update(customer.id, {
@@ -5103,102 +5233,58 @@ function findAvailablePort(startPort) {
 
         // נסה קודם עם השם בעברית
         try {
-          const encoded = encodeURIComponent(city.trim());
-          const fwdUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encoded}.json?access_token=${process.env.MAPBOX_TOKEN}&country=il&language=he&types=place&limit=5`;
-          const fwdRes = await axios.get(fwdUrl);
-          const features = fwdRes.data?.features || [];
-
-          // מצא את התוצאה שתואמת לישוב שנבחר
-          let matchingFeature = null;
-          if (cityEnglishName && cityEnglishName.trim()) {
-            const cityEngName = cityEnglishName.trim().toLowerCase();
-
-            matchingFeature = features.find((feature) => {
-              const featureEngName = (feature.text || feature.place_name || "")
-                .trim()
-                .toLowerCase();
-              // עדיפות להתאמה מדויקת
-              if (featureEngName === cityEngName) {
-                return true;
-              }
-              // אחר כך בדוק התאמה חלקית (אבל רק אם השם לא קצר מדי)
-              if (cityEngName.length >= 3) {
-                return (
-                  featureEngName.includes(cityEngName) ||
-                  cityEngName.includes(featureEngName)
-                );
-              }
-              return false;
-            });
-          }
-
-          // אם יש cityEnglishName אבל לא מצאנו התאמה, לא נשתמש בתוצאה
-          // אם אין cityEnglishName, נשתמש בתוצאה הראשונה
-          const feature = cityEnglishName ? matchingFeature : features[0];
-
-          if (feature) {
-            const [lng, lat] =
-              (feature.center &&
-                feature.center.length >= 2 &&
-                feature.center) ||
-              (feature.geometry?.coordinates &&
-                feature.geometry.coordinates.length >= 2 &&
-                feature.geometry.coordinates) ||
-              [];
-            if (Number.isFinite(lng) && Number.isFinite(lat)) {
-              update.location = {
-                type: "Point",
-                coordinates: [lng, lat],
-              };
-              update.coordinates = { lng, lat };
-              coordinatesFound = true;
-            }
-          }
-        } catch (fwdErr) {
-          // Forward geocoding (Hebrew) failed
-        }
-
-        // אם לא מצאנו קואורדינטות בעברית, נסה עם השם באנגלית
-        if (!coordinatesFound && cityEnglishName && cityEnglishName.trim()) {
-          try {
-            const encodedEn = encodeURIComponent(cityEnglishName.trim());
-            const fwdUrlEn = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedEn}.json?access_token=${process.env.MAPBOX_TOKEN}&country=il&types=place&limit=5`;
-            const fwdResEn = await axios.get(fwdUrlEn);
-            const featuresEn = fwdResEn.data?.features || [];
+          const geocodeResult = await geocodeAddress(city.trim());
+          if (geocodeResult) {
+            // Convert Google Maps format to Mapbox-like format for compatibility
+            const features = [
+              {
+                text: geocodeResult.formatted_address,
+                place_name: geocodeResult.formatted_address,
+                center: [geocodeResult.lng, geocodeResult.lat],
+                address_components: geocodeResult.address_components,
+              },
+            ];
 
             // מצא את התוצאה שתואמת לישוב שנבחר
-            let matchingFeatureEn = null;
-            const cityEngName = cityEnglishName.trim().toLowerCase();
+            let matchingFeature = null;
+            if (cityEnglishName && cityEnglishName.trim()) {
+              const cityEngName = cityEnglishName.trim().toLowerCase();
 
-            matchingFeatureEn = featuresEn.find((feature) => {
-              const featureEngName = (feature.text || feature.place_name || "")
-                .trim()
-                .toLowerCase();
-              // עדיפות להתאמה מדויקת
-              if (featureEngName === cityEngName) {
-                return true;
-              }
-              // אחר כך בדוק התאמה חלקית (אבל רק אם השם לא קצר מדי)
-              if (cityEngName.length >= 3) {
-                return (
-                  featureEngName.includes(cityEngName) ||
-                  cityEngName.includes(featureEngName)
-                );
-              }
-              return false;
-            });
+              matchingFeature = features.find((feature) => {
+                const featureEngName = (
+                  feature.text ||
+                  feature.place_name ||
+                  ""
+                )
+                  .trim()
+                  .toLowerCase();
+                // עדיפות להתאמה מדויקת
+                if (featureEngName === cityEngName) {
+                  return true;
+                }
+                // אחר כך בדוק התאמה חלקית (אבל רק אם השם לא קצר מדי)
+                if (cityEngName.length >= 3) {
+                  return (
+                    featureEngName.includes(cityEngName) ||
+                    cityEngName.includes(featureEngName)
+                  );
+                }
+                return false;
+              });
+            }
 
             // אם יש cityEnglishName אבל לא מצאנו התאמה, לא נשתמש בתוצאה
-            const featureEn = matchingFeatureEn || featuresEn[0];
+            // אם אין cityEnglishName, נשתמש בתוצאה הראשונה
+            const feature = cityEnglishName ? matchingFeature : features[0];
 
-            if (featureEn) {
+            if (feature) {
               const [lng, lat] =
-                (featureEn.center &&
-                  featureEn.center.length >= 2 &&
-                  featureEn.center) ||
-                (featureEn.geometry?.coordinates &&
-                  featureEn.geometry.coordinates.length >= 2 &&
-                  featureEn.geometry.coordinates) ||
+                (feature.center &&
+                  feature.center.length >= 2 &&
+                  feature.center) ||
+                (feature.geometry?.coordinates &&
+                  feature.geometry.coordinates.length >= 2 &&
+                  feature.geometry.coordinates) ||
                 [];
               if (Number.isFinite(lng) && Number.isFinite(lat)) {
                 update.location = {
@@ -5209,7 +5295,79 @@ function findAvailablePort(startPort) {
                 coordinatesFound = true;
               }
             }
-          } catch (fwdErrEn) {}
+          }
+        } catch (fwdErr) {
+          // Forward geocoding (Hebrew) failed
+        }
+
+        // אם לא מצאנו קואורדינטות בעברית, נסה עם השם באנגלית
+        if (!coordinatesFound && cityEnglishName && cityEnglishName.trim()) {
+          try {
+            const geocodeResultEn = await geocodeAddress(
+              cityEnglishName.trim()
+            );
+            if (geocodeResultEn) {
+              // Convert Google Maps format to Mapbox-like format for compatibility
+              const featuresEn = [
+                {
+                  text: geocodeResultEn.formatted_address,
+                  place_name: geocodeResultEn.formatted_address,
+                  center: [geocodeResultEn.lng, geocodeResultEn.lat],
+                  address_components: geocodeResultEn.address_components,
+                },
+              ];
+
+              // מצא את התוצאה שתואמת לישוב שנבחר
+              let matchingFeatureEn = null;
+              const cityEngName = cityEnglishName.trim().toLowerCase();
+
+              matchingFeatureEn = featuresEn.find((feature) => {
+                const featureEngName = (
+                  feature.text ||
+                  feature.place_name ||
+                  ""
+                )
+                  .trim()
+                  .toLowerCase();
+                // עדיפות להתאמה מדויקת
+                if (featureEngName === cityEngName) {
+                  return true;
+                }
+                // אחר כך בדוק התאמה חלקית (אבל רק אם השם לא קצר מדי)
+                if (cityEngName.length >= 3) {
+                  return (
+                    featureEngName.includes(cityEngName) ||
+                    cityEngName.includes(featureEngName)
+                  );
+                }
+                return false;
+              });
+
+              // אם יש cityEnglishName אבל לא מצאנו התאמה, לא נשתמש בתוצאה
+              const featureEn = matchingFeatureEn || featuresEn[0];
+
+              if (featureEn) {
+                const [lng, lat] =
+                  (featureEn.center &&
+                    featureEn.center.length >= 2 &&
+                    featureEn.center) ||
+                  (featureEn.geometry?.coordinates &&
+                    featureEn.geometry.coordinates.length >= 2 &&
+                    featureEn.geometry.coordinates) ||
+                  [];
+                if (Number.isFinite(lng) && Number.isFinite(lat)) {
+                  update.location = {
+                    type: "Point",
+                    coordinates: [lng, lat],
+                  };
+                  update.coordinates = { lng, lat };
+                  coordinatesFound = true;
+                }
+              }
+            }
+          } catch (fwdErrEn) {
+            // Forward geocoding (English) failed
+          }
         }
       }
 
@@ -5354,16 +5512,21 @@ function findAvailablePort(startPort) {
         handymanNameArray[existingIndex] = handymanName;
       }
 
-      await jobsCol.updateOne(
-        { _id: new ObjectId(jobId) },
-        {
-          $set: {
-            handymanId: handymanIdArray,
-            handymanName: handymanNameArray,
-            status: "assigned",
-          },
-        }
-      );
+      // Prepare update object
+      const updateData = {
+        $set: {
+          handymanId: handymanIdArray,
+          handymanName: handymanNameArray,
+          status: "assigned",
+        },
+      };
+
+      // If job has cancel field, remove it (job is being reassigned)
+      if (currentJob?.cancel) {
+        updateData.$unset = { cancel: "" };
+      }
+
+      await jobsCol.updateOne({ _id: new ObjectId(jobId) }, updateData);
 
       // Get job details to find client
       const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
@@ -5823,41 +5986,110 @@ function findAvailablePort(startPort) {
         personCancel = "customer";
       }
 
+      // Determine if this is a partial cancellation (for specific handyman) or total cancellation
+      const isPartialCancel =
+        cancel &&
+        cancel["Totally-cancels"] === false &&
+        personCancel === "customer";
+
       // Prepare update object
-      const updateData = {
-        handymanId: null,
-        handymanName: null,
-        status: "open",
-      };
+      const updateData = {};
+
+      // If partial cancellation (customer cancels for specific handyman), reset job to open
+      if (isPartialCancel) {
+        updateData.handymanId = null;
+        updateData.handymanName = null;
+        updateData.status = "open";
+      }
+      // Note: For total cancellation, we don't reset handymanId or status here
+      // The job will remain in its current state or be handled separately
+
+      // Get handymanId from job (can be array or single value)
+      let handymanIdForCancel = null;
+      if (job.handymanId) {
+        if (Array.isArray(job.handymanId)) {
+          // If array, take the first one (or all if needed)
+          handymanIdForCancel =
+            job.handymanId.length > 0 ? job.handymanId[0] : null;
+        } else {
+          handymanIdForCancel = job.handymanId;
+        }
+      }
 
       // Add cancel object if provided
       if (cancel) {
+        // Validate that reason-for-cancellation is provided (required for all cancellations)
+        // Exception: handyman can cancel without reason
+        if (
+          personCancel === "customer" &&
+          (!cancel["reason-for-cancellation"] ||
+            !cancel["reason-for-cancellation"].trim())
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: "סיבת ביטול היא חובה. אנא הזן סיבת ביטול.",
+          });
+        }
+
         // Use cancel object from request, but ensure personcancel is set correctly
         updateData.cancel = {
           personcancel: cancel.personcancel || personCancel,
-          "reason-for-cancellation": cancel["reason-for-cancellation"] || "",
+          "reason-for-cancellation":
+            cancel["reason-for-cancellation"]?.trim() || "",
           "Totally-cancels": cancel["Totally-cancels"] || false,
           JobId: cancel.JobId || jobId,
           cancelledAt: new Date(),
         };
+        // Add handymanId to cancel object if exists
+        if (handymanIdForCancel) {
+          updateData.cancel.handymanId = handymanIdForCancel;
+        }
       } else {
-        // Fallback for old format (backward compatibility)
+        // Fallback for old format (backward compatibility) - assume partial cancellation
+        // For handyman cancellation, reason is optional. For customer, it's required.
+        if (personCancel === "customer") {
+          return res.status(400).json({
+            success: false,
+            message: "סיבת ביטול היא חובה. אנא הזן סיבת ביטול.",
+          });
+        }
+
         updateData.cancel = {
           personcancel: personCancel,
-          "reason-for-cancellation": "",
+          "reason-for-cancellation": "", // Handyman can cancel without reason
           "Totally-cancels": false,
           JobId: jobId,
           cancelledAt: new Date(),
         };
+        // Add handymanId to cancel object if exists
+        if (handymanIdForCancel) {
+          updateData.cancel.handymanId = handymanIdForCancel;
+        }
+        // If no cancel object provided and it's customer canceling, assume partial cancellation
+        if (personCancel === "customer") {
+          updateData.handymanId = null;
+          updateData.handymanName = null;
+          updateData.status = "open";
+        }
       }
 
-      // If canceling for this handyman only, add handyman to handymanBlocked list
-      if (cancel && cancel["Totally-cancels"] === false && job.handymanId) {
+      // If canceling for this handyman only (customer cancels for specific handyman)
+      if (
+        cancel &&
+        cancel["Totally-cancels"] === false &&
+        personCancel === "customer" &&
+        job.handymanId
+      ) {
         const usersCol = getCollection();
         const handymanIds = Array.isArray(job.handymanId)
           ? job.handymanId
           : [job.handymanId];
 
+        // Add handyman to handiman-Blocked array in the job
+        const blockedHandymanIds = handymanIds.map((id) => new ObjectId(id));
+        updateData["handiman-Blocked"] = blockedHandymanIds;
+
+        // Also add to user's handymanBlocked list (for backward compatibility)
         for (const handymanId of handymanIds) {
           try {
             const handymanIdStr = String(handymanId);
@@ -6427,7 +6659,12 @@ function findAvailablePort(startPort) {
         handymanId: job.handymanId || handymanId,
       };
 
-      await jobsCol.updateOne(query, { $set: { status: "on_the_way" } });
+      // If job has cancel field, remove it (job is being reassigned/continued)
+      const updateQuery = { $set: { status: "on_the_way" } };
+      if (job?.cancel) {
+        updateQuery.$unset = { cancel: "" };
+      }
+      await jobsCol.updateOne(query, updateQuery);
       // Emit WebSocket event to notify clients
       const io = req.app.get("io");
       if (io) {
@@ -6508,7 +6745,12 @@ function findAvailablePort(startPort) {
         handymanId: job.handymanId || handymanId,
       };
 
-      await jobsCol.updateOne(query, { $set: { status: "in_progress" } });
+      // If job has cancel field, remove it (job is being reassigned/continued)
+      const updateQuery = { $set: { status: "in_progress" } };
+      if (job?.cancel) {
+        updateQuery.$unset = { cancel: "" };
+      }
+      await jobsCol.updateOne(query, updateQuery);
 
       // Emit WebSocket event to notify clients
       const io = req.app.get("io");
@@ -6601,13 +6843,18 @@ function findAvailablePort(startPort) {
       };
 
       // Update status to "done" - waiting for client approval before payment capture
-      await jobsCol.updateOne(query, {
+      // If job has cancel field, remove it (job is being completed)
+      const updateQuery = {
         $set: {
           status: "done",
           clientApproved: false,
           handymanReceivedPayment: false, // Handyman hasn't received payment yet
         },
-      });
+      };
+      if (job?.cancel) {
+        updateQuery.$unset = { cancel: "" };
+      }
+      await jobsCol.updateOne(query, updateQuery);
 
       // Update jobDone for handyman (handle both array and single handymanId, and handymanIdSpecial)
       if (actualHandymanId) {
@@ -6803,6 +7050,10 @@ function findAvailablePort(startPort) {
           currentStatus: job.status,
         });
       }
+
+      // Note: Each job in a split call is independent
+      // Client can approve and release payment for each handyman separately when their job is done
+      // No need to wait for all jobs to complete
 
       // If payment already released, just update clientApproved flag
       if (job.paymentStatus === "paid") {
@@ -7785,7 +8036,7 @@ function findAvailablePort(startPort) {
   // Price change request endpoint (handyman requests price change)
   app.post("/api/jobs/price-change-request", async (req, res) => {
     try {
-      const { jobId, handymanId, newPrice } = req.body;
+      const { jobId, handymanId, newPrice, subcategoryIndex } = req.body;
 
       if (!jobId || !handymanId || !newPrice) {
         return res.status(400).json({
@@ -7816,8 +8067,25 @@ function findAvailablePort(startPort) {
         });
       }
 
+      // Determine current price based on subcategoryIndex if provided
+      let currentPrice = job.price || 0;
+      let subcategoryInfo = null;
+
+      if (
+        subcategoryIndex !== undefined &&
+        subcategoryIndex !== null &&
+        job.subcategoryInfo &&
+        Array.isArray(job.subcategoryInfo) &&
+        job.subcategoryInfo.length > subcategoryIndex
+      ) {
+        subcategoryInfo = job.subcategoryInfo[subcategoryIndex];
+        currentPrice = subcategoryInfo.price || 0;
+        if (typeof currentPrice !== "number") {
+          currentPrice = parseFloat(currentPrice) || 0;
+        }
+      }
+
       // Validate price change (max 20%)
-      const currentPrice = job.price || 0;
       const priceChange = Math.abs(newPrice - currentPrice);
       const maxChange = currentPrice * 0.2;
 
@@ -7830,31 +8098,55 @@ function findAvailablePort(startPort) {
         });
       }
 
+      // Get handyman name for the request
+      const usersCol = getCollection();
+      let handymanName = null;
+      try {
+        const handymanObjectId = new ObjectId(handymanId);
+        const handyman = await usersCol.findOne({ _id: handymanObjectId });
+        if (handyman) {
+          handymanName = handyman.username || handyman.name || "הנדימן";
+        }
+      } catch (error) {
+        // If we can't get handyman name, use default
+        handymanName = job.handymanName || "הנדימן";
+      }
+
       // Send WebSocket event to client
       const io = req.app.get("io");
       if (io) {
         const change = newPrice - currentPrice;
         const changePercent = Math.round((change / currentPrice) * 100);
-        io.to(`job-${jobId}`).emit("price-change-request", {
+        const priceChangeData = {
           jobId,
           handymanId,
+          handymanName: handymanName,
           oldPrice: currentPrice,
           newPrice,
           change,
           changePercent,
-        });
+        };
+
+        // Add subcategory info if applicable
+        if (
+          subcategoryInfo &&
+          subcategoryIndex !== undefined &&
+          subcategoryIndex !== null
+        ) {
+          priceChangeData.subcategoryIndex = subcategoryIndex;
+          priceChangeData.subcategoryInfo = {
+            category: subcategoryInfo.category,
+            subcategory: subcategoryInfo.subcategory,
+            workType: subcategoryInfo.workType,
+          };
+        }
+
+        io.to(`job-${jobId}`).emit("price-change-request", priceChangeData);
         // Also emit to client's personal room
         if (job.clientId) {
           io.to(`user-${job.clientId.toString()}`).emit(
             "price-change-request",
-            {
-              jobId,
-              handymanId,
-              oldPrice: currentPrice,
-              newPrice,
-              change,
-              changePercent,
-            }
+            priceChangeData
           );
         }
       }
@@ -8025,9 +8317,6 @@ function findAvailablePort(startPort) {
                 // Cancel the old payment intent
                 try {
                   await cancelEscrow(oldPaymentIntentId);
-                  console.log(
-                    `Cancelled old payment intent ${oldPaymentIntentId} due to price change`
-                  );
                 } catch (cancelError) {
                   console.error(
                     `Error cancelling old payment intent:`,
@@ -8157,10 +8446,6 @@ function findAvailablePort(startPort) {
                       // Continue - payment intent is created, can be confirmed later
                     }
                   }
-
-                  console.log(
-                    `Created new payment intent ${newPaymentIntent.paymentIntentId} with price ${newPrice} ₪ (old: ${oldPrice} ₪)`
-                  );
                 } catch (createError) {
                   console.error(
                     `Error creating new payment intent:`,
@@ -8607,6 +8892,7 @@ function findAvailablePort(startPort) {
   app.post("/jobs/rate", async (req, res) => {
     try {
       const { jobId, handymanId, customerId, rating, review } = req.body;
+
       if (!jobId || !handymanId || !rating) {
         return res.status(400).json({
           success: false,
@@ -8619,18 +8905,27 @@ function findAvailablePort(startPort) {
       const ratingsCol = getCollectionRatings();
 
       // Get job to verify it exists and get customerId if not provided
+      console.log("🔵 [jobs/rate] Fetching job from database");
       const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
       if (!job) {
+        console.log("❌ [jobs/rate] Job not found:", jobId);
         return res.status(404).json({
           success: false,
           message: "Job not found",
         });
       }
 
+      console.log("🔵 [jobs/rate] Job found, splitCallId:", job.splitCallId);
+
+      // Note: Each job in a split call is independent
+      // Client can rate each handyman separately when their job is done
+      // No need to wait for all jobs to complete
+
       const finalCustomerId =
         customerId || job.clientId?.toString() || job.clientId;
       const finalHandymanId = handymanId?.toString() || handymanId;
 
+      console.log("🔵 [jobs/rate] Saving rating to database");
       // Save rating to collectionRatings
       await ratingsCol.insertOne({
         handymanId: finalHandymanId,
@@ -8640,8 +8935,10 @@ function findAvailablePort(startPort) {
         review: review || "",
         createdAt: new Date(),
       });
+      console.log("✅ [jobs/rate] Rating saved to database");
 
       // Update job with ratingSubmitted flag
+      console.log("🔵 [jobs/rate] Updating job with ratingSubmitted flag");
       await jobsCol.updateOne(
         { _id: new ObjectId(jobId) },
         {
@@ -8650,6 +8947,7 @@ function findAvailablePort(startPort) {
           },
         }
       );
+      console.log("✅ [jobs/rate] Job updated with ratingSubmitted flag");
 
       // Get chat messages before deletion to extract image URLs
       const chatsCol = getCollectionChats();
@@ -8776,29 +9074,35 @@ function findAvailablePort(startPort) {
 
             if (!isReadyForTransfer) {
               // Don't attempt transfer - payment not ready or not approved
-              return;
-            }
-
-            // Call payment transfer endpoint internally
-            const transferResponse = await axios
-              .post(
-                `${req.protocol}://${req.get("host")}/payment/transfer`,
-                { jobId: jobId },
-                {
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                }
-              )
-              .catch((err) => {
-                return { data: { success: false } };
-              });
-
-            if (!transferResponse.data.success) {
-              console.error(
-                "Error transferring payment:",
-                transferResponse.data.message
+              console.log(
+                "🔵 [jobs/rate] Payment not ready for transfer, skipping"
               );
+              // Don't return here - continue to send response
+            } else {
+              console.log("🔵 [jobs/rate] Attempting payment transfer");
+              // Call payment transfer endpoint internally
+              const transferResponse = await axios
+                .post(
+                  `${req.protocol}://${req.get("host")}/payment/transfer`,
+                  { jobId: jobId },
+                  {
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                  }
+                )
+                .catch((err) => {
+                  return { data: { success: false } };
+                });
+
+              if (!transferResponse.data.success) {
+                console.error(
+                  "Error transferring payment:",
+                  transferResponse.data.message
+                );
+              } else {
+                console.log("✅ [jobs/rate] Payment transfer successful");
+              }
             }
           } catch (paymentCheckError) {
             console.error(
@@ -8812,6 +9116,7 @@ function findAvailablePort(startPort) {
         // Don't fail the rating request if payment transfer fails
       }
 
+      console.log("🔵 [jobs/rate] Calculating average rating for handyman");
       // Calculate average rating for handyman from all ratings
       try {
         const handymanObjectId = new ObjectId(finalHandymanId);
@@ -8886,10 +9191,17 @@ function findAvailablePort(startPort) {
         }
       } catch (ratingError) {
         // Don't fail the request if rating calculation fails
+        console.error(
+          "⚠️ [jobs/rate] Error calculating average rating:",
+          ratingError.message
+        );
       }
 
+      console.log("✅ [jobs/rate] Sending success response");
       return res.json({ success: true });
     } catch (error) {
+      console.error("❌ [jobs/rate] Error in rating endpoint:", error);
+      console.error("❌ [jobs/rate] Error stack:", error.stack);
       return res.status(500).json({
         success: false,
         message: "Error submitting rating",
@@ -10202,11 +10514,14 @@ ${categoryNames.map((cat, idx) => `${idx + 1}. ${cat}`).join("\n")}
 רשימת תת-קטגוריות:
 ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
-חשוב מאוד:
+חשוב מאוד - קריטי:
+- אתה חייב לבחור תת-קטגוריה מהרשימה לעיל - אסור להחזיר רק את שם הקטגוריה
 - ענה רק בשם התת-קטגוריה הכי מתאימה מהרשימה לעיל, ללא מספרים או תווים נוספים
 - אסור להמציא תת-קטגוריות שלא קיימות ברשימה
+- אסור להחזיר את שם הקטגוריה "${matchedCategory}" - חייב להיות תת-קטגוריה מהרשימה
 - אם אין התאמה טובה, בחר את הכי קרוב מהרשימה
-- אם אין התאמה בכלל, בחר את הכי קרוב מהרשימה (אל תמציא)`;
+- אם אין התאמה בכלל, בחר את הכי קרוב מהרשימה (אל תמציא)
+- אם אין תת-קטגוריה מתאימה, בחר את הראשונה מהרשימה`;
 
                 try {
                   const subcategoryCompletion =
@@ -10230,6 +10545,40 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                   matchedSubcategory =
                     subcategoryCompletion.choices[0]?.message?.content?.trim() ||
                     null;
+
+                  // Validate that the matched subcategory is actually a subcategory, not the category name
+                  if (
+                    matchedSubcategory &&
+                    matchedSubcategory === matchedCategory
+                  ) {
+                    // If AI returned category name instead of subcategory, try to get first subcategory
+                    if (subcategoryNames.length > 0) {
+                      matchedSubcategory = subcategoryNames[0];
+                    } else {
+                      matchedSubcategory = null;
+                    }
+                  }
+
+                  // Validate that matchedSubcategory exists in the subcategoryNames list
+                  if (
+                    matchedSubcategory &&
+                    !subcategoryNames.includes(matchedSubcategory)
+                  ) {
+                    // Try to find closest match (case-insensitive)
+                    const closestMatch = subcategoryNames.find(
+                      (sub) =>
+                        sub.toLowerCase() === matchedSubcategory.toLowerCase()
+                    );
+                    if (closestMatch) {
+                      matchedSubcategory = closestMatch;
+                    } else {
+                      // If no match found, use first subcategory as fallback
+                      matchedSubcategory =
+                        subcategoryNames.length > 0
+                          ? subcategoryNames[0]
+                          : null;
+                    }
+                  }
                 } catch (error) {}
               }
             }
@@ -10289,13 +10638,9 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
             workType: subcategoryDetails.workType || null,
           });
         } else {
-          // If no subcategory, use full category
-          subcategoryInfoArray.push({
-            category: match.category,
-            subcategory: null,
-            price: null,
-            workType: null,
-          });
+          // If no subcategory found, skip this match - we require subcategory
+          // Don't add to subcategoryInfoArray if there's no valid subcategory
+          continue;
         }
       }
 
@@ -10323,6 +10668,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
   // Reverse geocoding endpoint - convert coordinates to address
   app.get("/reverse-geocode", async (req, res) => {
+    console.log("🚀 [/reverse-geocode] Endpoint called with query:", req.query);
     try {
       const { lat, lng } = req.query;
 
@@ -10343,39 +10689,42 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         });
       }
 
-      // Use Mapbox Geocoding API for reverse geocoding
-      if (process.env.MAPBOX_TOKEN) {
+      // Use Google Maps Geocoding API for reverse geocoding
+      if (process.env.GOOGLE_MAPS_API_KEY) {
         try {
-          const mapboxUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${parsedLng},${parsedLat}.json?country=il&language=he&access_token=${process.env.MAPBOX_TOKEN}`;
-          const response = await axios.get(mapboxUrl, { timeout: 10000 });
+          const reverseGeocodeResult = await reverseGeocodeCoordinates(
+            parsedLat,
+            parsedLng
+          );
 
           if (
-            response.data &&
-            response.data.features &&
-            response.data.features.length > 0
+            reverseGeocodeResult &&
+            reverseGeocodeResult.results &&
+            reverseGeocodeResult.results.length > 0
           ) {
-            const feature = response.data.features[0];
-            const address = feature.properties || {};
-            const context = feature.context || [];
+            const result = reverseGeocodeResult.results[0];
+            const addressComponents = result.address_components || [];
 
-            // Extract city name from context
+            // Extract city name from address components
             let cityName = null;
-            for (const item of context) {
-              if (item.id && item.id.startsWith("place.")) {
-                cityName = item.text;
+            for (const component of addressComponents) {
+              if (
+                component.types.includes("locality") ||
+                component.types.includes("administrative_area_level_2")
+              ) {
+                cityName = component.long_name;
                 break;
               }
             }
 
-            // If no city found, try locality or neighborhood
+            // If no city found, try other address components
             if (!cityName) {
-              for (const item of context) {
+              for (const component of addressComponents) {
                 if (
-                  item.id &&
-                  (item.id.startsWith("locality.") ||
-                    item.id.startsWith("neighborhood."))
+                  component.types.includes("administrative_area_level_3") ||
+                  component.types.includes("sublocality")
                 ) {
-                  cityName = item.text;
+                  cityName = component.long_name;
                   break;
                 }
               }
@@ -10383,12 +10732,12 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
             return res.json({
               success: true,
-              address: address.name || feature.place_name || "מיקום שנבחר במפה",
-              city: cityName || address.name || null,
-              fullAddress: feature.place_name || null,
+              address: result.formatted_address || "מיקום שנבחר במפה",
+              city: cityName || null,
+              fullAddress: result.formatted_address || null,
             });
           }
-        } catch (mapboxError) {
+        } catch (googleError) {
           // Fall through to fallback
         }
       }
@@ -10410,6 +10759,11 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
   });
 
   app.post("/create-call-v2", async (req, res) => {
+    console.log("🚀 [create-call-v2] Endpoint called");
+    console.log(
+      "📦 [create-call-v2] Request body keys:",
+      Object.keys(req.body)
+    );
     try {
       const collection = getCollection();
       // Get subcategoryInfo array from body (already processed by AI in step 1)
@@ -10438,6 +10792,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       // Get coordinates from location
       let userLng = null;
       let userLat = null;
+      let resolvedLocationText = null; // Will store the address from geocoding
       const {
         usingMyLocation,
         coordinates,
@@ -10446,12 +10801,23 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         location,
       } = req.body;
 
+      console.log("🔍 [create-call-v2] Location data from request:", {
+        usingMyLocation,
+        coordinates,
+        locationEnglishName,
+        selectedCity,
+        location,
+      });
+
       // Priority 1: If coordinates are sent directly (from map click or my location)
       if (
         coordinates &&
         (coordinates.lng !== undefined || coordinates.lon !== undefined) &&
         coordinates.lat !== undefined
       ) {
+        console.log(
+          "📍 [create-call-v2] Using direct coordinates from request"
+        );
         const rawLng =
           coordinates.lng !== undefined ? coordinates.lng : coordinates.lon;
         const parsedLng = parseFloat(rawLng);
@@ -10459,8 +10825,51 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         if (Number.isFinite(parsedLng) && Number.isFinite(parsedLat)) {
           userLng = parsedLng;
           userLat = parsedLat;
+          console.log("✅ [create-call-v2] Direct coordinates set:", {
+            lng: userLng,
+            lat: userLat,
+          });
+
+          // Get address name from coordinates using reverse geocoding
+          try {
+            console.log(
+              "🔄 [create-call-v2] Getting address name from coordinates..."
+            );
+            const reverseGeocodeResult = await reverseGeocodeCoordinates(
+              parsedLat,
+              parsedLng
+            );
+            if (
+              reverseGeocodeResult &&
+              reverseGeocodeResult.formatted_address
+            ) {
+              // Remove Plus Code (e.g., "9HXM+88") from address
+              let cleanedAddress = reverseGeocodeResult.formatted_address;
+              // Remove Plus Code pattern: letters/numbers followed by + followed by numbers/letters
+              cleanedAddress = cleanedAddress
+                .replace(/\s*[A-Z0-9]+\+[A-Z0-9]+\s*/g, "")
+                .trim();
+              resolvedLocationText = cleanedAddress;
+              console.log("📍 [create-call-v2] Address from coordinates:");
+              console.log("   📍 Address:", cleanedAddress);
+              console.log("   📍 Coordinates:", {
+                lat: parsedLat,
+                lng: parsedLng,
+              });
+            } else {
+              console.log(
+                "⚠️ [create-call-v2] Could not get address from coordinates"
+              );
+            }
+          } catch (error) {
+            console.error(
+              "❌ [create-call-v2] Error in reverse geocoding:",
+              error.message
+            );
+          }
         }
       } else if (usingMyLocation && coordinates) {
+        console.log("📍 [create-call-v2] Using 'My Location' coordinates");
         // Use coordinates from "My Location"
 
         const rawLng =
@@ -10472,39 +10881,84 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           userLat = parsedLat;
         }
       } else if (locationEnglishName || selectedCity || location) {
-        // Find coordinates via Mapbox Geocoding API
+        // Find coordinates via Google Maps Geocoding API
+        console.log("🔍 [create-call-v2] Starting geocoding for location:", {
+          locationEnglishName,
+          selectedCity,
+          location,
+        });
 
         const addressToSearch = locationEnglishName || selectedCity || location;
 
         const searchAddress = async (addr) => {
+          console.log(
+            "🔍 [create-call-v2 searchAddress] Called with address:",
+            addr
+          );
           const cleaned = addr.trim();
-          if (!cleaned) return null;
-          const encoded = encodeURIComponent(cleaned);
-          const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encoded}.json?country=il&access_token=${process.env.MAPBOX_TOKEN}`;
+          if (!cleaned) {
+            console.log("🔍 [create-call-v2 searchAddress] Address is empty");
+            return null;
+          }
+          console.log(
+            "🔍 [create-call-v2 searchAddress] Calling geocodeAddress with:",
+            cleaned
+          );
           try {
-            const response = await axios.get(url, { timeout: 10000 });
-            if (response.data.features && response.data.features.length > 0) {
-              const feature = response.data.features[0];
-              if (
-                feature.center &&
-                Array.isArray(feature.center) &&
-                feature.center.length >= 2
-              ) {
-                return {
-                  lng: feature.center[0],
-                  lat: feature.center[1],
-                };
-              }
+            const geocodeResult = await geocodeAddress(cleaned);
+            if (geocodeResult) {
+              console.log(
+                "✅ [create-call-v2 searchAddress] Geocoding success!"
+              );
+              console.log("   📍 Address:", geocodeResult.formatted_address);
+              console.log("   📍 Coordinates:", {
+                lat: geocodeResult.lat,
+                lng: geocodeResult.lng,
+              });
+              return {
+                lng: geocodeResult.lng,
+                lat: geocodeResult.lat,
+                formatted_address: geocodeResult.formatted_address,
+              };
+            } else {
+              console.log(
+                "⚠️ [create-call-v2 searchAddress] Geocoding returned no results"
+              );
             }
-          } catch (error) {}
+          } catch (error) {
+            console.error(
+              "❌ [create-call-v2 searchAddress] Error geocoding:",
+              error.message
+            );
+          }
           return null;
         };
 
+        console.log(
+          "🔍 [create-call-v2] Calling searchAddress with:",
+          addressToSearch
+        );
         const coords = await searchAddress(addressToSearch);
         if (coords) {
           userLng = coords.lng;
           userLat = coords.lat;
+          if (coords.formatted_address) {
+            // Remove Plus Code (e.g., "9HXM+88") from address
+            let cleanedAddress = coords.formatted_address;
+            // Remove Plus Code pattern: letters/numbers followed by + followed by numbers/letters
+            cleanedAddress = cleanedAddress
+              .replace(/\s*[A-Z0-9]+\+[A-Z0-9]+\s*/g, "")
+              .trim();
+            resolvedLocationText = cleanedAddress;
+            console.log("📍 [create-call-v2] Final geocoding result:");
+            console.log("   📍 Address:", cleanedAddress);
+            console.log("   📍 Coordinates:", {
+              lat: coords.lat,
+              lng: coords.lng,
+            });
+          }
         } else {
+          console.log("⚠️ [create-call-v2] No coordinates found for address");
         }
       }
 
@@ -10514,6 +10968,11 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           message: "לא ניתן למצוא את המיקום. אנא בחר מיקום תקין.",
         });
       }
+
+      console.log(
+        "📍 [create-call-v2] Final locationText to save:",
+        resolvedLocationText || location || "מיקום"
+      );
 
       // Use coordinates we found earlier (userLng, userLat already set)
       const maxDistanceMeters = 50000; // 50 ק"מ
@@ -10702,6 +11161,10 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
             // Client fetch failed, continue without clientName
           }
         }
+        // Ensure handimanBlocked is always an array (even if empty)
+        if (!Array.isArray(handimanBlocked)) {
+          handimanBlocked = [];
+        }
 
         // Create job with subcategoryInfo as array
         const jobData = {
@@ -10713,7 +11176,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           subcategoryInfo: subcategoryInfoArray, // Array!
           workType: workType || "קלה",
           desc: desc || "",
-          locationText: location || "מיקום",
+          locationText: resolvedLocationText || location || "מיקום",
           imageUrl: imageUrlArray, // Array of image URLs
           when: when || "asap",
           urgent: urgent || false,
@@ -11005,6 +11468,8 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
   // Split call endpoint - creates separate jobs for each handyman with their matching subcategories
   app.post("/split-call-v2", async (req, res) => {
     try {
+      console.log("🔧 [split-call-v2] Received split call request");
+
       const {
         userId,
         desc,
@@ -11021,7 +11486,20 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         matchedSubcategories,
       } = req.body;
 
+      console.log("🔧 [split-call-v2] Request data:", {
+        userId,
+        handymenCount: handymen?.length || 0,
+        matchedSubcategoriesCount: matchedSubcategories?.length || 0,
+        hasCoordinates: !!(coordinates?.lng && coordinates?.lat),
+        coordinates: coordinates,
+        usingMyLocation: usingMyLocation,
+        location: location || locationEnglishName || selectedCity,
+        locationEnglishName: locationEnglishName,
+        selectedCity: selectedCity,
+      });
+
       if (!handymen || !Array.isArray(handymen) || handymen.length === 0) {
+        console.error("❌ [split-call-v2] No handymen provided");
         return res.status(400).json({
           success: false,
           message: "לא נמצאו הנדימנים",
@@ -11033,6 +11511,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         !Array.isArray(matchedSubcategories) ||
         matchedSubcategories.length === 0
       ) {
+        console.error("❌ [split-call-v2] No matched subcategories provided");
         return res.status(400).json({
           success: false,
           message: "לא נמצאו תחומים מתאימים",
@@ -11068,11 +11547,27 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       let userLng = null;
       let userLat = null;
 
+      console.log("🔍 [split-call-v2] Checking location data:", {
+        hasCoordinates: !!(
+          coordinates &&
+          (coordinates.lng !== undefined || coordinates.lon !== undefined) &&
+          coordinates.lat !== undefined
+        ),
+        usingMyLocation: usingMyLocation,
+        locationEnglishName,
+        selectedCity,
+        location,
+      });
+
       if (
         coordinates &&
         (coordinates.lng !== undefined || coordinates.lon !== undefined) &&
         coordinates.lat !== undefined
       ) {
+        console.log(
+          "📍 [split-call-v2] Using direct coordinates:",
+          coordinates
+        );
         const rawLng =
           coordinates.lng !== undefined ? coordinates.lng : coordinates.lon;
         const parsedLng = parseFloat(rawLng);
@@ -11080,31 +11575,76 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         if (Number.isFinite(parsedLng) && Number.isFinite(parsedLat)) {
           userLng = parsedLng;
           userLat = parsedLat;
+          console.log("✅ [split-call-v2] Coordinates set:", {
+            lng: userLng,
+            lat: userLat,
+          });
+        }
+      } else if (usingMyLocation && coordinates) {
+        console.log(
+          "📍 [split-call-v2] Using 'My Location' coordinates:",
+          coordinates
+        );
+        // Use coordinates from "My Location"
+        const rawLng =
+          coordinates.lng !== undefined ? coordinates.lng : coordinates.lon;
+        const parsedLng = parseFloat(rawLng);
+        const parsedLat = parseFloat(coordinates.lat);
+        console.log("🔧 [split-call-v2] Parsed coordinates:", {
+          rawLng,
+          parsedLng,
+          parsedLat,
+          isFiniteLng: Number.isFinite(parsedLng),
+          isFiniteLat: Number.isFinite(parsedLat),
+        });
+        if (Number.isFinite(parsedLng) && Number.isFinite(parsedLat)) {
+          userLng = parsedLng;
+          userLat = parsedLat;
+          console.log("✅ [split-call-v2] My Location coordinates set:", {
+            lng: userLng,
+            lat: userLat,
+          });
+        } else {
+          console.error("❌ [split-call-v2] Failed to parse coordinates:", {
+            rawLng,
+            parsedLng,
+            parsedLat,
+            coordinates,
+          });
         }
       } else if (locationEnglishName || selectedCity || location) {
+        // Find coordinates via Google Maps Geocoding API
+        console.log("🔍 [split-call-v2] Starting geocoding for location:", {
+          locationEnglishName,
+          selectedCity,
+          location,
+        });
+
         const addressToSearch = locationEnglishName || selectedCity || location;
         const searchAddress = async (addr) => {
           const cleaned = addr.trim();
-          if (!cleaned) return null;
-          const encoded = encodeURIComponent(cleaned);
-          const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encoded}.json?country=il&access_token=${process.env.MAPBOX_TOKEN}`;
+          if (!cleaned) {
+            console.log("⚠️ [split-call-v2] Address is empty");
+            return null;
+          }
           try {
-            const response = await axios.get(url, { timeout: 10000 });
-            if (response.data.features && response.data.features.length > 0) {
-              const feature = response.data.features[0];
-              if (
-                feature.center &&
-                Array.isArray(feature.center) &&
-                feature.center.length >= 2
-              ) {
-                return {
-                  lng: feature.center[0],
-                  lat: feature.center[1],
-                };
-              }
+            const geocodeResult = await geocodeAddress(cleaned);
+            if (geocodeResult) {
+              console.log("✅ [split-call-v2] Geocoding success:", {
+                address: geocodeResult.formatted_address,
+                lat: geocodeResult.lat,
+                lng: geocodeResult.lng,
+              });
+              return {
+                lng: geocodeResult.lng,
+                lat: geocodeResult.lat,
+                formatted_address: geocodeResult.formatted_address,
+              };
+            } else {
+              console.log("⚠️ [split-call-v2] Geocoding returned no results");
             }
           } catch (error) {
-            // Error geocoding, continue
+            console.error("❌ [split-call-v2] Error geocoding:", error.message);
           }
           return null;
         };
@@ -11113,30 +11653,63 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         if (coords) {
           userLng = coords.lng;
           userLat = coords.lat;
+          console.log("✅ [split-call-v2] Final coordinates:", {
+            lng: userLng,
+            lat: userLat,
+          });
         } else {
+          console.log("⚠️ [split-call-v2] No coordinates found for address");
         }
       }
 
       if (!userLng || !userLat) {
+        console.error("❌ [split-call-v2] Missing coordinates:", {
+          userLng,
+          userLat,
+        });
         return res.status(400).json({
           success: false,
           message: "לא ניתן למצוא את המיקום. אנא בחר מיקום תקין.",
         });
       }
 
-      // Get client name
+      console.log("✅ [split-call-v2] Location resolved:", {
+        userLng,
+        userLat,
+      });
 
+      // Get client name and blocked handymen list
       let clientName = null;
+      let handimanBlocked = []; // Get blocked handymen list from client
       if (userId) {
         try {
           const clientObjectId = new ObjectId(userId);
           const client = await collection.findOne({ _id: clientObjectId });
           if (client) {
             clientName = client.username || null;
+            // Copy handiman-Blocked array from client to job
+            handimanBlocked = Array.isArray(client["handiman-Blocked"])
+              ? client["handiman-Blocked"].map((id) => {
+                  if (id instanceof ObjectId) {
+                    return id;
+                  } else if (typeof id === "string") {
+                    try {
+                      return new ObjectId(id);
+                    } catch (e) {
+                      return id; // Return as-is if conversion fails
+                    }
+                  }
+                  return id;
+                })
+              : [];
           }
         } catch (error) {
           // Client fetch failed, continue without clientName
         }
+      }
+      // Ensure handimanBlocked is always an array (even if empty)
+      if (!Array.isArray(handimanBlocked)) {
+        handimanBlocked = [];
       }
 
       // Support both array (new) and single string (old) for backward compatibility
@@ -11154,6 +11727,9 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       const createdJobs = [];
 
       // First, fetch all handymen and find which subcategories each matches
+      console.log(
+        "🔍 [split-call-v2] Processing handymen and subcategories..."
+      );
       const handymenWithMatches = [];
       for (const handymanData of handymen) {
         // Fetch full handyman data from database to get specialties
@@ -11166,10 +11742,18 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
             handyman = await collection.findOne({ _id: handymanObjectId });
           }
         } catch (error) {
+          console.error(
+            "❌ [split-call-v2] Error fetching handyman:",
+            error.message
+          );
           continue;
         }
 
         if (!handyman || !handyman.specialties) {
+          console.log(
+            "⚠️ [split-call-v2] Handyman not found or has no specialties:",
+            handymanData._id || handymanData.id
+          );
           continue;
         }
 
@@ -11185,12 +11769,27 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         );
 
         if (matchingSubcategories.length > 0) {
+          console.log(
+            `✅ [split-call-v2] Handyman ${
+              handyman.username || handyman._id
+            } matches ${matchingSubcategories.length} subcategories`
+          );
           handymenWithMatches.push({
             handyman: handyman,
             matchingSubcategories: matchingSubcategories,
           });
+        } else {
+          console.log(
+            `⚠️ [split-call-v2] Handyman ${
+              handyman.username || handyman._id
+            } matches no subcategories`
+          );
         }
       }
+
+      console.log(
+        `🔍 [split-call-v2] Found ${handymenWithMatches.length} handymen with matches out of ${handymen.length} total`
+      );
 
       // Group subcategories by unique combinations
       // Use a Map where key is a sorted string of subcategory keys, value is the subcategories array
@@ -11209,6 +11808,13 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         }
       }
 
+      console.log(
+        `🔍 [split-call-v2] Creating ${subcategoryGroups.size} jobs for ${subcategoryGroups.size} unique subcategory groups`
+      );
+
+      // Generate a unique splitCallId for this split call
+      const splitCallId = new ObjectId().toString();
+
       // Create one job per unique subcategory group
       for (const [groupKey, subcategoryGroup] of subcategoryGroups) {
         const jobData = {
@@ -11225,6 +11831,8 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           when: when || "asap",
           urgent: urgent || false,
           status: "open",
+          "handiman-Blocked": handimanBlocked, // Copy blocked handymen from client
+          splitCallId: splitCallId, // Link all jobs from the same split call
           createdAt: new Date(),
           updatedAt: new Date(),
           location: {
@@ -11237,7 +11845,14 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           },
         };
 
+        console.log(
+          `🔧 [split-call-v2] Creating job for subcategories:`,
+          subcategoryGroup.map((s) => s.subcategory || s.category).join(", ")
+        );
         const result = await jobsCollection.insertOne(jobData);
+        console.log(
+          `✅ [split-call-v2] Job created with ID: ${result.insertedId}`
+        );
 
         // Find all handymen that match this subcategory group
         const matchingHandymen = handymenWithMatches
@@ -11295,15 +11910,82 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         }
       }
 
+      console.log(
+        `✅ [split-call-v2] Successfully created ${createdJobs.length} jobs`
+      );
       return res.json({
         success: true,
         message: `נוצרו ${createdJobs.length} עבודות בהצלחה`,
         jobs: createdJobs,
       });
     } catch (error) {
+      console.error("❌ [split-call-v2] Error splitting call:", error);
+      console.error("❌ [split-call-v2] Error stack:", error.stack);
       return res.status(500).json({
         success: false,
         message: "שגיאה בפיצול הקריאה",
+        error: error.message,
+      });
+    }
+  });
+
+  // Get related jobs for a split call
+  app.get("/api/jobs/:jobId/related", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      if (!jobId) {
+        return res.status(400).json({
+          success: false,
+          message: "jobId required",
+        });
+      }
+
+      const jobsCol = getCollectionJobs();
+      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
+
+      // If this job has a splitCallId, get all related jobs
+      if (job.splitCallId) {
+        const relatedJobs = await jobsCol
+          .find({
+            splitCallId: job.splitCallId,
+            clientId: job.clientId,
+          })
+          .toArray();
+
+        return res.json({
+          success: true,
+          isSplitCall: true,
+          splitCallId: job.splitCallId,
+          relatedJobs: relatedJobs.map((j) => ({
+            _id: j._id,
+            handymanId: j.handymanId,
+            handymanName: j.handymanName,
+            status: j.status,
+            subcategoryInfo: j.subcategoryInfo,
+            price: j.price,
+            priceChangeRequest: j.priceChangeRequest,
+          })),
+          allJobsDone: relatedJobs.every((j) => j.status === "done"),
+        });
+      } else {
+        return res.json({
+          success: true,
+          isSplitCall: false,
+          relatedJobs: [],
+          allJobsDone: true,
+        });
+      }
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching related jobs",
         error: error.message,
       });
     }
@@ -11911,35 +12593,56 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       const jobsCol = getCollectionJobs();
       const usersCol = getCollection();
 
+      // Pagination parameters
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 20;
+      const skip = (page - 1) * limit;
+
       // Filter out payments with zero or missing amounts (likely incomplete/error records)
+      // Also filter out subscription payments (they appear in subscriptions table)
       // Only show payments that have either:
       // 1. A valid amount > 0 (either totalAmount or amount field)
       // 2. A paymentIntentId (meaning it's a real payment, even if amount is 0 temporarily)
-      const payments = await paymentsCol
-        .find({
-          $or: [
-            { totalAmount: { $gt: 0 } },
-            { amount: { $gt: 0 } },
-            {
-              $and: [
-                {
-                  paymentIntentId: {
-                    $exists: true,
-                    $ne: null,
-                    $ne: "",
+      const query = {
+        $and: [
+          {
+            // Exclude subscription payments
+            type: { $ne: "subscription" },
+          },
+          {
+            $or: [
+              { totalAmount: { $gt: 0 } },
+              { amount: { $gt: 0 } },
+              {
+                $and: [
+                  {
+                    paymentIntentId: {
+                      $exists: true,
+                      $ne: null,
+                      $ne: "",
+                    },
                   },
-                },
-                {
-                  $or: [
-                    { status: { $exists: true, $ne: null } },
-                    { createdAt: { $exists: true } },
-                  ],
-                },
-              ],
-            },
-          ],
-        })
+                  {
+                    $or: [
+                      { status: { $exists: true, $ne: null } },
+                      { createdAt: { $exists: true } },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      // Get total count for pagination
+      const totalPayments = await paymentsCol.countDocuments(query);
+
+      const payments = await paymentsCol
+        .find(query)
         .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
         .toArray();
 
       // Enrich payments with job and user details
@@ -12027,6 +12730,12 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       return res.json({
         success: true,
         payments: enrichedPayments,
+        pagination: {
+          page: page,
+          limit: limit,
+          total: totalPayments,
+          totalPages: Math.ceil(totalPayments / limit),
+        },
       });
     } catch (error) {
       return res.status(500).json({
@@ -12042,6 +12751,10 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
     try {
       const paymentsCol = getCollectionPayments();
       const usersCol = getCollection();
+
+      // Pagination parameters
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 20;
 
       // Get all subscription payments
       const subscriptionPayments = await paymentsCol
@@ -12093,11 +12806,22 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         }
       }
 
-      const subscriptions = Array.from(subscriptionsMap.values());
+      const allSubscriptions = Array.from(subscriptionsMap.values());
+
+      // Apply pagination
+      const totalSubscriptions = allSubscriptions.length;
+      const skip = (page - 1) * limit;
+      const subscriptions = allSubscriptions.slice(skip, skip + limit);
 
       return res.json({
         success: true,
         subscriptions: subscriptions,
+        pagination: {
+          page: page,
+          limit: limit,
+          total: totalSubscriptions,
+          totalPages: Math.ceil(totalSubscriptions / limit),
+        },
       });
     } catch (error) {
       return res.status(500).json({
@@ -12127,22 +12851,36 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         59
       );
 
-      // Get payments for current month
-      const payments = await paymentsCol
+      // Get transaction payments (not subscriptions) for current month
+      const transactionPayments = await paymentsCol
         .find({
           createdAt: {
             $gte: startOfMonth,
             $lte: endOfMonth,
           },
-          status: "transferred", // Only transferred payments
+          type: { $ne: "subscription" }, // Exclude subscriptions
+          status: { $in: ["transferred", "succeeded", "captured"] }, // Only completed payments
         })
         .sort({ createdAt: -1 })
         .toArray();
 
-      // Enrich payments with user names
+      // Get subscription payments for current month
+      const subscriptionPayments = await paymentsCol
+        .find({
+          createdAt: {
+            $gte: startOfMonth,
+            $lte: endOfMonth,
+          },
+          type: "subscription",
+          status: { $in: ["active", "succeeded"] }, // Active or succeeded subscriptions
+        })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      // Enrich transaction payments with user names
       const usersCol = getCollection();
-      const enrichedPaymentsForPDF = await Promise.all(
-        payments.map(async (payment) => {
+      const enrichedTransactionPayments = await Promise.all(
+        transactionPayments.map(async (payment) => {
           let clientName = "ללא שם";
           let handymanName = "ללא שם";
 
@@ -12176,6 +12914,31 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
             ...payment,
             clientName,
             handymanName,
+          };
+        })
+      );
+
+      // Enrich subscription payments with user names
+      const enrichedSubscriptionPayments = await Promise.all(
+        subscriptionPayments.map(async (payment) => {
+          let userName = "ללא שם";
+
+          try {
+            if (payment.userId) {
+              const user = await usersCol.findOne({
+                _id: new ObjectId(payment.userId),
+              });
+              if (user) {
+                userName = user.username || "ללא שם";
+              }
+            }
+          } catch (err) {
+            // User not found
+          }
+
+          return {
+            ...payment,
+            userName,
           };
         })
       );
@@ -12229,23 +12992,42 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         totalVAT: 0,
       };
 
-      // Calculate totals from payments
-      const paymentsTotal = enrichedPaymentsForPDF.reduce(
-        (sum, p) => sum + (p.totalAmount || 0),
+      // Calculate totals from transaction payments
+      const transactionPaymentsTotal = enrichedTransactionPayments.reduce(
+        (sum, p) => sum + (p.totalAmount || p.amount || 0),
         0
       );
-      const vatTotal = enrichedPaymentsForPDF.reduce(
+      const transactionVatTotal = enrichedTransactionPayments.reduce(
         (sum, p) => sum + (p.vatAmount || 0),
         0
       );
-      const handymanRevenue = enrichedPaymentsForPDF.reduce(
-        (sum, p) => sum + (p.spacious_H || 0),
+      const handymanRevenue = enrichedTransactionPayments.reduce(
+        (sum, p) => sum + (p.spacious_H || p.handymanRevenue || 0),
         0
       );
-      const systemRevenue = enrichedPaymentsForPDF.reduce(
-        (sum, p) => sum + (p.spacious_M || 0),
+      const systemRevenue = enrichedTransactionPayments.reduce(
+        (sum, p) => sum + (p.spacious_M || p.platformFee || 0),
         0
       );
+
+      // Calculate totals from subscription payments
+      const vatPercent = getMaamPercent();
+      const subscriptionPaymentsTotal = enrichedSubscriptionPayments.reduce(
+        (sum, p) => sum + (p.amount || 0),
+        0
+      );
+      const subscriptionVatTotal = enrichedSubscriptionPayments.reduce(
+        (sum, p) => {
+          const amount = p.amount || 0;
+          return sum + (amount * vatPercent) / 100;
+        },
+        0
+      );
+
+      // Combined totals
+      const paymentsTotal =
+        transactionPaymentsTotal + subscriptionPaymentsTotal;
+      const vatTotal = transactionVatTotal + subscriptionVatTotal;
 
       // Generate HTML for PDF
       const monthNames = [
@@ -12364,13 +13146,33 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
   </div>
 
   <div class="summary">
-    <h3>סיכום כספי</h3>
+    <h3>סיכום כספי - חודש ${monthName} ${year}</h3>
+    <div class="summary-row">
+      <span class="summary-label">סך כל תשלומי עסקאות:</span>
+      <span class="summary-value">${transactionPaymentsTotal.toFixed(
+        2
+      )} ₪</span>
+    </div>
+    <div class="summary-row">
+      <span class="summary-label">סך כל תשלומי מנויים:</span>
+      <span class="summary-value">${subscriptionPaymentsTotal.toFixed(
+        2
+      )} ₪</span>
+    </div>
     <div class="summary-row">
       <span class="summary-label">סך כל התשלומים:</span>
       <span class="summary-value">${paymentsTotal.toFixed(2)} ₪</span>
     </div>
     <div class="summary-row">
-      <span class="summary-label">סך מע"מ:</span>
+      <span class="summary-label">סך מע"מ (עסקאות):</span>
+      <span class="summary-value">${transactionVatTotal.toFixed(2)} ₪</span>
+    </div>
+    <div class="summary-row">
+      <span class="summary-label">סך מע"מ (מנויים):</span>
+      <span class="summary-value">${subscriptionVatTotal.toFixed(2)} ₪</span>
+    </div>
+    <div class="summary-row">
+      <span class="summary-label">סך כל מע"מ:</span>
       <span class="summary-value">${vatTotal.toFixed(2)} ₪</span>
     </div>
     <div class="summary-row">
@@ -12389,36 +13191,123 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
     </div>
   </div>
 
-  <h3>פירוט תשלומים (${enrichedPaymentsForPDF.length} תשלומים)</h3>
+  <h3>פירוט תשלומי עסקאות (${enrichedTransactionPayments.length} תשלומים)</h3>
   <table>
     <thead>
       <tr>
         <th>תאריך</th>
+        <th>שעה</th>
         <th>לקוח</th>
         <th>הנדימן</th>
         <th>סכום כולל</th>
         <th>מע"מ</th>
+        <th>סכום ללא מע"מ</th>
         <th>רווח הנדימן</th>
         <th>רווח המערכת</th>
       </tr>
     </thead>
     <tbody>
-      ${enrichedPaymentsForPDF
-        .map(
-          (payment) => `
+      ${
+        enrichedTransactionPayments.length > 0
+          ? enrichedTransactionPayments
+              .map(
+                (payment) => `
         <tr>
           <td>${new Date(payment.createdAt).toLocaleDateString("he-IL")}</td>
+          <td>${new Date(payment.createdAt).toLocaleTimeString("he-IL", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}</td>
           <td>${payment.clientName || "ללא"}</td>
           <td>${payment.handymanName || "ללא"}</td>
-          <td>${(payment.totalAmount || 0).toFixed(2)} ₪</td>
+          <td>${(payment.totalAmount || payment.amount || 0).toFixed(2)} ₪</td>
           <td>${(payment.vatAmount || 0).toFixed(2)} ₪</td>
-          <td>${(payment.spacious_H || 0).toFixed(2)} ₪</td>
-          <td>${(payment.spacious_M || 0).toFixed(2)} ₪</td>
+          <td>${(
+            (payment.totalAmount || payment.amount || 0) -
+            (payment.vatAmount || 0)
+          ).toFixed(2)} ₪</td>
+          <td>${(payment.spacious_H || payment.handymanRevenue || 0).toFixed(
+            2
+          )} ₪</td>
+          <td>${(payment.spacious_M || payment.platformFee || 0).toFixed(
+            2
+          )} ₪</td>
         </tr>
       `
-        )
-        .join("")}
+              )
+              .join("")
+          : `<tr><td colspan="9" style="text-align: center; padding: 20px;">אין תשלומי עסקאות בחודש זה</td></tr>`
+      }
     </tbody>
+    <tfoot>
+      <tr style="background: #f0f0f0; font-weight: bold;">
+        <td colspan="4" style="text-align: left;">סה"כ:</td>
+        <td>${transactionPaymentsTotal.toFixed(2)} ₪</td>
+        <td>${transactionVatTotal.toFixed(2)} ₪</td>
+        <td>${(transactionPaymentsTotal - transactionVatTotal).toFixed(
+          2
+        )} ₪</td>
+        <td>${handymanRevenue.toFixed(2)} ₪</td>
+        <td>${systemRevenue.toFixed(2)} ₪</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <h3 style="margin-top: 40px;">פירוט תשלומי מנויים (${
+    enrichedSubscriptionPayments.length
+  } תשלומים)</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>תאריך</th>
+        <th>שעה</th>
+        <th>שם המנוי</th>
+        <th>סכום כולל</th>
+        <th>מע"מ</th>
+        <th>סכום ללא מע"מ</th>
+        <th>מספר מנוי</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${
+        enrichedSubscriptionPayments.length > 0
+          ? enrichedSubscriptionPayments
+              .map((payment) => {
+                const amount = payment.amount || 0;
+                const vatAmount = (amount * vatPercent) / 100;
+                const amountWithoutVAT = amount - vatAmount;
+                return `
+        <tr>
+          <td>${new Date(payment.createdAt).toLocaleDateString("he-IL")}</td>
+          <td>${new Date(payment.createdAt).toLocaleTimeString("he-IL", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}</td>
+          <td>${payment.userName || "ללא שם"}</td>
+          <td>${amount.toFixed(2)} ₪</td>
+          <td>${vatAmount.toFixed(2)} ₪</td>
+          <td>${amountWithoutVAT.toFixed(2)} ₪</td>
+          <td>${
+            payment.subscriptionId || payment._id?.toString().slice(-8) || "-"
+          }</td>
+        </tr>
+      `;
+              })
+              .join("")
+          : `<tr><td colspan="7" style="text-align: center; padding: 20px;">אין תשלומי מנויים בחודש זה</td></tr>`
+      }
+    </tbody>
+    <tfoot>
+      <tr style="background: #f0f0f0; font-weight: bold;">
+        <td colspan="3" style="text-align: left;">סה"כ:</td>
+        <td>${subscriptionPaymentsTotal.toFixed(2)} ₪</td>
+        <td>${subscriptionVatTotal.toFixed(2)} ₪</td>
+        <td>${(subscriptionPaymentsTotal - subscriptionVatTotal).toFixed(
+          2
+        )} ₪</td>
+        <td>-</td>
+      </tr>
+    </tfoot>
   </table>
 
   <div class="footer">
@@ -12651,6 +13540,14 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         });
       }
 
+      // Pagination parameters
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 20;
+      const skip = (page - 1) * limit;
+
+      // Get total count for pagination
+      const totalUsers = await collection.countDocuments({});
+
       const users = await collection
         .find({})
         .project({
@@ -12658,11 +13555,19 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           googleId: 0, // Exclude sensitive data
         })
         .sort({ createdAt: -1 }) // Sort by newest first
+        .skip(skip)
+        .limit(limit)
         .toArray();
 
       return res.json({
         success: true,
         users: users,
+        pagination: {
+          page: page,
+          limit: limit,
+          total: totalUsers,
+          totalPages: Math.ceil(totalUsers / limit),
+        },
       });
     } catch (error) {
       return res.status(500).json({
@@ -13662,17 +14567,51 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         });
       }
 
-      // Find all jobs with cancel object
+      // Pagination parameters
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 20;
+      const skip = (page - 1) * limit;
+
+      // Get total count for pagination - only jobs that actually have a cancel field (not null/undefined)
+      // Important: Only show jobs where cancel field exists - this identifies cancellations
+      // We check that cancel exists and is not null
+      const cancellationQuery = {
+        cancel: { $exists: true, $ne: null },
+      };
+
+      const totalCancellations = await jobsCol.countDocuments(
+        cancellationQuery
+      );
+
+      // Find all jobs with cancel object that is not null
+      // This ensures we only show actual cancellations, not completed jobs
       const cancelledJobs = await jobsCol
-        .find({
-          cancel: { $exists: true },
-        })
+        .find(cancellationQuery)
         .sort({ "cancel.cancelledAt": -1 }) // Sort by cancellation date, newest first
+        .skip(skip)
+        .limit(limit)
         .toArray();
+
+      // Filter out jobs where cancel is not actually an object or is empty (additional client-side filter)
+      const validCancellations = cancelledJobs.filter((job) => {
+        return (
+          job.cancel &&
+          typeof job.cancel === "object" &&
+          job.cancel !== null &&
+          !Array.isArray(job.cancel) &&
+          Object.keys(job.cancel).length > 0
+        );
+      });
 
       return res.json({
         success: true,
-        cancellations: cancelledJobs,
+        cancellations: validCancellations,
+        pagination: {
+          page: page,
+          limit: limit,
+          total: validCancellations.length,
+          totalPages: Math.ceil(validCancellations.length / limit),
+        },
       });
     } catch (error) {
       return res.status(500).json({
@@ -13802,7 +14741,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         });
       }
 
-      // Get the original payment intent to retrieve payment method
+      // Get the original payment intent to retrieve payment method and customer
       let originalPaymentIntent;
       try {
         originalPaymentIntent = await stripe.paymentIntents.retrieve(
@@ -13822,6 +14761,17 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           success: false,
           message:
             "Payment intent has no payment method. Cannot charge client.",
+        });
+      }
+
+      // Get customer ID from the original payment intent
+      // If payment_method is attached, we need the customer ID
+      const customerId = originalPaymentIntent.customer;
+      if (!customerId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Payment intent has no customer. Cannot charge client for fine.",
         });
       }
 
@@ -13849,14 +14799,31 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       const handymanAmountAgorot = Math.round(handymanAmount * 100);
       const platformFeeAgorot = Math.round(platformFeeAmount * 100);
 
-      // Create a new payment intent for the fine using the same payment method
+      // Create a new payment intent for the fine using the same payment method and customer
+      // Use transfer_data to send money directly from client to handyman, with application_fee for platform
+      // This avoids the need for a separate transfer and balance issues in test mode
       let finePaymentIntent;
       try {
+        // First, create the payment intent without confirming
+        // Must include customer when using payment_method
+        // Set allow_redirects to 'never' to avoid redirect-based payment methods (like Link)
+        // Use transfer_data to send money directly to handyman, and application_fee_amount for platform fee
         finePaymentIntent = await stripe.paymentIntents.create({
           amount: fineAmountAgorot,
           currency: "ils",
+          customer: customerId, // Required when using payment_method
           payment_method: originalPaymentIntent.payment_method,
-          confirm: true,
+          automatic_payment_methods: {
+            enabled: true,
+            allow_redirects: "never", // Prevent redirect-based payment methods
+          },
+          // Transfer money directly to handyman's account
+          // The difference (fineAmountAgorot - handymanAmountAgorot = platformFeeAgorot) stays in our account automatically
+          transfer_data: {
+            destination: handymanAccountId,
+            amount: handymanAmountAgorot, // Amount that goes to handyman
+          },
+          confirm: false, // Don't confirm immediately
           metadata: {
             jobId: String(jobId),
             type: "cancellation_fine",
@@ -13866,19 +14833,30 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           },
         });
 
-        // If payment intent is not immediately succeeded, try to confirm it
-        if (finePaymentIntent.status !== "succeeded") {
+        // Now confirm the payment intent
+        try {
           finePaymentIntent = await stripe.paymentIntents.confirm(
             finePaymentIntent.id
           );
+        } catch (confirmError) {
+          console.error("Error confirming payment intent:", confirmError);
+          // If confirmation fails, try to cancel the payment intent
+          try {
+            await stripe.paymentIntents.cancel(finePaymentIntent.id);
+          } catch (cancelError) {
+            console.error("Error cancelling payment intent:", cancelError);
+          }
+          throw confirmError;
         }
       } catch (chargeError) {
         console.error("Stripe charge error for fine:", chargeError);
         return res.status(500).json({
           success: false,
-          message: "שגיאה בגביית הקנס מהלקוח",
+          message:
+            "שגיאה בגביית הקנס מהלקוח: " +
+            (chargeError.message || "שגיאה לא ידועה"),
           error: chargeError.message,
-          code: chargeError.code || "unknown",
+          code: chargeError.code || chargeError.type || "unknown",
         });
       }
 
@@ -13890,46 +14868,28 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         });
       }
 
-      // Create transfer to handyman using Stripe Connect
-      // Since we already charged the client, the money is in our platform account
-      // Now we transfer the handyman's portion to their account
-      let transfer = null;
-      try {
-        transfer = await stripe.transfers.create({
-          amount: handymanAmountAgorot,
-          currency: "ils",
-          destination: handymanAccountId,
-          metadata: {
-            jobId: String(jobId),
-            type: "cancellation_fine",
-            fineAmount: String(fineAmount),
-            platformFeeAmount: String(platformFeeAmount),
-            finePaymentIntentId: finePaymentIntent.id,
-          },
-        });
-      } catch (stripeError) {
-        console.error("Stripe transfer error:", stripeError);
-
-        // Handle specific error cases
-        if (stripeError.code === "balance_insufficient") {
-          // This should not happen since we just charged the client, but handle it anyway
-          return res.status(400).json({
-            success: false,
-            message:
-              "אין מספיק כסף בחשבון Stripe לביצוע ההעברה. ב-test mode, יש להוסיף כסף לחשבון באמצעות כרטיס הבדיקה 4000000000000077",
-            error: stripeError.message,
-            code: "balance_insufficient",
-            isTestMode: process.env.STRIPE_SECRET_KEY?.includes("sk_test"),
-          });
+      console.log(
+        "✅ Fine payment collected from client and transferred to handyman:",
+        {
+          fineAmount: fineAmount,
+          fineAmountAgorot: fineAmountAgorot,
+          paymentIntentId: finePaymentIntent.id,
+          status: finePaymentIntent.status,
+          handymanAmount: handymanAmount,
+          handymanAmountAgorot: handymanAmountAgorot,
+          platformFeeAmount: platformFeeAmount,
+          platformFeeAgorot: platformFeeAgorot,
+          flow: "Client -> Handyman (handymanAmount) + Platform (platformFeeAmount) - Direct transfer via PaymentIntent transfer_data",
         }
+      );
 
-        return res.status(500).json({
-          success: false,
-          message: "שגיאה בהעברת כסף להנדימן",
-          error: stripeError.message,
-          code: stripeError.code || "unknown",
-        });
-      }
+      // No need for separate transfer - money was sent directly via transfer_data in PaymentIntent
+      // The difference (fineAmountAgorot - handymanAmountAgorot = platformFeeAgorot) stays in our platform account automatically
+      const transfer = {
+        id: finePaymentIntent.id, // Use payment intent ID as transfer reference
+        amount: handymanAmountAgorot,
+        destination: handymanAccountId,
+      };
 
       // Update job with fine information
       await jobsCol.updateOne(
@@ -13958,12 +14918,26 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         { upsert: true }
       );
 
+      console.log("✅ Fine collection completed successfully:", {
+        fineAmount: fineAmount,
+        platformFeeAmount: platformFeeAmount,
+        handymanAmount: handymanAmount,
+        transferId: transfer.id,
+        paymentIntentId: finePaymentIntent.id,
+        flow: "Client -> Platform (full amount) -> Handyman (handymanAmount) + Platform keeps (platformFeeAmount)",
+      });
+
       return res.json({
         success: true,
         message: "Fine collected successfully",
         fineAmount: fineAmount,
         platformFeeAmount: platformFeeAmount,
         handymanAmount: handymanAmount,
+        summary: {
+          totalCollected: fineAmount,
+          platformFee: platformFeeAmount,
+          handymanReceived: handymanAmount,
+        },
       });
     } catch (error) {
       return res.status(500).json({
@@ -14162,8 +15136,15 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
     // Handle price change request from handyman
     socket.on("price-change-request", async (data) => {
-      const { jobId, handymanId, percent, oldPrice, newPrice, changeAmount } =
-        data;
+      const {
+        jobId,
+        handymanId,
+        percent,
+        oldPrice,
+        newPrice,
+        changeAmount,
+        subcategoryIndex,
+      } = data;
       if (!jobId || !handymanId || percent === undefined) return;
 
       try {
@@ -14207,15 +15188,57 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           return;
         }
 
+        // Get handyman name
+        const usersCol = getCollection();
+        let handymanName = null;
+        try {
+          const handymanObjectId = new ObjectId(handymanId);
+          const handyman = await usersCol.findOne({ _id: handymanObjectId });
+          if (handyman) {
+            handymanName = handyman.username || handyman.name || "הנדימן";
+          }
+        } catch (error) {
+          handymanName = job.handymanName || "הנדימן";
+        }
+
+        // Get subcategory info if applicable
+        let subcategoryInfo = null;
+        if (
+          subcategoryIndex !== undefined &&
+          subcategoryIndex !== null &&
+          job.subcategoryInfo &&
+          Array.isArray(job.subcategoryInfo) &&
+          job.subcategoryInfo.length > subcategoryIndex
+        ) {
+          subcategoryInfo = job.subcategoryInfo[subcategoryIndex];
+        }
+
         // Emit price change request to client
-        io.to(`job-${jobId}`).emit("price-change-request", {
+        const priceChangeData = {
           jobId,
           handymanId,
+          handymanName: handymanName,
           percent,
           oldPrice,
           newPrice,
           changeAmount,
-        });
+        };
+
+        // Add subcategory info if applicable
+        if (
+          subcategoryInfo &&
+          subcategoryIndex !== undefined &&
+          subcategoryIndex !== null
+        ) {
+          priceChangeData.subcategoryIndex = subcategoryIndex;
+          priceChangeData.subcategoryInfo = {
+            category: subcategoryInfo.category,
+            subcategory: subcategoryInfo.subcategory,
+            workType: subcategoryInfo.workType,
+          };
+        }
+
+        io.to(`job-${jobId}`).emit("price-change-request", priceChangeData);
       } catch (error) {
         console.error("Error handling price change request:", error);
         socket.emit("error", { message: "שגיאה בעיבוד בקשת שינוי המחיר" });

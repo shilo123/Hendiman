@@ -79,7 +79,6 @@ export default {
           alert("שגיאה בקבלת קישור הגדרה. נסה שוב מאוחר יותר.");
         }
       } catch (error) {
-        console.error("Error getting onboarding link:", error);
         alert("שגיאה בקבלת קישור הגדרה. נסה שוב מאוחר יותר.");
       }
     },

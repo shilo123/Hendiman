@@ -75,7 +75,9 @@ export default {
           this.toast?.showError("לא ניתן לקבל token להתראות");
         }
       } catch (error) {
-        this.toast?.showError("שגיאה בהפעלת התראות: " + error.message);
+        this.toast?.showError(
+          "אויי חבל, לא הצלחנו להפעיל את ההתראות: " + error.message
+        );
       } finally {
         this.isRequesting = false;
       }

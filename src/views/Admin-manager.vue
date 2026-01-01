@@ -58,7 +58,8 @@
                 }"
                 @click="
                   userFilters.userType = 'handyman';
-                  filterUsers();
+                  usersPagination.page = 1;
+                  loadUsers(1);
                 "
               >
                 הנדימנים ({{ handymenCount }})
@@ -70,7 +71,8 @@
                 }"
                 @click="
                   userFilters.userType = 'client';
-                  filterUsers();
+                  usersPagination.page = 1;
+                  loadUsers(1);
                 "
               >
                 לקוחות ({{ clientsCount }})
@@ -241,6 +243,28 @@
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <!-- Pagination for Users -->
+            <div v-if="usersPagination.totalPages > 0" class="pagination">
+              <button
+                class="pagination-btn"
+                :disabled="usersPagination.page === 1"
+                @click="loadUsers(usersPagination.page - 1)"
+              >
+                הקודם
+              </button>
+              <span class="pagination-info">
+                עמוד {{ usersPagination.page }} מתוך
+                {{ usersPagination.totalPages }} (סה"כ
+                {{ usersPagination.total }} משתמשים)
+              </span>
+              <button
+                class="pagination-btn"
+                :disabled="usersPagination.page >= usersPagination.totalPages"
+                @click="loadUsers(usersPagination.page + 1)"
+              >
+                הבא
+              </button>
             </div>
           </div>
         </div>
@@ -553,8 +577,8 @@
                   type="button"
                   @click="
                     activePaymentsTab === 'transactions'
-                      ? loadPayments()
-                      : loadSubscriptions()
+                      ? loadPayments(paymentsPagination.page)
+                      : loadSubscriptions(subscriptionsPagination.page)
                   "
                 >
                   ↻ רענן
@@ -765,6 +789,30 @@
                   </tbody>
                 </table>
               </div>
+              <!-- Pagination for Payments -->
+              <div v-if="paymentsPagination.totalPages > 1" class="pagination">
+                <button
+                  class="pagination-btn"
+                  :disabled="paymentsPagination.page === 1"
+                  @click="loadPayments(paymentsPagination.page - 1)"
+                >
+                  הקודם
+                </button>
+                <span class="pagination-info">
+                  עמוד {{ paymentsPagination.page }} מתוך
+                  {{ paymentsPagination.totalPages }} (סה"כ
+                  {{ paymentsPagination.total }} תשלומים)
+                </span>
+                <button
+                  class="pagination-btn"
+                  :disabled="
+                    paymentsPagination.page >= paymentsPagination.totalPages
+                  "
+                  @click="loadPayments(paymentsPagination.page + 1)"
+                >
+                  הבא
+                </button>
+              </div>
             </div>
 
             <!-- Subscriptions Tab -->
@@ -817,6 +865,34 @@
                     </tr>
                   </tbody>
                 </table>
+              </div>
+              <!-- Pagination for Subscriptions -->
+              <div
+                v-if="subscriptionsPagination.totalPages > 1"
+                class="pagination"
+              >
+                <button
+                  class="pagination-btn"
+                  :disabled="subscriptionsPagination.page === 1"
+                  @click="loadSubscriptions(subscriptionsPagination.page - 1)"
+                >
+                  הקודם
+                </button>
+                <span class="pagination-info">
+                  עמוד {{ subscriptionsPagination.page }} מתוך
+                  {{ subscriptionsPagination.totalPages }} (סה"כ
+                  {{ subscriptionsPagination.total }} מנויים)
+                </span>
+                <button
+                  class="pagination-btn"
+                  :disabled="
+                    subscriptionsPagination.page >=
+                    subscriptionsPagination.totalPages
+                  "
+                  @click="loadSubscriptions(subscriptionsPagination.page + 1)"
+                >
+                  הבא
+                </button>
               </div>
             </div>
           </div>
@@ -1155,7 +1231,7 @@
               <button
                 class="refresh-cancellations-btn"
                 type="button"
-                @click="loadCancellations"
+                @click="loadCancellations(cancellationsPagination.page)"
               >
                 ↻ רענן
               </button>
@@ -1170,6 +1246,7 @@
                 <thead>
                   <tr>
                     <th>תאריך ביטול</th>
+                    <th>ID עבודה</th>
                     <th>עבודה</th>
                     <th>לקוח</th>
                     <th>הנדימן</th>
@@ -1206,6 +1283,11 @@
                       </div>
                     </td>
                     <td>
+                      <span class="job-id">{{
+                        cancellation._id || cancellation.id || "-"
+                      }}</span>
+                    </td>
+                    <td>
                       <span class="job-desc">{{
                         getJobNames(cancellation) || "-"
                       }}</span>
@@ -1218,6 +1300,12 @@
                     <td>
                       <div class="user-cell">
                         <span>{{ cancellation.handymanName || "ללא שם" }}</span>
+                        <span
+                          v-if="cancellation.cancel?.handymanId"
+                          class="handyman-id"
+                        >
+                          ({{ cancellation.cancel.handymanId }})
+                        </span>
                       </div>
                     </td>
                     <td>
@@ -1300,10 +1388,38 @@
                     </td>
                   </tr>
                   <tr v-if="cancellations.length === 0">
-                    <td colspan="10" class="no-data">אין ביטולים להצגה</td>
+                    <td colspan="11" class="no-data">אין ביטולים להצגה</td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <!-- Pagination for Cancellations -->
+            <div
+              v-if="cancellationsPagination.totalPages > 1"
+              class="pagination"
+            >
+              <button
+                class="pagination-btn"
+                :disabled="cancellationsPagination.page === 1"
+                @click="loadCancellations(cancellationsPagination.page - 1)"
+              >
+                הקודם
+              </button>
+              <span class="pagination-info">
+                עמוד {{ cancellationsPagination.page }} מתוך
+                {{ cancellationsPagination.totalPages }} (סה"כ
+                {{ cancellationsPagination.total }} ביטולים)
+              </span>
+              <button
+                class="pagination-btn"
+                :disabled="
+                  cancellationsPagination.page >=
+                  cancellationsPagination.totalPages
+                "
+                @click="loadCancellations(cancellationsPagination.page + 1)"
+              >
+                הבא
+              </button>
             </div>
           </div>
         </div>
@@ -2076,10 +2192,63 @@
                 fineAmount > 200 ||
                 isCollectingFine
               "
-              @click="collectFine"
+              @click="showConfirmFineModal = true"
             >
-              <span v-if="isCollectingFine">גובה...</span>
-              <span v-else>גבה קנס</span>
+              המשך
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Confirm Fine Collection Modal -->
+      <div
+        v-if="showConfirmFineModal"
+        class="modal-overlay"
+        @click="showConfirmFineModal = false"
+      >
+        <div class="modal-content modal-content--confirm" @click.stop>
+          <div class="modal-header">
+            <h3 class="modal-title">אישור גביית קנס</h3>
+            <button class="modal-close" @click="showConfirmFineModal = false">
+              ×
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="confirm-message">
+              <p>
+                האם אתה בטוח שברצונך לגבות קנס של
+                <strong>{{ fineAmount }} ₪</strong>?
+              </p>
+              <p>
+                עבודה: <strong>{{ getJobNames(fineJob) || "-" }}</strong>
+              </p>
+              <p>
+                לקוח: <strong>{{ fineJob?.clientName || "ללא שם" }}</strong>
+              </p>
+              <p>
+                הנדימן: <strong>{{ fineJob?.handymanName || "ללא שם" }}</strong>
+              </p>
+              <p>
+                סיבת ביטול:
+                <strong>{{
+                  fineJob?.cancel?.["reason-for-cancellation"] || "-"
+                }}</strong>
+              </p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button
+              class="btn btn--ghost"
+              @click="showConfirmFineModal = false"
+            >
+              ביטול
+            </button>
+            <button
+              class="btn btn--primary"
+              :disabled="isCollectingFine"
+              @click="confirmCollectFine"
+            >
+              {{ isCollectingFine ? "מגבה..." : "כן, גבה קנס" }}
             </button>
           </div>
         </div>
@@ -2226,6 +2395,12 @@ export default {
       users: [],
       filteredUsers: [],
       isLoadingUsers: false,
+      usersPagination: {
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 0,
+      },
       categories: [],
       isLoadingCategories: false,
       activeCategoryTab: "", // Track active category tab
@@ -2331,9 +2506,21 @@ export default {
         status: "",
         sortBy: "",
       },
+      paymentsPagination: {
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 0,
+      },
       // Subscriptions
       subscriptions: [],
       isLoadingSubscriptions: false,
+      subscriptionsPagination: {
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 0,
+      },
       // Payments sub-tabs
       activePaymentsTab: "transactions", // 'transactions' or 'subscriptions'
       // Delete payment modal
@@ -2352,7 +2539,14 @@ export default {
       // Cancellations
       cancellations: [],
       isLoadingCancellations: false,
+      cancellationsPagination: {
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 0,
+      },
       showFineModal: false,
+      showConfirmFineModal: false,
       fineJob: null,
       fineAmount: 0,
       isCollectingFine: false,
@@ -2439,6 +2633,9 @@ export default {
     },
     filteredPayments() {
       let filtered = [...this.payments];
+
+      // Filter out subscription payments (they appear in subscriptions table)
+      filtered = filtered.filter((payment) => payment.type !== "subscription");
 
       // Filter by search
       if (this.paymentFilters.search) {
@@ -2527,8 +2724,8 @@ export default {
   },
   watch: {
     activePaymentsTab(newTab) {
-      if (newTab === "subscriptions" && this.subscriptions.length === 0) {
-        this.loadSubscriptions();
+      if (newTab === "subscriptions") {
+        this.loadSubscriptions(this.subscriptionsPagination.page);
       }
     },
     async activeTab(newTab) {
@@ -2544,7 +2741,7 @@ export default {
         this.loadTransactionsChart();
       }
       if (newTab === "payments") {
-        this.loadPayments();
+        this.loadPayments(this.paymentsPagination.page);
       }
       if (newTab === "settings") {
         this.loadPlatformFee();
@@ -2552,7 +2749,7 @@ export default {
         this.loadMonthlySubscription();
       }
       if (newTab === "cancellations") {
-        this.loadCancellations();
+        this.loadCancellations(this.cancellationsPagination.page);
       }
       if (newTab === "contact") {
         this.loadInquiries();
@@ -2574,17 +2771,26 @@ export default {
     }
   },
   methods: {
-    async loadUsers() {
+    async loadUsers(page = 1) {
       this.isLoadingUsers = true;
       try {
-        const response = await axios.get(`${URL}/admin/users`);
+        const userType = this.userFilters.userType || "handyman";
+        const response = await axios.get(`${URL}/admin/users`, {
+          params: {
+            page,
+            limit: this.usersPagination.limit,
+            userType: userType, // Send userType to backend
+          },
+        });
         if (response.data.success) {
           this.users = response.data.users || [];
+          this.usersPagination.page = response.data.page || page;
+          this.usersPagination.total = response.data.total || 0;
+          this.usersPagination.totalPages = response.data.totalPages || 0;
           this.filterUsers();
         }
       } catch (error) {
-        console.error("Error loading users:", error);
-        this.toast?.showError("שגיאה בטעינת המשתמשים");
+        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המשתמשים");
       } finally {
         this.isLoadingUsers = false;
       }
@@ -2600,7 +2806,6 @@ export default {
           this.activeCategoryTab = this.categories[0].name;
         }
       } catch (error) {
-        console.error("Error loading categories:", error);
       } finally {
         this.isLoadingCategories = false;
       }
@@ -2675,15 +2880,14 @@ export default {
         await this.loadUsers();
         this.closeDeleteUserModal();
       } catch (error) {
-        console.error("Error deleting user:", error);
         this.toast.showError(
-          error.response?.data?.message || "שגיאה במחיקת המשתמש"
+          error.response?.data?.message || "אויי חבל, לא הצלחנו למחוק את המשתמש"
         );
       }
     },
     async toggleBlockUser(user) {
       if (!user || !user._id) {
-        this.toast?.showError("שגיאה: משתמש לא תקין");
+        this.toast?.showError("אויי חבל, משתמש לא תקין");
         return;
       }
 
@@ -2700,7 +2904,6 @@ export default {
         );
         await this.loadUsers();
       } catch (error) {
-        console.error("Error toggling user block status:", error);
         this.toast?.showError(
           error.response?.data?.message || "שגיאה בעדכון סטטוס החסימה"
         );
@@ -2726,20 +2929,17 @@ export default {
       }
 
       if (!this.messageText || !this.messageText.trim()) {
-        console.warn("[submitMessage] WARNING: Empty message text");
         this.toast.showError("יש להזין תוכן הודעה");
         return;
       }
 
       if (!this.messageUser || !this.messageUser._id) {
-        console.error("[submitMessage] ERROR: Invalid user:", this.messageUser);
-        this.toast.showError("שגיאה: משתמש לא תקין");
+        this.toast.showError("אויי חבל, המשתמש לא תקין");
         return;
       }
 
       // Prevent double submission
       if (this.isSubmittingMessage) {
-        console.warn("[submitMessage] WARNING: Already submitting, ignoring");
         return;
       }
 
@@ -2757,37 +2957,15 @@ export default {
           this.toast.showSuccess("הודעה נשלחה בהצלחה");
           this.closeSendMessageModal();
         } else {
-          console.error(
-            "[submitMessage] ERROR: Response indicates failure:",
-            response?.data
-          );
           this.toast.showError(
-            response?.data?.message || "שגיאה בשליחת ההודעה"
+            response?.data?.message || "אויי חבל, לא הצלחנו לשלוח את ההודעה"
           );
         }
       } catch (error) {
-        console.error("[submitMessage] ERROR: Exception caught:", error);
-        console.error("[submitMessage] Error type:", error?.constructor?.name);
-        console.error("[submitMessage] Error message:", error?.message);
-        console.error("[submitMessage] Error response:", error?.response);
-        console.error(
-          "[submitMessage] Error response status:",
-          error?.response?.status
-        );
-        console.error(
-          "[submitMessage] Error response data:",
-          error?.response?.data
-        );
-        console.error("[submitMessage] Error stack:", error?.stack);
-
         const errorMessage =
           error.response?.data?.message ||
           error.message ||
-          "שגיאה בשליחת ההודעה";
-        console.error(
-          "[submitMessage] Final error message to user:",
-          errorMessage
-        );
+          "אויי חבל, לא הצלחנו לשלוח את ההודעה";
         this.toast.showError(errorMessage);
       } finally {
         this.isSubmittingMessage = false;
@@ -2817,7 +2995,7 @@ export default {
     },
     async saveUser() {
       if (!this.editingUser || !this.editingUser._id) {
-        this.toast?.showError("שגיאה: משתמש לא תקין");
+        this.toast?.showError("אויי חבל, משתמש לא תקין");
         return;
       }
 
@@ -2829,9 +3007,8 @@ export default {
         await this.loadUsers();
         this.closeEditUserModal();
       } catch (error) {
-        console.error("Error updating user:", error);
         this.toast?.showError(
-          error.response?.data?.message || "שגיאה בעדכון המשתמש"
+          error.response?.data?.message || "אויי חבל, לא הצלחנו לעדכן את המשתמש"
         );
       }
     },
@@ -2844,7 +3021,6 @@ export default {
           this.usdToIlsRate = response.data.rates.ILS;
         }
       } catch (error) {
-        console.error("Error loading exchange rate:", error);
         // Keep default rate of 1 if API fails
         this.usdToIlsRate = 1;
       }
@@ -2893,9 +3069,9 @@ export default {
         await this.loadCategories();
         this.closeCategoryModal();
       } catch (error) {
-        console.error("Error saving category:", error);
         this.toast.showError(
-          error.response?.data?.message || "שגיאה בשמירת הקטגוריה"
+          error.response?.data?.message ||
+            "אויי חבל, לא הצלחנו לשמור את הקטגוריה"
         );
       }
     },
@@ -2911,9 +3087,9 @@ export default {
             this.toast.showSuccess("קטגוריה נמחקה בהצלחה");
             await this.loadCategories();
           } catch (error) {
-            console.error("Error deleting category:", error);
             this.toast.showError(
-              error.response?.data?.message || "שגיאה במחיקת הקטגוריה"
+              error.response?.data?.message ||
+                "אויי חבל, לא הצלחנו למחוק את הקטגוריה"
             );
           }
         }
@@ -2981,9 +3157,9 @@ export default {
         await this.loadCategories();
         this.closeSubcategoryModal();
       } catch (error) {
-        console.error("Error saving subcategory:", error);
         this.toast.showError(
-          error.response?.data?.message || "שגיאה בשמירת התת-קטגוריה"
+          error.response?.data?.message ||
+            "אויי חבל, לא הצלחנו לשמור את התת-קטגוריה"
         );
       }
     },
@@ -3037,9 +3213,9 @@ export default {
         this.toast.showSuccess("תת-קטגוריה נמחקה בהצלחה");
         await this.loadCategories();
       } catch (error) {
-        console.error("Error deleting subcategory:", error);
         this.toast.showError(
-          error.response?.data?.message || "שגיאה במחיקת התת-קטגוריה"
+          error.response?.data?.message ||
+            "אויי חבל, לא הצלחנו למחוק את התת-קטגוריה"
         );
       }
     },
@@ -3157,8 +3333,7 @@ export default {
           };
         }
       } catch (error) {
-        console.error("Error loading financials:", error);
-        this.toast?.showError("שגיאה בטעינת נתונים פיננסיים");
+        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את הנתונים הפיננסיים");
       } finally {
         this.isLoadingFinancials = false;
       }
@@ -3196,7 +3371,7 @@ export default {
           };
         }
       } catch (error) {
-        this.toast?.showError("שגיאה בטעינת נתוני סטטוס");
+        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את נתוני הסטטוס");
       } finally {
         this.isLoadingStatus = false;
       }
@@ -3209,7 +3384,9 @@ export default {
           this.renderUsersChart();
         }
       } catch (error) {
-        this.toast?.showError("שגיאה בטעינת נתוני גרף המשתמשים");
+        this.toast?.showError(
+          "אויי חבל, לא הצלחנו לטעון את נתוני גרף המשתמשים"
+        );
       }
     },
     async loadTransactionsChart() {
@@ -3222,7 +3399,7 @@ export default {
           this.renderTransactionsChart();
         }
       } catch (error) {
-        this.toast?.showError("שגיאה בטעינת נתוני גרף העסקאות");
+        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את נתוני גרף העסקאות");
       }
     },
     renderUsersChart() {
@@ -3453,9 +3630,8 @@ export default {
         await this.loadFinancials();
         this.closeEditFinancialModal();
       } catch (error) {
-        console.error("Error updating financial:", error);
         this.toast?.showError(
-          error.response?.data?.message || "שגיאה בעדכון הסכום"
+          error.response?.data?.message || "אויי חבל, לא הצלחנו לעדכן את הסכום"
         );
       }
     },
@@ -3472,8 +3648,7 @@ export default {
           this.renderChart();
         }
       } catch (error) {
-        console.error("Error loading chart data:", error);
-        this.toast?.showError("שגיאה בטעינת נתוני הגרף");
+        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את נתוני הגרף");
       }
     },
     renderChart() {
@@ -3611,31 +3786,41 @@ export default {
         },
       });
     },
-    async loadPayments() {
+    async loadPayments(page = 1) {
       this.isLoadingPayments = true;
       try {
-        const response = await axios.get(`${URL}/admin/payments`);
+        const response = await axios.get(
+          `${URL}/admin/payments?page=${page}&limit=20`
+        );
         if (response.data.success) {
           this.payments = response.data.payments || [];
+          if (response.data.pagination) {
+            this.paymentsPagination = response.data.pagination;
+          }
         }
-        // Load subscriptions as well
-        await this.loadSubscriptions();
+        // Load subscriptions as well (if on subscriptions tab)
+        if (this.activePaymentsTab === "subscriptions") {
+          await this.loadSubscriptions(this.subscriptionsPagination.page);
+        }
       } catch (error) {
-        console.error("Error loading payments:", error);
-        this.toast?.showError("שגיאה בטעינת התשלומים");
+        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את התשלומים");
       } finally {
         this.isLoadingPayments = false;
       }
     },
-    async loadSubscriptions() {
+    async loadSubscriptions(page = 1) {
       this.isLoadingSubscriptions = true;
       try {
-        const response = await axios.get(`${URL}/admin/subscriptions`);
+        const response = await axios.get(
+          `${URL}/admin/subscriptions?page=${page}&limit=20`
+        );
         if (response.data.success) {
           this.subscriptions = response.data.subscriptions || [];
+          if (response.data.pagination) {
+            this.subscriptionsPagination = response.data.pagination;
+          }
         }
       } catch (error) {
-        console.error("Error loading subscriptions:", error);
         // Don't show error toast - subscriptions are optional
       } finally {
         this.isLoadingSubscriptions = false;
@@ -3649,8 +3834,7 @@ export default {
           this.inquiries = response.data.inquiries || [];
         }
       } catch (error) {
-        console.error("Error loading inquiries:", error);
-        this.toast?.showError("שגיאה בטעינת הפניות");
+        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את הפניות");
       } finally {
         this.isLoadingInquiries = false;
       }
@@ -3704,9 +3888,8 @@ export default {
         this.toast?.showSuccess("ההודעה נשלחה בהצלחה");
         this.closePushModal();
       } catch (error) {
-        console.error("Error sending push:", error);
         this.toast?.showError(
-          error.response?.data?.message || "שגיאה בשליחת ההודעה"
+          error.response?.data?.message || "אויי חבל, לא הצלחנו לשלוח את ההודעה"
         );
       } finally {
         this.isSendingPush = false;
@@ -3746,9 +3929,8 @@ export default {
         this.toast?.showSuccess("המייל נשלח בהצלחה");
         this.closeEmailModal();
       } catch (error) {
-        console.error("Error sending email:", error);
         this.toast?.showError(
-          error.response?.data?.message || "שגיאה בשליחת המייל"
+          error.response?.data?.message || "אויי חבל, לא הצלחנו לשלוח את המייל"
         );
       } finally {
         this.isSendingEmail = false;
@@ -3762,8 +3944,7 @@ export default {
         this.toast?.showSuccess("הפנייה סומנה כנענה");
         await this.loadInquiries();
       } catch (error) {
-        console.error("Error updating inquiry status:", error);
-        this.toast?.showError("שגיאה בעדכון הסטטוס");
+        this.toast?.showError("אויי חבל, לא הצלחנו לעדכן את הסטטוס");
       }
     },
     confirmDeleteInquiry(inquiry) {
@@ -3781,9 +3962,8 @@ export default {
         this.toast?.showSuccess("הפנייה נמחקה בהצלחה");
         await this.loadInquiries();
       } catch (error) {
-        console.error("Error deleting inquiry:", error);
         this.toast?.showError(
-          error.response?.data?.message || "שגיאה במחיקת הפנייה"
+          error.response?.data?.message || "אויי חבל, לא הצלחנו למחוק את הפנייה"
         );
       }
     },
@@ -3804,11 +3984,10 @@ export default {
         if (response.data.success) {
           this.userDetails = response.data.user;
         } else {
-          this.toast?.showError("שגיאה בטעינת פרטי המשתמש");
+          this.toast?.showError("אויי חבל, לא הצלחנו לטעון את פרטי המשתמש");
         }
       } catch (error) {
-        console.error("Error loading user details:", error);
-        this.toast?.showError("שגיאה בטעינת פרטי המשתמש");
+        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את פרטי המשתמש");
       } finally {
         this.isLoadingUserDetails = false;
       }
@@ -3911,9 +4090,8 @@ export default {
 
         this.toast?.showSuccess("הדוח הורד בהצלחה");
       } catch (error) {
-        console.error("Error generating PDF:", error);
         this.toast?.showError(
-          error.response?.data?.message || "שגיאה ביצירת הדוח"
+          error.response?.data?.message || "אויי חבל, לא הצלחנו ליצור את הדוח"
         );
       } finally {
         this.isGeneratingPDF = false;
@@ -3974,7 +4152,7 @@ export default {
     },
     async deletePayment() {
       if (!this.paymentToDelete || !this.paymentToDelete._id) {
-        this.toast?.showError("שגיאה: תשלום לא תקין");
+        this.toast?.showError("אויי חבל, תשלום לא תקין");
         return;
       }
 
@@ -3982,18 +4160,17 @@ export default {
         const paymentId = this.paymentToDelete._id;
         await axios.delete(`${URL}/admin/payments/${paymentId}`);
         this.toast?.showSuccess("תשלום נמחק בהצלחה");
-        await this.loadPayments();
+        await this.loadPayments(this.paymentsPagination.page);
         this.closeDeletePaymentModal();
       } catch (error) {
-        console.error("Error deleting payment:", error);
         this.toast?.showError(
-          error.response?.data?.message || "שגיאה במחיקת התשלום"
+          error.response?.data?.message || "אויי חבל, לא הצלחנו למחוק את התשלום"
         );
       }
     },
     async capturePayment(payment) {
       if (!payment || !payment.paymentIntentId) {
-        this.toast?.showError("שגיאה: פרטי תשלום לא תקינים");
+        this.toast?.showError("אויי חבל, פרטי תשלום לא תקינים");
         return;
       }
 
@@ -4010,7 +4187,7 @@ export default {
       }
 
       if (!jobId) {
-        this.toast?.showError("שגיאה: לא נמצא מזהה עבודה");
+        this.toast?.showError("אויי חבל, לא מצאנו מזהה עבודה");
         return;
       }
 
@@ -4036,14 +4213,15 @@ export default {
 
         if (response.data.success) {
           this.toast?.showSuccess("התשלום שוחרר בהצלחה");
-          await this.loadPayments();
+          await this.loadPayments(this.paymentsPagination.page);
         } else {
-          this.toast?.showError(response.data.message || "שגיאה בשחרור התשלום");
+          this.toast?.showError(
+            response.data.message || "אויי חבל, לא הצלחנו לשחרר את התשלום"
+          );
         }
       } catch (error) {
-        console.error("Error capturing payment:", error);
         this.toast?.showError(
-          error.response?.data?.message || "שגיאה בשחרור התשלום"
+          error.response?.data?.message || "אויי חבל, לא הצלחנו לשחרר את התשלום"
         );
       } finally {
         this.isCapturingPayment = false;
@@ -4057,8 +4235,7 @@ export default {
           this.platformFee = response.data.fee;
         }
       } catch (error) {
-        console.error("Error loading platform fee:", error);
-        this.toast?.showError("שגיאה בטעינת אחוז העמלה");
+        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את אחוז העמלה");
       }
     },
     async updatePlatformFee() {
@@ -4083,13 +4260,13 @@ export default {
           this.toast?.showSuccess("אחוז העמלה עודכן בהצלחה");
         } else {
           this.toast?.showError(
-            response.data.message || "שגיאה בעדכון אחוז העמלה"
+            response.data.message || "אויי חבל, לא הצלחנו לעדכן את אחוז העמלה"
           );
         }
       } catch (error) {
-        console.error("Error updating platform fee:", error);
         this.toast?.showError(
-          error.response?.data?.message || "שגיאה בעדכון אחוז העמלה"
+          error.response?.data?.message ||
+            "אויי חבל, לא הצלחנו לעדכן את אחוז העמלה"
         );
       } finally {
         this.isUpdatingFee = false;
@@ -4103,8 +4280,7 @@ export default {
           this.maamPercent = response.data.maam;
         }
       } catch (error) {
-        console.error("Error loading maam percent:", error);
-        this.toast?.showError('שגיאה בטעינת אחוז המע"מ');
+        this.toast?.showError('אויי חבל, לא הצלחנו לטעון את אחוז המע"מ');
       }
     },
     async updateMaamPercent() {
@@ -4129,13 +4305,13 @@ export default {
           this.toast?.showSuccess('אחוז המע"מ עודכן בהצלחה');
         } else {
           this.toast?.showError(
-            response.data.message || 'שגיאה בעדכון אחוז המע"מ'
+            response.data.message || 'אויי חבל, לא הצלחנו לעדכן את אחוז המע"מ'
           );
         }
       } catch (error) {
-        console.error("Error updating maam percent:", error);
         this.toast?.showError(
-          error.response?.data?.message || 'שגיאה בעדכון אחוז המע"מ'
+          error.response?.data?.message ||
+            'אויי חבל, לא הצלחנו לעדכן את אחוז המע"מ'
         );
       } finally {
         this.isUpdatingMaam = false;
@@ -4149,8 +4325,7 @@ export default {
           this.monthlySubscription = response.data.amount;
         }
       } catch (error) {
-        console.error("Error loading monthly subscription:", error);
-        this.toast?.showError("שגיאה בטעינת סכום המנוי החודשי");
+        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את סכום המנוי החודשי");
       }
     },
     async updateMonthlySubscription() {
@@ -4178,28 +4353,33 @@ export default {
           this.toast?.showSuccess("סכום המנוי החודשי עודכן בהצלחה");
         } else {
           this.toast?.showError(
-            response.data.message || "שגיאה בעדכון סכום המנוי החודשי"
+            response.data.message ||
+              "אויי חבל, לא הצלחנו לעדכן את סכום המנוי החודשי"
           );
         }
       } catch (error) {
-        console.error("Error updating monthly subscription:", error);
         this.toast?.showError(
-          error.response?.data?.message || "שגיאה בעדכון סכום המנוי החודשי"
+          error.response?.data?.message ||
+            "אויי חבל, לא הצלחנו לעדכן את סכום המנוי החודשי"
         );
       } finally {
         this.isUpdatingMonthlySubscription = false;
       }
     },
-    async loadCancellations() {
+    async loadCancellations(page = 1) {
       this.isLoadingCancellations = true;
       try {
-        const response = await axios.get(`${URL}/admin/cancellations`);
+        const response = await axios.get(
+          `${URL}/admin/cancellations?page=${page}&limit=20`
+        );
         if (response.data.success) {
           this.cancellations = response.data.cancellations || [];
+          if (response.data.pagination) {
+            this.cancellationsPagination = response.data.pagination;
+          }
         }
       } catch (error) {
-        console.error("Error loading cancellations:", error);
-        this.toast?.showError("שגיאה בטעינת הביטולים");
+        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את הביטולים");
       } finally {
         this.isLoadingCancellations = false;
       }
@@ -4211,9 +4391,15 @@ export default {
     },
     closeFineModal() {
       this.showFineModal = false;
+      this.showConfirmFineModal = false;
       this.fineJob = null;
       this.fineAmount = 0;
       this.isCollectingFine = false;
+    },
+    confirmCollectFine() {
+      // Close confirmation modal and proceed with collection
+      this.showConfirmFineModal = false;
+      this.collectFine();
     },
     async collectFine() {
       if (
@@ -4225,16 +4411,6 @@ export default {
         this.toast?.showError("יש להזין סכום קנס תקין (עד 200 ₪)");
         return;
       }
-
-      // Confirm before collecting
-      const confirmed = confirm(
-        `האם אתה בטוח שברצונך לגבות קנס של ${this.fineAmount} ₪?\n\n` +
-          `לקוח: ${this.fineJob.clientName || "ללא שם"}\n` +
-          `הנדימן: ${this.fineJob.handymanName || "ללא שם"}\n` +
-          `עבודה: ${this.getJobNames(this.fineJob) || "-"}`
-      );
-
-      if (!confirmed) return;
 
       this.isCollectingFine = true;
       try {
@@ -4249,16 +4425,19 @@ export default {
 
         if (response.data.success) {
           this.toast?.showSuccess("הקנס נגבה בהצלחה");
-          await this.loadCancellations();
+          await this.loadCancellations(this.cancellationsPagination.page);
           this.closeFineModal();
         } else {
-          this.toast?.showError(response.data.message || "שגיאה בגביית הקנס");
+          this.toast?.showError(
+            response.data.message || "אויי חבל, לא הצלחנו לגבות את הקנס"
+          );
         }
       } catch (error) {
-        console.error("Error collecting fine:", error);
-        this.toast?.showError(
-          error.response?.data?.message || "שגיאה בגביית הקנס"
-        );
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          "אויי חבל, לא הצלחנו לגבות את הקנס";
+        this.toast?.showError(errorMessage);
       } finally {
         this.isCollectingFine = false;
       }
@@ -5039,6 +5218,23 @@ $muted: rgba(255, 255, 255, 0.62);
       border: 1px solid rgba(239, 68, 68, 0.3);
     }
   }
+}
+
+.job-id {
+  font-family: monospace;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  word-break: break-all;
+  max-width: 150px;
+  display: inline-block;
+}
+
+.handyman-id {
+  font-family: monospace;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-right: 5px;
+  display: inline-block;
 }
 
 .job-desc {
@@ -7075,6 +7271,50 @@ select.form-input {
 .inquiry-no-mentions {
   color: $muted;
   font-size: 12px;
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-top: 24px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  border: 1px solid rgba($orange, 0.2);
+}
+
+.pagination-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba($orange, 0.15);
+  color: $orange2;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: $font-family;
+
+  &:hover:not(:disabled) {
+    background: rgba($orange, 0.25);
+    border-color: rgba($orange, 0.5);
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.pagination-info {
+  font-size: 14px;
+  font-weight: 800;
+  color: $text;
+  white-space: nowrap;
   font-style: italic;
 }
 

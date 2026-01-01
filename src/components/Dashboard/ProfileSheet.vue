@@ -129,7 +129,7 @@
             <h3 class="card__title">חשבון תשלומים</h3>
           </div>
           <div class="muted" style="margin-bottom: 10px">
-            הגדר את פרטי החשבון שלך כדי לקבל תשלומים
+            {{ hasPaymentAccount ? "ערוך את פרטי החשבון שלך" : "הגדר את פרטי החשבון שלך כדי לקבל תשלומים" }}
           </div>
           <a
             v-if="onboardingUrl"
@@ -139,7 +139,7 @@
             class="paymentBtn"
           >
             <span>💳</span>
-            הגדר חשבון תשלומים
+            {{ hasPaymentAccount ? "שינוי חשבון תשלומים" : "הגדר חשבון תשלומים" }}
           </a>
           <button
             v-else
@@ -149,7 +149,25 @@
             :disabled="isLoadingOnboarding"
           >
             <span>💳</span>
-            {{ isLoadingOnboarding ? "טוען..." : "הגדר חשבון תשלומים" }}
+            {{ isLoadingOnboarding ? "טוען..." : (hasPaymentAccount ? "שינוי חשבון תשלומים" : "הגדר חשבון תשלומים") }}
+          </button>
+        </section>
+
+        <!-- Change Payment Method (for subscription) -->
+        <section v-if="isHandyman && hasPaymentAccount" class="card">
+          <div class="card__head">
+            <h3 class="card__title">שינוי אשראי לחיוב המנוי</h3>
+          </div>
+          <div class="muted" style="margin-bottom: 10px">
+            שנה את כרטיס האשראי לחיוב המנוי החודשי
+          </div>
+          <button
+            class="paymentBtn"
+            type="button"
+            @click="goToPaymentSettings"
+          >
+            <span>💳</span>
+            שינוי אשראי לחיוב המנוי
           </button>
         </section>
 
@@ -304,6 +322,7 @@ export default {
       // Payment onboarding
       onboardingUrl: null,
       isLoadingOnboarding: false,
+      hasPaymentAccount: false, // Track if user has completed onboarding
     };
   },
   computed: {
@@ -422,7 +441,7 @@ export default {
     async handleDeleteUser() {
       const userId = this.user?._id || this.user?.id;
       if (!userId) {
-        alert("שגיאה: לא ניתן לזהות את המשתמש");
+        alert("אויי חבל, לא הצלחנו לזהות את המשתמש");
         return;
       }
 
@@ -436,13 +455,13 @@ export default {
           this.$router.push("/");
         } else {
           alert(
-            response.data.message || "שגיאה במחיקת המשתמש. נסה שוב מאוחר יותר."
+            response.data.message || "אויי חבל, לא הצלחנו למחוק את המשתמש. נסה שוב מאוחר יותר."
           );
         }
       } catch (error) {
         const errorMessage =
           error.response?.data?.message ||
-          "שגיאה במחיקת המשתמש. נסה שוב מאוחר יותר.";
+          "אויי חבל, לא הצלחנו למחוק את המשתמש. נסה שוב מאוחר יותר.";
         alert(errorMessage);
       } finally {
         this.isDeleting = false;
@@ -487,6 +506,9 @@ export default {
         if (response.data && response.data.success) {
           const { needsOnboarding } = response.data;
 
+          // Update hasPaymentAccount based on onboarding status
+          this.hasPaymentAccount = !needsOnboarding;
+
           if (needsOnboarding) {
             // Fetch onboarding link
             await this.fetchOnboardingLink();
@@ -496,7 +518,6 @@ export default {
           }
         }
       } catch (error) {
-        console.error("Error checking onboarding status:", error);
         // Don't show error to user - just try to fetch link
         await this.fetchOnboardingLink();
       }
@@ -519,15 +540,26 @@ export default {
           this.onboardingUrl = response.data.url;
         } else {
           this.onboardingUrl = null;
-          alert("לא ניתן ליצור קישור הגדרת תשלומים. אנא נסה שוב מאוחר יותר.");
+          alert("אויי חבל, לא הצלחנו ליצור קישור הגדרת תשלומים. אנא נסה שוב מאוחר יותר.");
         }
       } catch (error) {
-        console.error("Error fetching onboarding link:", error);
         this.onboardingUrl = null;
-        alert("שגיאה בטעינת קישור הגדרת תשלומים. אנא נסה שוב מאוחר יותר.");
+        alert("אויי חבל, לא הצלחנו לטעון את קישור הגדרת תשלומים. אנא נסה שוב מאוחר יותר.");
       } finally {
         this.isLoadingOnboarding = false;
       }
+    },
+    goToPaymentSettings() {
+      const userId = this.user?._id || this.user?.id;
+      if (!userId) {
+        alert("אויי חבל, לא הצלחנו לזהות את המשתמש");
+        return;
+      }
+      this.$emit("close");
+      this.$router.push({
+        name: "Payments",
+        params: { id: userId },
+      });
     },
   },
 };

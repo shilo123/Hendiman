@@ -47,6 +47,7 @@ body {
   height: 100%;
   margin: 0;
   padding: 0;
+  background: #0b0b0f;
   font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
 }
@@ -55,6 +56,7 @@ body {
   min-height: 100%;
   display: flex;
   flex-direction: column;
+  background: #0b0b0f;
   font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
 }

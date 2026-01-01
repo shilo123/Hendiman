@@ -1835,7 +1835,7 @@ export default {
           // Refresh jobs list
           await this.onRefresh();
         } else {
-          this.toast?.showError(response.data.message || "שגיאה בעדכון העבודה");
+          this.toast?.showError(response.data.message || "אויי חבל, לא הצלחנו לעדכן את העבודה");
         }
       } catch (error) {
         this.toast?.showError(
@@ -1868,7 +1868,7 @@ export default {
             this.editJobForm.imageUrl.push(data.imageUrl);
           }
         } catch (error) {
-          this.toast?.showError("שגיאה בהעלאת תמונה");
+          this.toast?.showError("אויי חבל, לא הצלחנו להעלות את התמונה");
         }
       }
 
@@ -2014,12 +2014,12 @@ export default {
               if (typeof window.L !== "undefined") {
                 this.createEditMap();
               } else {
-                this.toast?.showError("שגיאה בטעינת המפה. נסה שוב.");
+                this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב.");
               }
             }, 100);
           };
           script.onerror = () => {
-            this.toast?.showError("שגיאה בטעינת המפה. נסה שוב.");
+            this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב.");
           };
           document.body.appendChild(script);
         } else {
@@ -2033,7 +2033,7 @@ export default {
           setTimeout(() => {
             clearInterval(checkInterval);
             if (typeof window.L === "undefined") {
-              this.toast?.showError("שגיאה בטעינת המפה. נסה שוב.");
+              this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב.");
             }
           }, 5000);
         }
@@ -2043,7 +2043,7 @@ export default {
     },
     createEditMap() {
       if (typeof window.L === "undefined") {
-        this.toast?.showError("שגיאה בטעינת המפה. נסה שוב.");
+        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב.");
         return;
       }
 
@@ -2104,7 +2104,7 @@ export default {
           }
         });
       } catch (error) {
-        this.toast?.showError("שגיאה ביצירת המפה. נסה שוב.");
+        this.toast?.showError("אויי חבל, לא הצלחנו ליצור את המפה. נסה שוב.");
       }
     },
     async confirmEditMapLocation() {
@@ -2180,7 +2180,7 @@ export default {
           // Refresh jobs list
           await this.onRefresh();
         } else {
-          this.toast?.showError(response.data.message || "שגיאה במחיקת העבודה");
+          this.toast?.showError(response.data.message || "אויי חבל, לא הצלחנו למחוק את העבודה");
         }
       } catch (error) {
         this.toast?.showError(
@@ -2712,6 +2712,8 @@ export default {
           // Show notification that payment was approved and released
           if (paymentStatus === "paid" || data.paymentReleased) {
             this.showHandymanApprovedNotification = true;
+            // Hide the "waiting for client approval" notification when payment is released
+            this.showHandymanDoneNotification = false;
           }
 
           // Check if this job needs onboarding
@@ -2903,7 +2905,7 @@ export default {
         this.me?.id;
 
       if (!jobId || !clientId) {
-        this.toast?.showError("שגיאה: חסרים פרטים לאישור העבודה");
+        this.toast?.showError("אויי חבל, חסרים פרטים לאישור העבודה");
         return;
       }
 
@@ -3173,7 +3175,7 @@ export default {
       try {
         const userId = this.store.user?._id || this.$route.params.id;
         if (!userId || !this.handymanToBlock) {
-          this.toast?.showError("שגיאה: חסרים פרטים לחסימת הנדימן");
+          this.toast?.showError("אויי חבל, חסרים פרטים לחסימת הנדימן");
           return;
         }
 
@@ -3214,7 +3216,7 @@ export default {
     async onSaveProfile(form) {
       const userId = this.store.user?._id;
       if (!userId) {
-        this.toast?.showError("שגיאה: לא נמצא מזהה משתמש");
+        this.toast?.showError("אויי חבל, לא הצלחנו לזהות את המשתמש");
         return;
       }
       try {
@@ -3223,7 +3225,8 @@ export default {
           username: form.name,
           phone: form.phone,
           email: form.email,
-          city: form.city,
+          city: form.address || form.city,
+          cityEnglishName: form.cityEnglishName,
           specialties: form.specialties,
         });
         if (res.data?.success) {
@@ -3244,11 +3247,13 @@ export default {
           }
           this.toast?.showSuccess("הפרופיל עודכן בהצלחה");
           this.showProfileSheet = false;
+          // Refresh user data to get updated coordinates
+          await this.store.fetchDashboardData(userId);
         } else {
-          this.toast?.showError("שגיאה בעדכון הפרופיל");
+          this.toast?.showError("אויי חבל, לא הצלחנו לעדכן את הפרופיל");
         }
       } catch (error) {
-        this.toast?.showError("שגיאה בעדכון הפרופיל");
+        this.toast?.showError("אויי חבל, לא הצלחנו לעדכן את הפרופיל");
       }
     },
 
@@ -3261,7 +3266,7 @@ export default {
           this.toast.showError(data.message);
         }
       } catch (error) {
-        this.toast.showError("שגיאה בטעינת פרטי ההנדימן");
+        this.toast.showError("אויי חבל, לא הצלחנו לטעון את פרטי ההנדימן");
       }
     },
 
@@ -3613,6 +3618,16 @@ export default {
 
         // Check for jobs where client approved but handyman needs onboarding (for handyman)
         if (this.isHendiman && data?.Jobs) {
+          // Check if any done jobs have paymentStatus "paid" - if so, hide the "waiting for approval" notification
+          const paidJobs = data.Jobs.filter(
+            (job) =>
+              job.status === "done" &&
+              (job.paymentStatus === "paid" || job.handymanReceivedPayment === true)
+          );
+          if (paidJobs.length > 0) {
+            this.showHandymanDoneNotification = false;
+          }
+          
           const approvedJobsNeedingOnboarding = data.Jobs.filter(
             (job) =>
               job.status === "done" &&
