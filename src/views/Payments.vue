@@ -3,18 +3,18 @@
     <div class="payments-container">
       <!-- Header -->
       <div class="payments-header">
-        <button
-          class="payments-back"
-          type="button"
-          @click="handleBack"
-        >
+        <button class="payments-back" type="button" @click="handleBack">
           ← חזור
         </button>
         <h1 class="payments-title">
           {{ isSubscription ? "הרשמה למנוי חודשי" : "תשלום" }}
         </h1>
         <p class="payments-subtitle">
-          {{ isSubscription ? "הזן פרטי כרטיס אשראי להרשמה למנוי חודשי" : "הזן פרטי כרטיס אשראי" }}
+          {{
+            isSubscription
+              ? "הזן פרטי כרטיס אשראי להרשמה למנוי חודשי"
+              : "הזן פרטי כרטיס אשראי"
+          }}
         </p>
       </div>
 
@@ -25,6 +25,9 @@
           <div class="subscription-notice__title">מנוי חודשי</div>
           <div class="subscription-notice__text">
             התשלום יתבצע מדי חודש אוטומטית. תוכל לבטל את המנוי בכל עת.
+            <span v-if="getPendingRegistrationData()" class="subscription-notice__resume">
+              <br />אתה ממשיך תהליך הרשמה.
+            </span>
           </div>
         </div>
       </div>
@@ -37,7 +40,9 @@
             <label class="form-label">סכום לתשלום</label>
             <div class="amount-display">
               {{ formatCurrency(currentAmount || amount) }}
-              <span v-if="isSubscription" class="amount-display__period">/חודש</span>
+              <span v-if="isSubscription" class="amount-display__period"
+                >/חודש</span
+              >
             </div>
           </div>
 
@@ -48,46 +53,6 @@
               <!-- Stripe Elements will mount here -->
             </div>
             <div id="card-errors" class="form-error" role="alert"></div>
-          </div>
-
-          <!-- Billing Address (optional) -->
-          <div class="form-field">
-            <label class="form-label" for="billingAddress">
-              כתובת לחיוב (אופציונלי)
-            </label>
-            <input
-              id="billingAddress"
-              v-model="paymentForm.billingAddress"
-              type="text"
-              class="form-input"
-              placeholder="רחוב ומספר בית"
-            />
-          </div>
-
-          <!-- City and Zip -->
-          <div class="form-row">
-            <div class="form-field">
-              <label class="form-label" for="city"> עיר </label>
-              <input
-                id="city"
-                v-model="paymentForm.city"
-                type="text"
-                class="form-input"
-                placeholder="עיר"
-              />
-            </div>
-
-            <div class="form-field">
-              <label class="form-label" for="zipCode"> מיקוד </label>
-              <input
-                id="zipCode"
-                v-model="paymentForm.zipCode"
-                type="text"
-                class="form-input"
-                placeholder="מיקוד"
-                maxlength="7"
-              />
-            </div>
           </div>
 
           <!-- Security Notice -->
@@ -114,7 +79,9 @@
                   ? ` ${formatCurrency(currentAmount || amount)}`
                   : ""
               }}
-              <span v-if="isSubscription && (currentAmount || amount)">/חודש</span>
+              <span v-if="isSubscription && (currentAmount || amount)"
+                >/חודש</span
+              >
             </span>
           </button>
 
@@ -160,11 +127,7 @@ export default {
       currentJobId: null,
       currentAmount: null,
       isSubscription: false,
-      paymentForm: {
-        billingAddress: "",
-        city: "",
-        zipCode: "",
-      },
+      paymentForm: {},
       isProcessing: false,
       submitError: "",
       isStripeReady: false,
@@ -172,17 +135,28 @@ export default {
   },
   async created() {
     this.toast = useToast();
-    
+
     // Check if this is a subscription payment
-    this.isSubscription = this.$route.query.subscription === "true";
-    
+    // Check both query param and localStorage for pending registration
+    const hasPendingRegistration = this.getPendingRegistrationData() !== null;
+    this.isSubscription =
+      this.$route.query.subscription === "true" || hasPendingRegistration;
+
+    // If we have pending registration but no subscription query param, update the route
+    if (hasPendingRegistration && !this.$route.query.subscription) {
+      this.$router.replace({
+        ...this.$route,
+        query: { ...this.$route.query, subscription: "true" },
+      });
+    }
+
     // Get jobId and amount from query params if not provided as props
     if (this.$route.query.jobId) {
       this.currentJobId = this.$route.query.jobId;
     } else if (this.jobId) {
       this.currentJobId = this.jobId;
     }
-    
+
     if (this.$route.query.amount) {
       this.currentAmount = parseFloat(this.$route.query.amount);
     } else if (this.amount) {
@@ -207,7 +181,7 @@ export default {
       if (data.publishableKey) {
         this.stripePublishableKey = data.publishableKey;
         this.stripe = await loadStripe(data.publishableKey);
-        
+
         if (this.stripe) {
           this.elements = this.stripe.elements();
           this.setupCardElement();
@@ -239,7 +213,8 @@ export default {
         style: {
           base: {
             color: "rgba(255, 255, 255, 0.92)",
-            fontFamily: '"Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+            fontFamily:
+              '"Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
             fontSmoothing: "antialiased",
             fontSize: "15px",
             fontWeight: "800",
@@ -327,13 +302,6 @@ export default {
         await this.stripe.createPaymentMethod({
           type: "card",
           card: this.cardElement,
-          billing_details: {
-            address: {
-              line1: this.paymentForm.billingAddress || undefined,
-              city: this.paymentForm.city || undefined,
-              postal_code: this.paymentForm.zipCode || undefined,
-            },
-          },
         });
 
       if (pmError || !paymentMethod) {
@@ -376,11 +344,11 @@ export default {
         if (completeData.success) {
           // Clear pending registration
           localStorage.removeItem("pendingHandymanRegistration");
-          
+
           this.toast?.showSuccess(
             "הרשמה למנוי בוצעה בהצלחה! ברוך הבא להנדימן."
           );
-          
+
           // Redirect to dashboard
           setTimeout(() => {
             if (completeData.user?._id) {
@@ -436,20 +404,12 @@ export default {
         {
           payment_method: {
             card: this.cardElement,
-            billing_details: {
-              address: {
-                line1: this.paymentForm.billingAddress || undefined,
-                city: this.paymentForm.city || undefined,
-                postal_code: this.paymentForm.zipCode || undefined,
-              },
-            },
           },
         }
       );
 
       if (error) {
-        this.submitError =
-          error.message || "שגיאה באישור התשלום. אנא נסה שוב.";
+        this.submitError = error.message || "שגיאה באישור התשלום. אנא נסה שוב.";
         return;
       }
 
@@ -594,6 +554,15 @@ $font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
   font-weight: 700;
   color: rgba(255, 255, 255, 0.8);
   line-height: 1.5;
+}
+
+.subscription-notice__resume {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  font-style: italic;
 }
 
 .payment-form-wrapper {

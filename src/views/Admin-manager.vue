@@ -540,6 +540,7 @@
               <h2 class="payments-section__title">תשלומים</h2>
               <div class="payments-section__actions">
                 <button
+                  v-if="activePaymentsTab === 'transactions'"
                   class="download-pdf-btn"
                   type="button"
                   @click="downloadMonthlyPDF"
@@ -550,93 +551,89 @@
                 <button
                   class="refresh-payments-btn"
                   type="button"
-                  @click="loadPayments"
+                  @click="
+                    activePaymentsTab === 'transactions'
+                      ? loadPayments()
+                      : loadSubscriptions()
+                  "
                 >
                   ↻ רענן
                 </button>
               </div>
             </div>
 
-            <!-- Filters -->
-            <div class="payments-section__filters">
-              <input
-                v-model="paymentFilters.search"
-                type="text"
-                class="filter-input"
-                placeholder="חפש לפי לקוח, הנדימן או עבודה..."
-                @input="filterPayments"
-              />
-              <select
-                v-model="paymentFilters.status"
-                class="filter-select"
-                @change="filterPayments"
+            <!-- Payments Sub-Tabs -->
+            <div class="payments-sub-tabs">
+              <button
+                class="payments-sub-tab"
+                :class="{
+                  'payments-sub-tab--active':
+                    activePaymentsTab === 'transactions',
+                }"
+                type="button"
+                @click="activePaymentsTab = 'transactions'"
               >
-                <option value="">כל הסטטוסים</option>
-                <option value="transferred">הועבר</option>
-                <option value="pending">ממתין</option>
-                <option value="processing">מעבד</option>
-                <option value="requires_payment_method">נדרש תשלום</option>
-                <option value="requires_capture">נדרש לכידה</option>
-                <option value="failed">נכשל</option>
-                <option value="canceled">בוטל</option>
-              </select>
-              <select
-                v-model="paymentFilters.sortBy"
-                class="filter-select"
-                @change="filterPayments"
+                עסקאות
+              </button>
+              <button
+                class="payments-sub-tab"
+                :class="{
+                  'payments-sub-tab--active':
+                    activePaymentsTab === 'subscriptions',
+                }"
+                type="button"
+                @click="activePaymentsTab = 'subscriptions'"
               >
-                <option value="">מיין לפי</option>
-                <option value="date-desc">תאריך (חדש לישן)</option>
-                <option value="date-asc">תאריך (ישן לחדש)</option>
-                <option value="amount-desc">סכום (גבוה לנמוך)</option>
-                <option value="amount-asc">סכום (נמוך לגבוה)</option>
-              </select>
+                מנויים
+              </button>
             </div>
 
-            <div v-if="isLoadingPayments" class="loading-state">
-              טוען תשלומים...
-            </div>
-
-            <div v-else class="payments-tables-container">
-              <!-- Subscriptions Table -->
-              <div class="subscriptions-table-wrapper">
-                <h3 class="subscriptions-table-title">מנויים פעילים</h3>
-                <div v-if="isLoadingSubscriptions" class="loading-state">
-                  טוען מנויים...
-                </div>
-                <table v-else class="subscriptions-table">
-                  <thead>
-                    <tr>
-                      <th>שם המנוי</th>
-                      <th>סכום החיוב</th>
-                      <th>סכום המעמ</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      v-for="subscription in subscriptions"
-                      :key="subscription._id"
-                    >
-                      <td>{{ subscription.userName || "ללא שם" }}</td>
-                      <td>
-                        {{ formatCurrencySimple(subscription.amount || 0) }} ₪
-                      </td>
-                      <td>
-                        {{
-                          formatCurrencySimple(subscription.vatAmount || 0)
-                        }}
-                        ₪
-                      </td>
-                    </tr>
-                    <tr v-if="subscriptions.length === 0">
-                      <td colspan="3" class="no-data">אין מנויים פעילים</td>
-                    </tr>
-                  </tbody>
-                </table>
+            <!-- Transactions Tab -->
+            <div
+              v-if="activePaymentsTab === 'transactions'"
+              class="payments-sub-panel"
+            >
+              <!-- Filters -->
+              <div class="payments-section__filters">
+                <input
+                  v-model="paymentFilters.search"
+                  type="text"
+                  class="filter-input"
+                  placeholder="חפש לפי לקוח, הנדימן או עבודה..."
+                  @input="filterPayments"
+                />
+                <select
+                  v-model="paymentFilters.status"
+                  class="filter-select"
+                  @change="filterPayments"
+                >
+                  <option value="">כל הסטטוסים</option>
+                  <option value="transferred">הועבר</option>
+                  <option value="pending">ממתין</option>
+                  <option value="processing">מעבד</option>
+                  <option value="requires_payment_method">נדרש תשלום</option>
+                  <option value="requires_capture">נדרש לכידה</option>
+                  <option value="failed">נכשל</option>
+                  <option value="canceled">בוטל</option>
+                </select>
+                <select
+                  v-model="paymentFilters.sortBy"
+                  class="filter-select"
+                  @change="filterPayments"
+                >
+                  <option value="">מיין לפי</option>
+                  <option value="date-desc">תאריך (חדש לישן)</option>
+                  <option value="date-asc">תאריך (ישן לחדש)</option>
+                  <option value="amount-desc">סכום (גבוה לנמוך)</option>
+                  <option value="amount-asc">סכום (נמוך לגבוה)</option>
+                </select>
               </div>
 
-              <!-- Main Payments Table -->
-              <div class="payments-table-wrapper">
+              <div v-if="isLoadingPayments" class="loading-state">
+                טוען תשלומים...
+              </div>
+
+              <div v-else class="payments-table-wrapper">
                 <table class="payments-table">
                   <thead>
                     <tr>
@@ -764,6 +761,59 @@
                     </tr>
                     <tr v-if="filteredPayments.length === 0">
                       <td colspan="16" class="no-data">אין תשלומים להצגה</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Subscriptions Tab -->
+            <div
+              v-if="activePaymentsTab === 'subscriptions'"
+              class="payments-sub-panel"
+            >
+              <div v-if="isLoadingSubscriptions" class="loading-state">
+                טוען מנויים...
+              </div>
+              <div v-else class="subscriptions-table-wrapper">
+                <table class="subscriptions-table">
+                  <thead>
+                    <tr>
+                      <th>שם המנוי</th>
+                      <th>סכום החיוב</th>
+                      <th>סכום המעמ</th>
+                      <th>תאריך חיוב אחרון</th>
+                      <th>זמן במערכת</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="subscription in subscriptions"
+                      :key="subscription._id"
+                    >
+                      <td>{{ subscription.userName || "ללא שם" }}</td>
+                      <td>
+                        {{ formatCurrencySimple(subscription.amount || 0) }} ₪
+                      </td>
+                      <td>
+                        {{ formatCurrencySimple(subscription.vatAmount || 0) }}
+                        ₪
+                      </td>
+                      <td>
+                        <span v-if="subscription.lastPaymentDate">
+                          {{ formatDate(subscription.lastPaymentDate) }}
+                        </span>
+                        <span v-else class="no-data">-</span>
+                      </td>
+                      <td>
+                        <span v-if="subscription.userCreatedAt">
+                          {{ getTimeInSystem(subscription.userCreatedAt) }}
+                        </span>
+                        <span v-else class="no-data">-</span>
+                      </td>
+                    </tr>
+                    <tr v-if="subscriptions.length === 0">
+                      <td colspan="5" class="no-data">אין מנויים פעילים</td>
                     </tr>
                   </tbody>
                 </table>
@@ -2284,6 +2334,8 @@ export default {
       // Subscriptions
       subscriptions: [],
       isLoadingSubscriptions: false,
+      // Payments sub-tabs
+      activePaymentsTab: "transactions", // 'transactions' or 'subscriptions'
       // Delete payment modal
       showDeletePaymentModal: false,
       paymentToDelete: null,
@@ -2474,6 +2526,11 @@ export default {
     }
   },
   watch: {
+    activePaymentsTab(newTab) {
+      if (newTab === "subscriptions" && this.subscriptions.length === 0) {
+        this.loadSubscriptions();
+      }
+    },
     async activeTab(newTab) {
       if (newTab === "expenses") {
         await this.loadFinancials();
@@ -3025,6 +3082,26 @@ export default {
       if (diffMonths < 12) return `לפני ${diffMonths} חודשים`;
       if (diffYears === 1) return "לפני שנה אחת";
       return `לפני ${diffYears} שנים`;
+    },
+    getTimeInSystem(date) {
+      if (!date) return "";
+      const now = new Date();
+      const past = new Date(date);
+      const diffMs = now - past;
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const diffWeeks = Math.floor(diffDays / 7);
+      const diffMonths = Math.floor(diffDays / 30);
+      const diffYears = Math.floor(diffDays / 365);
+
+      if (diffDays === 0) return "היום";
+      if (diffDays === 1) return "יום אחד";
+      if (diffDays < 7) return `${diffDays} ימים`;
+      if (diffWeeks === 1) return "שבוע אחד";
+      if (diffWeeks < 4) return `${diffWeeks} שבועות`;
+      if (diffMonths === 1) return "חודש אחד";
+      if (diffMonths < 12) return `${diffMonths} חודשים`;
+      if (diffYears === 1) return "שנה אחת";
+      return `${diffYears} שנים`;
     },
     getHowDidYouHearPercentage(key) {
       if (!this.status.howDidYouHearStats) return 0;
@@ -4737,6 +4814,43 @@ $muted: rgba(255, 255, 255, 0.62);
   }
 }
 
+.payments-sub-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid rgba($orange, 0.2);
+  padding-bottom: 0;
+}
+
+.payments-sub-tab {
+  padding: 12px 24px;
+  border: none;
+  background: transparent;
+  color: $muted;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: $font-family;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  position: relative;
+
+  &:hover {
+    color: $orange2;
+  }
+
+  &--active {
+    color: $orange2;
+    border-bottom-color: $orange;
+    font-weight: 1000;
+  }
+}
+
+.payments-sub-panel {
+  margin-top: 20px;
+}
+
 .payments-tables-container {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -4753,6 +4867,7 @@ $muted: rgba(255, 255, 255, 0.62);
   border: 1px solid rgba($orange, 0.2);
   border-radius: 16px;
   padding: 20px;
+  overflow-x: auto;
 }
 
 .subscriptions-table-title {

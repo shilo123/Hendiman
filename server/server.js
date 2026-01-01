@@ -251,6 +251,14 @@ function findAvailablePort(startPort) {
               const amount = invoice.amount_paid / 100; // Convert from agorot to ILS
               const amountInAgorot = invoice.amount_paid;
 
+              // Calculate Stripe fee: 2.9% + 0.3$ (convert $0.3 to ILS, assuming ~3.5 ILS per $)
+              const stripeFeePercent = 2.9;
+              const stripeFixedFeeUSD = 0.3;
+              const usdToIlsRate = 3.5; // Approximate rate, adjust if needed
+              const stripeFixedFeeILS = stripeFixedFeeUSD * usdToIlsRate;
+              const stripeFee =
+                (amount * stripeFeePercent) / 100 + stripeFixedFeeILS;
+
               // Save payment record
               await paymentsCol.insertOne({
                 type: "subscription",
@@ -271,6 +279,9 @@ function findAvailablePort(startPort) {
               await financialsCol.insertOne({
                 Revenue: {
                   Drawings: amount,
+                },
+                expenses: {
+                  "clearing fee": stripeFee,
                 },
                 createdAt: new Date(),
               });
@@ -4636,18 +4647,42 @@ function findAvailablePort(startPort) {
         });
       }
 
-      const subscriptionAmount = getMonthlySubscription();
-      const amountInAgorot = Math.round(subscriptionAmount * 100); // Convert to agorot
+      // Clean registration data - remove file objects, keep only URLs
+      const cleanedRegistrationData = { ...registrationData };
+      // Remove file objects (image, logo) - we only need URLs
+      delete cleanedRegistrationData.image;
+      delete cleanedRegistrationData.logo;
+      delete cleanedRegistrationData.imagePreview;
+      delete cleanedRegistrationData.logoPreview;
+      // Keep only imageUrl and logoUrl (strings, not files)
+      if (!cleanedRegistrationData.imageUrl) {
+        delete cleanedRegistrationData.imageUrl;
+      }
+      if (!cleanedRegistrationData.logoUrl) {
+        delete cleanedRegistrationData.logoUrl;
+      }
+
+      // Save registration data to DB temporarily (since Stripe metadata is limited to 500 chars)
+      const usersCol = getCollection();
+      const tempRegistrationDoc = {
+        registrationData: cleanedRegistrationData,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000), // Expires in 30 minutes
+        type: "pending_subscription",
+      };
+
+      const tempDoc = await usersCol.insertOne(tempRegistrationDoc);
+      const tempRegistrationId = tempDoc.insertedId.toString();
 
       // Create Setup Intent for subscription (not Payment Intent)
       // Setup Intent is used to collect payment method for future charges
+      // Note: Setup Intent does NOT accept amount or currency parameters
+      // We only store the temp registration ID in metadata (not the full data)
       const setupIntent = await stripe.setupIntents.create({
         payment_method_types: ["card"],
-        amount: amountInAgorot,
-        currency: "ils",
         metadata: {
           type: "handyman_subscription",
-          registrationData: JSON.stringify(registrationData),
+          tempRegistrationId: tempRegistrationId, // Only store ID, not full data
         },
       });
 
@@ -4692,14 +4727,36 @@ function findAvailablePort(startPort) {
         });
       }
 
-      // Get registration data from metadata
+      // Get registration data ID from metadata and retrieve from DB
       let registrationData = null;
       try {
-        if (setupIntent.metadata?.registrationData) {
-          registrationData = JSON.parse(setupIntent.metadata.registrationData);
+        const tempRegistrationId = setupIntent.metadata?.tempRegistrationId;
+        if (tempRegistrationId) {
+          const tempDoc = await usersCol.findOne({
+            _id: new ObjectId(tempRegistrationId),
+            type: "pending_subscription",
+          });
+
+          if (tempDoc && tempDoc.registrationData) {
+            // Check if expired
+            if (tempDoc.expiresAt && new Date(tempDoc.expiresAt) < new Date()) {
+              await usersCol.deleteOne({
+                _id: new ObjectId(tempRegistrationId),
+              });
+              return res.status(400).json({
+                success: false,
+                message: "Registration data expired. Please start over.",
+              });
+            }
+
+            registrationData = tempDoc.registrationData;
+
+            // Delete the temp document after retrieving
+            await usersCol.deleteOne({ _id: new ObjectId(tempRegistrationId) });
+          }
         }
-      } catch (parseError) {
-        console.error("Error parsing registration data:", parseError);
+      } catch (dbError) {
+        console.error("Error retrieving registration data from DB:", dbError);
       }
 
       if (!registrationData) {
@@ -4716,29 +4773,45 @@ function findAvailablePort(startPort) {
       // Create Stripe Customer
       const customer = await stripe.customers.create({
         email: registrationData.email || undefined,
-        payment_method: paymentMethodId,
         metadata: {
           userId: "pending", // Will be updated after user creation
           type: "handyman_subscription",
         },
       });
 
+      // Attach payment method to customer and set as default
+      await stripe.paymentMethods.attach(paymentMethodId, {
+        customer: customer.id,
+      });
+
+      // Set as default payment method for the customer
+      await stripe.customers.update(customer.id, {
+        invoice_settings: {
+          default_payment_method: paymentMethodId,
+        },
+      });
+
       // Create Subscription
+      // First, create a Product and Price, then use the Price ID
+      const product = await stripe.products.create({
+        name: "מנוי חודשי הנדימן",
+        description: "מנוי חודשי לפלטפורמת הנדימן",
+      });
+
+      const price = await stripe.prices.create({
+        product: product.id,
+        currency: "ils",
+        recurring: {
+          interval: "month",
+        },
+        unit_amount: amountInAgorot,
+      });
+
       const subscription = await stripe.subscriptions.create({
         customer: customer.id,
         items: [
           {
-            price_data: {
-              currency: "ils",
-              product_data: {
-                name: "מנוי חודשי הנדימן",
-                description: "מנוי חודשי לפלטפורמת הנדימן",
-              },
-              recurring: {
-                interval: "month",
-              },
-              unit_amount: amountInAgorot,
-            },
+            price: price.id,
           },
         ],
         metadata: {
@@ -4911,14 +4984,17 @@ function findAvailablePort(startPort) {
       }
 
       // Insert user
+      console.log("💾 Inserting user to database...");
       const result = await usersCol.insertOne(userData);
 
       if (!result.insertedId) {
+        console.log("❌ Failed to insert user");
         return res.status(500).json({
           success: false,
           message: "Failed to register user",
         });
       }
+      console.log("✅ User inserted with ID:", result.insertedId.toString());
 
       // Update Stripe customer metadata with actual userId
       await stripe.customers.update(customer.id, {
@@ -11990,6 +12066,16 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
               const vatPercent = getMaamPercent();
               const vatAmount = (payment.amount * vatPercent) / 100;
 
+              // Get last payment date for this user
+              const lastPayment = await paymentsCol.findOne(
+                {
+                  type: "subscription",
+                  userId: new ObjectId(userId),
+                  status: "succeeded",
+                },
+                { sort: { createdAt: -1 } }
+              );
+
               subscriptionsMap.set(userId, {
                 _id: payment._id,
                 userId: userId,
@@ -11997,6 +12083,8 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                 amount: payment.amount || 0,
                 vatAmount: vatAmount,
                 createdAt: payment.createdAt,
+                lastPaymentDate: lastPayment?.createdAt || payment.createdAt,
+                userCreatedAt: user.createdAt || null,
               });
             }
           } catch (err) {
