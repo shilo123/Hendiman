@@ -25,7 +25,10 @@
           <div class="subscription-notice__title">מנוי חודשי</div>
           <div class="subscription-notice__text">
             התשלום יתבצע מדי חודש אוטומטית. תוכל לבטל את המנוי בכל עת.
-            <span v-if="getPendingRegistrationData()" class="subscription-notice__resume">
+            <span
+              v-if="getPendingRegistrationData()"
+              class="subscription-notice__resume"
+            >
               <br />אתה ממשיך תהליך הרשמה.
             </span>
           </div>
@@ -43,6 +46,36 @@
               <span v-if="isSubscription" class="amount-display__period"
                 >/חודש</span
               >
+            </div>
+          </div>
+
+          <!-- EXPRESS / WALLETS (Apple Pay / Google Pay) -->
+          <div v-if="stripe && elements" class="wallet-section">
+            <div class="wallet-header">
+              <div class="wallet-title">תשלום מהיר</div>
+              <div class="wallet-subtitle">
+                Apple Pay / Google Pay (אם זמין במכשיר)
+              </div>
+            </div>
+
+            <div v-show="walletReady" class="wallet-button-wrapper">
+              <div id="wallet-element" class="wallet-button"></div>
+            </div>
+
+            <div v-if="walletLoading" class="wallet-loading">
+              טוען אפשרויות תשלום...
+            </div>
+
+            <div v-if="walletError" class="wallet-error">
+              {{ walletError }}
+            </div>
+
+            <div v-if="!walletLoading && !walletReady" class="wallet-hint">
+              לא זמין במכשיר/דפדפן הזה — אפשר לשלם בכרטיס למטה.
+            </div>
+
+            <div class="divider">
+              <span>או</span>
             </div>
           </div>
 
@@ -131,6 +164,13 @@ export default {
       isProcessing: false,
       submitError: "",
       isStripeReady: false,
+      // Wallet / Payment Request Button
+      paymentRequest: null,
+      prButton: null,
+      walletReady: false,
+      walletLoading: false,
+      walletError: null,
+      lastWalletEvent: null,
     };
   },
   async created() {
@@ -169,8 +209,7 @@ export default {
         if (data.success && data.amount) {
           this.currentAmount = data.amount;
         }
-      } catch (error) {
-      }
+      } catch (error) {}
     }
 
     // Get Stripe publishable key from server
@@ -184,6 +223,7 @@ export default {
         if (this.stripe) {
           this.elements = this.stripe.elements();
           this.setupCardElement();
+          this.initWalletButton();
         }
       }
     } catch (error) {
@@ -193,6 +233,9 @@ export default {
   beforeUnmount() {
     if (this.cardElement) {
       this.cardElement.unmount();
+    }
+    if (this.prButton) {
+      this.prButton.unmount();
     }
   },
   methods: {
@@ -249,6 +292,212 @@ export default {
         style: "currency",
         currency: "ILS",
       }).format(amount || 0);
+    },
+    async initWalletButton() {
+      if (!this.stripe || !this.elements) return;
+
+      // Payment Request API - try with IL (Israel) or fallback to US
+      const country = "IL";
+
+      this.walletLoading = true;
+      this.walletError = null;
+      this.walletReady = false;
+
+      try {
+        const amountInAgorot = Math.round(
+          (this.currentAmount || this.amount || 0) * 100
+        );
+
+        // Create PaymentRequest
+        this.paymentRequest = this.stripe.paymentRequest({
+          country: country,
+          currency: "ils",
+          total: {
+            label: this.isSubscription ? "מנוי חודשי" : "תשלום",
+            amount: amountInAgorot,
+          },
+          requestPayerName: true,
+          requestPayerEmail: true,
+        });
+
+        // Check if Apple Pay/Google Pay is available
+        const result = await this.paymentRequest.canMakePayment();
+        if (!result) {
+          this.walletReady = false;
+          this.walletLoading = false;
+          return;
+        }
+
+        // Create Payment Request Button Element
+        this.prButton = this.elements.create("paymentRequestButton", {
+          paymentRequest: this.paymentRequest,
+          style: {
+            paymentRequestButton: {
+              type: "default",
+              theme: "dark",
+              height: "48px",
+            },
+          },
+        });
+
+        // Handle payment method event
+        this.paymentRequest.on("paymentmethod", async (ev) => {
+          this.lastWalletEvent = ev;
+          this.isProcessing = true;
+          this.submitError = "";
+
+          try {
+            if (this.isSubscription) {
+              await this.handleWalletSubscriptionPayment(ev.paymentMethod.id);
+            } else {
+              await this.handleWalletRegularPayment(ev.paymentMethod.id);
+            }
+            ev.complete("success");
+            this.lastWalletEvent = null;
+          } catch (error) {
+            ev.complete("fail");
+            this.lastWalletEvent = null;
+            this.submitError = error.message || "שגיאה בעיבוד התשלום";
+          } finally {
+            this.isProcessing = false;
+          }
+        });
+
+        this.prButton.mount("#wallet-element");
+        this.walletReady = true;
+      } catch (e) {
+        this.walletError = "לא הצלחנו לאתחל Apple Pay / Google Pay כרגע.";
+        this.walletReady = false;
+      } finally {
+        this.walletLoading = false;
+      }
+    },
+    async handleWalletSubscriptionPayment(paymentMethodId) {
+      // Step 1: Create subscription on server
+      const createSubscriptionResponse = await fetch(
+        `${URL}/api/subscription/create`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            registrationData: this.getPendingRegistrationData(),
+          }),
+        }
+      );
+
+      const subscriptionData = await createSubscriptionResponse.json();
+
+      if (!subscriptionData.success || !subscriptionData.clientSecret) {
+        throw new Error(
+          subscriptionData.message || "שגיאה ביצירת מנוי. אנא נסה שוב."
+        );
+      }
+
+      // Step 2: Confirm setup intent with payment method
+      const { error, setupIntent } = await this.stripe.confirmCardSetup(
+        subscriptionData.clientSecret,
+        {
+          payment_method: paymentMethodId,
+        }
+      );
+
+      if (error) {
+        throw new Error(error.message || "שגיאה באישור המנוי. אנא נסה שוב.");
+      }
+
+      if (setupIntent && setupIntent.status === "succeeded") {
+        // Step 3: Complete registration on server
+        const completeResponse = await fetch(
+          `${URL}/api/subscription/complete`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              setupIntentId: setupIntent.id,
+              paymentMethodId: paymentMethodId,
+            }),
+          }
+        );
+
+        const completeData = await completeResponse.json();
+
+        if (completeData.success) {
+          localStorage.removeItem("pendingHandymanRegistration");
+          this.toast?.showSuccess(
+            "הרשמה למנוי בוצעה בהצלחה! ברוך הבא להנדימן."
+          );
+          if (completeData.userId) {
+            this.$router.push(`/Dashboard/${completeData.userId}`);
+          } else {
+            this.$router.push({ name: "logIn" });
+          }
+        } else {
+          throw new Error(completeData.message || "שגיאה בהשלמת ההרשמה");
+        }
+      }
+    },
+    async handleWalletRegularPayment(paymentMethodId) {
+      // Create payment intent on server
+      const response = await fetch(`${URL}/api/payment/create-intent`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          amount: Math.round((this.currentAmount || this.amount || 0) * 100),
+          currency: "ils",
+          paymentMethodId: paymentMethodId,
+          jobId: this.currentJobId,
+          userId: this.userId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success || !data.clientSecret) {
+        throw new Error(data.message || "שגיאה ביצירת תשלום. אנא נסה שוב.");
+      }
+
+      // Confirm payment intent
+      const { error, paymentIntent } = await this.stripe.confirmCardPayment(
+        data.clientSecret,
+        {
+          payment_method: paymentMethodId,
+        }
+      );
+
+      if (error) {
+        throw new Error(error.message || "שגיאה באישור התשלום. אנא נסה שוב.");
+      }
+
+      if (paymentIntent && paymentIntent.status === "succeeded") {
+        this.toast?.showSuccess("תשלום בוצע בהצלחה!");
+        this.$router.push(`/Dashboard/${this.userId}`);
+      } else if (paymentIntent && paymentIntent.status === "requires_capture") {
+        // Capture the payment
+        const captureResponse = await fetch(`${URL}/api/payment/capture`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            paymentIntentId: paymentIntent.id,
+            jobId: this.currentJobId,
+          }),
+        });
+
+        const captureData = await captureResponse.json();
+        if (captureData.success) {
+          this.toast?.showSuccess("תשלום בוצע בהצלחה!");
+          this.$router.push(`/Dashboard/${this.userId}`);
+        } else {
+          throw new Error(captureData.message || "שגיאה בקבלת התשלום");
+        }
+      }
     },
     async handlePayment() {
       if (!this.isStripeReady || !this.cardElement) {
@@ -449,8 +698,7 @@ export default {
         if (data) {
           return JSON.parse(data);
         }
-      } catch (error) {
-      }
+      } catch (error) {}
       return null;
     },
   },
@@ -815,6 +1063,98 @@ $font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
   .payment-submit-btn {
     padding: 12px;
     font-size: 15px;
+  }
+}
+
+/* Wallet Section Styles */
+.wallet-section {
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid rgba($orange, 0.2);
+}
+
+.wallet-header {
+  margin-bottom: 16px;
+}
+
+.wallet-title {
+  font-size: 16px;
+  font-weight: 900;
+  color: $orange2;
+  margin-bottom: 4px;
+}
+
+.wallet-subtitle {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 600;
+}
+
+.wallet-button-wrapper {
+  margin-bottom: 12px;
+}
+
+.wallet-button {
+  width: 100%;
+}
+
+.wallet-loading {
+  padding: 16px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.wallet-error {
+  padding: 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #ef4444;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.wallet-hint {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 20px 0;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
+  font-weight: 600;
+
+  &::before,
+  &::after {
+    content: "";
+    flex: 1;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  &::before {
+    margin-left: 10px;
+  }
+
+  &::after {
+    margin-right: 10px;
+  }
+
+  span {
+    padding: 0 10px;
   }
 }
 </style>

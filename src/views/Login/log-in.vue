@@ -214,7 +214,7 @@ export default {
             this.googleId = user.googleId;
             await this.handleLogin();
           } catch (error) {
-            this.toast?.showError("אויי חבל, לא הצלחנו לעבד את נתוני המשתמש");
+            this.toast?.showError("לא הצלחנו לעבד את נתוני המשתמש");
           }
         }
       }

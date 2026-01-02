@@ -871,7 +871,7 @@ export default {
           );
         }
       } catch (error) {
-        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את פרטי ההנדימן");
+        this.toast?.showError("לא הצלחנו לטעון את פרטי ההנדימן");
       }
     }
 
@@ -1163,9 +1163,7 @@ export default {
           this.clearError("image");
         } else {
           this.errors.image = errorMessage;
-          this.toast.showError(
-            `אויי חבל, לא הצלחנו להעלות את התמונה: ${errorMessage}`
-          );
+          this.toast.showError(`לא הצלחנו להעלות את התמונה: ${errorMessage}`);
         }
       }
 
@@ -1289,16 +1287,12 @@ export default {
               if (typeof window.L !== "undefined") {
                 this.createMap();
               } else {
-                this.toast?.showError(
-                  "אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב."
-                );
+                this.toast?.showError("לא הצלחנו לטעון את המפה. נסה שוב.");
               }
             }, 100);
           };
           script.onerror = () => {
-            this.toast?.showError(
-              "אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב."
-            );
+            this.toast?.showError("לא הצלחנו לטעון את המפה. נסה שוב.");
           };
           document.body.appendChild(script);
         } else {
@@ -1312,9 +1306,7 @@ export default {
           setTimeout(() => {
             clearInterval(checkInterval);
             if (typeof window.L === "undefined") {
-              this.toast?.showError(
-                "אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב."
-              );
+              this.toast?.showError("לא הצלחנו לטעון את המפה. נסה שוב.");
             }
           }, 5000);
         }
@@ -1324,7 +1316,7 @@ export default {
     },
     createMap() {
       if (typeof window.L === "undefined") {
-        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב.");
+        this.toast?.showError("לא הצלחנו לטעון את המפה. נסה שוב.");
         return;
       }
 
@@ -1384,7 +1376,7 @@ export default {
           }
         }, 100);
       } catch (error) {
-        this.toast?.showError("אויי חבל, לא הצלחנו ליצור את המפה. נסה שוב.");
+        this.toast?.showError("לא הצלחנו ליצור את המפה. נסה שוב.");
       }
     },
     async confirmMapLocation() {
@@ -1547,7 +1539,7 @@ export default {
             if (!paymentMethodId) {
               this.isLoading = false;
               this.toast?.showError(
-                "אויי חבל, לא הצלחנו ליצור אמצעי תשלום. אנא נסה שוב."
+                "לא הצלחנו ליצור אמצעי תשלום. אנא נסה שוב."
               );
               return;
             }
@@ -1616,9 +1608,7 @@ export default {
           error.response?.data?.error ||
           error.message ||
           "שגיאה בשליחת הקריאה. נסה שוב מאוחר יותר.";
-        this.toast.showError(
-          `אויי חבל, לא הצלחנו לשלוח את הקריאה: ${errorMessage}`
-        );
+        this.toast.showError(`לא הצלחנו לשלוח את הקריאה: ${errorMessage}`);
       }
     },
     startPatienceMessageInterval() {
@@ -1693,9 +1683,7 @@ export default {
           );
         }
       } catch (error) {
-        this.toast?.showError(
-          "אויי חבל, לא הצלחנו לחפש את התחומים. נסה שוב מאוחר יותר."
-        );
+        this.toast?.showError("לא הצלחנו לחפש את התחומים. נסה שוב מאוחר יותר.");
       } finally {
         this.isLoadingCategories = false;
       }
@@ -1747,7 +1735,7 @@ export default {
         if (!paymentMethodIdToUse) {
           this.isLoading = false;
           this.isProcessingPayment = false;
-          this.toast?.showError("אויי חבל, לא מצאנו אמצעי תשלום. אנא נסה שוב.");
+          this.toast?.showError("לא מצאנו אמצעי תשלום. אנא נסה שוב.");
           return;
         }
 
@@ -1759,9 +1747,7 @@ export default {
         if (!userId) {
           this.isLoading = false;
           this.isProcessingPayment = false;
-          this.toast?.showError(
-            "אויי חבל, לא הצלחנו לאמת את המשתמש. אנא נסה שוב."
-          );
+          this.toast?.showError("לא הצלחנו לאמת את המשתמש. אנא נסה שוב.");
           return;
         }
 
@@ -1810,9 +1796,7 @@ export default {
       } catch (error) {
         this.isLoading = false;
         this.isProcessingPayment = false;
-        this.toast?.showError(
-          "אויי חבל, לא הצלחנו לעבד את התשלום. אנא נסה שוב."
-        );
+        this.toast?.showError("לא הצלחנו לעבד את התשלום. אנא נסה שוב.");
       }
     },
     async checkSavedPaymentMethod() {

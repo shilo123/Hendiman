@@ -1543,7 +1543,7 @@ export default {
           });
         }
       } catch (error) {
-        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את ההודעות");
+        this.toast?.showError(" לא הצלחנו לטעון את ההודעות");
       }
     },
 
@@ -1753,7 +1753,7 @@ export default {
 
       const userId = this.store?.user?._id;
       if (!userId) {
-        this.toast?.showError("אויי חבל, לא הצלחנו לזהות את המשתמש");
+        this.toast?.showError(" לא הצלחנו לזהות את המשתמש");
         return;
       }
 
@@ -1805,7 +1805,7 @@ export default {
         if (tempIndex !== -1) {
           this.messages.splice(tempIndex, 1);
         }
-        this.toast?.showError("אויי חבל, לא הצלחנו לשלוח את המיקום");
+        this.toast?.showError(" לא הצלחנו לשלוח את המיקום");
       }
     },
 
@@ -1879,7 +1879,7 @@ export default {
       // Get current user ID from store
       const userId = this.store?.user?._id;
       if (!userId) {
-        this.toast?.showError("אויי חבל, לא הצלחנו לזהות את המשתמש");
+        this.toast?.showError(" לא הצלחנו לזהות את המשתמש");
         return;
       }
 
@@ -1918,7 +1918,7 @@ export default {
         if (index !== -1) {
           this.messages.splice(index, 1);
         }
-        this.toast?.showError("אויי חבל, לא הצלחנו לשלוח את ההודעה");
+        this.toast?.showError(" לא הצלחנו לשלוח את ההודעה");
       }
     },
 
@@ -2022,7 +2022,7 @@ export default {
         if (tempIndex !== -1) {
           this.messages.splice(tempIndex, 1);
         }
-        this.toast?.showError("אויי חבל, לא הצלחנו להעלות את התמונה");
+        this.toast?.showError(" לא הצלחנו להעלות את התמונה");
       }
     },
 
@@ -2033,7 +2033,7 @@ export default {
       // Get current user ID from store
       const userId = this.store?.user?._id;
       if (!userId) {
-        this.toast?.showError("אויי חבל, לא הצלחנו לזהות את המשתמש");
+        this.toast?.showError(" לא הצלחנו לזהות את המשתמש");
         return;
       }
 
@@ -2049,7 +2049,7 @@ export default {
         // Message will be added via WebSocket, but we already added it optimistically
         // The duplicate check in addMessageToUI will prevent showing it twice
       } catch (error) {
-        this.toast?.showError("אויי חבל, לא הצלחנו לשלוח את התמונה");
+        this.toast?.showError(" לא הצלחנו לשלוח את התמונה");
       }
     },
 
@@ -2138,9 +2138,7 @@ export default {
           this.onboardingUrl = response.data.url;
         }
       } catch (error) {
-        this.toast?.showError(
-          "אויי חבל, לא הצלחנו לקבל את קישור הגדרת תשלומים"
-        );
+        this.toast?.showError(" לא הצלחנו לקבל את קישור הגדרת תשלומים");
       } finally {
         this.isLoadingOnboarding = false;
       }
@@ -2172,7 +2170,7 @@ export default {
         });
         this.$emit("status-updated", newStatus);
       } catch (err) {
-        this.toast.showError("אויי חבל, לא הצלחנו לעדכן את הסטטוס");
+        this.toast.showError(" לא הצלחנו לעדכן את הסטטוס");
       }
     },
 
@@ -2185,7 +2183,7 @@ export default {
         // Get current user ID (customer)
         const customerId = this.store?.user?._id || this.job?.clientId;
         if (!customerId) {
-          this.toast.showError("אויי חבל, לא הצלחנו לזהות את הלקוח");
+          this.toast.showError(" לא הצלחנו לזהות את הלקוח");
           return;
         }
 
@@ -2208,7 +2206,9 @@ export default {
           const userId = this.store?.user?._id || this.$route.params.id;
           this.$router.push(`/Dashboard/${userId}`);
         } else {
-          this.toast.showError(response.data?.message || "אויי חבל, לא הצלחנו לשלוח את הדירוג");
+          this.toast.showError(
+            response.data?.message || ", לא הצלחנו לשלוח את הדירוג"
+          );
         }
       } catch (err) {
         if (err.response?.data?.message) {
@@ -2221,7 +2221,7 @@ export default {
           const userId = this.store?.user?._id || this.$route.params.id;
           this.$router.push(`/Dashboard/${userId}`);
         } else {
-          this.toast.showError("אויי חבל, לא הצלחנו לשלוח את הדירוג");
+          this.toast.showError(" לא הצלחנו לשלוח את הדירוג");
         }
       }
     },
@@ -2288,7 +2288,7 @@ export default {
         this.store.user?.id;
 
       if (!jobId || !clientId) {
-        this.toast?.showError("אויי חבל, חסרים פרטים לאישור העבודה");
+        this.toast?.showError("  חסרים פרטים לאישור העבודה");
         return;
       }
 
@@ -2365,7 +2365,7 @@ export default {
 
         const userId = this.store.user?._id || this.store.user?.id;
         if (!userId) {
-          this.toast.showError("אויי חבל, לא מצאנו מזהה משתמש");
+          this.toast.showError(" לא מצאנו מזהה משתמש");
           return;
         }
 
@@ -2445,7 +2445,7 @@ export default {
         (this.selectedSubcategoryIndex === null ||
           this.selectedSubcategoryIndex === undefined)
       ) {
-        this.toast?.showError("אויי חבל, אנא בחר עבודה");
+        this.toast?.showError(" אנא בחר עבודה");
         return;
       }
 
@@ -2456,7 +2456,7 @@ export default {
 
         const handymanId = this.store.user?._id || this.store.user?.id;
         if (!handymanId) {
-          this.toast?.showError("אויי חבל, לא מצאנו מזהה משתמש");
+          this.toast?.showError(" לא מצאנו מזהה משתמש");
           return;
         }
 
@@ -2521,7 +2521,7 @@ export default {
 
         const clientId = this.store.user?._id || this.store.user?.id;
         if (!clientId) {
-          this.toast?.showError("אויי חבל, לא מצאנו מזהה משתמש");
+          this.toast?.showError(" לא מצאנו מזהה משתמש");
           return;
         }
 

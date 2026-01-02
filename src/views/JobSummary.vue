@@ -242,7 +242,7 @@ export default {
       } catch (error) {
         // Show error to user
         if (this.store?.toast) {
-          this.store.toast.showError("אויי חבל, לא הצלחנו לטעון את סיכום העבודה");
+          this.store.toast.showError("לא הצלחנו לטעון את סיכום העבודה");
         }
       } finally {
         this.isLoading = false;

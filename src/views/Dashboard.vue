@@ -1835,7 +1835,9 @@ export default {
           // Refresh jobs list
           await this.onRefresh();
         } else {
-          this.toast?.showError(response.data.message || "אויי חבל, לא הצלחנו לעדכן את העבודה");
+          this.toast?.showError(
+            response.data.message || "לא הצלחנו לעדכן את העבודה"
+          );
         }
       } catch (error) {
         this.toast?.showError(
@@ -1868,7 +1870,7 @@ export default {
             this.editJobForm.imageUrl.push(data.imageUrl);
           }
         } catch (error) {
-          this.toast?.showError("אויי חבל, לא הצלחנו להעלות את התמונה");
+          this.toast?.showError("לא הצלחנו להעלות את התמונה");
         }
       }
 
@@ -2014,12 +2016,12 @@ export default {
               if (typeof window.L !== "undefined") {
                 this.createEditMap();
               } else {
-                this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב.");
+                this.toast?.showError("לא הצלחנו לטעון את המפה. נסה שוב.");
               }
             }, 100);
           };
           script.onerror = () => {
-            this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב.");
+            this.toast?.showError("לא הצלחנו לטעון את המפה. נסה שוב.");
           };
           document.body.appendChild(script);
         } else {
@@ -2033,7 +2035,7 @@ export default {
           setTimeout(() => {
             clearInterval(checkInterval);
             if (typeof window.L === "undefined") {
-              this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב.");
+              this.toast?.showError("לא הצלחנו לטעון את המפה. נסה שוב.");
             }
           }, 5000);
         }
@@ -2043,7 +2045,7 @@ export default {
     },
     createEditMap() {
       if (typeof window.L === "undefined") {
-        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב.");
+        this.toast?.showError("לא הצלחנו לטעון את המפה. נסה שוב.");
         return;
       }
 
@@ -2104,7 +2106,7 @@ export default {
           }
         });
       } catch (error) {
-        this.toast?.showError("אויי חבל, לא הצלחנו ליצור את המפה. נסה שוב.");
+        this.toast?.showError("לא הצלחנו ליצור את המפה. נסה שוב.");
       }
     },
     async confirmEditMapLocation() {
@@ -2180,7 +2182,9 @@ export default {
           // Refresh jobs list
           await this.onRefresh();
         } else {
-          this.toast?.showError(response.data.message || "אויי חבל, לא הצלחנו למחוק את העבודה");
+          this.toast?.showError(
+            response.data.message || "לא הצלחנו למחוק את העבודה"
+          );
         }
       } catch (error) {
         this.toast?.showError(
@@ -2905,7 +2909,7 @@ export default {
         this.me?.id;
 
       if (!jobId || !clientId) {
-        this.toast?.showError("אויי חבל, חסרים פרטים לאישור העבודה");
+        this.toast?.showError("חסרים פרטים לאישור העבודה");
         return;
       }
 
@@ -3175,7 +3179,7 @@ export default {
       try {
         const userId = this.store.user?._id || this.$route.params.id;
         if (!userId || !this.handymanToBlock) {
-          this.toast?.showError("אויי חבל, חסרים פרטים לחסימת הנדימן");
+          this.toast?.showError("חסרים פרטים לחסימת הנדימן");
           return;
         }
 
@@ -3216,7 +3220,7 @@ export default {
     async onSaveProfile(form) {
       const userId = this.store.user?._id;
       if (!userId) {
-        this.toast?.showError("אויי חבל, לא הצלחנו לזהות את המשתמש");
+        this.toast?.showError(" לא הצלחנו לזהות את המשתמש");
         return;
       }
       try {
@@ -3250,10 +3254,10 @@ export default {
           // Refresh user data to get updated coordinates
           await this.store.fetchDashboardData(userId);
         } else {
-          this.toast?.showError("אויי חבל, לא הצלחנו לעדכן את הפרופיל");
+          this.toast?.showError("לא הצלחנו לעדכן את הפרופיל");
         }
       } catch (error) {
-        this.toast?.showError("אויי חבל, לא הצלחנו לעדכן את הפרופיל");
+        this.toast?.showError("לא הצלחנו לעדכן את הפרופיל");
       }
     },
 
@@ -3266,7 +3270,7 @@ export default {
           this.toast.showError(data.message);
         }
       } catch (error) {
-        this.toast.showError("אויי חבל, לא הצלחנו לטעון את פרטי ההנדימן");
+        this.toast.showError("לא הצלחנו לטעון את פרטי ההנדימן");
       }
     },
 
@@ -3622,12 +3626,13 @@ export default {
           const paidJobs = data.Jobs.filter(
             (job) =>
               job.status === "done" &&
-              (job.paymentStatus === "paid" || job.handymanReceivedPayment === true)
+              (job.paymentStatus === "paid" ||
+                job.handymanReceivedPayment === true)
           );
           if (paidJobs.length > 0) {
             this.showHandymanDoneNotification = false;
           }
-          
+
           const approvedJobsNeedingOnboarding = data.Jobs.filter(
             (job) =>
               job.status === "done" &&

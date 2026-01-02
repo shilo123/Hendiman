@@ -129,7 +129,11 @@
             <h3 class="card__title">חשבון תשלומים</h3>
           </div>
           <div class="muted" style="margin-bottom: 10px">
-            {{ hasPaymentAccount ? "ערוך את פרטי החשבון שלך" : "הגדר את פרטי החשבון שלך כדי לקבל תשלומים" }}
+            {{
+              hasPaymentAccount
+                ? "ערוך את פרטי החשבון שלך"
+                : "הגדר את פרטי החשבון שלך כדי לקבל תשלומים"
+            }}
           </div>
           <a
             v-if="onboardingUrl"
@@ -139,7 +143,9 @@
             class="paymentBtn"
           >
             <span>💳</span>
-            {{ hasPaymentAccount ? "שינוי חשבון תשלומים" : "הגדר חשבון תשלומים" }}
+            {{
+              hasPaymentAccount ? "שינוי חשבון תשלומים" : "הגדר חשבון תשלומים"
+            }}
           </a>
           <button
             v-else
@@ -149,7 +155,13 @@
             :disabled="isLoadingOnboarding"
           >
             <span>💳</span>
-            {{ isLoadingOnboarding ? "טוען..." : (hasPaymentAccount ? "שינוי חשבון תשלומים" : "הגדר חשבון תשלומים") }}
+            {{
+              isLoadingOnboarding
+                ? "טוען..."
+                : hasPaymentAccount
+                ? "שינוי חשבון תשלומים"
+                : "הגדר חשבון תשלומים"
+            }}
           </button>
         </section>
 
@@ -161,11 +173,7 @@
           <div class="muted" style="margin-bottom: 10px">
             שנה את כרטיס האשראי לחיוב המנוי החודשי
           </div>
-          <button
-            class="paymentBtn"
-            type="button"
-            @click="goToPaymentSettings"
-          >
+          <button class="paymentBtn" type="button" @click="goToPaymentSettings">
             <span>💳</span>
             שינוי אשראי לחיוב המנוי
           </button>
@@ -291,6 +299,7 @@
 import cities from "@/APIS/AdressFromIsrael.json";
 import CategoryCheckboxSelector from "@/components/Global/CategoryCheckboxSelector.vue";
 import axios from "axios";
+import { useToast } from "@/composables/useToast";
 import { URL } from "@/Url/url";
 
 export default {
@@ -323,6 +332,7 @@ export default {
       onboardingUrl: null,
       isLoadingOnboarding: false,
       hasPaymentAccount: false, // Track if user has completed onboarding
+      toast: null,
     };
   },
   computed: {
@@ -333,6 +343,9 @@ export default {
       if (!q) return list.slice(1, 60); // יותר נוח ברשימה
       return list.filter((c) => c.name.includes(q)).slice(0, 60);
     },
+  },
+  created() {
+    this.toast = useToast();
   },
   watch: {
     user: {
@@ -441,7 +454,7 @@ export default {
     async handleDeleteUser() {
       const userId = this.user?._id || this.user?.id;
       if (!userId) {
-        alert("אויי חבל, לא הצלחנו לזהות את המשתמש");
+        this.toast?.showError(" לא הצלחנו לזהות את המשתמש");
         return;
       }
 
@@ -455,13 +468,14 @@ export default {
           this.$router.push("/");
         } else {
           alert(
-            response.data.message || "אויי חבל, לא הצלחנו למחוק את המשתמש. נסה שוב מאוחר יותר."
+            response.data.message ||
+              "לא הצלחנו למחוק את המשתמש. נסה שוב מאוחר יותר."
           );
         }
       } catch (error) {
         const errorMessage =
           error.response?.data?.message ||
-          "אויי חבל, לא הצלחנו למחוק את המשתמש. נסה שוב מאוחר יותר.";
+          "לא הצלחנו למחוק את המשתמש. נסה שוב מאוחר יותר.";
         alert(errorMessage);
       } finally {
         this.isDeleting = false;
@@ -518,6 +532,9 @@ export default {
           }
         }
       } catch (error) {
+        this.toast?.showError(
+          " לא הצלחנו ליצור קישור הגדרת תשלומים. אנא נסה שוב מאוחר יותר."
+        );
         // Don't show error to user - just try to fetch link
         await this.fetchOnboardingLink();
       }
@@ -528,7 +545,6 @@ export default {
 
       const handymanId = this.user?._id || this.user?.id;
       if (!handymanId) return;
-
       this.isLoadingOnboarding = true;
       try {
         const response = await axios.post(
@@ -540,11 +556,15 @@ export default {
           this.onboardingUrl = response.data.url;
         } else {
           this.onboardingUrl = null;
-          alert("אויי חבל, לא הצלחנו ליצור קישור הגדרת תשלומים. אנא נסה שוב מאוחר יותר.");
+          alert(
+            " לא הצלחנו ליצור קישור הגדרת תשלומים. אנא נסה שוב מאוחר יותר."
+          );
         }
       } catch (error) {
         this.onboardingUrl = null;
-        alert("אויי חבל, לא הצלחנו לטעון את קישור הגדרת תשלומים. אנא נסה שוב מאוחר יותר.");
+        alert(
+          "לא הצלחנו לטעון את קישור הגדרת תשלומים. אנא נסה שוב מאוחר יותר."
+        );
       } finally {
         this.isLoadingOnboarding = false;
       }
@@ -552,7 +572,7 @@ export default {
     goToPaymentSettings() {
       const userId = this.user?._id || this.user?.id;
       if (!userId) {
-        alert("אויי חבל, לא הצלחנו לזהות את המשתמש");
+        alert("לא הצלחנו לזהות את המשתמש");
         return;
       }
       this.$emit("close");

@@ -802,13 +802,13 @@
     >
       <div class="modal-content">
         <div class="modal-header">
-          <h3>אויי חבל, לא מצאנו בשבילך הנדימן אחד לתחומים שרצית</h3>
+          <h3>לא מצאנו בשבילך הנדימן אחד לתחומים שרצית נסה שוב מאוחר יותר</h3>
           <button class="modal-close" @click="showPartialMatchModal = false">
             ×
           </button>
         </div>
         <div class="modal-body">
-          <p style="margin-bottom: 16px">אויי חבל, לא מצאנו בשבילך הנדימן אחד לתחומים שרצית.</p>
+          <p style="margin-bottom: 16px">יש הנדימנים אך לא לתחומים שביקשת</p>
           <div class="matched-subcategories-list">
             <p
               v-for="(subcat, index) in partialMatchData.matchedSubcategories"
@@ -1136,7 +1136,7 @@ export default {
           const data = await loadCategories();
           this.allCategories = data.categories || [];
         } catch (error) {
-          this.toast?.showError("אויי חבל, לא הצלחנו לטעון את הקטגוריות");
+          this.toast?.showError(" לא הצלחנו לטעון את הקטגוריות");
           return;
         }
       }
@@ -1237,16 +1237,16 @@ export default {
             axiosError.code === "ERR_CONNECTION_REFUSED" ||
             axiosError.code === "ECONNABORTED"
           ) {
-            this.toast?.showError("אויי חבל, לא הצלחנו להתחבר לשרת. אנא ודא שהשרת רץ.");
+            this.toast?.showError(" לא הצלחנו להתחבר לשרת. אנא ודא שהשרת רץ.");
           } else if (axiosError.response) {
             // Server responded with error status
             if (axiosError.response.status === 404) {
-              this.toast?.showError("אויי חבל, השרת לא מצא את המשתמש. אנא נסה שוב.");
+              this.toast?.showError("השרת לא מצא את המשתמש. אנא נסה שוב.");
             } else if (axiosError.response.status === 500) {
-              this.toast?.showError("אויי חבל, יש בעיה בשרת. אנא נסה שוב מאוחר יותר.");
+              this.toast?.showError("יש בעיה בשרת. אנא נסה שוב מאוחר יותר.");
             }
           } else if (axiosError.code === "ECONNABORTED") {
-            this.toast?.showError("אויי חבל, הבקשה לשרת ארכה זמן רב מדי. אנא נסה שוב.");
+            this.toast?.showError("הבקשה לשרת ארכה זמן רב מדי. אנא נסה שוב.");
           }
           // Error checking payment method, show form anyway
           this.showChangePaymentMethod = false;
@@ -1313,7 +1313,7 @@ export default {
     async processPayment(jobId) {
       if (!this.stripe) {
         this.isLoading = false;
-        this.toast?.showError("אויי חבל, מערכת התשלומים לא נטענה. אנא רענן את הדף.");
+        this.toast?.showError("מערכת התשלומים לא נטענה. אנא רענן את הדף.");
         return;
       }
 
@@ -1340,7 +1340,7 @@ export default {
           this.isLoading = false;
           this.isProcessingPayment = false;
           this.toast?.showError(
-            intentData.message || "אויי חבל, לא הצלחנו ליצור כוונת תשלום. אנא נסה שוב."
+            intentData.message || " לא הצלחנו ליצור כוונת תשלום. אנא נסה שוב."
           );
           return;
         }
@@ -1367,7 +1367,7 @@ export default {
           this.isLoading = false;
           this.isProcessingPayment = false;
           this.toast?.showError(
-            pmError?.message || "אויי חבל, לא הצלחנו ליצור אמצעי תשלום. אנא נסה שוב."
+            pmError?.message || " לא הצלחנו ליצור אמצעי תשלום. אנא נסה שוב."
           );
           return;
         }
@@ -1384,7 +1384,7 @@ export default {
           this.isLoading = false;
           this.isProcessingPayment = false;
           this.toast?.showError(
-            error.message || "אויי חבל, לא הצלחנו לאשר את התשלום. אנא נסה שוב."
+            error.message || " לא הצלחנו לאשר את התשלום. אנא נסה שוב."
           );
           return;
         }
@@ -1422,12 +1422,12 @@ export default {
         } else {
           this.isLoading = false;
           this.isProcessingPayment = false;
-          this.toast?.showError("אויי חבל, מצב תשלום לא צפוי. אנא פנה לתמיכה.");
+          this.toast?.showError("מצב תשלום לא צפוי. אנא פנה לתמיכה.");
         }
       } catch (error) {
         this.isLoading = false;
         this.isProcessingPayment = false;
-        this.toast?.showError("אויי חבל, לא הצלחנו לעבד את התשלום. אנא נסה שוב.");
+        this.toast?.showError(" לא הצלחנו לעבד את התשלום. אנא נסה שוב.");
       }
     },
     setMyLocation() {
@@ -1591,7 +1591,7 @@ export default {
           this.clearError("image");
         } else {
           this.errors.image = errorMessage;
-          this.toast.showError(`אויי חבל, לא הצלחנו להעלות את התמונה: ${errorMessage}`);
+          this.toast.showError(`לא הצלחנו להעלות את התמונה: ${errorMessage}`);
         }
       } finally {
         this.isUploadingImage = false;
@@ -1654,12 +1654,12 @@ export default {
               if (typeof window.L !== "undefined") {
                 this.createMap();
               } else {
-                this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב.");
+                this.toast?.showError("לא הצלחנו לטעון את המפה. נסה שוב.");
               }
             }, 100);
           };
           script.onerror = () => {
-            this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב.");
+            this.toast?.showError("לא הצלחנו לטעון את המפה. נסה שוב.");
           };
           document.body.appendChild(script);
         } else {
@@ -1673,7 +1673,7 @@ export default {
           setTimeout(() => {
             clearInterval(checkInterval);
             if (typeof window.L === "undefined") {
-              this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב.");
+              this.toast?.showError("לא הצלחנו לטעון את המפה. נסה שוב.");
             }
           }, 5000);
         }
@@ -1683,7 +1683,7 @@ export default {
     },
     createMap() {
       if (typeof window.L === "undefined") {
-        this.toast?.showError("אויי חבל, לא הצלחנו לטעון את המפה. נסה שוב.");
+        this.toast?.showError("לא הצלחנו לטעון את המפה. נסה שוב.");
         return;
       }
 
@@ -1743,12 +1743,12 @@ export default {
           }
         }, 100);
       } catch (error) {
-        this.toast?.showError("אויי חבל, לא הצלחנו ליצור את המפה. נסה שוב.");
+        this.toast?.showError(" לא הצלחנו ליצור את המפה. נסה שוב.");
       }
     },
     async confirmMapLocation() {
       if (!this.selectedMapLocation) {
-        this.toast?.showError("אויי חבל, אנא בחר מיקום במפה");
+        this.toast?.showError(" אנא בחר מיקום במפה");
         return;
       }
 
@@ -1886,7 +1886,7 @@ export default {
             // Check if CreditCardForm component is available
             if (!this.$refs.creditCardForm) {
               this.isLoading = false;
-              this.toast?.showError("אויי חבל, טופס כרטיס האשראי לא זמין. אנא נסה שוב.");
+              this.toast?.showError(" טופס כרטיס האשראי לא זמין. אנא נסה שוב.");
               return;
             }
 
@@ -1896,7 +1896,9 @@ export default {
 
             if (!paymentMethodId) {
               this.isLoading = false;
-              this.toast?.showError("אויי חבל, לא הצלחנו ליצור אמצעי תשלום. אנא נסה שוב.");
+              this.toast?.showError(
+                " לא הצלחנו ליצור אמצעי תשלום. אנא נסה שוב."
+              );
               return;
             }
 
@@ -1905,8 +1907,9 @@ export default {
             callData.paymentMethodId = paymentMethodId;
           } catch (paymentError) {
             this.isLoading = false;
-              this.toast?.showError(
-              paymentError.message || "אויי חבל, לא הצלחנו ליצור אמצעי תשלום. אנא נסה שוב."
+            this.toast?.showError(
+              paymentError.message ||
+                "לא הצלחנו ליצור אמצעי תשלום. אנא נסה שוב."
             );
             return;
           }
@@ -1982,12 +1985,12 @@ export default {
         this.stopPatienceMessageInterval();
 
         this.isLoading = false;
-          const errorMessage =
+        const errorMessage =
           error.response?.data?.message ||
           error.response?.data?.error ||
           error.message ||
-          "אויי חבל, לא הצלחנו לשלוח את הקריאה. נסה שוב מאוחר יותר.";
-        this.toast.showError(`אויי חבל, לא הצלחנו לשלוח את הקריאה: ${errorMessage}`);
+          "לא הצלחנו לשלוח את הקריאה. נסה שוב מאוחר יותר.";
+        this.toast.showError(`לא הצלחנו לשלוח את הקריאה: ${errorMessage}`);
       }
     },
     async handleSplitCall() {
@@ -2138,7 +2141,7 @@ export default {
         }
 
         if (fullMatchedSubcategories.length === 0) {
-          this.toast.showError("אויי חבל, לא מצאנו בשבילך תחומים לפיצול");
+          this.toast.showError("לא מצאנו בשבילך תחומים לפיצול");
           this.isLoading = false;
           return;
         }
@@ -2148,7 +2151,7 @@ export default {
         callData.matchedSubcategories = fullMatchedSubcategories;
 
         if (!callData.handymen || callData.handymen.length === 0) {
-          this.toast.showError("אויי חבל, לא מצאנו בשבילך הנדימנים לפיצול");
+          this.toast.showError("לא מצאנו בשבילך הנדימנים לפיצול");
           this.isLoading = false;
           return;
         }
@@ -2189,7 +2192,9 @@ export default {
             });
           }, 1000);
         } else {
-          this.toast.showError(response.data.message || "אויי חבל, לא הצלחנו לפצל את הקריאה");
+          this.toast.showError(
+            response.data.message || "לא הצלחנו לפצל את הקריאה"
+          );
         }
       } catch (error) {
         const errorMessage =
@@ -2371,10 +2376,12 @@ export default {
             });
           }, 1000);
         } else {
-          this.toast.showError(response.data.message || "אויי חבל, לא הצלחנו לפצל את הקריאה");
+          this.toast.showError(
+            response.data.message || "לא הצלחנו לפצל את הקריאה"
+          );
         }
       } catch (error) {
-        this.toast.showError("אויי חבל, לא הצלחנו לפצל את הקריאה. נסה שוב מאוחר יותר.");
+        this.toast.showError("לא הצלחנו לפצל את הקריאה. נסה שוב מאוחר יותר.");
       } finally {
         this.isLoading = false;
       }
@@ -2452,11 +2459,11 @@ export default {
           this.foundCategories = response.data.subcategories;
         } else {
           this.toast?.showError(
-            response.data.message || "אויי חבל, לא מצאנו בשבילך תחומים מתאימים"
+            response.data.message || "לא מצאנו בשבילך תחומים מתאימים"
           );
         }
       } catch (error) {
-        this.toast?.showError("אויי חבל, לא הצלחנו לחפש את התחומים. נסה שוב מאוחר יותר.");
+        this.toast?.showError("לא הצלחנו לחפש את התחומים. נסה שוב מאוחר יותר.");
       } finally {
         this.isLoadingCategories = false;
       }
