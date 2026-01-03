@@ -21,253 +21,7 @@
       <!-- Tab Content -->
       <div class="tab-content">
         <!-- Users Tab -->
-        <div v-if="activeTab === 'users'" class="tab-panel">
-          <div class="users-section">
-            <div class="users-section__header">
-              <h2 class="users-section__title">משתמשים</h2>
-              <div class="users-section__controls">
-                <div class="users-section__filters">
-                  <input
-                    v-model="userFilters.search"
-                    type="text"
-                    class="filter-input"
-                    placeholder="חפש לפי שם או אימייל..."
-                    @input="filterUsers"
-                  />
-                  <select
-                    v-model="userFilters.sortBy"
-                    class="filter-select"
-                    @change="filterUsers"
-                  >
-                    <option value="">מיין לפי</option>
-                    <option value="username">שם משתמש</option>
-                    <option value="createdAt">תאריך יצירה</option>
-                    <option value="rating">דירוג</option>
-                    <option value="jobDone">עבודות שבוצעו</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <!-- User Type Tabs -->
-            <div class="user-type-tabs">
-              <button
-                class="user-type-tab"
-                :class="{
-                  'user-type-tab--active': userFilters.userType === 'handyman',
-                }"
-                @click="
-                  userFilters.userType = 'handyman';
-                  usersPagination.page = 1;
-                  loadUsers(1);
-                "
-              >
-                הנדימנים ({{ handymenCount }})
-              </button>
-              <button
-                class="user-type-tab"
-                :class="{
-                  'user-type-tab--active': userFilters.userType === 'client',
-                }"
-                @click="
-                  userFilters.userType = 'client';
-                  usersPagination.page = 1;
-                  loadUsers(1);
-                "
-              >
-                לקוחות ({{ clientsCount }})
-              </button>
-            </div>
-
-            <div v-if="isLoadingUsers" class="loading-state">
-              טוען משתמשים...
-            </div>
-
-            <div v-else class="users-table-wrapper">
-              <table class="users-table">
-                <thead>
-                  <tr>
-                    <th>שם משתמש</th>
-                    <th>אימייל</th>
-                    <th>טלפון</th>
-                    <th>כתובת/עיר</th>
-                    <th v-if="userFilters.userType === 'handyman'">
-                      תחומי התמחות
-                    </th>
-                    <th v-if="userFilters.userType === 'handyman'">דירוג</th>
-                    <th v-if="userFilters.userType === 'handyman'">
-                      עבודות שבוצעו
-                    </th>
-                    <th v-if="userFilters.userType === 'client'">
-                      מספר הזמנות
-                    </th>
-                    <th>נוצר ב</th>
-                    <th>חסום</th>
-                    <th>פעולות</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="user in filteredUsers"
-                    :key="user._id || user.id"
-                    class="users-table__row"
-                  >
-                    <td>
-                      <div class="user-cell">
-                        <img
-                          v-if="user.imageUrl"
-                          :src="user.imageUrl"
-                          :alt="user.username"
-                          class="user-avatar"
-                          @error="handleImageError"
-                        />
-                        <span>{{ user.username || "ללא שם" }}</span>
-                      </div>
-                    </td>
-                    <td>{{ user.email || "-" }}</td>
-                    <td>{{ user.phone || "-" }}</td>
-                    <td>{{ user.city || user.address || "-" }}</td>
-                    <td v-if="userFilters.userType === 'handyman'">
-                      <div
-                        v-if="user.specialties && user.specialties.length > 0"
-                        class="specialties-list"
-                      >
-                        <span
-                          v-for="(spec, idx) in getCategorySpecialties(
-                            user.specialties
-                          ).slice(0, 3)"
-                          :key="idx"
-                          class="specialty-badge"
-                        >
-                          {{ spec.name }}
-                        </span>
-                        <span
-                          v-if="
-                            getCategorySpecialties(user.specialties).length > 3
-                          "
-                          class="specialty-more"
-                        >
-                          +{{
-                            getCategorySpecialties(user.specialties).length - 3
-                          }}
-                        </span>
-                      </div>
-                      <span v-else class="no-data-small">אין</span>
-                    </td>
-                    <td v-if="userFilters.userType === 'handyman'">
-                      <span v-if="user.rating && user.rating > 0">
-                        {{ user.rating.toFixed(1) }} ⭐
-                      </span>
-                      <span v-else class="no-rating">אין דירוג</span>
-                    </td>
-                    <td v-if="userFilters.userType === 'handyman'">
-                      {{ user.jobDone || 0 }}
-                    </td>
-                    <td v-if="userFilters.userType === 'client'">
-                      {{ user.Ordered || 0 }}
-                    </td>
-                    <td>
-                      <div class="date-cell">
-                        <div class="date-value">
-                          {{
-                            user.createdAt ? formatDate(user.createdAt) : "-"
-                          }}
-                        </div>
-                        <div
-                          v-if="user.createdAt"
-                          class="date-tooltip"
-                          :title="getTimeAgo(user.createdAt)"
-                        >
-                          {{ getTimeAgo(user.createdAt) }}
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <button
-                        class="block-user-btn"
-                        :class="{
-                          'block-user-btn--blocked': user.IsBlocked === true,
-                        }"
-                        type="button"
-                        @click="toggleBlockUser(user)"
-                        :title="
-                          user.IsBlocked === true ? 'ביטול חסימה' : 'חסום'
-                        "
-                      >
-                        <font-awesome-icon
-                          :icon="
-                            user.IsBlocked === true
-                              ? ['fas', 'ban']
-                              : ['fas', 'check']
-                          "
-                        />
-                        {{ user.IsBlocked === true ? "חסום" : "פעיל" }}
-                      </button>
-                    </td>
-                    <td>
-                      <div class="actions-buttons">
-                        <button
-                          class="edit-user-btn"
-                          type="button"
-                          @click="editUser(user)"
-                          title="ערוך משתמש"
-                        >
-                          <font-awesome-icon :icon="['fas', 'edit']" />
-                        </button>
-                        <button
-                          class="send-message-btn"
-                          type="button"
-                          @click="sendMessage(user)"
-                          title="שלח הודעה"
-                        >
-                          <font-awesome-icon :icon="['fas', 'comment']" />
-                        </button>
-                        <button
-                          class="delete-user-btn"
-                          type="button"
-                          @click="confirmDeleteUser(user)"
-                          title="מחק משתמש"
-                        >
-                          <font-awesome-icon :icon="['fas', 'trash']" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr v-if="filteredUsers.length === 0">
-                    <td
-                      :colspan="userFilters.userType === 'handyman' ? 10 : 8"
-                      class="no-data"
-                    >
-                      אין משתמשים להצגה
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <!-- Pagination for Users -->
-            <div v-if="usersPagination.totalPages > 0" class="pagination">
-              <button
-                class="pagination-btn"
-                :disabled="usersPagination.page === 1"
-                @click="loadUsers(usersPagination.page - 1)"
-              >
-                הקודם
-              </button>
-              <span class="pagination-info">
-                עמוד {{ usersPagination.page }} מתוך
-                {{ usersPagination.totalPages }} (סה"כ
-                {{ usersPagination.total }} משתמשים)
-              </span>
-              <button
-                class="pagination-btn"
-                :disabled="usersPagination.page >= usersPagination.totalPages"
-                @click="loadUsers(usersPagination.page + 1)"
-              >
-                הבא
-              </button>
-            </div>
-          </div>
-        </div>
+        <UsersTab v-if="activeTab === 'users'" />
 
         <!-- Categories Tab -->
         <div v-if="activeTab === 'categories'" class="tab-panel">
@@ -578,7 +332,9 @@
                   @click="
                     activePaymentsTab === 'transactions'
                       ? loadPayments(paymentsPagination.page)
-                      : loadSubscriptions(subscriptionsPagination.page)
+                      : activePaymentsTab === 'subscriptions'
+                      ? loadSubscriptions(subscriptionsPagination.page)
+                      : null
                   "
                 >
                   ↻ רענן
@@ -609,6 +365,16 @@
                 @click="activePaymentsTab = 'subscriptions'"
               >
                 מנויים
+              </button>
+              <button
+                class="payments-sub-tab"
+                :class="{
+                  'payments-sub-tab--active': activePaymentsTab === 'receipts',
+                }"
+                type="button"
+                @click="activePaymentsTab = 'receipts'"
+              >
+                קבלות
               </button>
             </div>
 
@@ -894,6 +660,14 @@
                   הבא
                 </button>
               </div>
+            </div>
+
+            <!-- Receipts Tab -->
+            <div
+              v-if="activePaymentsTab === 'receipts'"
+              class="payments-sub-panel"
+            >
+              <ReceiptsTab />
             </div>
           </div>
         </div>
@@ -2132,35 +1906,6 @@
         </div>
       </div>
 
-      <!-- Delete User Confirmation Modal -->
-      <div
-        v-if="showDeleteUserModal"
-        class="modal-overlay"
-        @click="closeDeleteUserModal"
-      >
-        <div class="modal-content modal-content--confirm" @click.stop>
-          <div class="modal-header">
-            <h3 class="modal-title">מחיקת משתמש</h3>
-            <button class="modal-close" @click="closeDeleteUserModal">×</button>
-          </div>
-          <div class="modal-body">
-            <div class="confirm-message">
-              האם אתה בטוח שברצונך למחוק את המשתמש
-              <strong>{{ userToDelete?.username || "ללא שם" }}</strong
-              >?
-              <br />
-              פעולה זו לא ניתנת לביטול!
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn--ghost" @click="closeDeleteUserModal">
-              ביטול
-            </button>
-            <button class="btn btn--danger" @click="deleteUser">מחק</button>
-          </div>
-        </div>
-      </div>
-
       <!-- Delete Payment Confirmation Modal -->
       <div
         v-if="showDeletePaymentModal"
@@ -2252,113 +1997,6 @@
             </button>
             <button class="btn btn--primary" @click="saveSubcategory">
               {{ editingSubcategory ? "שמור שינויים" : "הוסף" }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Edit User Modal -->
-      <div
-        v-if="showEditUserModal"
-        class="modal-overlay"
-        @click="closeEditUserModal"
-      >
-        <div class="modal-content" @click.stop>
-          <div class="modal-header">
-            <h3 class="modal-title">עריכת משתמש</h3>
-            <button class="modal-close" @click="closeEditUserModal">×</button>
-          </div>
-          <div class="modal-body">
-            <div class="form-field">
-              <label class="form-label">שם משתמש</label>
-              <input
-                v-model="userForm.username"
-                type="text"
-                class="form-input"
-                placeholder="שם משתמש"
-              />
-            </div>
-            <div class="form-field">
-              <label class="form-label">אימייל</label>
-              <input
-                v-model="userForm.email"
-                type="email"
-                class="form-input"
-                placeholder="אימייל"
-              />
-            </div>
-            <div class="form-field">
-              <label class="form-label">טלפון</label>
-              <input
-                v-model="userForm.phone"
-                type="text"
-                class="form-input"
-                placeholder="טלפון"
-              />
-            </div>
-            <div class="form-field">
-              <label class="form-label">עיר</label>
-              <input
-                v-model="userForm.city"
-                type="text"
-                class="form-input"
-                placeholder="עיר"
-              />
-            </div>
-            <div class="form-field">
-              <label class="form-label">כתובת</label>
-              <input
-                v-model="userForm.address"
-                type="text"
-                class="form-input"
-                placeholder="כתובת"
-              />
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn--ghost" @click="closeEditUserModal">
-              ביטול
-            </button>
-            <button class="btn btn--primary" @click="saveUser">שמור</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Send Message Modal -->
-      <div
-        v-if="showSendMessageModal"
-        class="modal-overlay"
-        @click="closeSendMessageModal"
-      >
-        <div class="modal-content" @click.stop>
-          <div class="modal-header">
-            <h3 class="modal-title">שליחת הודעה</h3>
-            <button class="modal-close" @click="closeSendMessageModal">
-              ×
-            </button>
-          </div>
-          <div class="modal-body">
-            <div class="form-field">
-              <label class="form-label">מה יהיה תוכן ההודעה?</label>
-              <textarea
-                v-model="messageText"
-                class="form-input"
-                rows="4"
-                placeholder="הכנס תוכן הודעה..."
-              ></textarea>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn--ghost" @click="closeSendMessageModal">
-              ביטול
-            </button>
-            <button
-              class="btn btn--primary"
-              :disabled="isSubmittingMessage"
-              @click="submitMessage"
-            >
-              <span v-if="isSubmittingMessage">שולח...</span>
-              <span v-else>שלח</span>
             </button>
           </div>
         </div>
@@ -2599,6 +2237,8 @@ import { useToast } from "@/composables/useToast";
 import { Chart, registerables } from "chart.js";
 import AddressAutocomplete from "@/components/Global/AddressAutocomplete.vue";
 import CategoryCheckboxSelector from "@/components/Global/CategoryCheckboxSelector.vue";
+import ReceiptsTab from "@/components/Admin/ReceiptsTab.vue";
+import UsersTab from "@/components/Admin/UsersTab.vue";
 
 Chart.register(...registerables);
 
@@ -2607,6 +2247,8 @@ export default {
   components: {
     AddressAutocomplete,
     CategoryCheckboxSelector,
+    ReceiptsTab,
+    UsersTab,
   },
   data() {
     return {
@@ -2622,23 +2264,9 @@ export default {
         { id: "cancellations", label: "ביטולים" },
         { id: "free-handyman", label: "רישום הנדימן חבר בחינם" },
       ],
-      users: [],
-      filteredUsers: [],
-      isLoadingUsers: false,
-      usersPagination: {
-        page: 1,
-        limit: 20,
-        total: 0,
-        totalPages: 0,
-      },
       categories: [],
       isLoadingCategories: false,
       activeCategoryTab: "", // Track active category tab
-      userFilters: {
-        search: "",
-        userType: "handyman", // Default to handymen
-        sortBy: "",
-      },
       // Category modal
       showCategoryModal: false,
       editingCategory: null,
@@ -2659,9 +2287,6 @@ export default {
       deleteConfirmCallback: null,
       deleteConfirmTitle: "",
       deleteConfirmMessage: "",
-      // User delete confirmation
-      showDeleteUserModal: false,
-      userToDelete: null,
       // Financials
       financials: {
         expenses: {
@@ -2686,21 +2311,6 @@ export default {
       editFinancialField: "",
       editFinancialCurrentValue: 0,
       editFinancialAmount: 0,
-      // User Edit Modal
-      showEditUserModal: false,
-      editingUser: null,
-      userForm: {
-        username: "",
-        email: "",
-        phone: "",
-        city: "",
-        address: "",
-      },
-      // Send Message Modal
-      showSendMessageModal: false,
-      messageUser: null,
-      messageText: "",
-      isSubmittingMessage: false,
       toast: null,
       // Chart
       chart: null,
@@ -2775,7 +2385,7 @@ export default {
         totalPages: 0,
       },
       // Payments sub-tabs
-      activePaymentsTab: "transactions", // 'transactions' or 'subscriptions'
+      activePaymentsTab: "transactions", // 'transactions', 'subscriptions', or 'receipts'
       // Delete payment modal
       showDeletePaymentModal: false,
       paymentToDelete: null,
@@ -2865,12 +2475,6 @@ export default {
         );
       return totalRevenue - totalExpenses;
     },
-    handymenCount() {
-      return this.users.filter((u) => u.isHandyman === true).length;
-    },
-    clientsCount() {
-      return this.users.filter((u) => !u.isHandyman).length;
-    },
     editFinancialFieldLabel() {
       const fieldMap = {
         "expenses.AI expenses": "הוצאות AI",
@@ -2955,7 +2559,6 @@ export default {
     },
   },
   async mounted() {
-    await this.loadUsers();
     this.loadCategories();
     await this.loadExchangeRate();
     if (this.activeTab === "expenses") {
@@ -3024,30 +2627,6 @@ export default {
     }
   },
   methods: {
-    async loadUsers(page = 1) {
-      this.isLoadingUsers = true;
-      try {
-        const userType = this.userFilters.userType || "handyman";
-        const response = await axios.get(`${URL}/admin/users`, {
-          params: {
-            page,
-            limit: this.usersPagination.limit,
-            userType: userType, // Send userType to backend
-          },
-        });
-        if (response.data.success) {
-          this.users = response.data.users || [];
-          this.usersPagination.page = response.data.page || page;
-          this.usersPagination.total = response.data.total || 0;
-          this.usersPagination.totalPages = response.data.totalPages || 0;
-          this.filterUsers();
-        }
-      } catch (error) {
-        this.toast?.showError("לא הצלחנו לטעון את המשתמשים");
-      } finally {
-        this.isLoadingUsers = false;
-      }
-    },
     async loadCategories() {
       this.isLoadingCategories = true;
       try {
@@ -3066,204 +2645,9 @@ export default {
     addCategory() {
       this.openCategoryModal();
     },
-    filterUsers() {
-      let filtered = [...this.users];
-
-      // Filter by user type
-      if (this.userFilters.userType === "handyman") {
-        filtered = filtered.filter((user) => user.isHandyman === true);
-      } else if (this.userFilters.userType === "client") {
-        filtered = filtered.filter((user) => !user.isHandyman);
-      }
-
-      // Filter by search
-      if (this.userFilters.search) {
-        const searchLower = this.userFilters.search.toLowerCase();
-        filtered = filtered.filter((user) => {
-          const username = (user.username || "").toLowerCase();
-          const email = (user.email || "").toLowerCase();
-          const firstName = (user.firstName || "").toLowerCase();
-          return (
-            username.includes(searchLower) ||
-            email.includes(searchLower) ||
-            firstName.includes(searchLower)
-          );
-        });
-      }
-
-      // Sort users
-      if (this.userFilters.sortBy) {
-        filtered.sort((a, b) => {
-          switch (this.userFilters.sortBy) {
-            case "username":
-              return (a.username || "").localeCompare(b.username || "", "he");
-            case "createdAt":
-              return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-            case "rating":
-              return (b.rating || 0) - (a.rating || 0);
-            case "jobDone":
-              return (b.jobDone || 0) - (a.jobDone || 0);
-            default:
-              return 0;
-          }
-        });
-      }
-
-      this.filteredUsers = filtered;
-    },
     getCategorySpecialties(specialties) {
       if (!specialties || !Array.isArray(specialties)) return [];
       return specialties.filter((s) => s.type === "category");
-    },
-    confirmDeleteUser(user) {
-      this.userToDelete = user;
-      this.showDeleteUserModal = true;
-    },
-    closeDeleteUserModal() {
-      this.showDeleteUserModal = false;
-      this.userToDelete = null;
-    },
-    async deleteUser() {
-      if (!this.userToDelete) return;
-
-      try {
-        const userId = this.userToDelete._id || this.userToDelete.id;
-        await axios.delete(`${URL}/admin/users/${userId}`);
-        this.toast.showSuccess("משתמש נמחק בהצלחה");
-        await this.loadUsers();
-        this.closeDeleteUserModal();
-      } catch (error) {
-        this.toast.showError(
-          error.response?.data?.message || "לא הצלחנו למחוק את המשתמש"
-        );
-      }
-    },
-    async toggleBlockUser(user) {
-      if (!user || !user._id) {
-        this.toast?.showError("משתמש לא תקין");
-        return;
-      }
-
-      const newBlockStatus = !(user.IsBlocked === true);
-
-      try {
-        const userId = user._id || user.id;
-        await axios.post(`${URL}/admin/users/${userId}/block`, {
-          isBlocked: newBlockStatus,
-        });
-
-        this.toast?.showSuccess(
-          newBlockStatus ? "משתמש נחסם בהצלחה" : "חסימת משתמש בוטלה בהצלחה"
-        );
-        await this.loadUsers();
-      } catch (error) {
-        this.toast?.showError(
-          error.response?.data?.message || "שגיאה בעדכון סטטוס החסימה"
-        );
-      }
-    },
-    handleImageError(event) {
-      event.target.style.display = "none";
-    },
-    sendMessage(user) {
-      this.messageUser = user;
-      this.messageText = "";
-      this.showSendMessageModal = true;
-    },
-    closeSendMessageModal() {
-      this.showSendMessageModal = false;
-      this.messageUser = null;
-      this.messageText = "";
-      this.isSubmittingMessage = false;
-    },
-    async submitMessage() {
-      if (!this.toast) {
-        return;
-      }
-
-      if (!this.messageText || !this.messageText.trim()) {
-        this.toast.showError("יש להזין תוכן הודעה");
-        return;
-      }
-
-      if (!this.messageUser || !this.messageUser._id) {
-        this.toast.showError("המשתמש לא תקין");
-        return;
-      }
-
-      // Prevent double submission
-      if (this.isSubmittingMessage) {
-        return;
-      }
-
-      this.isSubmittingMessage = true;
-
-      try {
-        const payload = {
-          userId: this.messageUser._id,
-          message: this.messageText.trim(),
-        };
-
-        const response = await axios.post(`${URL}/admin/send-message`, payload);
-
-        if (response && response.data && response.data.success) {
-          this.toast.showSuccess("הודעה נשלחה בהצלחה");
-          this.closeSendMessageModal();
-        } else {
-          this.toast.showError(
-            response?.data?.message || " לא הצלחנו לשלוח את ההודעה"
-          );
-        }
-      } catch (error) {
-        const errorMessage =
-          error.response?.data?.message ||
-          error.message ||
-          "לא הצלחנו לשלוח את ההודעה";
-        this.toast.showError(errorMessage);
-      } finally {
-        this.isSubmittingMessage = false;
-      }
-    },
-    editUser(user) {
-      this.editingUser = user;
-      this.userForm = {
-        username: user.username || "",
-        email: user.email || "",
-        phone: user.phone || "",
-        city: user.city || "",
-        address: user.address || "",
-      };
-      this.showEditUserModal = true;
-    },
-    closeEditUserModal() {
-      this.showEditUserModal = false;
-      this.editingUser = null;
-      this.userForm = {
-        username: "",
-        email: "",
-        phone: "",
-        city: "",
-        address: "",
-      };
-    },
-    async saveUser() {
-      if (!this.editingUser || !this.editingUser._id) {
-        this.toast?.showError("משתמש לא תקין");
-        return;
-      }
-
-      try {
-        const userId = this.editingUser._id;
-        await axios.put(`${URL}/admin/users/${userId}`, this.userForm);
-
-        this.toast?.showSuccess("משתמש עודכן בהצלחה");
-        await this.loadUsers();
-        this.closeEditUserModal();
-      } catch (error) {
-        this.toast?.showError(
-          error.response?.data?.message || " לא הצלחנו לעדכן את המשתמש"
-        );
-      }
     },
     async loadExchangeRate() {
       try {
@@ -4658,11 +4042,12 @@ export default {
 
       this.isCollectingFine = true;
       try {
-        const jobId = this.fineJob._id || this.fineJob.id;
+        // Use cancellation ID from the cancellation document
+        const cancellationId = this.fineJob._id || this.fineJob.id;
         const response = await axios.post(
           `${URL}/admin/cancellations/collect-fine`,
           {
-            jobId,
+            cancellationId,
             fineAmount: this.fineAmount,
           }
         );
@@ -4973,33 +4358,6 @@ $muted: rgba(255, 255, 255, 0.62);
   }
 }
 
-/* Users Section */
-.users-section__header {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.users-section__title {
-  font-size: 20px;
-  font-weight: 1000;
-  color: $orange2;
-}
-
-.users-section__controls {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  width: 100%;
-}
-
-.users-section__filters {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
 .filter-input,
 .filter-select {
   padding: 8px 12px;
@@ -5043,136 +4401,6 @@ $muted: rgba(255, 255, 255, 0.62);
   }
 }
 
-.users-table-wrapper {
-  overflow-x: auto;
-  border-radius: 12px;
-  border: 1px solid rgba($orange, 0.2);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.users-table {
-  width: 100%;
-  border-collapse: collapse;
-
-  thead {
-    background: rgba($orange, 0.1);
-  }
-
-  th {
-    padding: 14px 12px;
-    text-align: right;
-    font-size: 13px;
-    font-weight: 1000;
-    color: $orange2;
-    border-bottom: 1px solid rgba($orange, 0.2);
-    white-space: nowrap;
-  }
-
-  td {
-    padding: 12px;
-    text-align: right;
-    font-size: 13px;
-    font-weight: 800;
-    color: $text;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    vertical-align: middle;
-  }
-
-  tbody tr {
-    transition: background 0.2s ease;
-
-    &:hover {
-      background: rgba($orange, 0.05);
-    }
-
-    &:last-child td {
-      border-bottom: none;
-    }
-  }
-}
-
-.user-type-tabs {
-  display: flex;
-  gap: 8px;
-  border-bottom: 2px solid rgba($orange, 0.2);
-  margin-bottom: 20px;
-}
-
-.user-type-tab {
-  padding: 10px 20px;
-  border: none;
-  background: transparent;
-  color: $muted;
-  font-size: 14px;
-  font-weight: 900;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-  font-family: $font-family;
-
-  &:hover {
-    color: $orange2;
-  }
-
-  &--active {
-    color: $orange2;
-    border-bottom-color: $orange;
-  }
-}
-
-.user-cell {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.user-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 1px solid rgba($orange, 0.3);
-  flex-shrink: 0;
-}
-
-.specialties-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
-.specialty-badge {
-  padding: 4px 8px;
-  border-radius: 6px;
-  background: rgba($orange, 0.15);
-  border: 1px solid rgba($orange, 0.3);
-  font-size: 11px;
-  font-weight: 800;
-  color: $orange2;
-  white-space: nowrap;
-}
-
-.specialty-more {
-  font-size: 11px;
-  font-weight: 800;
-  color: $muted;
-}
-
-.no-data-small {
-  font-size: 12px;
-  color: $muted;
-  font-style: italic;
-}
-
-.actions-buttons {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
 .date-cell {
   position: relative;
   display: flex;
@@ -5195,100 +4423,6 @@ $muted: rgba(255, 255, 255, 0.62);
   font-weight: 800;
   font-size: 13px;
   color: $text;
-}
-
-.edit-user-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  border: 1px solid rgba($orange, 0.3);
-  background: rgba($orange, 0.15);
-  color: $orange2;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: rgba($orange, 0.25);
-    border-color: rgba($orange, 0.5);
-    transform: translateY(-1px);
-  }
-}
-
-.send-message-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  border: 1px solid rgba($orange, 0.3);
-  background: rgba($orange, 0.15);
-  color: $orange2;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: rgba($orange, 0.25);
-    border-color: rgba($orange, 0.5);
-    transform: translateY(-1px);
-  }
-}
-
-.delete-user-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: rgba(239, 68, 68, 0.25);
-    border-color: rgba(239, 68, 68, 0.5);
-    transform: translateY(-1px);
-  }
-}
-
-.block-user-btn {
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 193, 7, 0.3);
-  background: rgba(255, 193, 7, 0.15);
-  color: #ffc107;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 900;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-
-  &:hover {
-    background: rgba(255, 193, 7, 0.25);
-    border-color: rgba(255, 193, 7, 0.5);
-    transform: translateY(-1px);
-  }
-
-  &--blocked {
-    border-color: rgba(239, 68, 68, 0.3);
-    background: rgba(239, 68, 68, 0.15);
-    color: #ef4444;
-
-    &:hover {
-      background: rgba(239, 68, 68, 0.25);
-      border-color: rgba(239, 68, 68, 0.5);
-    }
-  }
 }
 
 .delete-payment-btn {
@@ -8244,5 +7378,170 @@ select.form-input {
       cursor: not-allowed;
     }
   }
+}
+
+/* Receipts Section Styles */
+.receipts-section {
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 16px;
+  border: 1px solid rgba($orange, 0.2);
+}
+
+.receipts-section__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid rgba($orange, 0.3);
+}
+
+.receipts-section__title {
+  font-size: 28px;
+  font-weight: 1000;
+  color: $orange2;
+  margin: 0;
+  font-family: $font-family;
+}
+
+.refresh-receipts-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba($orange, 0.15);
+  color: $orange2;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: $font-family;
+
+  &:hover {
+    background: rgba($orange, 0.25);
+    border-color: rgba($orange, 0.5);
+    transform: translateY(-1px);
+  }
+}
+
+.receipts-table-wrapper {
+  overflow-x: auto;
+  margin-top: 20px;
+}
+
+.receipts-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  overflow: hidden;
+
+  thead {
+    background: rgba($orange, 0.1);
+  }
+
+  th {
+    padding: 14px 12px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 1000;
+    color: $orange2;
+    border-bottom: 1px solid rgba($orange, 0.2);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 12px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 800;
+    color: $text;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    vertical-align: middle;
+  }
+
+  tbody tr {
+    transition: background 0.2s ease;
+
+    &:hover {
+      background: rgba($orange, 0.05);
+    }
+
+    &:last-child td {
+      border-bottom: none;
+    }
+  }
+}
+
+.receipt-type-badge {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  display: inline-block;
+  border: 1px solid;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+
+  &--handyman {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+
+  &--platform {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border-color: rgba(16, 185, 129, 0.3);
+  }
+
+  &--subscription {
+    background: rgba(139, 92, 246, 0.15);
+    color: #8b5cf6;
+    border-color: rgba(139, 92, 246, 0.3);
+  }
+}
+
+.receipt-status-badge {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  display: inline-block;
+  border: 1px solid;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+
+  &--sent {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border-color: rgba(16, 185, 129, 0.3);
+  }
+
+  &--pending {
+    background: rgba(255, 193, 7, 0.15);
+    color: #ffc107;
+    border-color: rgba(255, 193, 7, 0.3);
+  }
+
+  &--failed {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+}
+
+.receipt-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.receipt-error {
+  color: #ef4444;
+  font-weight: 700;
+  margin-top: 4px;
 }
 </style>

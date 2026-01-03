@@ -26,6 +26,9 @@ const {
   getCollectionChats,
   getCollectionFinancials,
   getCollectionInquiries,
+  getCollectionReceipts,
+  getCollectionCanceld,
+  getDb,
 } = require("./config/database");
 const setupPassport = require("./config/passport");
 const setupAuthRoutes = require("./routes/auth");
@@ -46,6 +49,10 @@ const {
   getPlatformFeePercent,
   updatePlatformFeePercent,
 } = require("./services/stripeService");
+const {
+  generateOrderNumber,
+  createAndSendReceipt,
+} = require("./services/receiptService");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 // Helper function to read dry-data.json and get MAAM percentage
@@ -382,6 +389,36 @@ function findAvailablePort(startPort) {
                   },
                 }
               );
+
+              // Create receipt for subscription payment
+              try {
+                const db = getDb();
+                if (user.email) {
+                  await createAndSendReceipt(
+                    {
+                      source: "subscription",
+                      subscriptionId: invoice.subscription,
+                      invoiceId: invoice.id,
+                      userId: user._id.toString(),
+                      type: "subscription",
+                      amount: amount,
+                      currency: "ILS",
+                      vatRate: vatPercent / 100, // Convert percentage to decimal
+                      toEmail: user.email,
+                    },
+                    db,
+                    getCollectionReceipts,
+                    getCollection,
+                    getCollectionJobs
+                  );
+                }
+              } catch (receiptError) {
+                console.error(
+                  "Error creating subscription receipt:",
+                  receiptError
+                );
+                // Don't fail the webhook if receipt creation fails
+              }
             }
           }
         }
@@ -1175,6 +1212,7 @@ function findAvailablePort(startPort) {
         logoUrl,
         isHandyman,
         googleId, // בדוק אם יש googleId נפרד
+        usingMyLocation, // הוסף את המשתנה מה-request body
       } = req.body;
 
       const fullName = `${firstName || ""} ${lastName || ""}`.trim();
@@ -1182,7 +1220,7 @@ function findAvailablePort(startPort) {
       // אם אין addressEnglish, נסה למצוא אותו מהמאגר
       let finalAddressEnglish = addressEnglish;
       if (!finalAddressEnglish && address) {
-        if (usingMyLocation) {
+        if (usingMyLocation === true || usingMyLocation === "true") {
           try {
             const citiesPath = path.join(
               __dirname,
@@ -3815,12 +3853,13 @@ function findAvailablePort(startPort) {
       // Check if handyman has completed onboarding (charges_enabled and payouts_enabled)
       // NOTE: In TEST MODE (with sk_test keys), this check is more lenient for testing
       // In PRODUCTION (with sk_live keys), this will block payment creation until onboarding is complete
-      const isTestMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_test");
+      const isTestModeOnboarding =
+        process.env.STRIPE_SECRET_KEY?.startsWith("sk_test");
 
       try {
         const account = await stripe.accounts.retrieve(handymanAccountId);
         if (!account.charges_enabled || !account.payouts_enabled) {
-          if (!isTestMode) {
+          if (!isTestModeOnboarding) {
             // PRODUCTION: Block payment creation until onboarding is complete
             return res.status(400).json({
               success: false,
@@ -3833,7 +3872,7 @@ function findAvailablePort(startPort) {
         }
       } catch (stripeError) {
         // In test mode, continue anyway - in production fail
-        if (!isTestMode) {
+        if (!isTestModeOnboarding) {
           return res.status(500).json({
             success: false,
             message: "Failed to verify handyman payment account",
@@ -3894,6 +3933,10 @@ function findAvailablePort(startPort) {
         });
       }
 
+      // Determine Stripe mode (test or live)
+      const isTestMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_test");
+      const stripeMode = isTestMode ? "TEST" : "LIVE";
+
       // Create Escrow Payment Intent
 
       const paymentIntentParams = {
@@ -3905,11 +3948,18 @@ function findAvailablePort(startPort) {
           jobId: jobId,
           clientId: job.clientId?.toString() || "",
           handymanId: handymanId.toString(),
+          userId: job.clientId?.toString() || "",
         },
       };
 
       const { clientSecret, paymentIntentId, status } =
         await createEscrowPaymentIntent(paymentIntentParams);
+
+      // Log payment intent creation with mode and prefix
+      const clientSecretPrefix = clientSecret?.split("_")[0] || "unknown";
+      console.log(
+        `[PAYMENT INTENT] Mode: ${stripeMode} | Prefix: ${clientSecretPrefix} | PaymentIntent ID: ${paymentIntentId} | JobId: ${jobId}`
+      );
 
       // Calculate VAT (MAAM)
       const maamPercent = getMaamPercent();
@@ -4800,25 +4850,43 @@ function findAvailablePort(startPort) {
       const tempDoc = await usersCol.insertOne(tempRegistrationDoc);
       const tempRegistrationId = tempDoc.insertedId.toString();
 
-      // Create Setup Intent for subscription (not Payment Intent)
-      // Setup Intent is used to collect payment method for future charges
-      // Note: Setup Intent does NOT accept amount or currency parameters
-      // We only store the temp registration ID in metadata (not the full data)
-      const setupIntent = await stripe.setupIntents.create({
-        payment_method_types: ["card"],
+      // Determine Stripe mode (test or live)
+      const isTestMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_test");
+      const stripeMode = isTestMode ? "TEST" : "LIVE";
+
+      // Get subscription amount
+      const subscriptionAmount = getMonthlySubscription();
+      const amountInAgorot = Math.round(subscriptionAmount * 100);
+
+      // Create Payment Intent for subscription (not Setup Intent)
+      // Payment Intent with automatic_payment_methods enables wallets (Apple Pay, Google Pay)
+      // We'll charge immediately for the first month
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amountInAgorot,
+        currency: "ils",
+        automatic_payment_methods: {
+          enabled: true, // Enable Apple Pay, Google Pay, and other wallets
+        },
         metadata: {
           type: "handyman_subscription",
           tempRegistrationId: tempRegistrationId, // Only store ID, not full data
         },
       });
 
+      // Log payment intent creation with mode and prefix
+      const clientSecretPrefix =
+        paymentIntent.client_secret?.split("_")[0] || "unknown";
+      console.log(
+        `[SUBSCRIPTION INTENT] Mode: ${stripeMode} | Prefix: ${clientSecretPrefix} | PaymentIntent ID: ${paymentIntent.id} | Amount: ${subscriptionAmount} ILS`
+      );
+
       return res.json({
         success: true,
-        clientSecret: setupIntent.client_secret,
-        setupIntentId: setupIntent.id,
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
       });
     } catch (error) {
-      console.error("Error creating subscription setup intent:", error);
+      console.error("Error creating subscription payment intent:", error);
       return res.status(500).json({
         success: false,
         message: "שגיאה ביצירת מנוי",
@@ -4830,12 +4898,13 @@ function findAvailablePort(startPort) {
   // Complete subscription registration after payment method is confirmed
   app.post("/api/subscription/complete", async (req, res) => {
     try {
-      const { setupIntentId, paymentMethodId } = req.body;
+      const { paymentIntentId, setupIntentId, paymentMethodId } = req.body;
 
-      if (!setupIntentId || !paymentMethodId) {
+      // Support both paymentIntentId (new) and setupIntentId (legacy)
+      if (!paymentIntentId && !setupIntentId) {
         return res.status(400).json({
           success: false,
-          message: "setupIntentId and paymentMethodId required",
+          message: "paymentIntentId or setupIntentId required",
         });
       }
 
@@ -4843,20 +4912,38 @@ function findAvailablePort(startPort) {
       const paymentsCol = getCollectionPayments();
       const financialsCol = getCollectionFinancials();
 
-      // Retrieve setup intent to get registration data
-      const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
+      // Determine Stripe mode
+      const isTestMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_test");
+      const stripeMode = isTestMode ? "TEST" : "LIVE";
 
-      if (setupIntent.status !== "succeeded") {
-        return res.status(400).json({
-          success: false,
-          message: "Setup intent not succeeded",
-        });
-      }
-
-      // Get registration data ID from metadata and retrieve from DB
       let registrationData = null;
-      try {
-        const tempRegistrationId = setupIntent.metadata?.tempRegistrationId;
+      let paymentMethodIdToUse = paymentMethodId;
+
+      // Handle PaymentIntent (new flow with wallets)
+      if (paymentIntentId) {
+        const paymentIntent = await stripe.paymentIntents.retrieve(
+          paymentIntentId
+        );
+
+        // Log payment intent retrieval
+        console.log(
+          `[SUBSCRIPTION COMPLETE] Mode: ${stripeMode} | PaymentIntent ID: ${paymentIntentId} | Status: ${paymentIntent.status}`
+        );
+
+        if (paymentIntent.status !== "succeeded") {
+          return res.status(400).json({
+            success: false,
+            message: `Payment intent not succeeded. Status: ${paymentIntent.status}`,
+          });
+        }
+
+        // Get payment method from payment intent
+        if (paymentIntent.payment_method) {
+          paymentMethodIdToUse = paymentIntent.payment_method;
+        }
+
+        // Get registration data from metadata
+        const tempRegistrationId = paymentIntent.metadata?.tempRegistrationId;
         if (tempRegistrationId) {
           const tempDoc = await usersCol.findOne({
             _id: new ObjectId(tempRegistrationId),
@@ -4876,13 +4963,66 @@ function findAvailablePort(startPort) {
             }
 
             registrationData = tempDoc.registrationData;
-
             // Delete the temp document after retrieving
             await usersCol.deleteOne({ _id: new ObjectId(tempRegistrationId) });
           }
         }
-      } catch (dbError) {
-        console.error("Error retrieving registration data from DB:", dbError);
+      } else if (setupIntentId) {
+        // Handle SetupIntent (legacy flow)
+        const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
+
+        // Log setup intent retrieval
+        console.log(
+          `[SUBSCRIPTION COMPLETE] Mode: ${stripeMode} | SetupIntent ID: ${setupIntentId} | Status: ${setupIntent.status}`
+        );
+
+        if (setupIntent.status !== "succeeded") {
+          return res.status(400).json({
+            success: false,
+            message: "Setup intent not succeeded",
+          });
+        }
+
+        // Get payment method from setup intent
+        if (setupIntent.payment_method) {
+          paymentMethodIdToUse = setupIntent.payment_method;
+        }
+
+        // Get registration data ID from metadata and retrieve from DB
+        try {
+          const tempRegistrationId = setupIntent.metadata?.tempRegistrationId;
+          if (tempRegistrationId) {
+            const tempDoc = await usersCol.findOne({
+              _id: new ObjectId(tempRegistrationId),
+              type: "pending_subscription",
+            });
+
+            if (tempDoc && tempDoc.registrationData) {
+              // Check if expired
+              if (
+                tempDoc.expiresAt &&
+                new Date(tempDoc.expiresAt) < new Date()
+              ) {
+                await usersCol.deleteOne({
+                  _id: new ObjectId(tempRegistrationId),
+                });
+                return res.status(400).json({
+                  success: false,
+                  message: "Registration data expired. Please start over.",
+                });
+              }
+
+              registrationData = tempDoc.registrationData;
+
+              // Delete the temp document after retrieving
+              await usersCol.deleteOne({
+                _id: new ObjectId(tempRegistrationId),
+              });
+            }
+          }
+        } catch (dbError) {
+          console.error("Error retrieving registration data from DB:", dbError);
+        }
       }
 
       if (!registrationData) {
@@ -4906,14 +5046,14 @@ function findAvailablePort(startPort) {
       });
 
       // Attach payment method to customer and set as default
-      await stripe.paymentMethods.attach(paymentMethodId, {
+      await stripe.paymentMethods.attach(paymentMethodIdToUse, {
         customer: customer.id,
       });
 
       // Set as default payment method for the customer
       await stripe.customers.update(customer.id, {
         invoice_settings: {
-          default_payment_method: paymentMethodId,
+          default_payment_method: paymentMethodIdToUse,
         },
       });
 
@@ -5527,6 +5667,31 @@ function findAvailablePort(startPort) {
       }
 
       await jobsCol.updateOne({ _id: new ObjectId(jobId) }, updateData);
+
+      // Check if there are cancellations for this job that should be deleted
+      // If another handyman accepted the job after cancellation, delete the cancellation after 1 day
+      const canceldCol = getCollectionCanceld();
+      const oneDayAgo = new Date();
+      oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+
+      // Find cancellations for this job that are older than 1 day
+      const oldCancellations = await canceldCol
+        .find({
+          jobId: new ObjectId(jobId),
+          dateCancel: { $lt: oneDayAgo },
+          "Completely canceled": false, // Only delete partial cancellations
+        })
+        .toArray();
+
+      // Delete old cancellations if job was reassigned
+      if (oldCancellations.length > 0) {
+        await canceldCol.deleteMany({
+          _id: { $in: oldCancellations.map((c) => c._id) },
+        });
+        console.log(
+          `Deleted ${oldCancellations.length} old cancellation(s) for job ${jobId} after reassignment`
+        );
+      }
 
       // Get job details to find client
       const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
@@ -6146,13 +6311,56 @@ function findAvailablePort(startPort) {
         }
       }
 
-      // Update handymanId and handymanName to null instead of deleting
-      await jobsCol.updateOne(
-        { _id: new ObjectId(jobId) },
-        {
-          $set: updateData,
+      // Create cancellation document in the new canceld collection
+      const canceldCol = getCollectionCanceld();
+      const completelyCanceled = cancel && cancel["Totally-cancels"] === true;
+      const whoCanceled = personCancel === "customer" ? "לקוח" : "הנדימן";
+
+      const cancellationDoc = {
+        jobId: new ObjectId(jobId),
+        handimanId: handymanIdForCancel
+          ? new ObjectId(handymanIdForCancel)
+          : null,
+        customerId: job.clientId ? new ObjectId(job.clientId) : null,
+        "handyman-requires": cancel?.handymanRequires || false,
+        status: job.status || "cancelled",
+        "reson-cancal": cancel?.["reason-for-cancellation"] || "",
+        dateCancel: new Date(),
+        "fine-collected": false,
+        "Who-canceled": whoCanceled,
+        "Completely canceled": completelyCanceled,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await canceldCol.insertOne(cancellationDoc);
+
+      // If completely canceled, delete the job from DB
+      if (completelyCanceled) {
+        await jobsCol.deleteOne({ _id: new ObjectId(jobId) });
+      } else {
+        // If partial cancellation (only for this handyman), reset job to open
+        if (isPartialCancel) {
+          // Add handyman to handiman-Blocked array
+          if (job.handymanId) {
+            const handymanIds = Array.isArray(job.handymanId)
+              ? job.handymanId
+              : [job.handymanId];
+            const blockedHandymanIds = handymanIds.map(
+              (id) => new ObjectId(id)
+            );
+            updateData["handiman-Blocked"] = blockedHandymanIds;
+          }
         }
-      );
+
+        // Update job with cancel info (but don't delete it)
+        await jobsCol.updateOne(
+          { _id: new ObjectId(jobId) },
+          {
+            $set: updateData,
+          }
+        );
+      }
 
       // Delete chat from database
       const chatsCol = getCollectionChats();
@@ -6310,13 +6518,38 @@ function findAvailablePort(startPort) {
         };
       }
 
-      // Update job with cancel info and mark as deleted
-      const updateResult = await jobsCol.updateOne(
-        { _id: new ObjectId(jobId) },
-        { $set: updateData }
-      );
+      // Create cancellation document in the new canceld collection
+      const canceldCol = getCollectionCanceld();
+      const whoCanceled =
+        cancel?.personcancel === "handyman" ? "הנדימן" : "לקוח";
 
-      if (updateResult.matchedCount === 0) {
+      const cancellationDoc = {
+        jobId: new ObjectId(jobId),
+        handimanId: job.handymanId
+          ? Array.isArray(job.handymanId)
+            ? job.handymanId[0]
+            : job.handymanId
+          : null,
+        customerId: job.clientId ? new ObjectId(job.clientId) : null,
+        "handyman-requires": cancel?.handymanRequires || false,
+        status: "cancelled",
+        "reson-cancal": cancel?.["reason-for-cancellation"] || "",
+        dateCancel: new Date(),
+        "fine-collected": false,
+        "Who-canceled": whoCanceled,
+        "Completely canceled": true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await canceldCol.insertOne(cancellationDoc);
+
+      // Delete the job from DB (completely canceled)
+      const deleteResult = await jobsCol.deleteOne({
+        _id: new ObjectId(jobId),
+      });
+
+      if (deleteResult.deletedCount === 0) {
         return res.status(404).json({
           success: false,
           message: "Job not found",
@@ -6450,11 +6683,48 @@ function findAvailablePort(startPort) {
         };
       }
 
-      // Update job with cancel info instead of deleting (preserve history)
-      const updateResult = await jobsCol.updateOne(
-        { _id: new ObjectId(jobId) },
-        { $set: updateData }
-      );
+      // Create cancellation document in the new canceld collection
+      const canceldCol = getCollectionCanceld();
+      const whoCanceled =
+        cancel?.personcancel === "handyman" ? "הנדימן" : "לקוח";
+      const completelyCanceled =
+        cancel?.["Totally-cancels"] !== undefined
+          ? cancel["Totally-cancels"]
+          : true;
+
+      const cancellationDoc = {
+        jobId: new ObjectId(jobId),
+        handimanId: job.handymanId
+          ? Array.isArray(job.handymanId)
+            ? job.handymanId[0]
+            : job.handymanId
+          : null,
+        customerId: job.clientId ? new ObjectId(job.clientId) : null,
+        "handyman-requires": cancel?.handymanRequires || false,
+        status: "cancelled",
+        "reson-cancal": cancel?.["reason-for-cancellation"] || "",
+        dateCancel: new Date(),
+        "fine-collected": false,
+        "Who-canceled": whoCanceled,
+        "Completely canceled": completelyCanceled,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await canceldCol.insertOne(cancellationDoc);
+
+      // If completely canceled, delete the job from DB
+      if (completelyCanceled) {
+        await jobsCol.deleteOne({ _id: new ObjectId(jobId) });
+      } else {
+        // Update job with cancel info instead of deleting (preserve history)
+        await jobsCol.updateOne(
+          { _id: new ObjectId(jobId) },
+          { $set: updateData }
+        );
+      }
+
+      const updateResult = { matchedCount: 1 }; // For compatibility
 
       if (updateResult.matchedCount === 0) {
         return res.status(404).json({
@@ -7759,6 +8029,66 @@ function findAvailablePort(startPort) {
               };
               await financialsCol.insertOne(financialsDoc);
             }
+
+            // Create receipts for Connect payment
+            try {
+              const db = getDb();
+              const orderNumber = await generateOrderNumber(db);
+              const jobData = await jobsCol.findOne({
+                _id: new ObjectId(jobId),
+              });
+              const handymanUser = await getCollection().findOne({
+                _id: new ObjectId(handymanIdForPayment),
+              });
+              const clientUser = await getCollection().findOne({
+                _id: new ObjectId(clientIdForPayment),
+              });
+
+              // Single receipt for client - includes work amount + commission
+              // Calculate total amount (handyman revenue + platform fee)
+              const totalAmount = handymanRevenue + platformFee;
+              // Calculate VAT: handyman has 0% VAT, platform has 17% VAT
+              const platformVatAmount = platformFee * 0.17;
+              const totalVatAmount = platformVatAmount;
+              const totalWithVat = totalAmount + totalVatAmount;
+
+              if (clientUser?.email && totalAmount > 0) {
+                await createAndSendReceipt(
+                  {
+                    source: "job_payment",
+                    paymentId: paymentID,
+                    jobId: new ObjectId(jobId),
+                    handymanId: handymanIdForPayment,
+                    clientId: clientIdForPayment,
+                    type: "handyman", // Keep as handyman type for receipt structure
+                    orderNumber: orderNumber,
+                    amount: totalAmount, // Total amount (work + commission)
+                    currency: "ILS",
+                    vatRate: totalAmount > 0 ? totalVatAmount / totalAmount : 0, // Weighted VAT rate
+                    platformFee: platformFee, // Store platform fee separately for display
+                    handymanAmount: handymanRevenue, // Store handyman amount separately for display
+                    toEmail: clientUser.email, // Send to CLIENT - single receipt
+                  },
+                  db,
+                  getCollectionReceipts,
+                  getCollection,
+                  getCollectionJobs
+                );
+              }
+            } catch (receiptError) {
+              console.error(
+                "❌ [RECEIPTS] Error creating receipts for Connect payment:",
+                receiptError
+              );
+              console.error("❌ [RECEIPTS] Error stack:", receiptError.stack);
+              console.error("❌ [RECEIPTS] Error details:", {
+                message: receiptError.message,
+                name: receiptError.name,
+                jobId: jobId,
+                paymentId: paymentID,
+              });
+              // Don't fail the payment if receipt creation fails
+            }
           } else {
             // Legacy payment flow (no Connect) - manual calculation
             const commissionRate = 0.1; // 10%
@@ -7804,6 +8134,66 @@ function findAvailablePort(startPort) {
               paymentID: paymentID, // Reference to payment document _id
             };
             await financialsCol.insertOne(financialsDoc);
+
+            // Create receipts for Legacy payment
+            try {
+              const db = getDb();
+              const orderNumber = await generateOrderNumber(db);
+              const jobData = await jobsCol.findOne({
+                _id: new ObjectId(jobId),
+              });
+              const handymanUser = await getCollection().findOne({
+                _id: new ObjectId(handymanIdForPayment),
+              });
+              const clientUser = await getCollection().findOne({
+                _id: new ObjectId(clientIdForPayment),
+              });
+
+              // Single receipt for client - includes work amount + commission
+              // Calculate total amount (handyman revenue + system revenue)
+              const totalAmount = handymanRevenue + systemRevenue;
+              // Calculate VAT: handyman has 0% VAT, platform has 17% VAT
+              const platformVatAmount = systemRevenue * 0.17;
+              const totalVatAmount = platformVatAmount;
+              const totalWithVat = totalAmount + totalVatAmount;
+
+              if (clientUser?.email && totalAmount > 0) {
+                await createAndSendReceipt(
+                  {
+                    source: "job_payment",
+                    paymentId: paymentID,
+                    jobId: new ObjectId(jobId),
+                    handymanId: handymanIdForPayment,
+                    clientId: clientIdForPayment,
+                    type: "handyman", // Keep as handyman type for receipt structure
+                    orderNumber: orderNumber,
+                    amount: totalAmount, // Total amount (work + commission)
+                    currency: "ILS",
+                    vatRate: totalAmount > 0 ? totalVatAmount / totalAmount : 0, // Weighted VAT rate
+                    platformFee: systemRevenue, // Store platform fee separately for display
+                    handymanAmount: handymanRevenue, // Store handyman amount separately for display
+                    toEmail: clientUser.email, // Send to CLIENT - single receipt
+                  },
+                  db,
+                  getCollectionReceipts,
+                  getCollection,
+                  getCollectionJobs
+                );
+              }
+            } catch (receiptError) {
+              console.error(
+                "❌ [RECEIPTS] Error creating receipts for Legacy payment:",
+                receiptError
+              );
+              console.error("❌ [RECEIPTS] Error stack:", receiptError.stack);
+              console.error("❌ [RECEIPTS] Error details:", {
+                message: receiptError.message,
+                name: receiptError.name,
+                jobId: jobId,
+                paymentId: paymentID,
+              });
+              // Don't fail the payment if receipt creation fails
+            }
           }
 
           // Update job payment status to paid (status remains "done")
@@ -8002,9 +8392,19 @@ function findAvailablePort(startPort) {
           });
         } catch (paymentError) {
           console.error(
-            `[Payment Error] Failed to process payment in /api/jobs/approve for jobId: ${jobId}:`,
+            "❌ [JOBS/APPROVE] Payment Error - Failed to process payment:",
             paymentError
           );
+          console.error(
+            "❌ [JOBS/APPROVE] Payment Error stack:",
+            paymentError.stack
+          );
+          console.error("❌ [JOBS/APPROVE] Payment Error details:", {
+            message: paymentError.message,
+            name: paymentError.name,
+            jobId: jobId,
+            clientId: clientId,
+          });
           // Job is already marked as clientApproved, but payment failed
           // Return success but with warning
           return res.status(500).json({
@@ -8025,6 +8425,14 @@ function findAvailablePort(startPort) {
         });
       }
     } catch (error) {
+      console.error("❌ [JOBS/APPROVE] Error approving job:", error);
+      console.error("❌ [JOBS/APPROVE] Error stack:", error.stack);
+      console.error("❌ [JOBS/APPROVE] Error details:", {
+        message: error.message,
+        name: error.name,
+        jobId: req.body?.jobId,
+        clientId: req.body?.clientId,
+      });
       return res.status(500).json({
         success: false,
         message: "Error approving job",
@@ -14559,8 +14967,11 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
   // Admin endpoint - Get all cancellations
   app.get("/admin/cancellations", async (req, res) => {
     try {
+      const canceldCol = getCollectionCanceld();
       const jobsCol = getCollectionJobs();
-      if (!jobsCol) {
+      const usersCol = getCollection();
+
+      if (!canceldCol) {
         return res.status(500).json({
           success: false,
           message: "Database not connected",
@@ -14572,48 +14983,89 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       const limit = parseInt(req.query.limit) || 20;
       const skip = (page - 1) * limit;
 
-      // Get total count for pagination - only jobs that actually have a cancel field (not null/undefined)
-      // Important: Only show jobs where cancel field exists - this identifies cancellations
-      // We check that cancel exists and is not null
-      const cancellationQuery = {
-        cancel: { $exists: true, $ne: null },
-      };
+      // Get total count for pagination
+      const totalCancellations = await canceldCol.countDocuments({});
 
-      const totalCancellations = await jobsCol.countDocuments(
-        cancellationQuery
-      );
-
-      // Find all jobs with cancel object that is not null
-      // This ensures we only show actual cancellations, not completed jobs
-      const cancelledJobs = await jobsCol
-        .find(cancellationQuery)
-        .sort({ "cancel.cancelledAt": -1 }) // Sort by cancellation date, newest first
+      // Find all cancellations from the new collection
+      const cancellations = await canceldCol
+        .find({})
+        .sort({ dateCancel: -1 }) // Sort by cancellation date, newest first
         .skip(skip)
         .limit(limit)
         .toArray();
 
-      // Filter out jobs where cancel is not actually an object or is empty (additional client-side filter)
-      const validCancellations = cancelledJobs.filter((job) => {
-        return (
-          job.cancel &&
-          typeof job.cancel === "object" &&
-          job.cancel !== null &&
-          !Array.isArray(job.cancel) &&
-          Object.keys(job.cancel).length > 0
-        );
-      });
+      // Enrich cancellations with job and user data
+      const enrichedCancellations = await Promise.all(
+        cancellations.map(async (cancellation) => {
+          let job = null;
+          let clientName = null;
+          let handymanName = null;
+
+          if (cancellation.jobId) {
+            try {
+              job = await jobsCol.findOne({
+                _id: new ObjectId(cancellation.jobId),
+              });
+            } catch (err) {
+              // Job might not exist
+            }
+          }
+
+          if (cancellation.customerId) {
+            try {
+              const client = await usersCol.findOne({
+                _id: new ObjectId(cancellation.customerId),
+              });
+              clientName = client?.username || client?.email || null;
+            } catch (err) {
+              // Client might not exist
+            }
+          }
+
+          if (cancellation.handimanId) {
+            try {
+              const handyman = await usersCol.findOne({
+                _id: new ObjectId(cancellation.handimanId),
+              });
+              handymanName = handyman?.username || handyman?.email || null;
+            } catch (err) {
+              // Handyman might not exist
+            }
+          }
+
+          return {
+            ...cancellation,
+            job: job,
+            clientName: clientName,
+            handymanName: handymanName,
+            // Map to old format for backward compatibility with frontend
+            cancel: {
+              cancelledAt: cancellation.dateCancel,
+              personcancel:
+                cancellation.whoCanceled === "לקוח" ? "customer" : "handyman",
+              "reason-for-cancellation": cancellation["reson-cancal"] || "",
+              "Totally-cancels": cancellation["Completely canceled"] || false,
+              JobId: cancellation.jobId,
+              handymanId: cancellation.handimanId,
+              fineCollected: cancellation["fine-collected"] || false,
+              fineAmount: cancellation.fineAmount || 0,
+            },
+          };
+        })
+      );
 
       return res.json({
         success: true,
-        cancellations: validCancellations,
+        cancellations: enrichedCancellations,
         pagination: {
           page: page,
           limit: limit,
-          total: validCancellations.length,
-          totalPages: Math.ceil(validCancellations.length / limit),
+          total: totalCancellations,
+          totalPages: Math.ceil(totalCancellations / limit),
         },
       });
     } catch (error) {
+      console.error("Error fetching cancellations:", error);
       return res.status(500).json({
         success: false,
         message: "Error fetching cancellations",
@@ -14625,12 +15077,12 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
   // Admin endpoint - Collect fine from cancellation
   app.post("/admin/cancellations/collect-fine", async (req, res) => {
     try {
-      const { jobId, fineAmount } = req.body;
+      const { cancellationId, fineAmount } = req.body;
 
-      if (!jobId || !fineAmount) {
+      if (!cancellationId || !fineAmount) {
         return res.status(400).json({
           success: false,
-          message: "Job ID and fine amount are required",
+          message: "Cancellation ID and fine amount are required",
         });
       }
 
@@ -14641,34 +15093,52 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         });
       }
 
-      const jobsCol = getCollectionJobs();
+      const canceldCol = getCollectionCanceld();
       const usersCol = getCollection();
       const financialsCol = getCollectionFinancials();
 
-      // Find the job
-      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
-      if (!job) {
+      // Find the cancellation
+      const cancellation = await canceldCol.findOne({
+        _id: new ObjectId(cancellationId),
+      });
+      if (!cancellation) {
         return res.status(404).json({
           success: false,
-          message: "Job not found",
+          message: "Cancellation not found",
         });
       }
 
       // Check if fine already collected
-      if (job.cancel?.fineCollected === true) {
+      if (cancellation["fine-collected"] === true) {
         return res.status(400).json({
           success: false,
           message: "Fine already collected for this cancellation",
         });
       }
 
-      // Get client and handyman - try multiple possible field names
-      let clientId = job.clientId || job.client?._id || job.userId;
-      let handymanId = job.handymanId
-        ? Array.isArray(job.handymanId)
-          ? job.handymanId[0]
-          : job.handymanId
-        : job.handyman?._id || job.handymanIdSpecial || null;
+      const jobId = cancellation.jobId;
+
+      // Get client and handyman from cancellation document
+      let clientId = cancellation.customerId;
+      let handymanId = cancellation.handimanId;
+
+      // If not found in cancellation, try to get from job
+      if (!clientId || !handymanId) {
+        const jobsCol = getCollectionJobs();
+        const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+        if (job) {
+          if (!clientId) {
+            clientId = job.clientId || job.client?._id || job.userId;
+          }
+          if (!handymanId) {
+            handymanId = job.handymanId
+              ? Array.isArray(job.handymanId)
+                ? job.handymanId[0]
+                : job.handymanId
+              : job.handyman?._id || job.handymanIdSpecial || null;
+          }
+        }
+      }
 
       // If still not found, try to get from payment if exists
       if (!clientId || !handymanId) {
@@ -14690,7 +15160,8 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         return res.status(400).json({
           success: false,
           message:
-            "Client or handyman not found for this job. Job ID: " + jobId,
+            "Client or handyman not found for this cancellation. Job ID: " +
+            jobId,
         });
       }
 
@@ -14732,8 +15203,12 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         });
       }
 
+      // Get job to find paymentIntentId
+      const jobsCol = getCollectionJobs();
+      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+
       // Check if job has paymentIntentId - needed to charge the client
-      if (!job.paymentIntentId) {
+      if (!job || !job.paymentIntentId) {
         return res.status(400).json({
           success: false,
           message:
@@ -14891,18 +15366,19 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         destination: handymanAccountId,
       };
 
-      // Update job with fine information
-      await jobsCol.updateOne(
-        { _id: new ObjectId(jobId) },
+      // Update cancellation document with fine information
+      await canceldCol.updateOne(
+        { _id: new ObjectId(cancellationId) },
         {
           $set: {
-            "cancel.fineCollected": true,
-            "cancel.fineAmount": fineAmount,
-            "cancel.fineCollectedAt": new Date(),
-            "cancel.platformFeeAmount": platformFeeAmount,
-            "cancel.handymanAmount": handymanAmount,
-            "cancel.stripeTransferId": transfer.id,
-            "cancel.finePaymentIntentId": finePaymentIntent.id,
+            "fine-collected": true,
+            fineAmount: fineAmount,
+            fineCollectedAt: new Date(),
+            platformFeeAmount: platformFeeAmount,
+            handymanAmount: handymanAmount,
+            stripeTransferId: transfer.id,
+            finePaymentIntentId: finePaymentIntent.id,
+            updatedAt: new Date(),
           },
         }
       );
@@ -15573,6 +16049,250 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
   // Make io available globally for use in routes
   app.set("io", io);
+
+  // ========== RECEIPTS ENDPOINTS ==========
+
+  // Get receipts with pagination
+  app.get("/api/receipts", async (req, res) => {
+    try {
+      const receiptsCol = getCollectionReceipts();
+      const jobsCol = getCollectionJobs();
+      const db = getDb();
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 20;
+      const skip = (page - 1) * limit;
+
+      // Get total count
+      const total = await receiptsCol.countDocuments({});
+
+      // First, get receipts with job lookup
+      const receiptsWithJobs = await receiptsCol
+        .aggregate([
+          {
+            $sort: { createdAt: -1 },
+          },
+          {
+            $skip: skip,
+          },
+          {
+            $limit: limit,
+          },
+          {
+            $addFields: {
+              jobIdForLookup: {
+                $cond: {
+                  if: { $eq: [{ $type: "$jobId" }, "string"] },
+                  then: {
+                    $convert: {
+                      input: "$jobId",
+                      to: "objectId",
+                      onError: null,
+                      onNull: null,
+                    },
+                  },
+                  else: "$jobId",
+                },
+              },
+            },
+          },
+          {
+            $lookup: {
+              from: "Jobs",
+              localField: "jobIdForLookup",
+              foreignField: "_id",
+              as: "job",
+            },
+          },
+          {
+            $addFields: {
+              jobData: { $arrayElemAt: ["$job", 0] },
+            },
+          },
+        ])
+        .toArray();
+
+      // Get all receipts with same orderNumber for current page receipts
+      const orderNumbers = receiptsWithJobs
+        .map((r) => r.orderNumber)
+        .filter((on) => on);
+
+      // Get all receipts for these orderNumbers to check for multiple jobs
+      const allReceiptsForOrders = orderNumbers.length
+        ? await receiptsCol
+            .aggregate([
+              {
+                $match: { orderNumber: { $in: orderNumbers } },
+              },
+              {
+                $addFields: {
+                  jobIdForLookup: {
+                    $cond: {
+                      if: { $eq: [{ $type: "$jobId" }, "string"] },
+                      then: {
+                        $convert: {
+                          input: "$jobId",
+                          to: "objectId",
+                          onError: null,
+                          onNull: null,
+                        },
+                      },
+                      else: "$jobId",
+                    },
+                  },
+                },
+              },
+              {
+                $lookup: {
+                  from: "Jobs",
+                  localField: "jobIdForLookup",
+                  foreignField: "_id",
+                  as: "job",
+                },
+              },
+              {
+                $addFields: {
+                  jobData: { $arrayElemAt: ["$job", 0] },
+                },
+              },
+            ])
+            .toArray()
+        : [];
+
+      // Group by orderNumber
+      const receiptsByOrder = {};
+      allReceiptsForOrders.forEach((receipt) => {
+        if (receipt.orderNumber) {
+          if (!receiptsByOrder[receipt.orderNumber]) {
+            receiptsByOrder[receipt.orderNumber] = [];
+          }
+          receiptsByOrder[receipt.orderNumber].push(receipt);
+        }
+      });
+
+      // Process receipts and add jobName
+      const receipts = receiptsWithJobs.map((receipt) => {
+        let jobName = "שם העבודה לא זמין";
+        let jobsCount = 0;
+        let allJobsForOrder = null;
+
+        if (receipt.jobData) {
+          if (
+            Array.isArray(receipt.jobData.subcategoryInfo) &&
+            receipt.jobData.subcategoryInfo.length > 0
+          ) {
+            jobName =
+              receipt.jobData.subcategoryInfo[0].subcategory ||
+              "שם העבודה לא זמין";
+          } else {
+            jobName =
+              receipt.jobData.category ||
+              receipt.jobData.subcategory ||
+              receipt.jobData.description ||
+              receipt.jobData.title ||
+              "שם העבודה לא זמין";
+          }
+        }
+
+        // Check if there are multiple receipts for this orderNumber
+        if (receipt.orderNumber && receiptsByOrder[receipt.orderNumber]) {
+          const orderReceipts = receiptsByOrder[receipt.orderNumber];
+          jobsCount = orderReceipts.length;
+
+          if (jobsCount > 1) {
+            allJobsForOrder = orderReceipts.map((r) => {
+              let name = "שם העבודה לא זמין";
+              if (r.jobData) {
+                if (
+                  Array.isArray(r.jobData.subcategoryInfo) &&
+                  r.jobData.subcategoryInfo.length > 0
+                ) {
+                  name =
+                    r.jobData.subcategoryInfo[0].subcategory ||
+                    r.jobData.category ||
+                    "שם העבודה לא זמין";
+                } else {
+                  name =
+                    r.jobData.category ||
+                    r.jobData.subcategory ||
+                    r.jobData.description ||
+                    r.jobData.title ||
+                    "שם העבודה לא זמין";
+                }
+              }
+              return {
+                jobName: name,
+                jobId: r.jobId,
+                receiptNumber: r.receiptNumber,
+              };
+            });
+            jobName = `${jobsCount} עבודות`;
+          }
+        }
+
+        return {
+          ...receipt,
+          jobName,
+          jobsCount: jobsCount > 1 ? jobsCount : 0,
+          allJobsForOrder,
+        };
+      });
+
+      const totalPages = Math.ceil(total / limit);
+
+      res.json({
+        success: true,
+        receipts,
+        page,
+        limit,
+        total,
+        totalPages,
+      });
+    } catch (error) {
+      console.error("Error fetching receipts:", error);
+      res.status(500).json({
+        success: false,
+        message: "שגיאה בטעינת הקבלות",
+      });
+    }
+  });
+
+  // Delete receipt endpoint
+  app.delete("/api/receipts/:receiptId", async (req, res) => {
+    try {
+      const { receiptId } = req.params;
+      const receiptsCol = getCollectionReceipts();
+
+      if (!ObjectId.isValid(receiptId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid receipt ID",
+        });
+      }
+
+      const result = await receiptsCol.deleteOne({
+        _id: new ObjectId(receiptId),
+      });
+
+      if (result.deletedCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Receipt not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Receipt deleted successfully",
+      });
+    } catch (error) {
+      console.error("Error deleting receipt:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error deleting receipt",
+        error: error.message,
+      });
+    }
+  });
 
   // ========== INQUIRIES ENDPOINTS ==========
 

@@ -33,11 +33,12 @@
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "pinia": "^3.0.4",
+    "playwright": "^1.40.0",
     "register-service-worker": "^1.7.2",
+    "resend": "^6.6.0",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
     "stripe": "^20.1.0",
-    "playwright": "^1.40.0",
     "vue": "^3.2.13",
     "vue-router": "^4.0.3",
     "vuex": "^4.0.0"

@@ -188,7 +188,9 @@ async function createEscrowPaymentIntent({
       },
       application_fee_amount: platformFeeAgorot,
       metadata: metadata,
-      payment_method_types: ["card"],
+      automatic_payment_methods: {
+        enabled: true, // Enable Apple Pay, Google Pay, and other wallets
+      },
     });
 
     const timeoutPromise = new Promise((_, reject) => {
@@ -239,8 +241,10 @@ async function createPaymentIntent(amount, jobId, clientId, metadata = {}) {
       },
       // Capture method: manual means we'll capture the payment later (Escrow pattern)
       capture_method: "manual",
-      // We want to authorize the payment immediately but capture it later
-      payment_method_types: ["card"],
+      // Enable Apple Pay, Google Pay, and other wallets
+      automatic_payment_methods: {
+        enabled: true,
+      },
     });
 
     return paymentIntent;

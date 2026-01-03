@@ -1,7 +1,6 @@
 <template>
   <div class="payments-page" dir="rtl">
     <div class="payments-container">
-      <!-- Header -->
       <div class="payments-header">
         <button class="payments-back" type="button" @click="handleBack">
           ← חזור
@@ -12,33 +11,14 @@
         <p class="payments-subtitle">
           {{
             isSubscription
-              ? "הזן פרטי כרטיס אשראי להרשמה למנוי חודשי"
-              : "הזן פרטי כרטיס אשראי"
+              ? "בחר אמצעי תשלום (כרטיס / Google Pay / Apple Pay אם זמין)"
+              : "בחר אמצעי תשלום"
           }}
         </p>
       </div>
 
-      <!-- Subscription Notice -->
-      <div v-if="isSubscription" class="subscription-notice">
-        <div class="subscription-notice__icon">📅</div>
-        <div class="subscription-notice__content">
-          <div class="subscription-notice__title">מנוי חודשי</div>
-          <div class="subscription-notice__text">
-            התשלום יתבצע מדי חודש אוטומטית. תוכל לבטל את המנוי בכל עת.
-            <span
-              v-if="getPendingRegistrationData()"
-              class="subscription-notice__resume"
-            >
-              <br />אתה ממשיך תהליך הרשמה.
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Payment Form -->
       <div class="payment-form-wrapper">
-        <form class="payment-form" @submit.prevent="handlePayment">
-          <!-- Amount Display -->
+        <form class="payment-form" @submit.prevent="handleSubmit">
           <div v-if="currentAmount || amount" class="form-field">
             <label class="form-label">סכום לתשלום</label>
             <div class="amount-display">
@@ -49,78 +29,29 @@
             </div>
           </div>
 
-          <!-- EXPRESS / WALLETS (Apple Pay / Google Pay) -->
-          <div v-if="stripe && elements" class="wallet-section">
-            <div class="wallet-header">
-              <div class="wallet-title">תשלום מהיר</div>
-              <div class="wallet-subtitle">
-                Apple Pay / Google Pay (אם זמין במכשיר)
-              </div>
-            </div>
+          <div v-if="loading" class="wallet-loading">טוען מערכת תשלום...</div>
 
-            <div v-show="walletReady" class="wallet-button-wrapper">
-              <div id="wallet-element" class="wallet-button"></div>
-            </div>
-
-            <div v-if="walletLoading" class="wallet-loading">
-              טוען אפשרויות תשלום...
-            </div>
-
-            <div v-if="walletError" class="wallet-error">
-              {{ walletError }}
-            </div>
-
-            <div v-if="!walletLoading && !walletReady" class="wallet-hint">
-              לא זמין במכשיר/דפדפן הזה — אפשר לשלם בכרטיס למטה.
-            </div>
-
-            <div class="divider">
-              <span>או</span>
+          <div v-if="!loading" class="form-field">
+            <label class="form-label">אמצעי תשלום</label>
+            <div id="payment-element" class="stripe-element-container"></div>
+            <div class="wallet-hint">
+              אם Google Pay / Apple Pay זמין אצלך, הוא יופיע כאן אוטומטית.
             </div>
           </div>
 
-          <!-- Stripe Elements Container -->
-          <div class="form-field">
-            <label class="form-label">פרטי כרטיס אשראי</label>
-            <div id="card-element" class="stripe-element-container">
-              <!-- Stripe Elements will mount here -->
-            </div>
-            <div id="card-errors" class="form-error" role="alert"></div>
-          </div>
-
-          <!-- Security Notice -->
-          <div class="security-notice">
-            <div class="security-notice__icon">🔒</div>
-            <div class="security-notice__text">
-              התשלום מאובטח ומצפין. פרטי הכרטיס שלך לא נשמרים בשרת שלנו.
-            </div>
-          </div>
-
-          <!-- Submit Button -->
           <button
-            type="submit"
             class="payment-submit-btn"
-            :disabled="isProcessing || !isStripeReady"
+            type="submit"
+            :disabled="processing || !ready"
           >
-            <span v-if="isProcessing">
-              {{ isSubscription ? "מעבד הרשמה..." : "מעבד תשלום..." }}
-            </span>
-            <span v-else>
-              {{ isSubscription ? "הרשם למנוי" : "שלם" }}
-              {{
-                currentAmount || amount
-                  ? ` ${formatCurrency(currentAmount || amount)}`
-                  : ""
-              }}
-              <span v-if="isSubscription && (currentAmount || amount)"
-                >/חודש</span
-              >
-            </span>
+            <span v-if="processing">{{
+              isSubscription ? "מעבד הרשמה..." : "מעבד תשלום..."
+            }}</span>
+            <span v-else>{{ isSubscription ? "הרשם למנוי" : "שלם" }}</span>
           </button>
 
-          <!-- Error Message -->
-          <div v-if="submitError" class="form-error form-error--submit">
-            {{ submitError }}
+          <div v-if="errorMsg" class="form-error form-error--submit">
+            {{ errorMsg }}
           </div>
         </form>
       </div>
@@ -136,53 +67,36 @@ import { loadStripe } from "@stripe/stripe-js";
 export default {
   name: "Payments",
   props: {
-    id: {
-      type: String,
-      required: true,
-    },
-    amount: {
-      type: Number,
-      default: null,
-    },
-    jobId: {
-      type: String,
-      default: null,
-    },
+    id: { type: String, required: true },
+    amount: { type: Number, default: null },
+    jobId: { type: String, default: null },
   },
   data() {
     return {
       toast: null,
-      userId: this.id,
       stripe: null,
       elements: null,
-      cardElement: null,
-      stripePublishableKey: null,
+      paymentElement: null,
+      clientSecret: null,
+
+      userId: this.id,
       currentJobId: null,
       currentAmount: null,
       isSubscription: false,
-      paymentForm: {},
-      isProcessing: false,
-      submitError: "",
-      isStripeReady: false,
-      // Wallet / Payment Request Button
-      paymentRequest: null,
-      prButton: null,
-      walletReady: false,
-      walletLoading: false,
-      walletError: null,
-      lastWalletEvent: null,
+
+      loading: true,
+      ready: false,
+      processing: false,
+      errorMsg: "",
     };
   },
   async created() {
     this.toast = useToast();
 
-    // Check if this is a subscription payment
-    // Check both query param and localStorage for pending registration
     const hasPendingRegistration = this.getPendingRegistrationData() !== null;
     this.isSubscription =
       this.$route.query.subscription === "true" || hasPendingRegistration;
 
-    // If we have pending registration but no subscription query param, update the route
     if (hasPendingRegistration && !this.$route.query.subscription) {
       this.$router.replace({
         ...this.$route,
@@ -190,53 +104,25 @@ export default {
       });
     }
 
-    // Get jobId and amount from query params if not provided as props
-    if (this.$route.query.jobId) {
-      this.currentJobId = this.$route.query.jobId;
-    } else if (this.jobId) {
-      this.currentJobId = this.jobId;
-    }
+    this.currentJobId = this.$route.query.jobId || this.jobId || null;
+    this.currentAmount = this.$route.query.amount
+      ? parseFloat(this.$route.query.amount)
+      : this.amount || null;
 
-    if (this.$route.query.amount) {
-      this.currentAmount = parseFloat(this.$route.query.amount);
-    } else if (this.amount) {
-      this.currentAmount = this.amount;
-    } else if (this.isSubscription) {
-      // Fetch subscription amount from server
+    if (!this.currentAmount && this.isSubscription) {
       try {
-        const response = await fetch(`${URL}/api/subscription/amount`);
-        const data = await response.json();
-        if (data.success && data.amount) {
-          this.currentAmount = data.amount;
-        }
-      } catch (error) {}
+        const r = await fetch(`${URL}/api/subscription/amount`);
+        const d = await r.json();
+        if (d.success && d.amount) this.currentAmount = d.amount;
+      } catch (e) {}
     }
 
-    // Get Stripe publishable key from server
-    try {
-      const response = await fetch(`${URL}/api/stripe/publishable-key`);
-      const data = await response.json();
-      if (data.publishableKey) {
-        this.stripePublishableKey = data.publishableKey;
-        this.stripe = await loadStripe(data.publishableKey);
-
-        if (this.stripe) {
-          this.elements = this.stripe.elements();
-          this.setupCardElement();
-          this.initWalletButton();
-        }
-      }
-    } catch (error) {
-      this.submitError = "שגיאה בטעינת מערכת התשלומים. אנא נסה שוב.";
-    }
+    await this.initStripe();
   },
   beforeUnmount() {
-    if (this.cardElement) {
-      this.cardElement.unmount();
-    }
-    if (this.prButton) {
-      this.prButton.unmount();
-    }
+    try {
+      if (this.paymentElement) this.paymentElement.unmount();
+    } catch (e) {}
   },
   methods: {
     handleBack() {
@@ -246,460 +132,126 @@ export default {
         this.$router.push(`/Dashboard/${this.userId}`);
       }
     },
-    setupCardElement() {
-      if (!this.elements) return;
-
-      // Create card element
-      this.cardElement = this.elements.create("card", {
-        style: {
-          base: {
-            color: "rgba(255, 255, 255, 0.92)",
-            fontFamily:
-              '"Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
-            fontSmoothing: "antialiased",
-            fontSize: "15px",
-            fontWeight: "800",
-            "::placeholder": {
-              color: "rgba(255, 255, 255, 0.4)",
-            },
-          },
-          invalid: {
-            color: "#ef4444",
-            iconColor: "#ef4444",
-          },
-        },
-      });
-
-      // Mount card element
-      const cardElementContainer = document.getElementById("card-element");
-      if (cardElementContainer) {
-        this.cardElement.mount("#card-element");
-        this.isStripeReady = true;
-
-        // Handle real-time validation errors
-        this.cardElement.on("change", (event) => {
-          const displayError = document.getElementById("card-errors");
-          if (event.error) {
-            displayError.textContent = event.error.message;
-          } else {
-            displayError.textContent = "";
-          }
-        });
-      }
-    },
     formatCurrency(amount) {
       return new Intl.NumberFormat("he-IL", {
         style: "currency",
         currency: "ILS",
       }).format(amount || 0);
     },
-    async initWalletButton() {
-      if (!this.stripe || !this.elements) return;
-
-      // Payment Request API - try with IL (Israel) or fallback to US
-      const country = "IL";
-
-      this.walletLoading = true;
-      this.walletError = null;
-      this.walletReady = false;
-
-      try {
-        const amountInAgorot = Math.round(
-          (this.currentAmount || this.amount || 0) * 100
-        );
-
-        // Create PaymentRequest
-        this.paymentRequest = this.stripe.paymentRequest({
-          country: country,
-          currency: "ils",
-          total: {
-            label: this.isSubscription ? "מנוי חודשי" : "תשלום",
-            amount: amountInAgorot,
-          },
-          requestPayerName: true,
-          requestPayerEmail: true,
-        });
-
-        // Check if Apple Pay/Google Pay is available
-        const result = await this.paymentRequest.canMakePayment();
-        if (!result) {
-          this.walletReady = false;
-          this.walletLoading = false;
-          return;
-        }
-
-        // Create Payment Request Button Element
-        this.prButton = this.elements.create("paymentRequestButton", {
-          paymentRequest: this.paymentRequest,
-          style: {
-            paymentRequestButton: {
-              type: "default",
-              theme: "dark",
-              height: "48px",
-            },
-          },
-        });
-
-        // Handle payment method event
-        this.paymentRequest.on("paymentmethod", async (ev) => {
-          this.lastWalletEvent = ev;
-          this.isProcessing = true;
-          this.submitError = "";
-
-          try {
-            if (this.isSubscription) {
-              await this.handleWalletSubscriptionPayment(ev.paymentMethod.id);
-            } else {
-              await this.handleWalletRegularPayment(ev.paymentMethod.id);
-            }
-            ev.complete("success");
-            this.lastWalletEvent = null;
-          } catch (error) {
-            ev.complete("fail");
-            this.lastWalletEvent = null;
-            this.submitError = error.message || "שגיאה בעיבוד התשלום";
-          } finally {
-            this.isProcessing = false;
-          }
-        });
-
-        this.prButton.mount("#wallet-element");
-        this.walletReady = true;
-      } catch (e) {
-        this.walletError = "לא הצלחנו לאתחל Apple Pay / Google Pay כרגע.";
-        this.walletReady = false;
-      } finally {
-        this.walletLoading = false;
-      }
-    },
-    async handleWalletSubscriptionPayment(paymentMethodId) {
-      // Step 1: Create subscription on server
-      const createSubscriptionResponse = await fetch(
-        `${URL}/api/subscription/create`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            registrationData: this.getPendingRegistrationData(),
-          }),
-        }
-      );
-
-      const subscriptionData = await createSubscriptionResponse.json();
-
-      if (!subscriptionData.success || !subscriptionData.clientSecret) {
-        throw new Error(
-          subscriptionData.message || "שגיאה ביצירת מנוי. אנא נסה שוב."
-        );
-      }
-
-      // Step 2: Confirm setup intent with payment method
-      const { error, setupIntent } = await this.stripe.confirmCardSetup(
-        subscriptionData.clientSecret,
-        {
-          payment_method: paymentMethodId,
-        }
-      );
-
-      if (error) {
-        throw new Error(error.message || "שגיאה באישור המנוי. אנא נסה שוב.");
-      }
-
-      if (setupIntent && setupIntent.status === "succeeded") {
-        // Step 3: Complete registration on server
-        const completeResponse = await fetch(
-          `${URL}/api/subscription/complete`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              setupIntentId: setupIntent.id,
-              paymentMethodId: paymentMethodId,
-            }),
-          }
-        );
-
-        const completeData = await completeResponse.json();
-
-        if (completeData.success) {
-          localStorage.removeItem("pendingHandymanRegistration");
-          this.toast?.showSuccess(
-            "הרשמה למנוי בוצעה בהצלחה! ברוך הבא להנדימן."
-          );
-          if (completeData.userId) {
-            this.$router.push(`/Dashboard/${completeData.userId}`);
-          } else {
-            this.$router.push({ name: "logIn" });
-          }
-        } else {
-          throw new Error(completeData.message || "שגיאה בהשלמת ההרשמה");
-        }
-      }
-    },
-    async handleWalletRegularPayment(paymentMethodId) {
-      // Create payment intent on server
-      const response = await fetch(`${URL}/api/payment/create-intent`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          amount: Math.round((this.currentAmount || this.amount || 0) * 100),
-          currency: "ils",
-          paymentMethodId: paymentMethodId,
-          jobId: this.currentJobId,
-          userId: this.userId,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!data.success || !data.clientSecret) {
-        throw new Error(data.message || "שגיאה ביצירת תשלום. אנא נסה שוב.");
-      }
-
-      // Confirm payment intent
-      const { error, paymentIntent } = await this.stripe.confirmCardPayment(
-        data.clientSecret,
-        {
-          payment_method: paymentMethodId,
-        }
-      );
-
-      if (error) {
-        throw new Error(error.message || "שגיאה באישור התשלום. אנא נסה שוב.");
-      }
-
-      if (paymentIntent && paymentIntent.status === "succeeded") {
-        this.toast?.showSuccess("תשלום בוצע בהצלחה!");
-        this.$router.push(`/Dashboard/${this.userId}`);
-      } else if (paymentIntent && paymentIntent.status === "requires_capture") {
-        // Capture the payment
-        const captureResponse = await fetch(`${URL}/api/payment/capture`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            paymentIntentId: paymentIntent.id,
-            jobId: this.currentJobId,
-          }),
-        });
-
-        const captureData = await captureResponse.json();
-        if (captureData.success) {
-          this.toast?.showSuccess("תשלום בוצע בהצלחה!");
-          this.$router.push(`/Dashboard/${this.userId}`);
-        } else {
-          throw new Error(captureData.message || "שגיאה בקבלת התשלום");
-        }
-      }
-    },
-    async handlePayment() {
-      if (!this.isStripeReady || !this.cardElement) {
-        this.submitError = "מערכת התשלומים לא נטענה. אנא רענן את הדף.";
-        return;
-      }
-
-      this.isProcessing = true;
-      this.submitError = "";
-
-      try {
-        if (this.isSubscription) {
-          await this.handleSubscriptionPayment();
-        } else {
-          await this.handleRegularPayment();
-        }
-      } catch (error) {
-        this.submitError = "שגיאה בחיבור לשרת. אנא נסה שוב.";
-      } finally {
-        this.isProcessing = false;
-      }
-    },
-    async handleSubscriptionPayment() {
-      // Step 1: Create subscription on server
-      const createSubscriptionResponse = await fetch(
-        `${URL}/api/subscription/create`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            registrationData: this.getPendingRegistrationData(),
-          }),
-        }
-      );
-
-      const subscriptionData = await createSubscriptionResponse.json();
-
-      if (!subscriptionData.success || !subscriptionData.clientSecret) {
-        this.submitError =
-          subscriptionData.message || "שגיאה ביצירת מנוי. אנא נסה שוב.";
-        return;
-      }
-
-      // Step 2: Create payment method from card element
-      const { error: pmError, paymentMethod } =
-        await this.stripe.createPaymentMethod({
-          type: "card",
-          card: this.cardElement,
-        });
-
-      if (pmError || !paymentMethod) {
-        this.submitError =
-          pmError?.message || "שגיאה ביצירת אמצעי תשלום. אנא נסה שוב.";
-        return;
-      }
-
-      // Step 3: Confirm setup intent with payment method
-      const { error, setupIntent } = await this.stripe.confirmCardSetup(
-        subscriptionData.clientSecret,
-        {
-          payment_method: paymentMethod.id,
-        }
-      );
-
-      if (error) {
-        this.submitError = error.message || "שגיאה באישור המנוי. אנא נסה שוב.";
-        return;
-      }
-
-      if (setupIntent && setupIntent.status === "succeeded") {
-        // Step 4: Complete registration on server
-        const completeResponse = await fetch(
-          `${URL}/api/subscription/complete`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              setupIntentId: setupIntent.id,
-              paymentMethodId: paymentMethod.id,
-            }),
-          }
-        );
-
-        const completeData = await completeResponse.json();
-
-        if (completeData.success) {
-          // Clear pending registration
-          localStorage.removeItem("pendingHandymanRegistration");
-
-          this.toast?.showSuccess(
-            "הרשמה למנוי בוצעה בהצלחה! ברוך הבא להנדימן."
-          );
-
-          // Redirect to dashboard
-          setTimeout(() => {
-            if (completeData.user?._id) {
-              this.$router.push({
-                name: "Dashboard",
-                params: { id: completeData.user._id },
-              });
-            } else {
-              this.$router.push({ name: "logIn" });
-            }
-          }, 2000);
-        } else {
-          this.submitError =
-            completeData.message ||
-            "המנוי אושר אך יש בעיה בעדכון השרת. אנא פנה לתמיכה.";
-        }
-      } else {
-        this.submitError = "מצב מנוי לא צפוי. אנא פנה לתמיכה.";
-      }
-    },
-    async handleRegularPayment() {
-      const jobIdToUse = this.currentJobId;
-      if (!jobIdToUse) {
-        this.submitError = "מספר עבודה לא נמצא. אנא חזור לדשבורד.";
-        return;
-      }
-
-      // Step 1: Create Payment Intent on server
-      const createIntentResponse = await fetch(
-        `${URL}/api/payments/create-intent`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            jobId: jobIdToUse,
-          }),
-        }
-      );
-
-      const intentData = await createIntentResponse.json();
-
-      if (!intentData.success || !intentData.clientSecret) {
-        this.submitError =
-          intentData.message || "שגיאה ביצירת כוונת תשלום. אנא נסה שוב.";
-        return;
-      }
-
-      // Step 2: Confirm payment with Stripe Elements
-      const { error, paymentIntent } = await this.stripe.confirmCardPayment(
-        intentData.clientSecret,
-        {
-          payment_method: {
-            card: this.cardElement,
-          },
-        }
-      );
-
-      if (error) {
-        this.submitError = error.message || "שגיאה באישור התשלום. אנא נסה שוב.";
-        return;
-      }
-
-      // Step 3: Update server with payment confirmation
-      if (paymentIntent && paymentIntent.status === "requires_capture") {
-        const confirmResponse = await fetch(`${URL}/api/payments/confirm`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            jobId: jobIdToUse,
-            paymentIntentId: paymentIntent.id,
-            stripeStatus: paymentIntent.status,
-          }),
-        });
-
-        const confirmData = await confirmResponse.json();
-
-        if (confirmData.success) {
-          this.toast?.showSuccess(
-            "התשלום אושר בהצלחה! הכסף יועבר לאחר אישור סיום העבודה."
-          );
-          // Redirect to dashboard
-          setTimeout(() => {
-            this.$router.push(`/Dashboard/${this.userId}`);
-          }, 2000);
-        } else {
-          this.submitError =
-            confirmData.message ||
-            "התשלום אושר אך יש בעיה בעדכון השרת. אנא פנה לתמיכה.";
-        }
-      } else {
-        this.submitError = "מצב תשלום לא צפוי. אנא פנה לתמיכה.";
-      }
-    },
     getPendingRegistrationData() {
       try {
         const data = localStorage.getItem("pendingHandymanRegistration");
-        if (data) {
-          return JSON.parse(data);
+        return data ? JSON.parse(data) : null;
+      } catch {
+        return null;
+      }
+    },
+
+    async initStripe() {
+      this.loading = true;
+      this.errorMsg = "";
+
+      try {
+        // 1) key
+        const keyRes = await fetch(`${URL}/api/stripe/publishable-key`);
+        const keyData = await keyRes.json();
+        if (!keyData.publishableKey) throw new Error("Missing publishableKey");
+
+        this.stripe = await loadStripe(keyData.publishableKey);
+        if (!this.stripe) throw new Error("Stripe init failed");
+
+        // 2) clientSecret from server (PaymentIntent / Subscription intent)
+        const secret = await this.fetchClientSecret();
+        this.clientSecret = secret;
+
+        // 3) mount Payment Element
+        this.elements = this.stripe.elements({
+          clientSecret: this.clientSecret,
+        });
+        this.paymentElement = this.elements.create("payment");
+        this.paymentElement.mount("#payment-element");
+
+        this.ready = true;
+      } catch (e) {
+        this.errorMsg = e?.message || "שגיאה בטעינת מערכת התשלום";
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async fetchClientSecret() {
+      // תשלום רגיל
+      if (!this.isSubscription) {
+        if (!this.currentJobId) throw new Error("חסר jobId");
+
+        const res = await fetch(`${URL}/api/payments/create-intent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobId: this.currentJobId }),
+        });
+        const data = await res.json();
+        if (!data.success || !data.clientSecret)
+          throw new Error(data.message || "אין clientSecret");
+        return data.clientSecret;
+      }
+
+      // מנוי
+      const res = await fetch(`${URL}/api/subscription/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          registrationData: this.getPendingRegistrationData(),
+        }),
+      });
+      const data = await res.json();
+      if (!data.success || !data.clientSecret)
+        throw new Error(data.message || "אין clientSecret למנוי");
+      return data.clientSecret;
+    },
+
+    async handleSubmit() {
+      if (!this.stripe || !this.elements || !this.clientSecret) return;
+
+      this.processing = true;
+      this.errorMsg = "";
+
+      try {
+        // confirmPayment עובד גם לכרטיס וגם ל-wallets דרך Payment Element
+        const { error, paymentIntent } = await this.stripe.confirmPayment({
+          elements: this.elements,
+          confirmParams: {
+            // Stripe יטפל ב-redirect אם צריך (3DS / wallets)
+            return_url: window.location.origin + `/Dashboard/${this.userId}`,
+          },
+          redirect: "if_required",
+        });
+
+        if (error) throw new Error(error.message || "שגיאה באישור התשלום");
+
+        // במנוי: אחרי שה-payment / setup הצליח, תעשה complete
+        if (this.isSubscription) {
+          const completeRes = await fetch(`${URL}/api/subscription/complete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paymentIntentId: paymentIntent?.id }),
+          });
+          const completeData = await completeRes.json();
+          if (!completeData.success)
+            throw new Error(completeData.message || "שגיאה בהשלמת ההרשמה");
+
+          localStorage.removeItem("pendingHandymanRegistration");
+          this.toast?.showSuccess("הרשמה למנוי בוצעה בהצלחה!");
+          this.$router.push(`/Dashboard/${completeData.userId || this.userId}`);
+          return;
         }
-      } catch (error) {}
-      return null;
+
+        this.toast?.showSuccess("תשלום בוצע בהצלחה!");
+        this.$router.push(`/Dashboard/${this.userId}`);
+      } catch (e) {
+        this.errorMsg = e?.message || "שגיאה בעיבוד התשלום";
+      } finally {
+        this.processing = false;
+      }
     },
   },
 };
