@@ -12,8 +12,22 @@ const FROM_EMAIL = isProduction
   ? "receipts@handiman.co.il" // Production: use verified domain
   : "onboarding@resend.dev"; // Local/Development: use Resend test domain
 
-// Initialize Resend with API key from ENV
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Initialize Resend lazily (only when needed)
+// This prevents crashes if RESEND_API_KEY is not set
+let resend = null;
+function getResend() {
+  if (!resend) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.warn(
+        "[receiptService] RESEND_API_KEY not set. Receipt emails will not be sent."
+      );
+      return null;
+    }
+    resend = new Resend(apiKey);
+  }
+  return resend;
+}
 
 /**
  * Get next counter value atomically
@@ -571,14 +585,22 @@ function generateSubscriptionReceiptHTML(receipt, user) {
  * Send receipt email using Resend
  */
 async function sendReceiptEmail(receipt, htmlContent, subject, toEmail) {
-  if (!process.env.RESEND_API_KEY) {
-    throw new Error("RESEND_API_KEY not configured");
+  const resendInstance = getResend();
+  if (!resendInstance) {
+    // If Resend is not configured, return error but don't throw
+    console.warn(
+      "[receiptService] Cannot send receipt email: RESEND_API_KEY not configured"
+    );
+    return {
+      success: false,
+      error: "RESEND_API_KEY not configured",
+    };
   }
 
   // Use FROM_EMAIL from env or default
   const fromEmail = process.env.RESEND_FROM_EMAIL || FROM_EMAIL;
 
-  const { data, error } = await resend.emails.send({
+  const { data, error } = await resendInstance.emails.send({
     from: fromEmail,
     to: toEmail,
     subject: subject,
@@ -751,6 +773,13 @@ async function createAndSendReceipt(
         subject,
         receiptData.toEmail
       );
+
+      // Check if email was sent successfully
+      if (!emailResult || !emailResult.success) {
+        // Email sending failed (e.g., RESEND_API_KEY not configured)
+        emailError = emailResult?.error || "Email sending failed";
+        throw new Error(emailError);
+      }
 
       // Update receipt status to sent
       await receiptsCol.updateOne(
