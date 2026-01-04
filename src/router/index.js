@@ -17,6 +17,7 @@ import RatingPage from "@/views/RatingPage.vue";
 import HandymanRatings from "@/views/HandymanRatings.vue";
 import Payments from "@/views/Payments.vue";
 import PersonalRequestCall from "@/views/PersonalRequestCall.vue";
+import SubscriptionPaymentSettings from "@/views/SubscriptionPaymentSettings.vue";
 
 // Admin routes
 import AdminManager from "@/views/Admin-manager.vue";
@@ -101,6 +102,12 @@ const routes = [
     path: "/Dashboard/:id/payments",
     name: "Payments",
     component: Payments,
+    props: true,
+  },
+  {
+    path: "/Dashboard/:id/subscription-payment-settings",
+    name: "SubscriptionPaymentSettings",
+    component: SubscriptionPaymentSettings,
     props: true,
   },
   {

@@ -33,11 +33,7 @@
         :class="{
           'user-type-tab--active': userFilters.userType === 'handyman',
         }"
-        @click="
-          userFilters.userType = 'handyman';
-          usersPagination.page = 1;
-          loadUsers(1);
-        "
+        @click="switchUserType('handyman')"
       >
         הנדימנים ({{ handymenCount }})
       </button>
@@ -46,11 +42,7 @@
         :class="{
           'user-type-tab--active': userFilters.userType === 'client',
         }"
-        @click="
-          userFilters.userType = 'client';
-          usersPagination.page = 1;
-          loadUsers(1);
-        "
+        @click="switchUserType('client')"
       >
         לקוחות ({{ clientsCount }})
       </button>
@@ -71,6 +63,7 @@
             <th v-if="userFilters.userType === 'handyman'">עבודות שבוצעו</th>
             <th v-if="userFilters.userType === 'client'">מספר הזמנות</th>
             <th>נוצר ב</th>
+            <th>היה פעיל לאחרונה</th>
             <th>חסום</th>
             <th>פעולות</th>
           </tr>
@@ -146,6 +139,18 @@
               </div>
             </td>
             <td>
+              <div class="date-cell">
+                <div
+                  v-if="user['last-activity']"
+                  class="date-tooltip"
+                  :title="formatDate(user['last-activity'])"
+                >
+                  {{ getTimeAgo(user["last-activity"]) }}
+                </div>
+                <span v-else class="no-data-small">לא זמין</span>
+              </div>
+            </td>
+            <td>
               <button
                 class="block-user-btn"
                 :class="{
@@ -194,7 +199,7 @@
           </tr>
           <tr v-if="filteredUsers.length === 0">
             <td
-              :colspan="userFilters.userType === 'handyman' ? 10 : 8"
+              :colspan="userFilters.userType === 'handyman' ? 11 : 9"
               class="no-data"
             >
               אין משתמשים להצגה
@@ -386,6 +391,10 @@ export default {
         userType: "handyman", // Default to handymen
         sortBy: "",
       },
+      userCounts: {
+        handymen: 0,
+        clients: 0,
+      },
       toast: null,
       // Edit User Modal
       showEditUserModal: false,
@@ -409,10 +418,10 @@ export default {
   },
   computed: {
     handymenCount() {
-      return this.users.filter((u) => u.isHandyman === true).length;
+      return this.userCounts.handymen;
     },
     clientsCount() {
-      return this.users.filter((u) => !u.isHandyman).length;
+      return this.userCounts.clients;
     },
   },
   mounted() {
@@ -420,6 +429,14 @@ export default {
     this.loadUsers(1);
   },
   methods: {
+    switchUserType(userType) {
+      // Clear users before switching tabs to prevent showing wrong data
+      this.users = [];
+      this.filteredUsers = [];
+      this.userFilters.userType = userType;
+      this.usersPagination.page = 1;
+      this.loadUsers(1);
+    },
     async loadUsers(page = 1) {
       this.isLoadingUsers = true;
       try {
@@ -433,9 +450,15 @@ export default {
         });
         if (response.data.success) {
           this.users = response.data.users || [];
-          this.usersPagination.page = response.data.page || page;
-          this.usersPagination.total = response.data.total || 0;
-          this.usersPagination.totalPages = response.data.totalPages || 0;
+          this.usersPagination.page = response.data.pagination?.page || page;
+          this.usersPagination.total = response.data.pagination?.total || 0;
+          this.usersPagination.totalPages =
+            response.data.pagination?.totalPages || 0;
+          // Update user counts from server response
+          if (response.data.counts) {
+            this.userCounts.handymen = response.data.counts.handymen || 0;
+            this.userCounts.clients = response.data.counts.clients || 0;
+          }
           this.filterUsers();
         }
       } catch (error) {
@@ -445,14 +468,8 @@ export default {
       }
     },
     filterUsers() {
+      // Start with users from server (already filtered by userType)
       let filtered = [...this.users];
-
-      // Filter by user type
-      if (this.userFilters.userType === "handyman") {
-        filtered = filtered.filter((user) => user.isHandyman === true);
-      } else if (this.userFilters.userType === "client") {
-        filtered = filtered.filter((user) => !user.isHandyman);
-      }
 
       // Filter by search
       if (this.userFilters.search) {

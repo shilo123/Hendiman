@@ -1,6 +1,7 @@
 <template>
   <div class="payments-page" dir="rtl">
     <div class="payments-container">
+      <!-- Header -->
       <div class="payments-header">
         <button class="payments-back" type="button" @click="handleBack">
           ← חזור
@@ -11,47 +12,159 @@
         <p class="payments-subtitle">
           {{
             isSubscription
-              ? "בחר אמצעי תשלום (כרטיס / Google Pay / Apple Pay אם זמין)"
-              : "בחר אמצעי תשלום"
+              ? "הזן פרטי כרטיס אשראי להרשמה למנוי חודשי"
+              : "הזן פרטי כרטיס אשראי"
           }}
         </p>
       </div>
 
+      <!-- Subscription Plans Selection -->
+      <div v-if="isSubscription" class="subscription-plans">
+        <!-- Annual Plan (Recommended) -->
+        <div
+          class="subscription-plan subscription-plan--annual"
+          :class="{
+            'subscription-plan--selected': selectedPlan === 'annual',
+          }"
+          @click="selectPlan('annual')"
+        >
+          <div class="subscription-plan__badge">⭐ מומלץ</div>
+          <div class="subscription-plan__header">
+            <div class="subscription-plan__icon">📅</div>
+            <div class="subscription-plan__title">מנוי שנתי</div>
+          </div>
+          <div class="subscription-plan__price-wrapper">
+            <div class="subscription-plan__price-old">
+              <span class="subscription-plan__price-old-amount">598.80</span>
+              <span class="subscription-plan__price-old-currency">₪</span>
+            </div>
+            <div class="subscription-plan__price">
+              <span class="subscription-plan__price-amount">499.90</span>
+              <span class="subscription-plan__price-currency">₪</span>
+              <span class="subscription-plan__price-period">/שנה</span>
+            </div>
+          </div>
+          <div class="subscription-plan__warning">
+            ⚠️ לא ניתן לבטל את המנוי באמצע שנה
+          </div>
+        </div>
+
+        <!-- Monthly Plan -->
+        <div
+          class="subscription-plan subscription-plan--monthly"
+          :class="{
+            'subscription-plan--selected': selectedPlan === 'monthly',
+          }"
+          @click="selectPlan('monthly')"
+        >
+          <div class="subscription-plan__header">
+            <div class="subscription-plan__icon">📆</div>
+            <div class="subscription-plan__title">מנוי חודשי</div>
+          </div>
+          <div class="subscription-plan__price">
+            <span class="subscription-plan__price-amount">49.90</span>
+            <span class="subscription-plan__price-currency">₪</span>
+            <span class="subscription-plan__price-period">/חודש</span>
+          </div>
+          <div class="subscription-plan__monthly-note">
+            התשלום יתבצע מדי חודש אוטומטית
+          </div>
+          <div class="subscription-plan__cancel-note">
+            תוכל לבטל את המנוי בכל עת
+          </div>
+        </div>
+      </div>
+
+      <!-- Trial Notice (for monthly subscription) -->
+      <div
+        v-if="isSubscription && selectedPlan === 'monthly'"
+        class="trial-notice"
+      >
+        <div class="trial-notice__icon">🎁</div>
+        <div class="trial-notice__content">
+          <div class="trial-notice__title">14 יום חינם!</div>
+          <div class="trial-notice__text">
+            תקופת נסיון של 14 יום חינם. התשלום יתחיל רק אחרי תקופת הנסיון.
+          </div>
+        </div>
+      </div>
+
+      <!-- Subscription Notice (for monthly) -->
+      <div
+        v-if="isSubscription && selectedPlan === 'monthly'"
+        class="subscription-notice"
+      >
+        <div class="subscription-notice__icon">📅</div>
+        <div class="subscription-notice__content">
+          <div class="subscription-notice__title">מנוי חודשי</div>
+          <div class="subscription-notice__text">
+            התשלום יתבצע מדי חודש אוטומטית. תוכל לבטל את המנוי בכל עת.
+            <span
+              v-if="getPendingRegistrationData()"
+              class="subscription-notice__resume"
+            >
+              <br />אתה ממשיך תהליך הרשמה.
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Payment Form -->
       <div class="payment-form-wrapper">
-        <form class="payment-form" @submit.prevent="handleSubmit">
+        <form class="payment-form" @submit.prevent="handlePayment">
+          <!-- Amount Display -->
           <div v-if="currentAmount || amount" class="form-field">
             <label class="form-label">סכום לתשלום</label>
             <div class="amount-display">
               {{ formatCurrency(currentAmount || amount) }}
-              <span v-if="isSubscription" class="amount-display__period"
-                >/חודש</span
-              >
+              <span v-if="isSubscription" class="amount-display__period">
+                {{ selectedPlan === "annual" ? "/שנה" : "/חודש" }}
+              </span>
             </div>
           </div>
 
-          <div v-if="loading" class="wallet-loading">טוען מערכת תשלום...</div>
+          <!-- Stripe Payment Element (includes Apple Pay/Google Pay) -->
+          <div class="form-field">
+            <label class="form-label">פרטי תשלום</label>
+            <div id="card-element" class="stripe-element-container">
+              <!-- Stripe Payment Element will mount here (includes Apple Pay/Google Pay) -->
+            </div>
+            <div id="card-errors" class="form-error" role="alert"></div>
+          </div>
 
-          <div v-if="!loading" class="form-field">
-            <label class="form-label">אמצעי תשלום</label>
-            <div id="payment-element" class="stripe-element-container"></div>
-            <div class="wallet-hint">
-              אם Google Pay / Apple Pay זמין אצלך, הוא יופיע כאן אוטומטית.
+          <!-- Security Notice -->
+          <div class="security-notice">
+            <div class="security-notice__icon">🔒</div>
+            <div class="security-notice__text">
+              התשלום מאובטח ומצפין. פרטי הכרטיס שלך לא נשמרים בשרת שלנו.
             </div>
           </div>
 
+          <!-- Submit Button -->
           <button
-            class="payment-submit-btn"
             type="submit"
-            :disabled="processing || !ready"
+            class="payment-submit-btn"
+            :disabled="isProcessing || !isStripeReady"
           >
-            <span v-if="processing">{{
-              isSubscription ? "מעבד הרשמה..." : "מעבד תשלום..."
-            }}</span>
-            <span v-else>{{ isSubscription ? "הרשם למנוי" : "שלם" }}</span>
+            <span v-if="isProcessing">
+              {{ isSubscription ? "מעבד הרשמה..." : "מעבד תשלום..." }}
+            </span>
+            <span v-else>
+              {{ isSubscription ? "הרשם למנוי" : "שלם" }}
+              {{
+                currentAmount || amount
+                  ? ` ${formatCurrency(currentAmount || amount)}`
+                  : ""
+              }}
+              <span v-if="isSubscription && (currentAmount || amount)">
+                {{ selectedPlan === "annual" ? "/שנה" : "/חודש" }}
+              </span>
+            </span>
           </button>
 
-          <div v-if="errorMsg" class="form-error form-error--submit">
-            {{ errorMsg }}
+          <!-- Error Message -->
+          <div v-if="submitError" class="form-error form-error--submit">
+            {{ submitError }}
           </div>
         </form>
       </div>
@@ -67,36 +180,51 @@ import { loadStripe } from "@stripe/stripe-js";
 export default {
   name: "Payments",
   props: {
-    id: { type: String, required: true },
-    amount: { type: Number, default: null },
-    jobId: { type: String, default: null },
+    id: {
+      type: String,
+      required: true,
+    },
+    amount: {
+      type: Number,
+      default: null,
+    },
+    jobId: {
+      type: String,
+      default: null,
+    },
   },
   data() {
     return {
       toast: null,
+      userId: this.id,
       stripe: null,
       elements: null,
       paymentElement: null,
-      clientSecret: null,
-
-      userId: this.id,
+      stripePublishableKey: null,
       currentJobId: null,
       currentAmount: null,
       isSubscription: false,
-
-      loading: true,
-      ready: false,
-      processing: false,
-      errorMsg: "",
+      paymentForm: {},
+      isProcessing: false,
+      submitError: "",
+      isStripeReady: false,
+      clientSecret: null,
+      selectedPlan: "annual", // 'annual' or 'monthly'
+      monthlyPrice: 49.9,
+      annualPrice: 499.9,
+      showPlans: false, // Control visibility of subscription plans
     };
   },
   async created() {
     this.toast = useToast();
 
+    // Check if this is a subscription payment
+    // Check both query param and localStorage for pending registration
     const hasPendingRegistration = this.getPendingRegistrationData() !== null;
     this.isSubscription =
       this.$route.query.subscription === "true" || hasPendingRegistration;
 
+    // If we have pending registration but no subscription query param, update the route
     if (hasPendingRegistration && !this.$route.query.subscription) {
       this.$router.replace({
         ...this.$route,
@@ -104,32 +232,252 @@ export default {
       });
     }
 
-    this.currentJobId = this.$route.query.jobId || this.jobId || null;
-    this.currentAmount = this.$route.query.amount
-      ? parseFloat(this.$route.query.amount)
-      : this.amount || null;
-
-    if (!this.currentAmount && this.isSubscription) {
-      try {
-        const r = await fetch(`${URL}/api/subscription/amount`);
-        const d = await r.json();
-        if (d.success && d.amount) this.currentAmount = d.amount;
-      } catch (e) {}
+    // Get jobId and amount from query params if not provided as props
+    if (this.$route.query.jobId) {
+      this.currentJobId = this.$route.query.jobId;
+    } else if (this.jobId) {
+      this.currentJobId = this.jobId;
     }
 
-    await this.initStripe();
+    if (this.$route.query.amount) {
+      this.currentAmount = parseFloat(this.$route.query.amount);
+    } else if (this.amount) {
+      this.currentAmount = this.amount;
+    } else if (this.isSubscription) {
+      // Fetch subscription amount from server
+      try {
+        const response = await fetch(`${URL}/api/subscription/amount`);
+        const data = await response.json();
+        if (data.success && data.amount) {
+          this.monthlyPrice = data.amount;
+          // Set initial amount based on selected plan
+          this.currentAmount =
+            this.selectedPlan === "annual"
+              ? this.annualPrice
+              : this.monthlyPrice;
+        }
+      } catch (error) {}
+    }
+
+    // Get Stripe publishable key from server
+    try {
+      const response = await fetch(`${URL}/api/stripe/publishable-key`);
+      const data = await response.json();
+      if (data.publishableKey) {
+        this.stripePublishableKey = data.publishableKey;
+        this.stripe = await loadStripe(data.publishableKey);
+
+        if (this.stripe) {
+          // Initialize Payment Element after getting clientSecret
+          await this.initializePaymentElement();
+        }
+      }
+    } catch (error) {
+      this.submitError = "שגיאה בטעינת מערכת התשלומים. אנא נסה שוב.";
+    }
   },
   beforeUnmount() {
-    try {
-      if (this.paymentElement) this.paymentElement.unmount();
-    } catch (e) {}
+    // Clean up Stripe elements
+    if (this.paymentElement) {
+      try {
+        this.paymentElement.unmount();
+      } catch (error) {
+        // Ignore unmount errors
+      }
+      this.paymentElement = null;
+    }
+
+    // Clear container
+    const paymentElementContainer = document.getElementById("card-element");
+    if (paymentElementContainer) {
+      paymentElementContainer.innerHTML = "";
+    }
+
+    // Reset state
+    this.elements = null;
+    this.isStripeReady = false;
   },
   methods: {
+    selectPlan(plan) {
+      this.selectedPlan = plan;
+      this.currentAmount =
+        plan === "annual" ? this.annualPrice : this.monthlyPrice;
+      // Reinitialize payment element with new amount
+      if (this.isStripeReady) {
+        this.initializePaymentElement();
+      }
+    },
     handleBack() {
       if (this.isSubscription && this.userId === "pending") {
         this.$router.push({ name: "Register" });
       } else {
         this.$router.push(`/Dashboard/${this.userId}`);
+      }
+    },
+    async initializePaymentElement() {
+      if (!this.stripe) return;
+
+      try {
+        // Clean up existing payment element before creating a new one
+        if (this.paymentElement) {
+          try {
+            this.paymentElement.unmount();
+          } catch (unmountError) {
+            // Ignore unmount errors
+          }
+          this.paymentElement = null;
+        }
+
+        // Clear the container
+        let paymentElementContainer = document.getElementById("card-element");
+        if (paymentElementContainer) {
+          paymentElementContainer.innerHTML = "";
+        }
+
+        // Reset Stripe ready state
+        this.isStripeReady = false;
+
+        // Step 1: Get clientSecret from server
+        let clientSecret = null;
+
+        if (this.isSubscription) {
+          // For subscription, create payment intent
+          const registrationData = this.getPendingRegistrationData();
+          if (!registrationData) {
+            this.submitError = "נתוני הרשמה לא נמצאו. אנא חזור לדף ההרשמה.";
+            return;
+          }
+
+          const createSubscriptionResponse = await fetch(
+            `${URL}/api/subscription/create`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                registrationData: registrationData,
+                planType: this.selectedPlan, // 'annual' or 'monthly'
+              }),
+            }
+          );
+
+          const subscriptionData = await createSubscriptionResponse.json();
+          if (!subscriptionData.success || !subscriptionData.clientSecret) {
+            this.submitError =
+              subscriptionData.message || "שגיאה ביצירת מנוי. אנא נסה שוב.";
+            return;
+          }
+          clientSecret = subscriptionData.clientSecret;
+        } else {
+          // For regular payment, create payment intent
+          const jobIdToUse =
+            this.currentJobId || this.jobId || this.$route.query.jobId;
+
+          if (!jobIdToUse) {
+            this.submitError = "מספר עבודה לא נמצא. אנא חזור לדשבורד.";
+            return;
+          }
+
+          const createIntentResponse = await fetch(
+            `${URL}/api/payments/create-intent`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                jobId: jobIdToUse,
+              }),
+            }
+          );
+
+          const intentData = await createIntentResponse.json();
+          if (!intentData.success || !intentData.clientSecret) {
+            this.submitError =
+              intentData.message || "שגיאה ביצירת כוונת תשלום. אנא נסה שוב.";
+            return;
+          }
+          clientSecret = intentData.clientSecret;
+        }
+
+        this.clientSecret = clientSecret;
+
+        // Step 2: Clean up existing Elements instance if it exists
+        if (this.elements) {
+          // Elements instance will be recreated with new clientSecret
+          this.elements = null;
+        }
+
+        // Step 3: Create Elements instance with clientSecret
+        const elementsOptions = {
+          clientSecret: clientSecret,
+          appearance: {
+            theme: "night",
+            variables: {
+              colorPrimary: "#ff6a00",
+              colorBackground: "#0b0b0f",
+              colorText: "rgba(255, 255, 255, 0.92)",
+              colorDanger: "#ef4444",
+              fontFamily:
+                '"Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+              spacingUnit: "4px",
+              borderRadius: "8px",
+            },
+            rules: {
+              ".Input": {
+                backgroundColor: "rgba(255, 255, 255, 0.06)",
+                border: "1px solid rgba(255, 106, 0, 0.2)",
+                color: "rgba(255, 255, 255, 0.92)",
+                fontSize: "15px",
+                fontWeight: "800",
+              },
+              ".Input:focus": {
+                border: "1px solid rgba(255, 106, 0, 0.5)",
+                boxShadow: "0 0 0 3px rgba(255, 106, 0, 0.18)",
+              },
+              ".Input--invalid": {
+                border: "1px solid #ef4444",
+                color: "#ef4444",
+              },
+            },
+          },
+          locale: "he",
+        };
+
+        this.elements = this.stripe.elements(elementsOptions);
+
+        // Step 4: Create Payment Element (includes Apple Pay/Google Pay)
+        this.paymentElement = this.elements.create("payment", {
+          layout: "tabs",
+          // Disable automatic Link form display
+          link: {
+            enabled: false,
+          },
+        });
+
+        // Step 5: Mount Payment Element
+        paymentElementContainer = document.getElementById("card-element");
+        if (paymentElementContainer) {
+          // Ensure container is empty before mounting
+          paymentElementContainer.innerHTML = "";
+
+          this.paymentElement.mount("#card-element");
+          this.isStripeReady = true;
+
+          // Handle real-time validation errors
+          this.paymentElement.on("change", (event) => {
+            const displayError = document.getElementById("card-errors");
+            if (event.error) {
+              displayError.textContent = event.error.message;
+            } else {
+              displayError.textContent = "";
+            }
+          });
+        }
+      } catch (error) {
+        this.submitError = "שגיאה באתחול מערכת התשלומים. אנא נסה שוב.";
+        console.error("Error initializing Payment Element:", error);
       }
     },
     formatCurrency(amount) {
@@ -138,120 +486,189 @@ export default {
         currency: "ILS",
       }).format(amount || 0);
     },
+    async handlePayment() {
+      if (!this.isStripeReady || !this.paymentElement || !this.clientSecret) {
+        this.submitError = "מערכת התשלומים לא נטענה. אנא רענן את הדף.";
+        return;
+      }
+
+      this.isProcessing = true;
+      this.submitError = "";
+
+      try {
+        if (this.isSubscription) {
+          await this.handleSubscriptionPayment();
+        } else {
+          await this.handleRegularPayment();
+        }
+      } catch (error) {
+        this.submitError = error.message || "שגיאה בחיבור לשרת. אנא נסה שוב.";
+      } finally {
+        this.isProcessing = false;
+      }
+    },
+    async handleSubscriptionPayment() {
+      // Step 1: Submit the Payment Element first (required by Stripe)
+      const { error: submitError } = await this.elements.submit();
+      if (submitError) {
+        this.submitError =
+          submitError.message || "שגיאה באימות פרטי התשלום. אנא נסה שוב.";
+        return;
+      }
+
+      // Step 2: Confirm Payment Intent with Payment Element
+      const { error, paymentIntent } = await this.stripe.confirmPayment({
+        elements: this.elements,
+        clientSecret: this.clientSecret,
+        confirmParams: {
+          return_url: `${window.location.origin}/Dashboard/${this.userId}`,
+        },
+        redirect: "if_required",
+      });
+
+      if (error) {
+        this.submitError = error.message || "שגיאה באישור התשלום. אנא נסה שוב.";
+        return;
+      }
+
+      if (paymentIntent && paymentIntent.status === "succeeded") {
+        console.log(
+          "[PAYMENTS] PaymentIntent succeeded, calling /api/subscription/complete..."
+        );
+        // Complete registration on server
+        try {
+          const completeResponse = await fetch(
+            `${URL}/api/subscription/complete`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                paymentIntentId: paymentIntent.id,
+                paymentMethodId: paymentIntent.payment_method,
+              }),
+            }
+          );
+
+          console.log(
+            "[PAYMENTS] Complete response status:",
+            completeResponse.status
+          );
+          const completeData = await completeResponse.json();
+          console.log("[PAYMENTS] Complete response data:", completeData);
+
+          if (completeData.success) {
+            // Clear pending registration
+            localStorage.removeItem("pendingHandymanRegistration");
+
+            this.toast?.showSuccess(
+              "הרשמה למנוי בוצעה בהצלחה! ברוך הבא להנדימן."
+            );
+
+            // Redirect to dashboard
+            setTimeout(() => {
+              if (completeData.user?._id) {
+                this.$router.push({
+                  name: "Dashboard",
+                  params: { id: completeData.user._id },
+                });
+              } else {
+                this.$router.push({ name: "logIn" });
+              }
+            }, 2000);
+          } else {
+            console.error("[PAYMENTS] Complete failed:", completeData);
+            this.submitError =
+              completeData.message ||
+              "המנוי אושר אך יש בעיה בעדכון השרת. אנא פנה לתמיכה.";
+          }
+        } catch (fetchError) {
+          console.error(
+            "[PAYMENTS] Error calling /api/subscription/complete:",
+            fetchError
+          );
+          this.submitError = "שגיאה בחיבור לשרת. אנא פנה לתמיכה או נסה שוב.";
+        }
+      } else {
+        console.error(
+          "[PAYMENTS] PaymentIntent status not succeeded:",
+          paymentIntent?.status
+        );
+        this.submitError = "מצב מנוי לא צפוי. אנא פנה לתמיכה.";
+      }
+    },
+    async handleRegularPayment() {
+      const jobIdToUse = this.currentJobId;
+      if (!jobIdToUse) {
+        this.submitError = "מספר עבודה לא נמצא. אנא חזור לדשבורד.";
+        return;
+      }
+
+      // Step 1: Submit the Payment Element first (required by Stripe)
+      const { error: submitError } = await this.elements.submit();
+      if (submitError) {
+        this.submitError =
+          submitError.message || "שגיאה באימות פרטי התשלום. אנא נסה שוב.";
+        return;
+      }
+
+      // Step 2: Confirm Payment Intent with Payment Element
+      const { error, paymentIntent } = await this.stripe.confirmPayment({
+        elements: this.elements,
+        clientSecret: this.clientSecret,
+        confirmParams: {
+          return_url: `${window.location.origin}/Dashboard/${this.userId}`,
+        },
+        redirect: "if_required",
+      });
+
+      if (error) {
+        this.submitError = error.message || "שגיאה באישור התשלום. אנא נסה שוב.";
+        return;
+      }
+
+      // Step 3: Update server with payment confirmation
+      if (paymentIntent && paymentIntent.status === "requires_capture") {
+        const confirmResponse = await fetch(`${URL}/api/payments/confirm`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            jobId: jobIdToUse,
+            paymentIntentId: paymentIntent.id,
+            stripeStatus: paymentIntent.status,
+          }),
+        });
+
+        const confirmData = await confirmResponse.json();
+
+        if (confirmData.success) {
+          this.toast?.showSuccess(
+            "התשלום אושר בהצלחה! הכסף יועבר לאחר אישור סיום העבודה."
+          );
+          // Redirect to dashboard
+          setTimeout(() => {
+            this.$router.push(`/Dashboard/${this.userId}`);
+          }, 2000);
+        } else {
+          this.submitError =
+            confirmData.message ||
+            "התשלום אושר אך יש בעיה בעדכון השרת. אנא פנה לתמיכה.";
+        }
+      } else {
+        this.submitError = "מצב תשלום לא צפוי. אנא פנה לתמיכה.";
+      }
+    },
     getPendingRegistrationData() {
       try {
         const data = localStorage.getItem("pendingHandymanRegistration");
-        return data ? JSON.parse(data) : null;
-      } catch {
-        return null;
-      }
-    },
-
-    async initStripe() {
-      this.loading = true;
-      this.errorMsg = "";
-
-      try {
-        // 1) key
-        const keyRes = await fetch(`${URL}/api/stripe/publishable-key`);
-        const keyData = await keyRes.json();
-        if (!keyData.publishableKey) throw new Error("Missing publishableKey");
-
-        this.stripe = await loadStripe(keyData.publishableKey);
-        if (!this.stripe) throw new Error("Stripe init failed");
-
-        // 2) clientSecret from server (PaymentIntent / Subscription intent)
-        const secret = await this.fetchClientSecret();
-        this.clientSecret = secret;
-
-        // 3) mount Payment Element
-        this.elements = this.stripe.elements({
-          clientSecret: this.clientSecret,
-        });
-        this.paymentElement = this.elements.create("payment");
-        this.paymentElement.mount("#payment-element");
-
-        this.ready = true;
-      } catch (e) {
-        this.errorMsg = e?.message || "שגיאה בטעינת מערכת התשלום";
-      } finally {
-        this.loading = false;
-      }
-    },
-
-    async fetchClientSecret() {
-      // תשלום רגיל
-      if (!this.isSubscription) {
-        if (!this.currentJobId) throw new Error("חסר jobId");
-
-        const res = await fetch(`${URL}/api/payments/create-intent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jobId: this.currentJobId }),
-        });
-        const data = await res.json();
-        if (!data.success || !data.clientSecret)
-          throw new Error(data.message || "אין clientSecret");
-        return data.clientSecret;
-      }
-
-      // מנוי
-      const res = await fetch(`${URL}/api/subscription/create`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          registrationData: this.getPendingRegistrationData(),
-        }),
-      });
-      const data = await res.json();
-      if (!data.success || !data.clientSecret)
-        throw new Error(data.message || "אין clientSecret למנוי");
-      return data.clientSecret;
-    },
-
-    async handleSubmit() {
-      if (!this.stripe || !this.elements || !this.clientSecret) return;
-
-      this.processing = true;
-      this.errorMsg = "";
-
-      try {
-        // confirmPayment עובד גם לכרטיס וגם ל-wallets דרך Payment Element
-        const { error, paymentIntent } = await this.stripe.confirmPayment({
-          elements: this.elements,
-          confirmParams: {
-            // Stripe יטפל ב-redirect אם צריך (3DS / wallets)
-            return_url: window.location.origin + `/Dashboard/${this.userId}`,
-          },
-          redirect: "if_required",
-        });
-
-        if (error) throw new Error(error.message || "שגיאה באישור התשלום");
-
-        // במנוי: אחרי שה-payment / setup הצליח, תעשה complete
-        if (this.isSubscription) {
-          const completeRes = await fetch(`${URL}/api/subscription/complete`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ paymentIntentId: paymentIntent?.id }),
-          });
-          const completeData = await completeRes.json();
-          if (!completeData.success)
-            throw new Error(completeData.message || "שגיאה בהשלמת ההרשמה");
-
-          localStorage.removeItem("pendingHandymanRegistration");
-          this.toast?.showSuccess("הרשמה למנוי בוצעה בהצלחה!");
-          this.$router.push(`/Dashboard/${completeData.userId || this.userId}`);
-          return;
+        if (data) {
+          return JSON.parse(data);
         }
-
-        this.toast?.showSuccess("תשלום בוצע בהצלחה!");
-        this.$router.push(`/Dashboard/${this.userId}`);
-      } catch (e) {
-        this.errorMsg = e?.message || "שגיאה בעיבוד התשלום";
-      } finally {
-        this.processing = false;
-      }
+      } catch (error) {}
+      return null;
     },
   },
 };
@@ -316,6 +733,337 @@ $font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
   color: $muted;
   margin: 0;
   text-align: center;
+}
+
+.subscription-plan-selector {
+  margin-bottom: 20px;
+}
+
+.subscription-plan-selector__btn {
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 2px solid rgba($orange, 0.4);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 106, 0, 0.15) 0%,
+    rgba(255, 138, 43, 0.08) 100%
+  );
+  color: $text;
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: $font-family;
+
+  &:hover {
+    border-color: $orange;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 106, 0, 0.2) 0%,
+      rgba(255, 138, 43, 0.12) 100%
+    );
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba($orange, 0.3);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.subscription-plan-selector__icon {
+  font-size: 20px;
+}
+
+.subscription-plan-selector__text {
+  flex: 1;
+  text-align: center;
+}
+
+.subscription-plan-selector__arrow {
+  font-size: 12px;
+  opacity: 0.7;
+  transition: transform 0.3s ease;
+}
+
+.subscription-plans-wrapper {
+  margin-bottom: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba($orange, 0.2);
+  border-radius: 16px;
+  padding: 20px;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.subscription-plans-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba($orange, 0.2);
+}
+
+.subscription-plans-header__title {
+  font-size: 18px;
+  font-weight: 1000;
+  color: $orange2;
+  margin: 0;
+}
+
+.subscription-plans-header__close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+  color: $text;
+  font-size: 18px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+
+  &:hover {
+    background: rgba(255, 106, 0, 0.15);
+    border-color: rgba($orange, 0.5);
+    transform: scale(1.1);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+.subscription-plans {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+
+  @media (max-width: 500px) {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+.subscription-plan {
+  position: relative;
+  padding: 18px;
+  border-radius: 14px;
+  border: 2px solid rgba($orange, 0.3);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  &:hover {
+    border-color: rgba($orange, 0.5);
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateY(-2px);
+  }
+
+  &--selected {
+    border-color: $orange;
+    background: rgba(255, 106, 0, 0.12);
+    box-shadow: 0 4px 20px rgba($orange, 0.3);
+  }
+
+  &--annual {
+    border-color: rgba($orange, 0.4);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 106, 0, 0.15) 0%,
+      rgba(255, 138, 43, 0.08) 100%
+    );
+
+    &.subscription-plan--selected {
+      border-color: $orange2;
+      background: linear-gradient(
+        135deg,
+        rgba(255, 106, 0, 0.2) 0%,
+        rgba(255, 138, 43, 0.12) 100%
+      );
+      box-shadow: 0 6px 24px rgba($orange, 0.4);
+    }
+  }
+}
+
+.subscription-plan__badge {
+  position: absolute;
+  top: -8px;
+  right: 12px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, $orange, $orange2);
+  color: #0b0b0f;
+  font-size: 11px;
+  font-weight: 1000;
+  box-shadow: 0 2px 8px rgba($orange, 0.4);
+  z-index: 1;
+}
+
+.subscription-plan__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.subscription-plan__icon {
+  font-size: 20px;
+}
+
+.subscription-plan__title {
+  font-size: 16px;
+  font-weight: 1000;
+  color: $orange2;
+}
+
+.subscription-plan__price-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.subscription-plan__price-old {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  position: relative;
+}
+
+.subscription-plan__price-old-amount {
+  font-size: 18px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.5);
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: rgba(255, 255, 255, 0.6);
+}
+
+.subscription-plan__price-old-currency {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: rgba(255, 255, 255, 0.6);
+}
+
+.subscription-plan__price {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.subscription-plan__price-amount {
+  font-size: 28px;
+  font-weight: 1000;
+  color: $text;
+  line-height: 1;
+}
+
+.subscription-plan__price-currency {
+  font-size: 20px;
+  font-weight: 900;
+  color: $orange2;
+}
+
+.subscription-plan__price-period {
+  font-size: 13px;
+  font-weight: 700;
+  color: $muted;
+  margin-right: 2px;
+}
+
+.subscription-plan__warning {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  font-size: 11px;
+  font-weight: 700;
+  color: #ef4444;
+  text-align: center;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.subscription-plan__monthly-note,
+.subscription-plan__cancel-note {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.subscription-plan__cancel-note {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.trial-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  background: linear-gradient(
+    135deg,
+    rgba(76, 175, 80, 0.15),
+    rgba(139, 195, 74, 0.1)
+  );
+  border: 2px solid rgba(76, 175, 80, 0.4);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
+}
+
+.trial-notice__icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.trial-notice__content {
+  flex: 1;
+}
+
+.trial-notice__title {
+  font-size: 18px;
+  font-weight: 1000;
+  color: #4caf50;
+  margin-bottom: 6px;
+  text-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);
+}
+
+.trial-notice__text {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
 }
 
 .subscription-notice {

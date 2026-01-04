@@ -2335,7 +2335,7 @@ export default {
         logoPreview: null,
         logoUrl: null,
         isHandyman: true,
-        handimanFree: true,
+        trialExpiresAt: "always", // Free forever - replaces handimanFree
       },
       chartPeriod: "daily",
       chartData: [],
@@ -4204,8 +4204,8 @@ export default {
             .map((item) => item.name);
         }
 
-        // Add handimanFree flag
-        formData.handimanFree = true;
+        // Add trialExpiresAt: "always" for free handymen
+        formData.trialExpiresAt = "always"; // Free forever - replaces handimanFree
 
         // Send registration request
         const { data } = await axios.post(
@@ -4237,7 +4237,7 @@ export default {
             logoPreview: null,
             logoUrl: null,
             isHandyman: true,
-            handimanFree: true,
+            trialExpiresAt: "always", // Free forever - replaces handimanFree
           };
         } else {
           this.toast?.showError(data?.message || "לא הצלחנו לרשום את ההנדימן");

@@ -366,6 +366,53 @@
           @save="onSaveProfile"
           @logout="onLogout"
         />
+        <!-- Trial Expired Modal -->
+        <div v-if="showTrialExpiredModal" class="trial-expired-modal" dir="rtl">
+          <div class="trial-expired-modal__content">
+            <div class="trial-expired-modal__header">
+              <h2 class="trial-expired-modal__title">תקופת הנסיון שלך נגמרה</h2>
+              <p class="trial-expired-modal__subtitle">
+                כדי להמשיך להשתמש בפלטפורמה, אנא מלא את פרטי כרטיס האשראי
+              </p>
+            </div>
+            <div
+              v-if="trialExpiredRequiresPayment"
+              class="trial-expired-modal__body"
+            >
+              <form @submit.prevent="handleTrialPaymentSubmit">
+                <div class="trial-payment-form">
+                  <div id="trial-payment-element" class="trial-payment-element">
+                    <!-- Stripe Payment Element will mount here -->
+                  </div>
+                  <div
+                    id="trial-payment-errors"
+                    class="trial-payment-errors"
+                  ></div>
+                  <button
+                    type="submit"
+                    class="trial-payment-submit"
+                    :disabled="isProcessingTrialPayment || !isStripeReady"
+                  >
+                    <span v-if="isProcessingTrialPayment">מעדכן...</span>
+                    <span v-else>המשך</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+            <div v-else class="trial-expired-modal__body">
+              <p class="trial-expired-modal__message">
+                תקופת הנסיון שלך נגמרה. מעתה נתחיל לחייב אותך לפי המנוי שלך.
+              </p>
+              <button
+                type="button"
+                class="trial-payment-submit"
+                @click="handleTrialExpiredConfirm"
+              >
+                הבנתי
+              </button>
+            </div>
+          </div>
+        </div>
         <!-- Job Cancelled Modal -->
         <!-- Client Approval Modal (for client when job is done) -->
         <div
@@ -1034,6 +1081,16 @@ export default {
       jobToEdit: null,
       showEditJobModal: false,
       jobToDelete: null,
+      // Trial expired modal
+      showTrialExpiredModal: false,
+      trialExpiredRequiresPayment: false,
+      stripe: null,
+      elements: null,
+      paymentElement: null,
+      stripePublishableKey: null,
+      isStripeReady: false,
+      setupIntentClientSecret: null,
+      isProcessingTrialPayment: false,
       showDeleteJobModal: false,
       isDeletingJob: false,
       editJobForm: {
@@ -1324,12 +1381,20 @@ export default {
           this.activeAssignedJob.status === "open" ||
           this.activeAssignedJob.status === "done"
         ) {
+          // אם העבודה סיימה, נקה את activeAssignedJob כדי לסגור את הצ'אט
+          this.activeAssignedJob = null;
+          this.isChatMinimized = true;
           return null;
         }
         return this.activeAssignedJob;
       }
       if (this.currentAssignedJobs.length > 0) {
-        return this.currentAssignedJobs[0];
+        const job = this.currentAssignedJobs[0];
+        // בדוק גם כאן אם העבודה סיימה
+        if (job && (job.status === "open" || job.status === "done")) {
+          return null;
+        }
+        return job;
       }
       return null;
     },
@@ -1370,11 +1435,18 @@ export default {
         const job = this.store.jobs?.find(
           (j) => String(j._id || j.id) === String(currentJobId)
         );
-        if (job && job.status !== "open" && job.status !== "done") {
-          // העבודה עדיין פעילה - פתח את הצ'אט מחדש
-          this.activeAssignedJob = job;
-          this.isChatMinimized = false;
-          return;
+        if (job) {
+          // אם העבודה סיימה (status: "done" או "open"), סגור את הצ'אט
+          if (job.status === "open" || job.status === "done") {
+            this.activeAssignedJob = null;
+            this.isChatMinimized = true;
+            // המשך לבדוק עבודות אחרות
+          } else if (job.status !== "open" && job.status !== "done") {
+            // העבודה עדיין פעילה - פתח את הצ'אט מחדש
+            this.activeAssignedJob = job;
+            this.isChatMinimized = false;
+            return;
+          }
         }
       }
 
@@ -2391,6 +2463,13 @@ export default {
       // Only set activeAssignedJob if it's a valid active job
       // כל עבודה שהסטטוס שלה הוא לא "open" או "done" תפתח את הצ'אט
       if (assignedJob) {
+        // בדוק שוב שהעבודה לא סיימה (למקרה שהסטטוס השתנה)
+        if (assignedJob.status === "open" || assignedJob.status === "done") {
+          // אם העבודה סיימה, נקה את activeAssignedJob כדי לסגור את הצ'אט
+          this.activeAssignedJob = null;
+          this.isChatMinimized = true;
+          return;
+        }
         // שמור את ה-activeAssignedJob רק אם הוא לא כבר מוגדר או שהוא עבודה אחרת
         const shouldSet =
           !this.activeAssignedJob ||
@@ -2399,6 +2478,16 @@ export default {
         if (shouldSet) {
           this.activeAssignedJob = assignedJob;
           this.isChatMinimized = false; // Ensure chat is not minimized when auto-opening
+        }
+      } else {
+        // אם לא נמצאה עבודה משובצת, וודא שהצ'אט סגור אם activeAssignedJob מכיל עבודה עם status "done"
+        if (
+          this.activeAssignedJob &&
+          (this.activeAssignedJob.status === "open" ||
+            this.activeAssignedJob.status === "done")
+        ) {
+          this.activeAssignedJob = null;
+          this.isChatMinimized = true;
         }
       }
     },
@@ -3392,6 +3481,165 @@ export default {
       };
       return labels[status] || status;
     },
+    async checkTrialExpiration(user) {
+      if (!user.trialExpiresAt || user.trialExpiresAt === "always") return;
+
+      const now = new Date();
+      const trialExpiry = new Date(user.trialExpiresAt);
+
+      if (now > trialExpiry) {
+        // Trial expired - check if user has payment method
+        const requiresPayment = !user.paymentMethodId;
+        this.trialExpiredRequiresPayment = requiresPayment;
+        this.showTrialExpiredModal = true;
+
+        if (requiresPayment) {
+          // Initialize Stripe Payment Element
+          await this.initializeTrialPayment();
+        }
+      }
+    },
+    async initializeTrialPayment() {
+      try {
+        // Get Stripe publishable key
+        const { data: keyData } = await axios.get(
+          `${URL}/api/stripe/publishable-key`
+        );
+        this.stripePublishableKey = keyData.publishableKey;
+
+        if (!this.stripePublishableKey) {
+          this.toast?.showError("שגיאה בטעינת מערכת התשלום");
+          return;
+        }
+
+        // Load Stripe
+        const { loadStripe } = await import("@stripe/stripe-js");
+        this.stripe = await loadStripe(this.stripePublishableKey);
+
+        if (!this.stripe) {
+          this.toast?.showError("שגיאה בטעינת מערכת התשלום");
+          return;
+        }
+
+        // Get Setup Intent client secret
+        const userId = this.store.user?._id || this.$route.params.id;
+        const { data: setupData } = await axios.post(
+          `${URL}/api/trial/create-setup-intent`,
+          { userId }
+        );
+
+        if (!setupData.success || !setupData.clientSecret) {
+          this.toast?.showError("שגיאה ביצירת טופס תשלום");
+          return;
+        }
+
+        this.setupIntentClientSecret = setupData.clientSecret;
+
+        // Create Elements instance
+        this.elements = this.stripe.elements({
+          clientSecret: this.setupIntentClientSecret,
+        });
+
+        // Create Payment Element
+        this.paymentElement = this.elements.create("payment", {
+          layout: "tabs",
+        });
+
+        // Mount Payment Element
+        await this.$nextTick();
+        const elementContainer = document.getElementById(
+          "trial-payment-element"
+        );
+        if (elementContainer) {
+          this.paymentElement.mount("#trial-payment-element");
+          this.isStripeReady = true;
+        }
+      } catch (error) {
+        console.error("Error initializing trial payment:", error);
+        this.toast?.showError("שגיאה בטעינת טופס התשלום");
+      }
+    },
+    async handleTrialPaymentSubmit() {
+      if (
+        !this.stripe ||
+        !this.paymentElement ||
+        !this.setupIntentClientSecret
+      ) {
+        return;
+      }
+
+      this.isProcessingTrialPayment = true;
+      const errorsElement = document.getElementById("trial-payment-errors");
+
+      try {
+        // Confirm Setup Intent
+        const { error, setupIntent } = await this.stripe.confirmSetup({
+          elements: this.elements,
+          confirmParams: {
+            return_url: `${window.location.origin}${this.$route.fullPath}`,
+          },
+          redirect: "if_required",
+        });
+
+        if (error) {
+          if (errorsElement) {
+            errorsElement.textContent = error.message;
+          }
+          this.isProcessingTrialPayment = false;
+          return;
+        }
+
+        if (setupIntent.status === "succeeded") {
+          // Update user payment method
+          const userId = this.store.user?._id || this.$route.params.id;
+          const { data } = await axios.post(`${URL}/api/trial/complete`, {
+            userId,
+            setupIntentId: setupIntent.id,
+            paymentMethodId: setupIntent.payment_method,
+          });
+
+          if (data.success) {
+            this.toast?.showSuccess("פרטי התשלום עודכנו בהצלחה");
+            this.showTrialExpiredModal = false;
+            // Refresh user data
+            await this.store.fetchDashboardData(userId);
+          } else {
+            this.toast?.showError(data.message || "שגיאה בעדכון פרטי התשלום");
+          }
+        }
+      } catch (error) {
+        console.error("Error processing trial payment:", error);
+        if (errorsElement) {
+          errorsElement.textContent = "שגיאה בעיבוד התשלום. אנא נסה שוב.";
+        }
+        this.toast?.showError("שגיאה בעיבוד התשלום");
+      } finally {
+        this.isProcessingTrialPayment = false;
+      }
+    },
+    async handleTrialExpiredConfirm() {
+      // User already has payment method - just confirm
+      const userId = this.store.user?._id || this.$route.params.id;
+      try {
+        const { data } = await axios.post(`${URL}/api/trial/confirm`, {
+          userId,
+        });
+
+        if (data.success) {
+          this.toast?.showSuccess(
+            "תקופת הנסיון הסתיימה. מעתה נתחיל לחייב אותך."
+          );
+          this.showTrialExpiredModal = false;
+          // Refresh user data
+          await this.store.fetchDashboardData(userId);
+        } else {
+          this.toast?.showError(data.message || "שגיאה");
+        }
+      } catch (error) {
+        console.error("Error confirming trial expiration:", error);
+        this.toast?.showError("שגיאה");
+      }
+    },
   },
   async mounted() {
     // Don't clear activeAssignedJob on mount - let checkForAssignedJob handle it
@@ -3485,7 +3733,7 @@ export default {
       // בדוק אם הנדימן צריך מנוי פעיל
       if (data.User.isHandyman === true) {
         const hasAccess =
-          data.User.handimanFree === true ||
+          data.User.trialExpiresAt === "always" || // Free forever
           data.User.hasActiveSubscription === true;
 
         if (!hasAccess) {
@@ -3559,6 +3807,11 @@ export default {
             );
             if (job) {
               const isDone = job.status === "done";
+              // אם העבודה סיימה, סגור את הצ'אט
+              if (isDone) {
+                this.activeAssignedJob = null;
+                this.isChatMinimized = true;
+              }
               const needsApproval =
                 job.clientApproved === false || job.clientApproved == null;
               if (isDone && needsApproval) {
@@ -3584,6 +3837,11 @@ export default {
                 ) {
                   const fetchedJob = response.data.job;
                   const isDone = fetchedJob.status === "done";
+                  // אם העבודה סיימה, סגור את הצ'אט
+                  if (isDone) {
+                    this.activeAssignedJob = null;
+                    this.isChatMinimized = true;
+                  }
                   const needsApproval =
                     fetchedJob.clientApproved === false ||
                     fetchedJob.clientApproved == null;
@@ -3722,16 +3980,22 @@ export default {
                 const job = newJobs.find(
                   (j) => String(j._id || j.id) === String(currentJobId)
                 );
-                if (job && job.status !== "open" && job.status !== "done") {
-                  // העבודה עדיין פעילה - וודא שהצ'אט פתוח
-                  if (
-                    !this.activeAssignedJob ||
-                    String(
-                      this.activeAssignedJob._id || this.activeAssignedJob.id
-                    ) !== String(currentJobId)
-                  ) {
-                    this.activeAssignedJob = job;
-                    this.isChatMinimized = false;
+                if (job) {
+                  // אם העבודה סיימה (status: "done" או "open"), סגור את הצ'אט
+                  if (job.status === "open" || job.status === "done") {
+                    this.activeAssignedJob = null;
+                    this.isChatMinimized = true;
+                  } else if (job.status !== "open" && job.status !== "done") {
+                    // העבודה עדיין פעילה - וודא שהצ'אט פתוח
+                    if (
+                      !this.activeAssignedJob ||
+                      String(
+                        this.activeAssignedJob._id || this.activeAssignedJob.id
+                      ) !== String(currentJobId)
+                    ) {
+                      this.activeAssignedJob = job;
+                      this.isChatMinimized = false;
+                    }
                   }
                 }
               });
@@ -5553,6 +5817,125 @@ $r2: 26px;
 }
 
 // Client Approval Modal Styles
+/* Trial Expired Modal */
+.trial-expired-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+  backdrop-filter: blur(8px);
+}
+
+.trial-expired-modal__content {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  border-radius: 20px;
+  padding: 40px;
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  border: 2px solid rgba($orange, 0.3);
+  animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.trial-expired-modal__header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.trial-expired-modal__title {
+  font-size: 28px;
+  font-weight: 900;
+  color: $orange2;
+  margin: 0 0 10px;
+  text-shadow: 0 2px 8px rgba($orange, 0.3);
+}
+
+.trial-expired-modal__subtitle {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.trial-expired-modal__body {
+  margin-top: 30px;
+}
+
+.trial-expired-modal__message {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.8);
+  text-align: center;
+  margin: 0 0 25px;
+  line-height: 1.6;
+}
+
+.trial-payment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.trial-payment-element {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba($orange, 0.2);
+  border-radius: 12px;
+  min-height: 100px;
+}
+
+.trial-payment-errors {
+  color: #ff4444;
+  font-size: 14px;
+  text-align: center;
+  min-height: 20px;
+}
+
+.trial-payment-submit {
+  width: 100%;
+  padding: 16px;
+  background: linear-gradient(135deg, $orange 0%, $orange2 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba($orange, 0.4);
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba($orange, 0.5);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
 .clientApprovalModal {
   position: fixed;
   inset: 0;

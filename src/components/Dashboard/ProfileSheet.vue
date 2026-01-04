@@ -29,9 +29,27 @@
           </p>
         </div>
 
-        <span class="ps__chip" :class="{ 'ps__chip--handyman': isHandyman }">
-          {{ isHandyman ? "הנדימן" : "לקוח" }}
-        </span>
+        <div class="ps__headerRight">
+          <!-- Cancel Subscription Button -->
+          <button
+            v-if="
+              isHandyman &&
+              hasActiveSubscription &&
+              user?.trialExpiresAt !== 'always'
+            "
+            class="ps__cancelSubscriptionBtn"
+            type="button"
+            @click="showCancelSubscriptionConfirm = true"
+            aria-label="בטל מנוי"
+          >
+            <span class="ps__cancelSubscriptionBtn__icon">🚫</span>
+            <span class="ps__cancelSubscriptionBtn__text">בטל מנוי</span>
+          </button>
+
+          <span class="ps__chip" :class="{ 'ps__chip--handyman': isHandyman }">
+            {{ isHandyman ? "הנדימן" : "לקוח" }}
+          </span>
+        </div>
       </header>
 
       <!-- Content -->
@@ -123,88 +141,84 @@
           </div>
         </section>
 
-        <!-- Payment Account Setup (handyman only) -->
-        <section v-if="isHandyman" class="card">
-          <div class="card__head">
-            <h3 class="card__title">חשבון תשלומים</h3>
-          </div>
-          <div class="muted" style="margin-bottom: 10px">
-            {{
-              hasPaymentAccount
-                ? "ערוך את פרטי החשבון שלך"
-                : "הגדר את פרטי החשבון שלך כדי לקבל תשלומים"
-            }}
-          </div>
-          <a
-            v-if="onboardingUrl"
-            :href="onboardingUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="paymentBtn"
-          >
-            <span>💳</span>
-            {{
-              hasPaymentAccount ? "שינוי חשבון תשלומים" : "הגדר חשבון תשלומים"
-            }}
-          </a>
-          <button
-            v-else
-            class="paymentBtn"
-            type="button"
-            @click="fetchOnboardingLink"
-            :disabled="isLoadingOnboarding"
-          >
-            <span>💳</span>
-            {{
-              isLoadingOnboarding
-                ? "טוען..."
-                : hasPaymentAccount
-                ? "שינוי חשבון תשלומים"
-                : "הגדר חשבון תשלומים"
-            }}
-          </button>
-        </section>
+        <!-- Actions section - all buttons in one row -->
+        <section class="card card--actions">
+          <div class="actions-grid">
+            <!-- Payment Account Setup (handyman only) -->
+            <div v-if="isHandyman" class="action-item">
+              <div class="action-item__label">חשבון תשלומים</div>
+              <a
+                v-if="onboardingUrl"
+                :href="onboardingUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="action-btn action-btn--payment"
+              >
+                <span>💳</span>
+                <span class="action-btn__text">{{
+                  hasPaymentAccount ? "שינוי חשבון" : "הגדר חשבון"
+                }}</span>
+              </a>
+              <button
+                v-else
+                class="action-btn action-btn--payment"
+                type="button"
+                @click="fetchOnboardingLink"
+                :disabled="isLoadingOnboarding"
+              >
+                <span>💳</span>
+                <span class="action-btn__text">{{
+                  isLoadingOnboarding
+                    ? "טוען..."
+                    : hasPaymentAccount
+                    ? "שינוי חשבון"
+                    : "הגדר חשבון"
+                }}</span>
+              </button>
+            </div>
 
-        <!-- Change Payment Method (for subscription) -->
-        <section v-if="isHandyman && hasPaymentAccount" class="card">
-          <div class="card__head">
-            <h3 class="card__title">שינוי אשראי לחיוב המנוי</h3>
-          </div>
-          <div class="muted" style="margin-bottom: 10px">
-            שנה את כרטיס האשראי לחיוב המנוי החודשי
-          </div>
-          <button class="paymentBtn" type="button" @click="goToPaymentSettings">
-            <span>💳</span>
-            שינוי אשראי לחיוב המנוי
-          </button>
-        </section>
+            <!-- Change Payment Method (for subscription) -->
+            <div v-if="isHandyman && hasActiveSubscription" class="action-item">
+              <div class="action-item__label">שינוי אשראי למנוי</div>
+              <button
+                class="action-btn action-btn--subscription"
+                type="button"
+                @click="goToPaymentSettings"
+              >
+                <span>💳</span>
+                <span class="action-btn__text">שינוי אשראי לחיוב מנוי</span>
+              </button>
+            </div>
 
-        <!-- Logout section -->
-        <section class="card">
-          <button
-            class="logoutBtn"
-            type="button"
-            @click="handleLogout"
-            :disabled="isLoggingOut"
-          >
-            {{ isLoggingOut ? "מתנתק..." : "התנתק" }}
-          </button>
-        </section>
+            <!-- Logout -->
+            <div class="action-item">
+              <div class="action-item__label">התנתקות</div>
+              <button
+                class="action-btn action-btn--logout"
+                type="button"
+                @click="handleLogout"
+                :disabled="isLoggingOut"
+              >
+                <span>🚪</span>
+                <span class="action-btn__text">{{
+                  isLoggingOut ? "מתנתק..." : "התנתק"
+                }}</span>
+              </button>
+            </div>
 
-        <!-- Danger zone -->
-        <section class="card card--danger">
-          <div class="card__head card__head--row">
-            <h3 class="card__title">אזור מסוכן</h3>
-            <span class="muted">מחק משתמש לצמיתות</span>
+            <!-- Delete User -->
+            <div class="action-item">
+              <div class="action-item__label">מחיקה</div>
+              <button
+                class="action-btn action-btn--danger"
+                type="button"
+                @click="showDeleteConfirm = true"
+              >
+                <span>🗑️</span>
+                <span class="action-btn__text">מחק משתמש</span>
+              </button>
+            </div>
           </div>
-
-          <button
-            class="dangerBtn"
-            type="button"
-            @click="showDeleteConfirm = true"
-          >
-            מחק משתמש
-          </button>
         </section>
       </div>
 
@@ -256,6 +270,40 @@
           <div v-if="filteredCities.length === 0" class="pickerModal__empty">
             לא נמצאה עיר
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cancel Subscription Confirmation Modal -->
+    <div
+      v-if="showCancelSubscriptionConfirm"
+      class="cancelSubscriptionModal"
+      dir="rtl"
+      @click.self="showCancelSubscriptionConfirm = false"
+    >
+      <div class="cancelSubscriptionModal__content">
+        <div class="cancelSubscriptionModal__icon">🚫</div>
+        <h2 class="cancelSubscriptionModal__title">ביטול מנוי</h2>
+        <p class="cancelSubscriptionModal__message">
+          האם אתה בטוח שברצונך לבטל את המנוי?
+        </p>
+        <div class="cancelSubscriptionModal__actions">
+          <button
+            class="cancelSubscriptionModal__btn cancelSubscriptionModal__btn--cancel"
+            type="button"
+            @click="showCancelSubscriptionConfirm = false"
+            :disabled="isCancellingSubscription"
+          >
+            בטל
+          </button>
+          <button
+            class="cancelSubscriptionModal__btn cancelSubscriptionModal__btn--confirm"
+            type="button"
+            @click="handleCancelSubscription"
+            :disabled="isCancellingSubscription"
+          >
+            {{ isCancellingSubscription ? "מבטל..." : "כן, בטל מנוי" }}
+          </button>
         </div>
       </div>
     </div>
@@ -327,11 +375,14 @@ export default {
       showDeleteConfirm: false,
       isDeleting: false,
       isLoggingOut: false,
+      showCancelSubscriptionConfirm: false,
+      isCancellingSubscription: false,
 
       // Payment onboarding
       onboardingUrl: null,
       isLoadingOnboarding: false,
       hasPaymentAccount: false, // Track if user has completed onboarding
+      hasActiveSubscription: false, // Track if user has active subscription
       toast: null,
     };
   },
@@ -352,6 +403,11 @@ export default {
       handler(val) {
         this.form = this.buildForm(val);
         this.cityInput = val?.address || "";
+
+        // Check subscription status
+        this.hasActiveSubscription =
+          val?.hasActiveSubscription === true ||
+          val?.trialExpiresAt === "always";
 
         // תיקון: חיפוש לפי address (לא val.city)
         if (val?.address) {
@@ -503,6 +559,72 @@ export default {
         this.isLoggingOut = false;
       }
     },
+    async handleCancelSubscription() {
+      const userId = this.user?._id || this.user?.id;
+      if (!userId) {
+        this.toast?.showError("לא הצלחנו לזהות את המשתמש");
+        return;
+      }
+
+      this.isCancellingSubscription = true;
+      try {
+        console.log(
+          "[ProfileSheet] Cancelling subscription for userId:",
+          userId
+        );
+        const response = await axios.post(
+          `${URL}/api/subscription/cancel`,
+          {
+            userId: String(userId),
+          },
+          {
+            timeout: 30000, // 30 seconds timeout
+          }
+        );
+
+        console.log(
+          "[ProfileSheet] Cancel subscription response:",
+          response.data
+        );
+
+        if (response.data && response.data.success) {
+          this.showCancelSubscriptionConfirm = false;
+          this.toast?.showSuccess("המנוי בוטל בהצלחה");
+          // Refresh user data
+          this.$emit("refresh-user");
+          // Update local state
+          this.hasActiveSubscription = false;
+        } else {
+          const errorMessage = response.data?.message || "שגיאה בביטול המנוי";
+          console.error(
+            "[ProfileSheet] Cancel subscription failed:",
+            errorMessage
+          );
+          this.toast?.showError(errorMessage);
+        }
+      } catch (error) {
+        console.error("[ProfileSheet] Error cancelling subscription:", error);
+        let errorMessage = "שגיאה בביטול המנוי";
+
+        if (error.response) {
+          // Server responded with error
+          errorMessage =
+            error.response.data?.message ||
+            error.response.data?.error ||
+            `שגיאת שרת: ${error.response.status}`;
+        } else if (error.request) {
+          // Request was made but no response received
+          errorMessage = "לא התקבלה תשובה מהשרת. אנא נסה שוב מאוחר יותר.";
+        } else {
+          // Error in request setup
+          errorMessage = error.message || "שגיאה בביטול המנוי";
+        }
+
+        this.toast?.showError(errorMessage);
+      } finally {
+        this.isCancellingSubscription = false;
+      }
+    },
 
     async checkOnboardingStatus() {
       if (!this.isHandyman) return;
@@ -577,7 +699,7 @@ export default {
       }
       this.$emit("close");
       this.$router.push({
-        name: "Payments",
+        name: "SubscriptionPaymentSettings",
         params: { id: userId },
       });
     },
@@ -657,6 +779,7 @@ $orange2: #ff8a2b;
   border-bottom: 1px solid rgba($orange, 0.12);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
 }
 
@@ -706,6 +829,55 @@ $orange2: #ff8a2b;
 .ps__chip--handyman {
   border-color: rgba($orange, 0.35);
   color: $orange;
+}
+
+.ps__headerRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ps__cancelSubscriptionBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.ps__cancelSubscriptionBtn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  transform: translateY(-1px);
+}
+
+.ps__cancelSubscriptionBtn__icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.ps__cancelSubscriptionBtn__text {
+  font-size: 11px;
+  font-weight: 900;
+}
+
+@media (max-width: 400px) {
+  .ps__cancelSubscriptionBtn {
+    padding: 6px 10px;
+    font-size: 10px;
+  }
+  .ps__cancelSubscriptionBtn__text {
+    display: none; /* Hide text on very small screens, show only icon */
+  }
 }
 
 .ps__content {
@@ -936,6 +1108,282 @@ $orange2: #ff8a2b;
   cursor: pointer;
 }
 
+/* Actions grid - all buttons in one row */
+.card--actions {
+  padding: 16px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 106, 0, 0.05) 0%,
+    rgba(255, 138, 43, 0.03) 100%
+  );
+  border: 1px solid rgba($orange, 0.15);
+  border-radius: 18px;
+}
+
+.actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.action-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.action-item__label {
+  font-size: 11px;
+  font-weight: 1000;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.3px;
+}
+
+.action-btn {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  color: $text;
+  font-weight: 1000;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 8px;
+  text-decoration: none;
+  flex-direction: row;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+.action-btn::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.action-btn:hover:not(:disabled)::before {
+  left: 100%;
+}
+
+.action-btn:hover:not(:disabled) {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.08) 100%
+  );
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.action-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.action-btn--payment {
+  border-color: rgba($orange, 0.4);
+  background: linear-gradient(
+    135deg,
+    rgba($orange, 0.18) 0%,
+    rgba($orange2, 0.12) 100%
+  );
+  color: $orange2;
+  box-shadow: 0 2px 12px rgba($orange, 0.2);
+}
+
+.action-btn--payment:hover:not(:disabled) {
+  background: linear-gradient(
+    135deg,
+    rgba($orange, 0.25) 0%,
+    rgba($orange2, 0.18) 100%
+  );
+  border-color: rgba($orange, 0.55);
+  box-shadow: 0 4px 20px rgba($orange, 0.35);
+}
+
+.action-btn--payment span:first-child,
+.action-btn--subscription span:first-child,
+.action-btn--logout span:first-child,
+.action-btn--danger span:first-child {
+  font-size: 16px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.action-btn--payment span:first-child {
+  filter: drop-shadow(0 2px 4px rgba($orange, 0.3));
+}
+
+.action-btn--subscription {
+  border-color: rgba(76, 175, 80, 0.4);
+  background: linear-gradient(
+    135deg,
+    rgba(76, 175, 80, 0.18) 0%,
+    rgba(139, 195, 74, 0.12) 100%
+  );
+  color: #4caf50;
+  box-shadow: 0 2px 12px rgba(76, 175, 80, 0.2);
+}
+
+.action-btn--subscription:hover:not(:disabled) {
+  background: linear-gradient(
+    135deg,
+    rgba(76, 175, 80, 0.25) 0%,
+    rgba(139, 195, 74, 0.18) 100%
+  );
+  border-color: rgba(76, 175, 80, 0.55);
+  box-shadow: 0 4px 20px rgba(76, 175, 80, 0.35);
+}
+
+.action-btn--subscription span:first-child {
+  filter: drop-shadow(0 2px 4px rgba(76, 175, 80, 0.3));
+}
+
+.action-btn--logout {
+  border-color: rgba($orange, 0.4);
+  background: linear-gradient(
+    135deg,
+    rgba($orange, 0.15) 0%,
+    rgba($orange2, 0.1) 100%
+  );
+  color: $orange2;
+  box-shadow: 0 2px 12px rgba($orange, 0.15);
+}
+
+.action-btn--logout:hover:not(:disabled) {
+  background: linear-gradient(
+    135deg,
+    rgba($orange, 0.22) 0%,
+    rgba($orange2, 0.15) 100%
+  );
+  border-color: rgba($orange, 0.55);
+  box-shadow: 0 4px 20px rgba($orange, 0.3);
+}
+
+.action-btn--danger {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.18) 0%,
+    rgba(220, 38, 38, 0.12) 100%
+  );
+  color: #ef4444;
+  box-shadow: 0 2px 12px rgba(239, 68, 68, 0.2);
+}
+
+.action-btn--danger:hover:not(:disabled) {
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.25) 0%,
+    rgba(220, 38, 38, 0.18) 100%
+  );
+  border-color: rgba(239, 68, 68, 0.55);
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.35);
+}
+
+.action-btn__text {
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  font-weight: 900;
+}
+
+/* Mobile responsive - 400px and below */
+@media (max-width: 400px) {
+  .actions-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .card--actions {
+    padding: 12px;
+  }
+
+  .action-btn {
+    min-height: 46px;
+    padding: 8px 6px;
+    border-radius: 10px;
+    font-size: 11px;
+  }
+
+  .action-btn__text {
+    font-size: 10px;
+  }
+
+  .action-item__label {
+    font-size: 9px;
+  }
+
+  .action-btn--payment span:first-child,
+  .action-btn--subscription span:first-child,
+  .action-btn--logout span:first-child,
+  .action-btn--danger span:first-child {
+    font-size: 14px;
+  }
+}
+
+/* Tablet and small desktop - between 400px and 600px */
+@media (min-width: 401px) and (max-width: 600px) {
+  .actions-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+}
+
+/* Desktop - better spacing */
+@media (min-width: 601px) {
+  .actions-grid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+  }
+
+  .action-btn {
+    min-height: 52px;
+    font-size: 12px;
+  }
+
+  .action-btn__text {
+    font-size: 11px;
+  }
+}
+
 /* Sticky footer buttons (mobile friendly) */
 .ps__footer {
   position: sticky;
@@ -1114,6 +1562,90 @@ $orange2: #ff8a2b;
   color: #ef4444;
 }
 .deleteUserModal__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Cancel Subscription Modal */
+.cancelSubscriptionModal {
+  position: fixed;
+  inset: 0;
+  z-index: 100003;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  padding: 16px;
+}
+
+.cancelSubscriptionModal__content {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.95),
+    rgba(15, 16, 22, 0.98)
+  );
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 20px;
+  padding: 22px;
+  width: min(420px, 92vw);
+  text-align: center;
+}
+
+.cancelSubscriptionModal__icon {
+  font-size: 44px;
+  margin-bottom: 12px;
+}
+
+.cancelSubscriptionModal__title {
+  font-size: 20px;
+  font-weight: 1000;
+  color: #fff;
+  margin: 0 0 12px 0;
+}
+
+.cancelSubscriptionModal__message {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.82);
+  margin: 0 0 18px 0;
+  line-height: 1.5;
+}
+
+.cancelSubscriptionModal__actions {
+  display: flex;
+  gap: 10px;
+}
+
+@media (max-width: 520px) {
+  .cancelSubscriptionModal__actions {
+    flex-direction: column;
+  }
+}
+
+.cancelSubscriptionModal__btn {
+  flex: 1;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: $text;
+  font-weight: 1000;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancelSubscriptionModal__btn--confirm {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.16);
+  color: #ef4444;
+}
+
+.cancelSubscriptionModal__btn--confirm:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.cancelSubscriptionModal__btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
