@@ -119,6 +119,17 @@
           🗺️ הנדימן בזמן אמת
         </button>
       </template>
+
+      <!-- Job Images button (for both handyman and client) -->
+      <button
+        v-if="jobImages.length > 0"
+        class="chip chip--ghost chip--icon-only"
+        type="button"
+        @click.stop="showJobImagesModal = true"
+        aria-label="תמונות העבודה"
+      >
+        📷
+      </button>
     </div>
 
     <!-- Compact stepper - hidden on mobile -->
@@ -709,6 +720,119 @@
       </div>
     </div>
 
+    <!-- Job Images Modal -->
+    <div
+      v-if="showJobImagesModal"
+      class="modal"
+      dir="rtl"
+      @click.self="showJobImagesModal = false"
+    >
+      <div class="jobImagesModal">
+        <div class="jobImagesModal__header">
+          <h3 class="jobImagesModal__title">תמונות העבודה</h3>
+          <button
+            class="jobImagesModal__close"
+            type="button"
+            @click="showJobImagesModal = false"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="jobImagesModal__body">
+          <div v-if="jobImages.length === 0" class="jobImagesModal__empty">
+            אין תמונות לעבודה זו
+          </div>
+          <div v-else class="jobImagesModal__grid">
+            <button
+              v-for="(image, index) in jobImages"
+              :key="index"
+              class="jobImagesModal__imageBtn"
+              type="button"
+              @click="openImage(image)"
+            >
+              <img
+                :src="image"
+                class="jobImagesModal__image"
+                alt="תמונת עבודה"
+              />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hours Worked Modal (for handyman when workType is hourly) -->
+    <div
+      v-if="showHoursWorkedModal"
+      class="modal"
+      dir="rtl"
+      @click.self="showHoursWorkedModal = false"
+    >
+      <div class="hoursWorkedModal">
+        <div class="hoursWorkedModal__header">
+          <h3 class="hoursWorkedModal__title">שעות עבודה</h3>
+          <button
+            class="hoursWorkedModal__close"
+            type="button"
+            @click="showHoursWorkedModal = false"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="hoursWorkedModal__body">
+          <div class="hoursWorkedModal__message">כמה שעות עבדת על העבודה?</div>
+          <div class="hoursWorkedModal__field">
+            <label class="hoursWorkedModal__label" for="hoursWorked"
+              >שעות</label
+            >
+            <input
+              id="hoursWorked"
+              v-model.number="hoursWorked"
+              type="number"
+              min="0.5"
+              step="0.5"
+              class="hoursWorkedModal__input"
+            />
+          </div>
+          <div class="hoursWorkedModal__priceInfo">
+            <div class="hoursWorkedModal__priceRow">
+              <span class="hoursWorkedModal__priceLabel">מחיר לשעה:</span>
+              <span class="hoursWorkedModal__priceValue">
+                {{ hourlyPrice.toFixed(2) }} ₪
+              </span>
+            </div>
+            <div
+              class="hoursWorkedModal__priceRow hoursWorkedModal__priceRow--total"
+            >
+              <span class="hoursWorkedModal__priceLabel">סה"כ לתשלום:</span>
+              <span
+                class="hoursWorkedModal__priceValue hoursWorkedModal__priceValue--total"
+              >
+                {{ (hoursWorked * hourlyPrice).toFixed(2) }} ₪
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="hoursWorkedModal__footer">
+          <button
+            class="hoursWorkedModal__btn hoursWorkedModal__btn--cancel"
+            type="button"
+            @click="showHoursWorkedModal = false"
+          >
+            ביטול
+          </button>
+          <button
+            class="hoursWorkedModal__btn hoursWorkedModal__btn--submit"
+            type="button"
+            :disabled="hoursWorked <= 0 || isSubmittingHours"
+            @click="submitHoursWorked"
+          >
+            {{ isSubmittingHours ? "שולח..." : "אישור" }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Handyman Route Modal (for client) -->
     <div
       v-if="showHandymanRouteModal"
@@ -885,6 +1009,14 @@ export default {
         jobId: null,
       },
       isRespondingToPriceChange: false,
+
+      // Job images state
+      showJobImagesModal: false,
+
+      // Hours worked state (for hourly work)
+      showHoursWorkedModal: false,
+      hoursWorked: 1,
+      isSubmittingHours: false,
     };
   },
   computed: {
@@ -953,6 +1085,102 @@ export default {
           : parseFloat(job.price) || 0;
       }
 
+      return 0;
+    },
+    jobImages() {
+      const job = this.currentJob;
+      if (!job) return [];
+      // Handle imageUrls as array or single value
+      if (Array.isArray(job.imageUrls)) {
+        return job.imageUrls.filter((url) => url && url.trim());
+      }
+      if (job.imageUrls && typeof job.imageUrls === "string") {
+        return [job.imageUrls];
+      }
+      // Fallback to imageUrl (singular)
+      if (job.imageUrl) {
+        return Array.isArray(job.imageUrl) ? job.imageUrl : [job.imageUrl];
+      }
+      return [];
+    },
+    isHourlyWork() {
+      const job = this.currentJob;
+      if (!job) return false;
+      const subcategoryInfo = job.subcategoryInfo;
+      if (Array.isArray(subcategoryInfo)) {
+        return subcategoryInfo.some(
+          (sub) => sub?.workType === "לשעה" || sub?.workType === "hourly"
+        );
+      }
+      return (
+        subcategoryInfo?.workType === "לשעה" ||
+        subcategoryInfo?.workType === "hourly"
+      );
+    },
+    hourlyPrice() {
+      const job = this.currentJob;
+      if (!job) return 0;
+      const subcategoryInfo = job.subcategoryInfo;
+      if (Array.isArray(subcategoryInfo)) {
+        const hourlySub = subcategoryInfo.find(
+          (sub) => sub?.workType === "לשעה" || sub?.workType === "hourly"
+        );
+        return hourlySub?.price || 0;
+      }
+      if (
+        subcategoryInfo?.workType === "לשעה" ||
+        subcategoryInfo?.workType === "hourly"
+      ) {
+        return subcategoryInfo?.price || 0;
+      }
+      return 0;
+    },
+    jobImages() {
+      const job = this.currentJob;
+      if (!job) return [];
+      // Handle imageUrls as array or single value
+      if (Array.isArray(job.imageUrls)) {
+        return job.imageUrls.filter((url) => url && url.trim());
+      }
+      if (job.imageUrls && typeof job.imageUrls === "string") {
+        return [job.imageUrls];
+      }
+      // Fallback to imageUrl (singular)
+      if (job.imageUrl) {
+        return Array.isArray(job.imageUrl) ? job.imageUrl : [job.imageUrl];
+      }
+      return [];
+    },
+    isHourlyWork() {
+      const job = this.currentJob;
+      if (!job) return false;
+      const subcategoryInfo = job.subcategoryInfo;
+      if (Array.isArray(subcategoryInfo)) {
+        return subcategoryInfo.some(
+          (sub) => sub?.workType === "לשעה" || sub?.workType === "hourly"
+        );
+      }
+      return (
+        subcategoryInfo?.workType === "לשעה" ||
+        subcategoryInfo?.workType === "hourly"
+      );
+    },
+    hourlyPrice() {
+      const job = this.currentJob;
+      if (!job) return 0;
+      const subcategoryInfo = job.subcategoryInfo;
+      if (Array.isArray(subcategoryInfo)) {
+        const hourlySub = subcategoryInfo.find(
+          (sub) => sub?.workType === "לשעה" || sub?.workType === "hourly"
+        );
+        return hourlySub?.price || 0;
+      }
+      if (
+        subcategoryInfo?.workType === "לשעה" ||
+        subcategoryInfo?.workType === "hourly"
+      ) {
+        return subcategoryInfo?.price || 0;
+      }
       return 0;
     },
     clientName() {
@@ -2681,6 +2909,13 @@ export default {
     async updateStatus(newStatus) {
       try {
         const job = this.currentJob;
+
+        // If status is "done" and work is hourly, show hours worked modal first
+        if (newStatus === "done" && this.isHandyman && this.isHourlyWork) {
+          this.showHoursWorkedModal = true;
+          return; // Don't update status yet, wait for hours input
+        }
+
         const endpoint = `/jobs/${newStatus.replaceAll("_", "-")}`;
 
         // Get handymanId - handle both array and single value
@@ -2748,6 +2983,124 @@ export default {
         this.$emit("status-updated", newStatus);
       } catch (err) {
         this.toast.showError("שגיאה בעדכון הסטטוס");
+      }
+    },
+    addMaterial() {
+      this.materials.push({ name: "", quantity: 1, unitPrice: 0 });
+    },
+    removeMaterial(index) {
+      if (this.materials.length > 1) {
+        this.materials.splice(index, 1);
+      }
+    },
+    async submitMaterials() {
+      if (!this.canSubmitMaterials || this.isSubmittingMaterials) return;
+
+      this.isSubmittingMaterials = true;
+      try {
+        const job = this.currentJob;
+        const jobId = job._id || job.id;
+        const handymanId = this.store.user?._id || this.store.user?.id;
+
+        const materialsData = this.materials
+          .filter((m) => m.name.trim() && m.quantity > 0 && m.unitPrice > 0)
+          .map((m) => ({
+            name: m.name.trim(),
+            quantity: m.quantity,
+            unitPrice: m.unitPrice,
+            total: m.quantity * m.unitPrice,
+          }));
+
+        const totalPrice = materialsData.reduce((sum, m) => sum + m.total, 0);
+
+        await axios.post(`${URL}/jobs/${jobId}/materials/request`, {
+          handymanId,
+          materials: materialsData,
+          totalPrice,
+        });
+
+        this.toast.showSuccess("בקשת החומרים נשלחה ללקוח");
+        this.showAddMaterialsModal = false;
+        this.materials = [{ name: "", quantity: 1, unitPrice: 0 }];
+      } catch (error) {
+        this.toast.showError(
+          error.response?.data?.message || "שגיאה בשליחת בקשת החומרים"
+        );
+      } finally {
+        this.isSubmittingMaterials = false;
+      }
+    },
+    async approveMaterials() {
+      this.isRespondingToMaterials = true;
+      try {
+        const jobId = this.pendingMaterials.jobId;
+        await axios.post(`${URL}/jobs/${jobId}/materials/approve`, {
+          approved: true,
+        });
+        this.toast.showSuccess("החומרים אושרו והמחיר עודכן");
+        this.showMaterialsApprovalModal = false;
+        this.$emit("price-updated");
+      } catch (error) {
+        this.toast.showError(
+          error.response?.data?.message || "שגיאה באישור החומרים"
+        );
+      } finally {
+        this.isRespondingToMaterials = false;
+      }
+    },
+    async rejectMaterials() {
+      this.isRespondingToMaterials = true;
+      try {
+        const jobId = this.pendingMaterials.jobId;
+        await axios.post(`${URL}/jobs/${jobId}/materials/approve`, {
+          approved: false,
+        });
+        this.toast.showSuccess("בקשת החומרים נדחתה");
+        this.showMaterialsApprovalModal = false;
+      } catch (error) {
+        this.toast.showError(
+          error.response?.data?.message || "שגיאה בדחיית החומרים"
+        );
+      } finally {
+        this.isRespondingToMaterials = false;
+      }
+    },
+    async submitHoursWorked() {
+      if (this.hoursWorked <= 0 || this.isSubmittingHours) return;
+
+      this.isSubmittingHours = true;
+      try {
+        const job = this.currentJob;
+        const jobId = job._id || job.id;
+        const handymanId = this.store.user?._id || this.store.user?.id;
+
+        const totalPrice = this.hoursWorked * this.hourlyPrice;
+
+        // First update status to "done"
+        await axios.post(`${URL}/jobs/done`, {
+          jobId,
+          handymanId,
+        });
+
+        // Then submit hours worked
+        await axios.post(`${URL}/jobs/${jobId}/hours`, {
+          handymanId,
+          hoursWorked: this.hoursWorked,
+          hourlyPrice: this.hourlyPrice,
+          totalPrice,
+        });
+
+        this.toast.showSuccess("שעות העבודה נשמרו");
+        this.showHoursWorkedModal = false;
+        this.hoursWorked = 1;
+        this.localJobStatus = "done";
+        this.$emit("status-updated", "done");
+      } catch (error) {
+        this.toast.showError(
+          error.response?.data?.message || "שגיאה בשמירת שעות העבודה"
+        );
+      } finally {
+        this.isSubmittingHours = false;
       }
     },
 
@@ -3370,6 +3723,13 @@ $orange2: #ff8a2b;
 
 .chip--ghost {
   border-color: rgba($orange, 0.18);
+}
+
+.chip--icon-only {
+  padding: 10px;
+  min-width: 40px;
+  justify-content: center;
+  font-size: 18px;
 }
 
 /* Active status button styles */
@@ -4810,6 +5170,257 @@ $orange2: #ff8a2b;
 }
 
 .priceApprovalModal__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Job Images Modal */
+.jobImagesModal {
+  background: rgba(11, 11, 15, 0.98);
+  border-radius: 20px;
+  padding: 24px;
+  max-width: 600px;
+  width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 1px solid rgba($orange, 0.2);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+}
+
+.jobImagesModal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.jobImagesModal__title {
+  font-size: 20px;
+  font-weight: 1000;
+  color: $text;
+}
+
+.jobImagesModal__close {
+  background: none;
+  border: none;
+  color: $muted;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.jobImagesModal__close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: $text;
+}
+
+.jobImagesModal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.jobImagesModal__empty {
+  text-align: center;
+  color: $muted;
+  font-size: 16px;
+  font-weight: 900;
+  padding: 40px 20px;
+}
+
+.jobImagesModal__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.jobImagesModal__imageBtn {
+  width: 100%;
+  aspect-ratio: 1;
+  border: none;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.jobImagesModal__imageBtn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba($orange, 0.3);
+}
+
+.jobImagesModal__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Hours Worked Modal */
+.hoursWorkedModal {
+  background: rgba(11, 11, 15, 0.98);
+  border-radius: 20px;
+  padding: 24px;
+  max-width: 400px;
+  width: 90vw;
+  border: 1px solid rgba($orange, 0.2);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+}
+
+.hoursWorkedModal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.hoursWorkedModal__title {
+  font-size: 20px;
+  font-weight: 1000;
+  color: $text;
+}
+
+.hoursWorkedModal__close {
+  background: none;
+  border: none;
+  color: $muted;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.hoursWorkedModal__close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: $text;
+}
+
+.hoursWorkedModal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.hoursWorkedModal__message {
+  font-size: 16px;
+  font-weight: 900;
+  color: $text;
+  line-height: 1.5;
+}
+
+.hoursWorkedModal__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hoursWorkedModal__label {
+  font-size: 14px;
+  font-weight: 900;
+  color: $muted;
+}
+
+.hoursWorkedModal__input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 14px 16px;
+  color: $text;
+  font-size: 18px;
+  font-weight: 1000;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.hoursWorkedModal__input:focus {
+  outline: none;
+  border-color: $orange;
+  box-shadow: 0 0 0 3px rgba($orange, 0.2);
+}
+
+.hoursWorkedModal__priceInfo {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.hoursWorkedModal__priceRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.hoursWorkedModal__priceRow--total {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.hoursWorkedModal__priceLabel {
+  font-size: 14px;
+  font-weight: 900;
+  color: $muted;
+}
+
+.hoursWorkedModal__priceValue {
+  font-size: 16px;
+  font-weight: 1000;
+  color: $text;
+}
+
+.hoursWorkedModal__priceValue--total {
+  font-size: 20px;
+  font-weight: 1100;
+  color: $orange2;
+}
+
+.hoursWorkedModal__footer {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.hoursWorkedModal__btn {
+  flex: 1;
+  padding: 14px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 1000;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.hoursWorkedModal__btn--cancel {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: $text;
+}
+
+.hoursWorkedModal__btn--submit {
+  background: linear-gradient(135deg, $orange, $orange2);
+  color: #0b0c10;
+  box-shadow: 0 0 20px rgba($orange, 0.3);
+}
+
+.hoursWorkedModal__btn--submit:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

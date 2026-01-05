@@ -19,23 +19,16 @@ function getPlatformFeePercent() {
 }
 
 // Get current platform fee (read from file each time to get latest value)
-// Note: We export a getter function instead of a constant to always get the latest value
-let _cachedFee = null;
-let _lastReadTime = 0;
-const CACHE_DURATION = 5000; // Cache for 5 seconds to avoid reading file too often
-
+// Note: Always read from file to ensure we get the latest dynamic value from dry-data.json
+// No caching to ensure real-time updates
 function getCachedPlatformFeePercent() {
-  const now = Date.now();
-  if (_cachedFee !== null && now - _lastReadTime < CACHE_DURATION) {
-    return _cachedFee;
-  }
-  _cachedFee = getPlatformFeePercent();
-  _lastReadTime = now;
-  return _cachedFee;
+  // Always read fresh from file - no cache for dynamic updates
+  return getPlatformFeePercent();
 }
 
-// For backward compatibility, export a getter
-const PLATFORM_FEE_PERCENT = getCachedPlatformFeePercent();
+// Export as function reference, not as constant, to ensure dynamic reading
+// This ensures we always read the latest value from dry-data.json
+const PLATFORM_FEE_PERCENT = getPlatformFeePercent;
 
 // Function to update platform fee in dry-data.json
 function updatePlatformFeePercent(newFee) {
@@ -44,9 +37,7 @@ function updatePlatformFeePercent(newFee) {
     const dryData = JSON.parse(fs.readFileSync(dryDataPath, "utf8"));
     dryData.FEE = parseFloat(newFee);
     fs.writeFileSync(dryDataPath, JSON.stringify(dryData, null, 2), "utf8");
-    // Clear cache to force re-read
-    _cachedFee = parseFloat(newFee);
-    _lastReadTime = Date.now();
+    // No cache - always reads fresh from file
     return true;
   } catch (error) {
     console.error("[stripeService] Error updating dry-data.json:", error);

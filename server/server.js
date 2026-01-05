@@ -1021,60 +1021,106 @@ function findAvailablePort(startPort) {
     return Math.round(R * c * 100) / 100; // two decimals
   }
   function handymanMatchesJob(handyman, job) {
-    if (!handyman.specialties || !Array.isArray(handyman.specialties)) {
+    // Use fullCategories field from handyman
+    if (
+      !handyman.fullCategories ||
+      !Array.isArray(handyman.fullCategories) ||
+      handyman.fullCategories.length === 0
+    ) {
       return false;
     }
 
-    // Handle subcategoryInfo as array
-    const firstSubcategory =
-      Array.isArray(job.subcategoryInfo) && job.subcategoryInfo.length > 0
-        ? job.subcategoryInfo[0]
-        : job.subcategoryInfo || {};
-    const jobCategory = firstSubcategory.category || job.category || "";
-    const jobCategoryLower = jobCategory.trim().toLowerCase();
-    const jobSubcategoryName =
-      firstSubcategory.subcategory || job.subcategoryName || "";
-    const jobSubLower = jobSubcategoryName.trim().toLowerCase();
+    // Helper function to check if two strings match (flexible)
+    const stringsMatch = (str1, str2) => {
+      if (!str1 || !str2) return false;
+      const s1 = str1.trim().toLowerCase();
+      const s2 = str2.trim().toLowerCase();
 
-    // Extract full categories and subcategories from handyman specialties
-    const fullCategories = handyman.specialties
-      .filter((s) => s && (s.type === "category" || s.isFullCategory === true))
-      .map((s) => (s.name || "").trim().toLowerCase())
+      // Exact match
+      if (s1 === s2) return true;
+
+      // One contains the other
+      if (s1.includes(s2) || s2.includes(s1)) return true;
+
+      // Word-based match
+      const words1 = s1.split(/\s+/).filter((w) => w.length >= 2);
+      const words2 = s2.split(/\s+/).filter((w) => w.length >= 2);
+
+      // Check if any significant word from str1 exists in str2
+      if (words1.some((w) => words2.includes(w))) return true;
+
+      // Check if any significant word from str2 exists in str1
+      if (words2.some((w) => words1.includes(w))) return true;
+
+      return false;
+    };
+
+    // Get fullCategories from handyman (array of category names)
+    const handymanCategories = handyman.fullCategories
+      .map((cat) => {
+        // Handle both string format and object format
+        if (typeof cat === "string") return cat.trim().toLowerCase();
+        return (cat.name || cat || "").trim().toLowerCase();
+      })
       .filter((n) => n.length > 0);
 
-    const subCategories = handyman.specialties
-      .filter(
-        (s) => s && (s.type === "subCategory" || (!s.type && !s.isFullCategory))
-      )
-      .map((s) => (s.name || "").trim().toLowerCase())
-      .filter((n) => n.length > 0);
-
-    // Check if matches full category
-    if (fullCategories.length > 0 && jobCategoryLower) {
-      if (fullCategories.includes(jobCategoryLower)) {
-        return true;
-      }
+    if (handymanCategories.length === 0) {
+      return false;
     }
 
-    // Check if matches subcategory
-    if (subCategories.length > 0 && jobSubLower) {
-      if (
-        subCategories.some((spec) => {
-          if (jobSubLower === spec) return true;
-          if (jobSubLower.includes(spec) || spec.includes(jobSubLower))
+    // Handle subcategoryInfo as array or object
+    let subcategoryInfoArray = [];
+    if (Array.isArray(job.subcategoryInfo)) {
+      subcategoryInfoArray = job.subcategoryInfo;
+    } else if (job.subcategoryInfo && typeof job.subcategoryInfo === "object") {
+      subcategoryInfoArray = [job.subcategoryInfo];
+    }
+
+    // If we have subcategoryInfo array, check all categories
+    if (subcategoryInfoArray.length > 0) {
+      for (const subcatInfo of subcategoryInfoArray) {
+        const jobCategory = subcatInfo.category || "";
+        const jobSubcategory = subcatInfo.subcategory || "";
+        const jobCategoryLower = jobCategory.trim().toLowerCase();
+        const jobSubcategoryLower = jobSubcategory.trim().toLowerCase();
+
+        // Check category match
+        if (jobCategoryLower) {
+          for (const handymanCat of handymanCategories) {
+            if (stringsMatch(jobCategoryLower, handymanCat)) {
+              return true;
+            }
+          }
+        }
+
+        // Check subcategory match
+        if (jobSubcategoryLower) {
+          for (const handymanCat of handymanCategories) {
+            if (stringsMatch(jobSubcategoryLower, handymanCat)) {
+              return true;
+            }
+            // Check if handyman category contains subcategory or vice versa
+            if (
+              handymanCat.includes(jobSubcategoryLower) ||
+              jobSubcategoryLower.includes(handymanCat)
+            ) {
+              return true;
+            }
+          }
+        }
+      }
+    } else {
+      // Fallback: check job.category if no subcategoryInfo
+      const jobCategory = job.category || "";
+      const jobCategoryLower = jobCategory.trim().toLowerCase();
+
+      if (jobCategoryLower) {
+        for (const handymanCat of handymanCategories) {
+          if (stringsMatch(jobCategoryLower, handymanCat)) {
             return true;
-          const jobWords = jobSubLower.split(/\s+/);
-          const specWords = spec.split(/\s+/);
-          return jobWords.some((w) => specWords.includes(w));
-        })
-      ) {
-        return true;
+          }
+        }
       }
-    }
-
-    // If no specialties filter, return true (show all jobs)
-    if (fullCategories.length === 0 && subCategories.length === 0) {
-      return true;
     }
 
     return false;
@@ -1092,8 +1138,8 @@ function findAvailablePort(startPort) {
         return;
       }
 
-      // Find all handymen within 30km (default max distance)
-      const maxDistanceMeters = 30000; // 30km
+      // Find all handymen within 35km (default max distance)
+      const maxDistanceMeters = 35000; // 35km
       let relevantHandymen = [];
 
       try {
@@ -1133,7 +1179,7 @@ function findAvailablePort(startPort) {
             handymanLat
           );
 
-          return distanceKm !== null && distanceKm <= 30; // 30km max
+          return distanceKm !== null && distanceKm <= 35; // 35km max
         });
       }
 
@@ -4656,6 +4702,17 @@ function findAvailablePort(startPort) {
   // ==================== SUBSCRIPTION ENDPOINTS ====================
 
   // Get subscription amount from dry-data.json
+  // Get platform fee percentage
+  app.get("/api/platform/fee", (req, res) => {
+    try {
+      const feePercent = getPlatformFeePercent();
+      res.json({ success: true, fee: feePercent });
+    } catch (error) {
+      console.error("Error getting platform fee:", error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   app.get("/api/subscription/amount", (req, res) => {
     try {
       const amount = getMonthlySubscription();
@@ -4759,6 +4816,96 @@ function findAvailablePort(startPort) {
       });
     } catch (error) {
       console.error("Error creating subscription payment intent:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה ביצירת מנוי",
+        error: error.message,
+      });
+    }
+  });
+
+  // Create subscription for existing user (not during registration)
+  app.post("/api/subscription/create-for-existing-user", async (req, res) => {
+    try {
+      const { userId, planType } = req.body; // planType: 'annual' or 'monthly'
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: "userId required",
+        });
+      }
+
+      const usersCol = getCollection();
+      const user = await usersCol.findOne({ _id: new ObjectId(userId) });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      if (!user.isHandyman) {
+        return res.status(400).json({
+          success: false,
+          message: "User is not a handyman",
+        });
+      }
+
+      // Determine Stripe mode (test or live)
+      const isTestMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_test");
+      const stripeMode = isTestMode ? "TEST" : "LIVE";
+
+      // Get subscription amount based on plan type
+      const monthlyAmount = getMonthlySubscription();
+      const annualAmount = 499.9; // Fixed annual price
+      const subscriptionAmount =
+        planType === "annual" ? annualAmount : monthlyAmount;
+      const amountInAgorot = Math.round(subscriptionAmount * 100);
+
+      // Get or create Stripe Customer
+      let customerId = user.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email || undefined,
+          metadata: {
+            userId: userId.toString(),
+            type: "handyman_subscription",
+          },
+        });
+        customerId = customer.id;
+        // Save customer ID to user
+        await usersCol.updateOne(
+          { _id: new ObjectId(userId) },
+          { $set: { stripeCustomerId: customerId } }
+        );
+      }
+
+      // Create Payment Intent for subscription
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amountInAgorot,
+        currency: "ils",
+        customer: customerId,
+        automatic_payment_methods: {
+          enabled: true,
+        },
+        setup_future_usage: "off_session",
+        metadata: {
+          type: "handyman_subscription",
+          planType: planType || "monthly",
+          userId: userId.toString(),
+          customerId: customerId,
+        },
+      });
+
+      return res.json({
+        success: true,
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+      });
+    } catch (error) {
+      console.error("Error creating subscription for existing user:", error);
       return res.status(500).json({
         success: false,
         message: "שגיאה ביצירת מנוי",
@@ -5444,6 +5591,214 @@ function findAvailablePort(startPort) {
     }
   });
 
+  // Complete subscription for existing user (not during registration)
+  app.post("/api/subscription/complete-for-existing-user", async (req, res) => {
+    try {
+      const { userId, paymentIntentId, paymentMethodId, planType } = req.body;
+
+      if (!userId || !paymentIntentId || !paymentMethodId) {
+        return res.status(400).json({
+          success: false,
+          message: "userId, paymentIntentId, and paymentMethodId are required",
+        });
+      }
+
+      const usersCol = getCollection();
+      const paymentsCol = getCollectionPayments();
+      const financialsCol = getCollectionFinancials();
+
+      // Get user
+      const user = await usersCol.findOne({ _id: new ObjectId(userId) });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      if (!user.isHandyman) {
+        return res.status(400).json({
+          success: false,
+          message: "User is not a handyman",
+        });
+      }
+
+      // Verify payment intent
+      const paymentIntent = await stripe.paymentIntents.retrieve(
+        paymentIntentId
+      );
+
+      if (paymentIntent.status !== "succeeded") {
+        return res.status(400).json({
+          success: false,
+          message: `Payment intent not succeeded. Status: ${paymentIntent.status}`,
+        });
+      }
+
+      // Get plan type from metadata or request
+      const finalPlanType =
+        planType || paymentIntent.metadata?.planType || "monthly";
+
+      // Get subscription amount
+      const monthlyAmount = getMonthlySubscription();
+      const annualAmount = 499.9;
+      const subscriptionAmount =
+        finalPlanType === "annual" ? annualAmount : monthlyAmount;
+      const amountInAgorot = Math.round(subscriptionAmount * 100);
+
+      // Get or create Stripe Customer
+      let customerId = user.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email || undefined,
+          metadata: {
+            userId: userId.toString(),
+            type: "handyman_subscription",
+          },
+        });
+        customerId = customer.id;
+      }
+
+      // Create Stripe Subscription for monthly plan
+      let stripeSubscriptionId = null;
+      if (finalPlanType === "monthly") {
+        // Create product and price if they don't exist
+        let product = null;
+        let price = null;
+
+        try {
+          product = await stripe.products.create({
+            name: "מנוי חודשי הנדימן",
+            description: "מנוי חודשי לפלטפורמת הנדימן",
+          });
+        } catch (productError) {
+          // Product might already exist, try to find it
+          const products = await stripe.products.list({ limit: 100 });
+          product = products.data.find((p) => p.name === "מנוי חודשי הנדימן");
+          if (!product) throw productError;
+        }
+
+        try {
+          price = await stripe.prices.create({
+            product: product.id,
+            currency: "ils",
+            recurring: {
+              interval: "month",
+            },
+            unit_amount: amountInAgorot,
+          });
+        } catch (priceError) {
+          // Price might already exist
+          const prices = await stripe.prices.list({ limit: 100 });
+          price = prices.data.find(
+            (p) =>
+              p.product === product.id &&
+              p.currency === "ils" &&
+              p.recurring?.interval === "month" &&
+              p.unit_amount === amountInAgorot
+          );
+          if (!price) throw priceError;
+        }
+
+        try {
+          const subscription = await stripe.subscriptions.create({
+            customer: customerId,
+            items: [
+              {
+                price: price.id,
+              },
+            ],
+            default_payment_method: paymentMethodId,
+            metadata: {
+              type: "handyman_subscription",
+              planType: "monthly",
+              userId: userId.toString(),
+            },
+          });
+          stripeSubscriptionId = subscription.id;
+        } catch (subscriptionError) {
+          console.error("Error creating subscription:", subscriptionError);
+          throw subscriptionError;
+        }
+      }
+
+      // For existing users, no trial period - subscription starts immediately
+      // Calculate expiration date based on plan type
+      let subscriptionExpiresAt = null;
+      if (finalPlanType === "annual") {
+        // Annual subscription expires in 1 year
+        subscriptionExpiresAt = new Date();
+        subscriptionExpiresAt.setFullYear(
+          subscriptionExpiresAt.getFullYear() + 1
+        );
+      }
+      // For monthly, subscription is managed by Stripe, no expiration date needed
+
+      // Update user with subscription info
+      const updateData = {
+        hasActiveSubscription: true,
+        stripeCustomerId: customerId,
+        subscriptionPlanType: finalPlanType,
+        paymentMethodId: paymentMethodId,
+        trialExpiresAt: null, // No trial period for existing users
+        subscriptionExpiresAt: subscriptionExpiresAt, // Only for annual plan
+        stripeSubscriptionId: stripeSubscriptionId,
+      };
+
+      await usersCol.updateOne(
+        { _id: new ObjectId(userId) },
+        { $set: updateData }
+      );
+
+      // Create payment record
+      const paymentRecord = {
+        userId: new ObjectId(userId),
+        amount: subscriptionAmount,
+        currency: "ILS",
+        status: "succeeded",
+        type:
+          finalPlanType === "annual" ? "annual_subscription" : "subscription",
+        planType: finalPlanType,
+        paymentIntentId: paymentIntentId,
+        paymentMethodId: paymentMethodId,
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: stripeSubscriptionId,
+        createdAt: new Date(),
+      };
+
+      await paymentsCol.insertOne(paymentRecord);
+
+      // Update financials
+      const financialRecord = {
+        type: "subscription",
+        amount: subscriptionAmount,
+        currency: "ILS",
+        userId: new ObjectId(userId),
+        paymentIntentId: paymentIntentId,
+        createdAt: new Date(),
+      };
+
+      await financialsCol.insertOne(financialRecord);
+
+      // Get updated user
+      const updatedUser = await usersCol.findOne({ _id: new ObjectId(userId) });
+
+      return res.json({
+        success: true,
+        user: updatedUser,
+        message: "המנוי הופעל בהצלחה",
+      });
+    } catch (error) {
+      console.error("Error completing subscription for existing user:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה בהשלמת המנוי",
+        error: error.message,
+      });
+    }
+  });
+
   // Create setup intent for updating subscription payment method
   app.post("/api/subscription/create-setup-intent", async (req, res) => {
     try {
@@ -5856,6 +6211,9 @@ function findAvailablePort(startPort) {
             const feature = cityEnglishName ? matchingFeature : features[0];
 
             if (feature) {
+              // IMPORTANT: feature.center is [lng, lat] from geocodeResult
+              // geocodeResult returns { lng: ..., lat: ... }
+              // So feature.center = [geocodeResult.lng, geocodeResult.lat] = [lng, lat] ✅
               const [lng, lat] =
                 (feature.center &&
                   feature.center.length >= 2 &&
@@ -5865,10 +6223,7 @@ function findAvailablePort(startPort) {
                   feature.geometry.coordinates) ||
                 [];
               if (Number.isFinite(lng) && Number.isFinite(lat)) {
-                update.location = {
-                  type: "Point",
-                  coordinates: [lng, lat],
-                };
+                // LOG: בדוק את הסדר
                 update.coordinates = { lng, lat };
                 coordinatesFound = true;
               }
@@ -8189,13 +8544,38 @@ function findAvailablePort(startPort) {
                   confirmedPaymentIntent = await stripe.paymentIntents.confirm(
                     job.paymentIntentId
                   );
+
+                  // Update paymentIntent with the confirmed one
+                  paymentIntent = confirmedPaymentIntent;
                 } catch (confirmError) {
-                  throw confirmError;
+                  // If confirmation fails, return error
+                  console.error(`[jobs/approve] ❌ Error confirming payment:`, {
+                    error: confirmError.message,
+                    type: confirmError.type,
+                    code: confirmError.code,
+                    decline_code: confirmError.decline_code,
+                    payment_intent: confirmError.payment_intent,
+                    stack: confirmError.stack,
+                  });
+                  return res.status(400).json({
+                    success: false,
+                    message:
+                      "שגיאה באישור התשלום עם אמצעי התשלום השמור. אנא נסה להוסיף אמצעי תשלום חדש.",
+                    requiresPaymentMethod: true,
+                    paymentIntentId: job.paymentIntentId,
+                    clientSecret: paymentIntent.client_secret,
+                    error: confirmError.message,
+                    errorType: confirmError.type,
+                    errorCode: confirmError.code,
+                  });
                 }
 
                 // Check if confirmation was successful
                 if (confirmedPaymentIntent.status === "requires_capture") {
                   // Payment confirmed, continue with capture
+                  paymentIntent = confirmedPaymentIntent;
+                } else if (confirmedPaymentIntent.status === "succeeded") {
+                  // Payment already succeeded (captured automatically), skip to update job
                   paymentIntent = confirmedPaymentIntent;
                 } else {
                   return res.status(400).json({
@@ -8204,26 +8584,24 @@ function findAvailablePort(startPort) {
                     currentStatus: confirmedPaymentIntent.status,
                   });
                 }
-              } catch (confirmError) {
-                // If confirmation fails, return error
-                console.error(`[jobs/approve] ❌ Error confirming payment:`, {
-                  error: confirmError.message,
-                  type: confirmError.type,
-                  code: confirmError.code,
-                  decline_code: confirmError.decline_code,
-                  payment_intent: confirmError.payment_intent,
-                  stack: confirmError.stack,
-                });
+              } catch (innerError) {
+                // If any error occurs in the try block above, return error
+                console.error(
+                  `[jobs/approve] ❌ Error in payment method processing:`,
+                  {
+                    error: innerError.message,
+                    type: innerError.type,
+                    code: innerError.code,
+                  }
+                );
                 return res.status(400).json({
                   success: false,
                   message:
-                    "שגיאה באישור התשלום עם אמצעי התשלום השמור. אנא נסה להוסיף אמצעי תשלום חדש.",
+                    "שגיאה בעיבוד אמצעי התשלום. אנא נסה שוב או הוסף אמצעי תשלום חדש.",
                   requiresPaymentMethod: true,
                   paymentIntentId: job.paymentIntentId,
                   clientSecret: paymentIntent.client_secret,
-                  error: confirmError.message,
-                  errorType: confirmError.type,
-                  errorCode: confirmError.code,
+                  error: innerError.message,
                 });
               }
             } else {
@@ -8235,6 +8613,66 @@ function findAvailablePort(startPort) {
                 requiresPaymentMethod: true,
                 paymentIntentId: job.paymentIntentId,
                 clientSecret: paymentIntent.client_secret,
+              });
+            }
+          } else if (paymentIntent.status === "requires_confirmation") {
+            // Payment intent needs confirmation but no payment method is saved
+            // Try to confirm without payment method (might work if payment method was attached earlier)
+            try {
+              // First, try to update the payment intent to set allow_redirects to never
+              // This prevents redirect-based payment methods that require return_url
+              let updateSucceeded = false;
+              try {
+                await stripe.paymentIntents.update(job.paymentIntentId, {
+                  automatic_payment_methods: {
+                    enabled: true,
+                    allow_redirects: "never",
+                  },
+                });
+                updateSucceeded = true;
+              } catch (updateError) {
+                // If update fails, we'll need to provide return_url when confirming
+                console.warn(
+                  `[jobs/approve] ⚠️ Warning: Could not update payment intent: ${updateError.message}`
+                );
+              }
+
+              // Now try to confirm the payment intent
+              // If update succeeded, we can confirm without return_url
+              // If update failed, we need to provide return_url
+              const confirmOptions = {};
+              if (!updateSucceeded) {
+                // Need return_url if update failed
+                confirmOptions.return_url = `${
+                  process.env.FRONTEND_URL || "https://hendiman.co.il"
+                }/dashboard`;
+              }
+
+              const confirmedPaymentIntent =
+                await stripe.paymentIntents.confirm(
+                  job.paymentIntentId,
+                  Object.keys(confirmOptions).length > 0
+                    ? confirmOptions
+                    : undefined
+                );
+              paymentIntent = confirmedPaymentIntent;
+            } catch (confirmError) {
+              console.error(
+                `[jobs/approve] ❌ Error confirming payment (no saved method):`,
+                {
+                  error: confirmError.message,
+                  type: confirmError.type,
+                  code: confirmError.code,
+                }
+              );
+              return res.status(400).json({
+                success: false,
+                message:
+                  "נדרש להוסיף אמצעי תשלום לפני אישור העבודה. אנא הוסף כרטיס אשראי תחילה.",
+                requiresPaymentMethod: true,
+                paymentIntentId: job.paymentIntentId,
+                clientSecret: paymentIntent.client_secret,
+                error: confirmError.message,
               });
             }
           }
@@ -8526,7 +8964,7 @@ function findAvailablePort(startPort) {
             }
           } else {
             // Legacy payment flow (no Connect) - manual calculation
-            const commissionRate = 0.1; // 10%
+            const commissionRate = getPlatformFeePercent() / 100; // Read from dry-data.json
             const commission =
               Math.round(totalAmount * commissionRate * 100) / 100;
             const systemRevenue = commission + urgentFee;
@@ -9002,6 +9440,101 @@ function findAvailablePort(startPort) {
       return res.status(500).json({
         success: false,
         message: "Error sending price change request",
+        error: error.message,
+      });
+    }
+  });
+
+  // Hours worked endpoint (for hourly work)
+  app.post("/jobs/:jobId/hours", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const { handymanId, hoursWorked, hourlyPrice, totalPrice } = req.body;
+
+      if (!handymanId || !hoursWorked || !hourlyPrice || !totalPrice) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "handymanId, hoursWorked, hourlyPrice, and totalPrice are required",
+        });
+      }
+
+      const jobsCol = getCollectionJobs();
+      const paymentsCol = getCollectionPayments();
+      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
+
+      // Verify handyman is assigned to this job
+      const handymanIdStr = String(handymanId);
+      const jobHandymanIds = Array.isArray(job.handymanId)
+        ? job.handymanId.map((id) => String(id))
+        : [String(job.handymanId)];
+      if (!jobHandymanIds.includes(handymanIdStr)) {
+        return res.status(403).json({
+          success: false,
+          message: "You are not authorized to update hours for this job",
+        });
+      }
+
+      // Update job with hours worked
+      await jobsCol.updateOne(
+        { _id: new ObjectId(jobId) },
+        {
+          $set: {
+            hoursWorked: hoursWorked,
+            hourlyPrice: hourlyPrice,
+            hoursTotalPrice: totalPrice,
+          },
+        }
+      );
+
+      // Update payment intent if exists
+      if (job.paymentIntentId) {
+        try {
+          const paymentIntent = await stripe.paymentIntents.retrieve(
+            job.paymentIntentId
+          );
+          const newAmount = Math.round(totalPrice * 100);
+          await stripe.paymentIntents.update(job.paymentIntentId, {
+            amount: newAmount,
+          });
+        } catch (stripeError) {
+          console.error(
+            "❌ [Hours] Error updating payment intent:",
+            stripeError
+          );
+        }
+      }
+
+      // Update payment record if exists
+      if (job.paymentIntentId) {
+        await paymentsCol.updateOne(
+          { paymentIntentId: job.paymentIntentId },
+          {
+            $set: {
+              amount: totalPrice,
+              hoursWorked: hoursWorked,
+              hourlyPrice: hourlyPrice,
+            },
+          }
+        );
+      }
+
+      return res.json({
+        success: true,
+        message: "Hours worked updated successfully",
+      });
+    } catch (error) {
+      console.error("❌ [Hours Worked] Error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error updating hours worked",
         error: error.message,
       });
     }
@@ -10104,10 +10637,36 @@ function findAvailablePort(startPort) {
         .toArray();
 
       // Get payments for this handyman to calculate earnings
+      // Try both ObjectId and string for handymanId
+      let handymanObjectId;
+      try {
+        handymanObjectId = new ObjectId(handymanId);
+      } catch (err) {
+        handymanObjectId = handymanId;
+      }
+
+      // Get all payments for this handyman
+      // Check for payments with handymanRevenue (the actual field in DB) or other earnings fields
       const payments = await paymentsCol
         .find({
-          handymanId: handymanId,
-          status: "transferred",
+          $and: [
+            {
+              $or: [
+                { handymanId: handymanId },
+                { handymanId: handymanObjectId },
+                { handymanId: String(handymanId) },
+              ],
+            },
+            {
+              $or: [
+                { status: "transferred" },
+                { status: "succeeded" },
+                { handymanRevenue: { $exists: true, $ne: null, $gt: 0 } },
+                { handymanAmount: { $exists: true, $ne: null, $gt: 0 } },
+                { spacious_H: { $exists: true, $ne: null, $gt: 0 } },
+              ],
+            },
+          ],
         })
         .toArray();
 
@@ -10127,13 +10686,23 @@ function findAvailablePort(startPort) {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
       payments.forEach((payment) => {
-        const earned = payment.spacious_H || 0;
-        totalEarnings += earned;
-        if (
-          payment.transferredAt &&
-          new Date(payment.transferredAt) >= startOfMonth
-        ) {
-          monthlyEarnings += earned;
+        // Use handymanRevenue (the actual field in DB) or handymanAmount, then spacious_H, then calculate
+        const earned =
+          payment.handymanRevenue ||
+          payment.handymanAmount ||
+          payment.spacious_H ||
+          (payment.totalAmount || payment.amount || 0) -
+            (payment.platformFee || payment.spacious_M || 0) ||
+          0;
+
+        if (earned > 0) {
+          totalEarnings += parseFloat(earned) || 0;
+          if (
+            payment.transferredAt &&
+            new Date(payment.transferredAt) >= startOfMonth
+          ) {
+            monthlyEarnings += parseFloat(earned) || 0;
+          }
         }
       });
 
@@ -11557,11 +12126,51 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
               }
             }
 
+            // Extract street number if available
+            let streetNumber = null;
+            for (const component of addressComponents) {
+              if (component.types.includes("street_number")) {
+                streetNumber = component.long_name;
+                break;
+              }
+            }
+
+            // Extract street name if available
+            let streetName = null;
+            for (const component of addressComponents) {
+              if (component.types.includes("route")) {
+                streetName = component.long_name;
+                break;
+              }
+            }
+
+            // Build full address: street name + street number + city
+            let fullAddress = reverseGeocodeResult.formatted_address;
+
+            // If we have street name and number, create a cleaner address
+            if (streetName && streetNumber) {
+              fullAddress = `${streetName} ${streetNumber}`;
+              if (cityName) {
+                fullAddress += `, ${cityName}`;
+              }
+            } else if (streetName) {
+              fullAddress = streetName;
+              if (cityName) {
+                fullAddress += `, ${cityName}`;
+              }
+            } else if (cityName) {
+              fullAddress = cityName;
+            }
+
+            // Return the full address (with street name and number if available)
             return res.json({
               success: true,
-              address: result.formatted_address || "מיקום שנבחר במפה",
+              address:
+                fullAddress || result.formatted_address || "מיקום שנבחר במפה",
               city: cityName || null,
-              fullAddress: result.formatted_address || null,
+              fullAddress: fullAddress || result.formatted_address || null,
+              streetNumber: streetNumber || null,
+              streetName: streetName || null,
             });
           }
         } catch (googleError) {
@@ -11728,7 +12337,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       }
 
       // Use coordinates we found earlier (userLng, userLat already set)
-      const maxDistanceMeters = 50000; // 50 ק"מ
+      const maxDistanceMeters = 35000; // 35 ק"מ
 
       // Find all handymen in the area
       let allHandymenInArea = [];
@@ -11748,12 +12357,201 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           })
           .toArray();
       } catch (error) {
+        console.error("❌ [CREATE-CALL-V2] Error finding handymen:", error);
         return res.status(500).json({
           success: false,
           message: "מצטערים, אין הנדימנים באזורך",
           handymen: [],
         });
       }
+
+      try {
+        const allHandymenInDB = await collection
+          .find({ isHandyman: true })
+          .toArray();
+
+        const categoryToMatch = subcategoryInfoArray[0]?.category || "";
+        const categoryToMatchLower = categoryToMatch.trim().toLowerCase();
+
+        const matchingHandymen = allHandymenInDB.filter((handyman) => {
+          // בדוק fullCategories
+          if (
+            handyman.fullCategories &&
+            Array.isArray(handyman.fullCategories) &&
+            handyman.fullCategories.length > 0
+          ) {
+            const handymanCategories = handyman.fullCategories
+              .map((cat) => {
+                if (typeof cat === "string") return cat.trim().toLowerCase();
+                return (cat.name || cat || "").trim().toLowerCase();
+              })
+              .filter((n) => n.length > 0);
+
+            if (
+              handymanCategories.some(
+                (cat) =>
+                  cat.includes(categoryToMatchLower) ||
+                  categoryToMatchLower.includes(cat)
+              )
+            ) {
+              return true;
+            }
+          }
+
+          // בדוק specialties
+          if (
+            handyman.specialties &&
+            Array.isArray(handyman.specialties) &&
+            handyman.specialties.length > 0
+          ) {
+            const handymanCategories = handyman.specialties
+              .map((cat) => {
+                if (typeof cat === "string") return cat.trim().toLowerCase();
+                return (cat.name || cat || "").trim().toLowerCase();
+              })
+              .filter((n) => n.length > 0);
+
+            if (
+              handymanCategories.some(
+                (cat) =>
+                  cat.includes(categoryToMatchLower) ||
+                  categoryToMatchLower.includes(cat)
+              )
+            ) {
+              return true;
+            }
+          }
+
+          return false;
+        });
+
+        matchingHandymen.forEach((h, index) => {
+          const isInArea = allHandymenInArea.some(
+            (areaH) => String(areaH._id) === String(h._id)
+          );
+
+          if (!isInArea && h.location && h.location.coordinates) {
+            const [coord0, coord1] = h.location.coordinates;
+            let handymanLng, handymanLat;
+            if (h.coordinates && h.coordinates.lng && h.coordinates.lat) {
+              handymanLng = h.coordinates.lng;
+              handymanLat = h.coordinates.lat;
+            } else {
+              handymanLng = coord0;
+              handymanLat = coord1;
+            }
+
+            const R = 6371;
+            const dLat = ((handymanLat - userLat) * Math.PI) / 180;
+            const dLng = ((handymanLng - userLng) * Math.PI) / 180;
+            const a =
+              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos((userLat * Math.PI) / 180) *
+                Math.cos((handymanLat * Math.PI) / 180) *
+                Math.sin(dLng / 2) *
+                Math.sin(dLng / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const distance = R * c;
+          }
+        });
+      } catch (error) {
+        console.error("❌ שגיאה בבדיקת כל ההנדימנים:", error);
+      }
+      try {
+        const etanPerez = await collection.findOne({
+          isHandyman: true,
+          $or: [
+            { username: "איתן פרץ" },
+            { username: /איתן.*פרץ/i },
+            { firstName: "איתן", lastName: "פרץ" },
+          ],
+        });
+        if (etanPerez) {
+          // Check if he's in the area
+          const isInArea = allHandymenInArea.some(
+            (h) => String(h._id) === String(etanPerez._id)
+          );
+
+          // Check distance if he has coordinates
+          if (etanPerez.location && etanPerez.location.coordinates) {
+            const [coord0, coord1] = etanPerez.location.coordinates;
+            // Try both orders: [lng, lat] and [lat, lng]
+            // If coordinates.coordinates exists, use it as reference
+            let handymanLng, handymanLat;
+            if (
+              etanPerez.coordinates &&
+              etanPerez.coordinates.lng &&
+              etanPerez.coordinates.lat
+            ) {
+              // Use coordinates object as reference
+              handymanLng = etanPerez.coordinates.lng;
+              handymanLat = etanPerez.coordinates.lat;
+            } else {
+              // Assume [lng, lat] format (MongoDB GeoJSON standard)
+              handymanLng = coord0;
+              handymanLat = coord1;
+            }
+
+            // Calculate distance (rough calculation)
+            const R = 6371; // Earth's radius in km
+            const dLat = ((handymanLat - userLat) * Math.PI) / 180;
+            const dLng = ((handymanLng - userLng) * Math.PI) / 180;
+            const a =
+              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos((userLat * Math.PI) / 180) *
+                Math.cos((handymanLat * Math.PI) / 180) *
+                Math.sin(dLng / 2) *
+                Math.sin(dLng / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const distance = R * c;
+
+            // Try reverse order to see if it's better
+            const handymanLngReversed = coord1;
+            const handymanLatReversed = coord0;
+            const dLatRev = ((handymanLatReversed - userLat) * Math.PI) / 180;
+            const dLngRev = ((handymanLngReversed - userLng) * Math.PI) / 180;
+            const aRev =
+              Math.sin(dLatRev / 2) * Math.sin(dLatRev / 2) +
+              Math.cos((userLat * Math.PI) / 180) *
+                Math.cos((handymanLatReversed * Math.PI) / 180) *
+                Math.sin(dLngRev / 2) *
+                Math.sin(dLngRev / 2);
+            const cRev = 2 * Math.atan2(Math.sqrt(aRev), Math.sqrt(1 - aRev));
+            const distanceReversed = R * cRev;
+          }
+        } else {
+          // Try to find all handymen with "איתן" or "פרץ" in name
+          const similarHandymen = await collection
+            .find({
+              isHandyman: true,
+              $or: [
+                { username: /איתן/i },
+                { username: /פרץ/i },
+                { firstName: /איתן/i },
+                { lastName: /פרץ/i },
+              ],
+            })
+            .toArray();
+          if (similarHandymen.length > 0) {
+            similarHandymen.forEach((h) => {});
+          }
+        }
+      } catch (error) {
+        console.error("❌ שגיאה בחיפוש איתן פרץ:", error);
+      }
+      allHandymenInArea.forEach((handyman, index) => {
+        // Show all fields that might contain category info
+        const relevantFields = Object.keys(handyman).filter(
+          (key) =>
+            key.toLowerCase().includes("categor") ||
+            key.toLowerCase().includes("specialt") ||
+            key.toLowerCase().includes("skill") ||
+            key.toLowerCase().includes("expert")
+        );
+        if (relevantFields.length > 0) {
+          relevantFields.forEach((field) => {});
+        }
+      });
 
       if (allHandymenInArea.length === 0) {
         return res.json({
@@ -11765,24 +12563,104 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
       // Helper function to check if handyman has specialty
       const handymanHasSpecialty = (handyman, category, subcategory) => {
-        if (!handyman.specialties || !Array.isArray(handyman.specialties)) {
+        // Get categories from fullCategories or specialties (fallback)
+        let handymanCategoriesArray = [];
+        let usingField = "";
+
+        if (
+          handyman.fullCategories &&
+          Array.isArray(handyman.fullCategories) &&
+          handyman.fullCategories.length > 0
+        ) {
+          handymanCategoriesArray = handyman.fullCategories;
+          usingField = "fullCategories";
+        } else if (
+          handyman.specialties &&
+          Array.isArray(handyman.specialties) &&
+          handyman.specialties.length > 0
+        ) {
+          // Fallback to specialties if fullCategories doesn't exist
+          handymanCategoriesArray = handyman.specialties;
+          usingField = "specialties";
+        } else {
           return false;
         }
 
-        // Check for full category match
-        const hasFullCategory = handyman.specialties.some(
-          (s) =>
-            s.name === category &&
-            (s.type === "category" || s.isFullCategory === true)
-        );
+        // Normalize category and subcategory
+        const categoryLower = (category || "").trim().toLowerCase();
+        const subcategoryLower = (subcategory || "").trim().toLowerCase();
 
-        if (hasFullCategory) return true;
+        // Get handyman categories (normalized)
+        const handymanCategories = handymanCategoriesArray
+          .map((cat) => {
+            // Handle both string format and object format
+            if (typeof cat === "string") {
+              return cat.trim().toLowerCase();
+            }
+            // Handle object format (from specialties array)
+            if (typeof cat === "object" && cat !== null) {
+              // If it has a name property, use it
+              if (cat.name) {
+                return String(cat.name).trim().toLowerCase();
+              }
+              // Fallback to string conversion
+              return String(cat).trim().toLowerCase();
+            }
+            return String(cat || "")
+              .trim()
+              .toLowerCase();
+          })
+          .filter((n) => n.length > 0);
 
-        // Check for subcategory match
-        if (subcategory) {
-          return handyman.specialties.some(
-            (s) => s.name === subcategory && s.type === "subCategory"
-          );
+        // Helper function to check if two strings match (flexible)
+        const stringsMatch = (str1, str2) => {
+          if (!str1 || !str2) return false;
+          const s1 = str1.trim().toLowerCase();
+          const s2 = str2.trim().toLowerCase();
+
+          // Exact match
+          if (s1 === s2) return true;
+
+          // One contains the other
+          if (s1.includes(s2) || s2.includes(s1)) return true;
+
+          // Word-based match
+          const words1 = s1.split(/\s+/).filter((w) => w.length >= 2);
+          const words2 = s2.split(/\s+/).filter((w) => w.length >= 2);
+
+          // Check if any significant word from str1 exists in str2
+          if (words1.some((w) => words2.includes(w))) return true;
+
+          // Check if any significant word from str2 exists in str1
+          if (words2.some((w) => words1.includes(w))) return true;
+
+          return false;
+        };
+
+        // Check category match
+        if (categoryLower) {
+          for (const handymanCat of handymanCategories) {
+            if (stringsMatch(categoryLower, handymanCat)) {
+              return true;
+            }
+          }
+        }
+
+        // Check subcategory match (sometimes subcategory contains the category name)
+        if (subcategoryLower) {
+          for (const handymanCat of handymanCategories) {
+            // Check if subcategory matches handyman category
+            if (stringsMatch(subcategoryLower, handymanCat)) {
+              return true;
+            }
+            // Check if handyman category contains subcategory or vice versa
+            if (
+              handymanCat.includes(subcategoryLower) ||
+              subcategoryLower.includes(handymanCat)
+            ) {
+              return true;
+            }
+          }
         }
 
         return false;
@@ -11805,6 +12683,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       }
 
       // Find handymen who match ALL subcategories (excluding blocked handymen)
+
       const handymenMatchingAll = allHandymenInArea.filter((handyman) => {
         // Skip blocked handymen
         const handymanIdStr = String(handyman._id);
@@ -11812,13 +12691,18 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           return false;
         }
 
-        return subcategoryInfoArray.every((subcatInfo) => {
+        const matchesAll = subcategoryInfoArray.every((subcatInfo) => {
           return handymanHasSpecialty(
             handyman,
             subcatInfo.category,
             subcatInfo.subcategory
           );
         });
+
+        if (matchesAll) {
+        }
+
+        return matchesAll;
       });
 
       // Find handymen who match SOME subcategories (for partial matches) (excluding blocked)
@@ -12258,24 +13142,57 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
       // Helper function to check if handyman has specialty (same as in create-call-v2)
       const handymanHasSpecialty = (handyman, category, subcategory) => {
-        if (!handyman.specialties || !Array.isArray(handyman.specialties)) {
+        // Use fullCategories field from handyman
+        if (
+          !handyman.fullCategories ||
+          !Array.isArray(handyman.fullCategories) ||
+          handyman.fullCategories.length === 0
+        ) {
           return false;
         }
 
-        // Check for full category match
-        const hasFullCategory = handyman.specialties.some(
-          (s) =>
-            s.name === category &&
-            (s.type === "category" || s.isFullCategory === true)
-        );
+        const categoryLower = (category || "").trim().toLowerCase();
 
-        if (hasFullCategory) return true;
+        // Check for full category match (case-insensitive, flexible)
+        if (categoryLower) {
+          const handymanCategories = handyman.fullCategories
+            .map((cat) => {
+              // Handle both string format and object format
+              if (typeof cat === "string") return cat.trim().toLowerCase();
+              return (cat.name || cat || "").trim().toLowerCase();
+            })
+            .filter((n) => n.length > 0);
 
-        // Check for subcategory match
-        if (subcategory) {
-          return handyman.specialties.some(
-            (s) => s.name === subcategory && s.type === "subCategory"
-          );
+          // Exact match
+          if (handymanCategories.includes(categoryLower)) {
+            return true;
+          }
+
+          // Partial match (one contains the other)
+          if (
+            handymanCategories.some(
+              (cat) =>
+                cat.includes(categoryLower) || categoryLower.includes(cat)
+            )
+          ) {
+            return true;
+          }
+
+          // Word-based match
+          const categoryWords = categoryLower
+            .split(/\s+/)
+            .filter((w) => w.length > 0);
+          if (
+            handymanCategories.some((cat) => {
+              const catWords = cat.split(/\s+/).filter((w) => w.length > 0);
+              return categoryWords.some((w) => {
+                if (w.length < 2) return false; // ignore very short words
+                return catWords.includes(w);
+              });
+            })
+          ) {
+            return true;
+          }
         }
 
         return false;
@@ -13035,6 +13952,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       }
 
       // Check if payment was already transferred
+      const paymentsCol = getCollectionPayments();
       const existingPaymentForTransferCheck = await paymentsCol.findOne({
         jobId: new ObjectId(jobId),
       });
@@ -13094,7 +14012,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       // המחיר בלי מע"מ - עליו מחשבים את הרווחים
       const amountWithoutVAT = vatCalculation.amountWithoutVAT;
       const urgentFee = job.urgent ? 10 : 0;
-      const commissionRate = 0.1; // 10%
+      const commissionRate = getPlatformFeePercent() / 100; // Read from dry-data.json
       // העמלה מחושבת על המחיר בלי מע"מ (כי המע"מ נגבה מהלקוח)
       const commission =
         Math.round(amountWithoutVAT * commissionRate * 100) / 100;
@@ -13334,9 +14252,11 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           // New: totalAmount, spacious_M, spacious_H
           const totalAmount = payment.totalAmount || payment.amount || 0;
           const spacious_M = payment.spacious_M || payment.platformFee || 0;
+          // Use handymanRevenue (the actual field in DB) or calculate it
           const spacious_H =
-            payment.spacious_H ||
             payment.handymanRevenue ||
+            payment.handymanAmount ||
+            payment.spacious_H ||
             totalAmount - spacious_M;
 
           return {
@@ -14753,8 +15673,122 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
     }
   });
 
+  // Admin: Get single job details
+  app.get("/admin/jobs/:jobId", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const jobsCol = getCollectionJobs();
+      const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "Job not found",
+        });
+      }
+
+      return res.json({
+        success: true,
+        job,
+      });
+    } catch (error) {
+      console.error("❌ [Admin Job Details] Error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching job details",
+        error: error.message,
+      });
+    }
+  });
+
+  // Admin: Get receipt by payment intent ID
+  app.get("/admin/receipts/:paymentIntentId", async (req, res) => {
+    try {
+      const { paymentIntentId } = req.params;
+      const receiptsCol = getCollectionReceipts();
+      const receipt = await receiptsCol.findOne({ paymentIntentId });
+
+      if (!receipt) {
+        return res.status(404).json({
+          success: false,
+          message: "Receipt not found",
+        });
+      }
+
+      return res.json({
+        success: true,
+        receipt,
+      });
+    } catch (error) {
+      console.error("❌ [Admin Receipt] Error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching receipt",
+        error: error.message,
+      });
+    }
+  });
+
   // Admin endpoint - Get financials data
   // Aggregates all financial documents and sums them up
+  // Admin: Get all jobs
+  app.get("/admin/jobs", async (req, res) => {
+    try {
+      const jobsCol = getCollectionJobs();
+      const jobs = await jobsCol
+        .find(
+          { isDeleted: { $ne: true } },
+          {
+            projection: {
+              _id: 1,
+              status: 1,
+              category: 1,
+              subcategory: 1,
+              subcategoryInfo: 1,
+              clientId: 1,
+              clientName: 1,
+              handymanId: 1,
+              handymanName: 1,
+              locationText: 1,
+              price: 1,
+              materials: 1,
+              materialsTotalPrice: 1,
+              hoursWorked: 1,
+              hourlyPrice: 1,
+              hoursTotalPrice: 1,
+              createdAt: 1,
+              updatedAt: 1,
+            },
+          }
+        )
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      // Calculate total price for each job
+      const jobsWithTotalPrice = jobs.map((job) => {
+        const basePrice = parseFloat(job.price) || 0;
+        const materialsPrice = parseFloat(job.materialsTotalPrice) || 0;
+        const hoursPrice = parseFloat(job.hoursTotalPrice) || 0;
+        return {
+          ...job,
+          totalPrice: basePrice + materialsPrice + hoursPrice,
+        };
+      });
+
+      return res.json({
+        success: true,
+        jobs: jobsWithTotalPrice,
+      });
+    } catch (error) {
+      console.error("❌ [Admin Jobs] Error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching jobs",
+        error: error.message,
+      });
+    }
+  });
+
   app.get("/admin/financials", async (req, res) => {
     try {
       const financialsCol = getCollectionFinancials();
@@ -15977,6 +17011,49 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       socket.leave(`job-${jobId}`);
     });
 
+    // Handle payment method details request
+    socket.on("get-payment-method-details", async (data) => {
+      try {
+        const { userId, paymentMethodId } = data;
+        if (!userId || !paymentMethodId) {
+          socket.emit("payment-method-details", {
+            success: false,
+            message: "userId and paymentMethodId required",
+          });
+          return;
+        }
+
+        // Retrieve payment method from Stripe
+        const paymentMethod = await stripe.paymentMethods.retrieve(
+          paymentMethodId
+        );
+
+        if (paymentMethod && paymentMethod.card) {
+          socket.emit("payment-method-details", {
+            success: true,
+            paymentMethodId: paymentMethodId,
+            card: {
+              brand: paymentMethod.card.brand,
+              last4: paymentMethod.card.last4,
+              expMonth: paymentMethod.card.exp_month,
+              expYear: paymentMethod.card.exp_year,
+            },
+          });
+        } else {
+          socket.emit("payment-method-details", {
+            success: false,
+            message: "Payment method not found",
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching payment method details:", error);
+        socket.emit("payment-method-details", {
+          success: false,
+          message: error.message || "Error fetching payment method details",
+        });
+      }
+    });
+
     // Handle handyman location updates
     socket.on("handyman-location-update", (data) => {
       const { jobId, location } = data;
@@ -16022,7 +17099,9 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
               timestamp: new Date().toISOString(),
             });
           }
-        } catch (error) {}
+        } catch (error) {
+          console.error("Error requesting handyman location:", error);
+        }
       }
     });
 
@@ -16762,35 +17841,89 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
   // Create inquiry
   app.post("/api/inquiries/create", async (req, res) => {
     try {
-      const { title, content, senderName, userId, ArrIDS } = req.body;
+      const {
+        title,
+        content,
+        senderName,
+        userId,
+        ArrIDS,
+        jobId,
+        clientId,
+        handymanId,
+        description,
+        type,
+      } = req.body;
 
-      if (!title || !content || !senderName) {
-        return res
-          .status(400)
-          .json({ success: false, message: "נושא, תוכן ושם שולח נדרשים" });
+      // Support both old format and new format (job problem)
+      if (type === "job_problem") {
+        // New format: job problem inquiry
+        if (!title || !description || !jobId || !clientId) {
+          return res.status(400).json({
+            success: false,
+            message: "נושא, תיאור, מזהה עבודה ומזהה לקוח נדרשים",
+          });
+        }
+
+        // Get user info for senderName
+        const usersCol = getCollection();
+        const client = await usersCol.findOne({ _id: new ObjectId(clientId) });
+        const senderNameValue = client
+          ? `${client.firstName || ""} ${client.lastName || ""}`.trim() ||
+            client.username ||
+            "לקוח"
+          : "לקוח";
+
+        const inquiriesCol = getCollectionInquiries();
+        const inquiry = {
+          Title: title,
+          Content: description,
+          SenderName: senderNameValue,
+          userId: new ObjectId(clientId),
+          jobId: new ObjectId(jobId),
+          handymanId: handymanId ? new ObjectId(handymanId) : null,
+          type: "job_problem",
+          ArrIDS: [],
+          createdAt: new Date(),
+          status: "pending", // pending, responded, resolved, deleted
+        };
+
+        const result = await inquiriesCol.insertOne(inquiry);
+
+        res.json({
+          success: true,
+          inquiryId: result.insertedId,
+          message: "הפנייה נשלחה בהצלחה",
+        });
+      } else {
+        // Old format: regular inquiry
+        if (!title || !content || !senderName) {
+          return res
+            .status(400)
+            .json({ success: false, message: "נושא, תוכן ושם שולח נדרשים" });
+        }
+
+        const inquiriesCol = getCollectionInquiries();
+        const inquiry = {
+          Title: title,
+          Content: content,
+          SenderName: senderName,
+          userId: userId ? new ObjectId(userId) : null,
+          ArrIDS:
+            ArrIDS && Array.isArray(ArrIDS)
+              ? ArrIDS.map((id) => new ObjectId(id))
+              : [],
+          createdAt: new Date(),
+          status: "pending", // pending, responded, resolved, deleted
+        };
+
+        const result = await inquiriesCol.insertOne(inquiry);
+
+        res.json({
+          success: true,
+          inquiryId: result.insertedId,
+          message: "הפנייה נשלחה בהצלחה",
+        });
       }
-
-      const inquiriesCol = getCollectionInquiries();
-      const inquiry = {
-        Title: title,
-        Content: content,
-        SenderName: senderName,
-        userId: userId ? new ObjectId(userId) : null,
-        ArrIDS:
-          ArrIDS && Array.isArray(ArrIDS)
-            ? ArrIDS.map((id) => new ObjectId(id))
-            : [],
-        createdAt: new Date(),
-        status: "pending", // pending, responded, resolved, deleted
-      };
-
-      const result = await inquiriesCol.insertOne(inquiry);
-
-      res.json({
-        success: true,
-        inquiryId: result.insertedId,
-        message: "הפנייה נשלחה בהצלחה",
-      });
     } catch (error) {
       console.error("Error creating inquiry:", error);
       res.status(500).json({ success: false, message: "שגיאה ביצירת הפנייה" });
@@ -16952,6 +18085,56 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
     } catch (error) {
       console.error("Error updating inquiry status:", error);
       res.status(500).json({ success: false, message: "שגיאה בעדכון הסטטוס" });
+    }
+  });
+
+  // Give handyman test access (free forever)
+  app.post("/api/handyman/give-test-access", async (req, res) => {
+    try {
+      const { userId } = req.body;
+
+      if (!userId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "מזהה משתמש נדרש" });
+      }
+
+      const usersCol = getCollection();
+      const user = await usersCol.findOne({ _id: new ObjectId(userId) });
+
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "משתמש לא נמצא" });
+      }
+
+      if (!user.isHandyman) {
+        return res
+          .status(400)
+          .json({ success: false, message: "משתמש זה אינו הנדימן" });
+      }
+
+      // Set trialExpiresAt to "always" for free forever access
+      await usersCol.updateOne(
+        { _id: new ObjectId(userId) },
+        {
+          $set: {
+            trialExpiresAt: "always",
+          },
+        }
+      );
+
+      res.json({
+        success: true,
+        message: "גישה חינם ניתנה בהצלחה",
+      });
+    } catch (error) {
+      console.error("Error giving test access:", error);
+      res.status(500).json({
+        success: false,
+        message: "שגיאה במתן גישה חינם",
+        error: error.message,
+      });
     }
   });
 

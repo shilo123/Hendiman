@@ -8,9 +8,9 @@
       </div>
     </div>
 
-    <!-- TOP BAR - hidden when chat is active, shown when minimized or no job -->
+    <!-- TOP BAR - hidden when loading, chat is active, shown when minimized or no job -->
     <DashboardTopBar
-      v-if="!currentAssignedJob || isChatMinimized"
+      v-if="!isLoading && (!currentAssignedJob || isChatMinimized)"
       :me="me"
       :isHendiman="isHendiman"
       :isAvailable="isAvailable"
@@ -413,6 +413,212 @@
             </div>
           </div>
         </div>
+        <!-- Subscription Required Modal (for handyman without subscription) -->
+        <div
+          v-if="showSubscriptionModal"
+          class="subscription-required-modal"
+          dir="rtl"
+        >
+          <div class="subscription-required-modal__content">
+            <div class="subscription-required-modal__header">
+              <h2 class="subscription-required-modal__title">
+                נדרש מנוי להמשך שימוש
+              </h2>
+              <p class="subscription-required-modal__subtitle">
+                כדי להמשיך להשתמש בפלטפורמה, אנא בחר מנוי או השתמש בגישה חינם
+              </p>
+            </div>
+
+            <!-- Subscription Plans -->
+            <div class="subscription-plans">
+              <!-- Annual Plan (Recommended) -->
+              <div
+                class="subscription-plan subscription-plan--annual"
+                :class="{
+                  'subscription-plan--selected':
+                    selectedSubscriptionPlan === 'annual',
+                }"
+                @click="selectedSubscriptionPlan = 'annual'"
+              >
+                <div class="subscription-plan__badge">⭐ מומלץ</div>
+                <div class="subscription-plan__header">
+                  <div class="subscription-plan__icon">📅</div>
+                  <div class="subscription-plan__title">מנוי שנתי</div>
+                </div>
+                <div class="subscription-plan__price-wrapper">
+                  <div class="subscription-plan__price-old">
+                    <span class="subscription-plan__price-old-amount"
+                      >598.80</span
+                    >
+                    <span class="subscription-plan__price-old-currency">₪</span>
+                  </div>
+                  <div class="subscription-plan__price">
+                    <span class="subscription-plan__price-amount">499.90</span>
+                    <span class="subscription-plan__price-currency">₪</span>
+                    <span class="subscription-plan__price-period">/שנה</span>
+                  </div>
+                </div>
+                <div class="subscription-plan__warning">
+                  ⚠️ לא ניתן לבטל את המנוי באמצע שנה
+                </div>
+              </div>
+
+              <!-- Monthly Plan -->
+              <div
+                class="subscription-plan subscription-plan--monthly"
+                :class="{
+                  'subscription-plan--selected':
+                    selectedSubscriptionPlan === 'monthly',
+                }"
+                @click="selectedSubscriptionPlan = 'monthly'"
+              >
+                <div class="subscription-plan__header">
+                  <div class="subscription-plan__icon">📆</div>
+                  <div class="subscription-plan__title">מנוי חודשי</div>
+                </div>
+                <div class="subscription-plan__price">
+                  <span class="subscription-plan__price-amount">49.90</span>
+                  <span class="subscription-plan__price-currency">₪</span>
+                  <span class="subscription-plan__price-period">/חודש</span>
+                </div>
+                <div class="subscription-plan__monthly-note">
+                  התשלום יתבצע מדי חודש אוטומטית
+                </div>
+                <div class="subscription-plan__cancel-note">
+                  תוכל לבטל את המנוי בכל עת
+                </div>
+              </div>
+            </div>
+
+            <!-- Payment Form (shown when plan is selected) -->
+            <div
+              v-if="showSubscriptionPaymentForm"
+              class="subscription-payment-form"
+            >
+              <!-- Amount Display -->
+              <div class="subscription-payment-form__amount">
+                <label class="subscription-payment-form__label"
+                  >סכום לתשלום</label
+                >
+                <div class="subscription-payment-form__amount-display">
+                  {{
+                    formatCurrency(
+                      selectedSubscriptionPlan === "annual" ? 499.9 : 49.9
+                    )
+                  }}
+                  <span class="subscription-payment-form__period">
+                    {{
+                      selectedSubscriptionPlan === "annual" ? "/שנה" : "/חודש"
+                    }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Stripe Payment Element -->
+              <div class="subscription-payment-form__field">
+                <label class="subscription-payment-form__label"
+                  >פרטי תשלום</label
+                >
+                <!-- Container wrapper with relative positioning -->
+                <div
+                  class="subscription-payment-form__field-wrapper"
+                  style="position: relative"
+                >
+                  <!-- Container - always present in DOM -->
+                  <div
+                    id="subscription-payment-element"
+                    class="subscription-payment-form__stripe-element"
+                    :style="{
+                      display: isLoadingSubscriptionPayment ? 'none' : 'block',
+                    }"
+                  >
+                    <!-- Stripe Payment Element will mount here when ready -->
+                  </div>
+                  <!-- Loading State - overlay -->
+                  <div
+                    v-if="isLoadingSubscriptionPayment"
+                    class="subscription-payment-form__loading"
+                  >
+                    <div
+                      class="subscription-payment-form__loading-spinner"
+                    ></div>
+                    <div class="subscription-payment-form__loading-text">
+                      טוען פרטי תשלום...
+                    </div>
+                  </div>
+                </div>
+                <div
+                  id="subscription-payment-errors"
+                  class="subscription-payment-form__error"
+                  role="alert"
+                ></div>
+              </div>
+
+              <!-- Security Notice -->
+              <div class="subscription-payment-form__security">
+                <div class="subscription-payment-form__security-icon">🔒</div>
+                <div class="subscription-payment-form__security-text">
+                  התשלום מאובטח ומצפין. פרטי הכרטיס שלך לא נשמרים בשרת שלנו.
+                </div>
+              </div>
+
+              <!-- Error Message -->
+              <div
+                v-if="subscriptionError"
+                class="subscription-payment-form__error subscription-payment-form__error--submit"
+              >
+                {{ subscriptionError }}
+              </div>
+
+              <!-- Submit Button -->
+              <button
+                type="button"
+                class="subscription-required-modal__btn subscription-required-modal__btn--subscribe"
+                @click="handleSubscriptionPayment"
+                :disabled="
+                  isProcessingSubscription ||
+                  !isSubscriptionStripeReady ||
+                  !subscriptionClientSecret
+                "
+              >
+                <span v-if="isProcessingSubscription">מעבד תשלום...</span>
+                <span v-else>
+                  {{
+                    selectedSubscriptionPlan === "annual"
+                      ? `הרשם למנוי שנתי - ${formatCurrency(499.9)} /שנה`
+                      : `הרשם למנוי חודשי - ${formatCurrency(49.9)} /חודש`
+                  }}
+                </span>
+              </button>
+            </div>
+
+            <!-- Actions (shown when payment form is not visible) -->
+            <div v-else class="subscription-required-modal__actions">
+              <button
+                type="button"
+                class="subscription-required-modal__btn subscription-required-modal__btn--test"
+                @click="handleTestAccess"
+              >
+                🧪 Test (גישה חינם)
+              </button>
+              <button
+                type="button"
+                class="subscription-required-modal__btn subscription-required-modal__btn--subscribe"
+                @click="handleSubscribe"
+                :disabled="!selectedSubscriptionPlan"
+              >
+                {{
+                  selectedSubscriptionPlan === "annual"
+                    ? "הרשם למנוי שנתי - 499.90 ₪"
+                    : selectedSubscriptionPlan === "monthly"
+                    ? "הרשם למנוי חודשי - 49.90 ₪"
+                    : "בחר מנוי"
+                }}
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Job Cancelled Modal -->
         <!-- Client Approval Modal (for client when job is done) -->
         <div
@@ -456,6 +662,23 @@
             </div>
           </div>
         </div>
+
+        <!-- Problem Report Modal -->
+        <ProblemReportModal
+          :isVisible="showProblemReportModal"
+          :job="pendingApprovalJob"
+          @close="showProblemReportModal = false"
+          @approve="handleApproveFromProblemModal"
+        />
+
+        <!-- Income Detail Modal (for handyman) -->
+        <IncomeDetailModal
+          v-if="isHendiman"
+          :isVisible="showIncomeDetailModal"
+          :jobInfo="incomeDetailJob"
+          :paymentInfo="incomeDetailPayment"
+          @close="showIncomeDetailModal = false"
+        />
 
         <!-- Onboarding Required Modal (for handyman) -->
         <div
@@ -987,6 +1210,8 @@ import ProfileSheet from "@/components/Dashboard/ProfileSheet.vue";
 import JobChat from "@/components/Dashboard/JobChat.vue";
 import JobChatMobile from "@/components/Dashboard/JobChatMobile.vue";
 import MinimizableNotification from "@/components/Global/MinimizableNotification.vue";
+import ProblemReportModal from "@/components/Dashboard/ProblemReportModal.vue";
+import IncomeDetailModal from "@/components/Dashboard/IncomeDetailModal.vue";
 import axios from "axios";
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
@@ -995,6 +1220,7 @@ import { io } from "socket.io-client";
 import { messaging, VAPID_KEY, getToken, onMessage } from "@/firebase";
 import AddressAutocomplete from "@/components/Global/AddressAutocomplete.vue";
 import citiesData from "@/APIS/AdressFromIsrael.json";
+import { loadStripe } from "@stripe/stripe-js";
 
 export default {
   name: "DashboardView",
@@ -1072,6 +1298,10 @@ export default {
       showClientApprovalModal: false, // Show approval popup for client
       pendingApprovalJob: null, // Job that needs client approval
       isApprovingPayment: false, // Loading state for payment approval
+      showProblemReportModal: false, // Show problem report modal
+      showIncomeDetailModal: false, // Show income detail modal for handyman
+      incomeDetailJob: null, // Job for income detail
+      incomeDetailPayment: null, // Payment info for income detail
       isMobile: window.innerWidth <= 768,
       // Rating for client
       pendingRatingValue: 0,
@@ -1093,6 +1323,20 @@ export default {
       isProcessingTrialPayment: false,
       showDeleteJobModal: false,
       isDeletingJob: false,
+      // Subscription required modal
+      showSubscriptionModal: false,
+      selectedSubscriptionPlan: "annual", // 'annual' or 'monthly'
+      showSubscriptionPaymentForm: false,
+      // Stripe for subscription
+      subscriptionStripe: null,
+      subscriptionElements: null,
+      subscriptionPaymentElement: null,
+      subscriptionStripePublishableKey: null,
+      isSubscriptionStripeReady: false,
+      subscriptionClientSecret: null,
+      isProcessingSubscription: false,
+      subscriptionError: "",
+      isLoadingSubscriptionPayment: false, // Loading state for payment form
       editJobForm: {
         subcategoryInfo: [],
         desc: "",
@@ -2807,6 +3051,14 @@ export default {
             this.showHandymanApprovedNotification = true;
             // Hide the "waiting for client approval" notification when payment is released
             this.showHandymanDoneNotification = false;
+
+            // Show income detail modal
+            const job = this.store.jobs?.find(
+              (j) => String(j._id || j.id) === jobId
+            );
+            if (job) {
+              await this.showIncomeDetail(job);
+            }
           }
 
           // Check if this job needs onboarding
@@ -3014,6 +3266,15 @@ export default {
         if (response.data && response.data.success) {
           this.toast?.showSuccess("העבודה אושרה והתשלום שוחרר");
           this.showClientApprovalModal = false;
+          this.showProblemReportModal = false;
+
+          // Navigate to rating page
+          const jobId =
+            this.pendingApprovalJob?._id || this.pendingApprovalJob?.id;
+          if (jobId) {
+            this.$router.push(`/rating/${jobId}`);
+          }
+
           this.pendingApprovalJob = null;
 
           // Refresh jobs data
@@ -3051,7 +3312,33 @@ export default {
     },
     handleClientReject() {
       this.showClientApprovalModal = false;
-      this.pendingApprovalJob = null;
+      // Open problem report modal instead of closing
+      this.showProblemReportModal = true;
+    },
+    handleApproveFromProblemModal() {
+      // Close problem modal and approve payment
+      this.showProblemReportModal = false;
+      this.handleClientApprove();
+    },
+    async showIncomeDetail(job) {
+      try {
+        // Get payment info
+        const { URL } = await import("@/Url/url");
+        const paymentResponse = await axios.get(
+          `${URL}/payment/${job._id || job.id}`
+        );
+
+        this.incomeDetailJob = job;
+        this.incomeDetailPayment = paymentResponse.data?.success
+          ? paymentResponse.data.payment
+          : null;
+        this.showIncomeDetailModal = true;
+      } catch (error) {
+        // If payment not found, still show modal with job info
+        this.incomeDetailJob = job;
+        this.incomeDetailPayment = null;
+        this.showIncomeDetailModal = true;
+      }
     },
     openOnboardingLink() {
       if (this.onboardingUrl) {
@@ -3640,6 +3927,257 @@ export default {
         this.toast?.showError("שגיאה");
       }
     },
+    async handleTestAccess() {
+      // Give handyman free access (trialExpiresAt: "always")
+      const userId = this.store.user?._id || this.$route.params.id;
+      try {
+        const { data } = await axios.post(
+          `${URL}/api/handyman/give-test-access`,
+          {
+            userId,
+          }
+        );
+
+        if (data.success) {
+          this.toast?.showSuccess("גישה חינם ניתנה בהצלחה!");
+          this.showSubscriptionModal = false;
+          // Refresh user data
+          await this.store.fetchDashboardData(userId);
+        } else {
+          this.toast?.showError(data.message || "שגיאה במתן גישה חינם");
+        }
+      } catch (error) {
+        console.error("Error giving test access:", error);
+        this.toast?.showError("שגיאה במתן גישה חינם");
+      }
+    },
+    async handleSubscribe() {
+      // Show payment form and initialize Stripe
+      this.showSubscriptionPaymentForm = true;
+      await this.initializeSubscriptionPayment();
+    },
+    formatCurrency(amount) {
+      return new Intl.NumberFormat("he-IL", {
+        style: "currency",
+        currency: "ILS",
+      }).format(amount || 0);
+    },
+    async initializeSubscriptionPayment() {
+      this.isLoadingSubscriptionPayment = true;
+      this.subscriptionError = "";
+
+      try {
+        // Get Stripe publishable key
+        const { data: keyData } = await axios.get(
+          `${URL}/api/stripe/publishable-key`
+        );
+        this.subscriptionStripePublishableKey = keyData.publishableKey;
+
+        if (!this.subscriptionStripePublishableKey) {
+          this.subscriptionError = "שגיאה בטעינת מערכת התשלום";
+          this.isLoadingSubscriptionPayment = false;
+          return;
+        }
+
+        // Load Stripe
+        this.subscriptionStripe = await loadStripe(
+          this.subscriptionStripePublishableKey
+        );
+
+        if (!this.subscriptionStripe) {
+          this.subscriptionError = "שגיאה בטעינת מערכת התשלום";
+          this.isLoadingSubscriptionPayment = false;
+          return;
+        }
+
+        // Create subscription payment intent
+        const userId = this.store.user?._id || this.$route.params.id;
+        const { data: subscriptionData } = await axios.post(
+          `${URL}/api/subscription/create-for-existing-user`,
+          {
+            userId,
+            planType: this.selectedSubscriptionPlan, // 'annual' or 'monthly'
+          }
+        );
+
+        if (!subscriptionData.success || !subscriptionData.clientSecret) {
+          this.subscriptionError =
+            subscriptionData.message || "שגיאה ביצירת מנוי. אנא נסה שוב.";
+          this.isLoadingSubscriptionPayment = false;
+          return;
+        }
+
+        this.subscriptionClientSecret = subscriptionData.clientSecret;
+
+        // Create Elements instance
+        this.subscriptionElements = this.subscriptionStripe.elements({
+          clientSecret: this.subscriptionClientSecret,
+          appearance: {
+            theme: "night",
+            variables: {
+              colorPrimary: "#ff6a00",
+              colorBackground: "#0b0b0f",
+              colorText: "rgb(255, 255, 255)",
+              colorDanger: "#ef4444",
+              fontFamily:
+                '"Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+              spacingUnit: "4px",
+              borderRadius: "8px",
+            },
+            rules: {
+              ".Input": {
+                backgroundColor: "rgba(255, 255, 255, 0.06)",
+                border: "1px solid rgba(255, 106, 0, 0.2)",
+                color: "rgb(255, 255, 255)",
+                fontSize: "15px",
+                fontWeight: "800",
+              },
+              ".Input:focus": {
+                border: "1px solid rgba(255, 106, 0, 0.5)",
+                boxShadow: "0 0 0 3px rgba(255, 106, 0, 0.18)",
+              },
+              ".Input--invalid": {
+                border: "1px solid #ef4444",
+                color: "#ef4444",
+              },
+            },
+          },
+          locale: "he",
+        });
+
+        // Create Payment Element
+        this.subscriptionPaymentElement = this.subscriptionElements.create(
+          "payment",
+          {
+            layout: "tabs",
+          }
+        );
+
+        // Wait for DOM to be ready
+        await this.$nextTick();
+
+        // Find container - it should always exist now
+        const elementContainer = document.getElementById(
+          "subscription-payment-element"
+        );
+
+        if (elementContainer) {
+          try {
+            this.subscriptionPaymentElement.mount(
+              "#subscription-payment-element"
+            );
+            this.isSubscriptionStripeReady = true;
+
+            // Handle real-time validation errors
+            this.subscriptionPaymentElement.on("change", (event) => {
+              const displayError = document.getElementById(
+                "subscription-payment-errors"
+              );
+              if (displayError) {
+                if (event.error) {
+                  displayError.textContent = event.error.message;
+                } else {
+                  displayError.textContent = "";
+                }
+              }
+            });
+
+            // Hide loading indicator after successful mount
+            this.isLoadingSubscriptionPayment = false;
+          } catch (mountError) {
+            console.error("Error mounting payment element:", mountError);
+            this.subscriptionError = "שגיאה בטעינת שדות התשלום. אנא נסה שוב.";
+            this.isLoadingSubscriptionPayment = false;
+          }
+        } else {
+          console.error("Payment element container not found");
+          this.subscriptionError = "שגיאה בטעינת שדות התשלום. אנא רענן את הדף.";
+          this.isLoadingSubscriptionPayment = false;
+        }
+      } catch (error) {
+        console.error("Error initializing subscription payment:", error);
+        this.subscriptionError = "שגיאה באתחול מערכת התשלומים. אנא נסה שוב.";
+        this.isLoadingSubscriptionPayment = false;
+      }
+    },
+    async handleSubscriptionPayment() {
+      if (
+        !this.isSubscriptionStripeReady ||
+        !this.subscriptionPaymentElement ||
+        !this.subscriptionClientSecret
+      ) {
+        this.subscriptionError = "מערכת התשלומים לא נטענה. אנא רענן את הדף.";
+        return;
+      }
+
+      this.isProcessingSubscription = true;
+      this.subscriptionError = "";
+
+      try {
+        // Step 1: Submit the Payment Element first (required by Stripe)
+        const { error: submitError } = await this.subscriptionElements.submit();
+        if (submitError) {
+          this.subscriptionError =
+            submitError.message || "שגיאה באימות פרטי התשלום. אנא נסה שוב.";
+          return;
+        }
+
+        // Step 2: Confirm Payment Intent with Payment Element
+        const { error, paymentIntent } =
+          await this.subscriptionStripe.confirmPayment({
+            elements: this.subscriptionElements,
+            clientSecret: this.subscriptionClientSecret,
+            confirmParams: {
+              return_url: `${window.location.origin}/Dashboard/${
+                this.store.user?._id || this.$route.params.id
+              }`,
+            },
+            redirect: "if_required",
+          });
+
+        if (error) {
+          this.subscriptionError =
+            error.message || "שגיאה באישור התשלום. אנא נסה שוב.";
+          return;
+        }
+
+        if (paymentIntent && paymentIntent.status === "succeeded") {
+          // Complete subscription on server
+          const userId = this.store.user?._id || this.$route.params.id;
+          const { data: completeData } = await axios.post(
+            `${URL}/api/subscription/complete-for-existing-user`,
+            {
+              userId,
+              paymentIntentId: paymentIntent.id,
+              paymentMethodId: paymentIntent.payment_method,
+              planType: this.selectedSubscriptionPlan,
+            }
+          );
+
+          if (completeData.success) {
+            this.toast?.showSuccess("הרשמה למנוי בוצעה בהצלחה! ברוך הבא.");
+            this.showSubscriptionModal = false;
+            this.showSubscriptionPaymentForm = false;
+            // Reset form
+            this.subscriptionError = "";
+            // Refresh user data
+            await this.store.fetchDashboardData(userId);
+          } else {
+            this.subscriptionError =
+              completeData.message ||
+              "המנוי אושר אך יש בעיה בעדכון השרת. אנא פנה לתמיכה.";
+          }
+        } else {
+          this.subscriptionError = "מצב מנוי לא צפוי. אנא פנה לתמיכה.";
+        }
+      } catch (error) {
+        console.error("Error processing subscription payment:", error);
+        this.subscriptionError =
+          error.message || "שגיאה בחיבור לשרת. אנא נסה שוב.";
+      } finally {
+        this.isProcessingSubscription = false;
+      }
+    },
   },
   async mounted() {
     // Don't clear activeAssignedJob on mount - let checkForAssignedJob handle it
@@ -3737,12 +4275,9 @@ export default {
           data.User.hasActiveSubscription === true;
 
         if (!hasAccess) {
-          // הנדימן לא יכול להישאר - העבר לדף הבית
-          this.toast?.showError(
-            "אין לך מנוי פעיל. אנא הירשם למנוי כדי להמשיך להשתמש בפלטפורמה."
-          );
-          this.$router.push({ name: "home" });
-          return;
+          // הנדימן לא מנוי - הצג פופאפ מנוי
+          this.showSubscriptionModal = true;
+          // המשך לטעון את הנתונים אבל עם פופאפ פתוח
         }
       }
 
@@ -3814,7 +4349,8 @@ export default {
               }
               const needsApproval =
                 job.clientApproved === false || job.clientApproved == null;
-              if (isDone && needsApproval) {
+              const paymentNotReceived = !job.handymanReceivedPayment;
+              if (isDone && needsApproval && paymentNotReceived) {
                 this.pendingApprovalJob = job;
                 this.showClientApprovalModal = true;
                 // Remove query parameters after showing modal
@@ -3845,7 +4381,9 @@ export default {
                   const needsApproval =
                     fetchedJob.clientApproved === false ||
                     fetchedJob.clientApproved == null;
-                  if (isDone && needsApproval) {
+                  const paymentNotReceived =
+                    !fetchedJob.handymanReceivedPayment;
+                  if (isDone && needsApproval && paymentNotReceived) {
                     this.pendingApprovalJob = fetchedJob;
                     this.showClientApprovalModal = true;
                   }
@@ -3865,7 +4403,9 @@ export default {
               const isDone = job.status === "done";
               const needsApproval =
                 job.clientApproved === false || job.clientApproved == null;
-              return isDone && needsApproval;
+              const paymentNotReceived = !job.handymanReceivedPayment;
+              // Show modal if job is done and needs approval AND payment hasn't been received
+              return isDone && needsApproval && paymentNotReceived;
             });
             if (
               jobsNeedingApproval.length > 0 &&
@@ -4373,7 +4913,7 @@ $r2: 26px;
 .job-card {
   border-radius: 20px;
   border: 1px solid rgba($orange, 0.14);
-  background: rgba(255, 255, 255, 0.06);
+  background: #242424;
   padding: 10px;
   display: flex;
   justify-content: space-between;
@@ -7294,5 +7834,459 @@ $r2: 26px;
     opacity: 0.5;
     cursor: not-allowed;
   }
+}
+
+/* Subscription Required Modal */
+.subscription-required-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.subscription-required-modal__content {
+  background: rgba(11, 11, 15, 0.98);
+  border-radius: 20px;
+  padding: 32px;
+  max-width: 600px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 1px solid rgba($orange, 0.2);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+}
+
+.subscription-required-modal__header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.subscription-required-modal__title {
+  font-size: 24px;
+  font-weight: 1000;
+  color: $orange2;
+  margin: 0 0 8px 0;
+}
+
+.subscription-required-modal__subtitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.subscription-required-modal__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.subscription-required-modal__btn {
+  width: 100%;
+  padding: 14px 20px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 1000;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  font-family: $font-family;
+}
+
+.subscription-required-modal__btn--test {
+  background: linear-gradient(135deg, #4caf50, #66bb6a);
+  color: #0b0c10;
+  box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
+}
+
+.subscription-required-modal__btn--test:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(76, 175, 80, 0.4);
+}
+
+.subscription-required-modal__btn--subscribe {
+  background: linear-gradient(135deg, $orange, $orange2);
+  color: #0b0c10;
+  box-shadow: 0 0 20px rgba($orange, 0.3);
+}
+
+.subscription-required-modal__btn--subscribe:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba($orange, 0.4);
+}
+
+.subscription-required-modal__btn--subscribe:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Reuse subscription plan styles from Payments.vue */
+.subscription-plans {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+
+  @media (max-width: 500px) {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+.subscription-plan {
+  position: relative;
+  padding: 18px;
+  border-radius: 14px;
+  border: 2px solid rgba($orange, 0.3);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  &:hover {
+    border-color: rgba($orange, 0.5);
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateY(-2px);
+  }
+
+  &--selected {
+    border-color: $orange;
+    background: rgba(255, 106, 0, 0.12);
+    box-shadow: 0 4px 20px rgba($orange, 0.3);
+  }
+
+  &--annual {
+    border-color: rgba($orange, 0.4);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 106, 0, 0.15) 0%,
+      rgba(255, 138, 43, 0.08) 100%
+    );
+
+    &.subscription-plan--selected {
+      border-color: $orange2;
+      background: linear-gradient(
+        135deg,
+        rgba(255, 106, 0, 0.2) 0%,
+        rgba(255, 138, 43, 0.12) 100%
+      );
+      box-shadow: 0 6px 24px rgba($orange, 0.4);
+    }
+  }
+}
+
+.subscription-plan__badge {
+  position: absolute;
+  top: -8px;
+  right: 12px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, $orange, $orange2);
+  color: #0b0b0f;
+  font-size: 11px;
+  font-weight: 1000;
+  box-shadow: 0 2px 8px rgba($orange, 0.4);
+  z-index: 1;
+}
+
+.subscription-plan__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.subscription-plan__icon {
+  font-size: 20px;
+}
+
+.subscription-plan__title {
+  font-size: 16px;
+  font-weight: 1000;
+  color: $orange2;
+}
+
+.subscription-plan__price-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.subscription-plan__price-old {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  position: relative;
+}
+
+.subscription-plan__price-old-amount {
+  font-size: 18px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.5);
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: rgba(255, 255, 255, 0.6);
+}
+
+.subscription-plan__price-old-currency {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: rgba(255, 255, 255, 0.6);
+}
+
+.subscription-plan__price {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.subscription-plan__price-amount {
+  font-size: 28px;
+  font-weight: 1000;
+  color: $text;
+  line-height: 1;
+}
+
+.subscription-plan__price-currency {
+  font-size: 20px;
+  font-weight: 900;
+  color: $orange2;
+}
+
+.subscription-plan__price-period {
+  font-size: 13px;
+  font-weight: 700;
+  color: $muted;
+  margin-right: 2px;
+}
+
+.subscription-plan__warning {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  font-size: 11px;
+  font-weight: 700;
+  color: #ef4444;
+  text-align: center;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.subscription-plan__monthly-note,
+.subscription-plan__cancel-note {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.subscription-plan__cancel-note {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.trial-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  background: linear-gradient(
+    135deg,
+    rgba(76, 175, 80, 0.15),
+    rgba(139, 195, 74, 0.1)
+  );
+  border: 2px solid rgba(76, 175, 80, 0.4);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
+}
+
+.trial-notice__icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.trial-notice__content {
+  flex: 1;
+}
+
+.trial-notice__title {
+  font-size: 18px;
+  font-weight: 1000;
+  color: #4caf50;
+  margin-bottom: 6px;
+  text-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);
+}
+
+.trial-notice__text {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+}
+
+/* Subscription Payment Form */
+.subscription-payment-form {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid rgba($orange, 0.2);
+}
+
+.subscription-payment-form__amount {
+  margin-bottom: 20px;
+}
+
+.subscription-payment-form__label {
+  font-size: 13px;
+  font-weight: 900;
+  color: $text;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.subscription-payment-form__amount-display {
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: rgba($orange, 0.15);
+  border: 1px solid rgba($orange, 0.3);
+  font-size: 22px;
+  font-weight: 1000;
+  color: $orange2;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.subscription-payment-form__period {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.subscription-payment-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.subscription-payment-form__stripe-element {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+  transition: all 0.2s ease;
+  min-height: 60px;
+  position: relative;
+}
+
+.subscription-payment-form__stripe-element--loading {
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.subscription-payment-form__stripe-element:focus-within {
+  border-color: $orange;
+  box-shadow: 0 0 0 3px rgba($orange, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.subscription-payment-form__loading {
+  padding: 24px;
+  border-radius: 10px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 120px;
+}
+
+.subscription-payment-form__loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba($orange, 0.2);
+  border-top-color: $orange;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.subscription-payment-form__loading-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+}
+
+.subscription-payment-form__error {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ef4444;
+  min-height: 16px;
+  line-height: 1.4;
+}
+
+.subscription-payment-form__error--submit {
+  text-align: center;
+  padding: 10px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  margin-top: 4px;
+}
+
+.subscription-payment-form__security {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  margin-bottom: 18px;
+}
+
+.subscription-payment-form__security-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.subscription-payment-form__security-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.5;
 }
 </style>

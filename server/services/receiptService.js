@@ -286,18 +286,6 @@ function generateHandymanReceiptHTML(receipt, job, handyman, client) {
                   `
                       : ""
                   }
-                  ${
-                    receipt.platformFee
-                      ? `
-                  <tr>
-                    <td style="color: rgba(255, 255, 255, 0.8); font-size: 15px; font-weight: 600; padding: 15px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">עמלת תיווך (לפני מע״מ):</td>
-                    <td style="text-align: right; color: #ffffff; font-weight: 800; font-size: 16px; padding: 15px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); font-family: 'Courier New', monospace;">${receipt.platformFee.toFixed(
-                      2
-                    )} ₪</td>
-                  </tr>
-                  `
-                      : ""
-                  }
                   <tr>
                     <td style="color: rgba(255, 255, 255, 0.8); font-size: 15px; font-weight: 600; padding: 15px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">סה״כ לפני מע״מ:</td>
                     <td style="text-align: right; color: #ffffff; font-weight: 800; font-size: 16px; padding: 15px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); font-family: 'Courier New', monospace;">${receipt.amount.toFixed(
@@ -824,7 +812,6 @@ async function createAndSendReceipt(
 
     const existingReceipt = await receiptsCol.findOne(duplicateQuery);
     if (existingReceipt) {
-      console.log(`Receipt already sent: ${existingReceipt.receiptNumber}`);
       return { success: false, reason: "duplicate" };
     }
 

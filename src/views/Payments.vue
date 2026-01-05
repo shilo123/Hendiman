@@ -532,9 +532,6 @@ export default {
       }
 
       if (paymentIntent && paymentIntent.status === "succeeded") {
-        console.log(
-          "[PAYMENTS] PaymentIntent succeeded, calling /api/subscription/complete..."
-        );
         // Complete registration on server
         try {
           const completeResponse = await fetch(
@@ -550,13 +547,6 @@ export default {
               }),
             }
           );
-
-          console.log(
-            "[PAYMENTS] Complete response status:",
-            completeResponse.status
-          );
-          const completeData = await completeResponse.json();
-          console.log("[PAYMENTS] Complete response data:", completeData);
 
           if (completeData.success) {
             // Clear pending registration

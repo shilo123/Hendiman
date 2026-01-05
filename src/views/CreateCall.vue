@@ -175,7 +175,12 @@
             </section>
           </div>
 
-          <button class="next-btn-animated" type="button" @click="nextStep">
+          <button
+            v-if="!isLoadingLocation"
+            class="next-btn-animated"
+            type="button"
+            @click="nextStep"
+          >
             <svg
               viewBox="0 0 320 512"
               height="1em"
@@ -288,7 +293,26 @@
               </div>
 
               <div class="location-content">
-                <div v-if="!selectedMapLocation" class="location-input-wrapper">
+                <!-- Loading indicator when searching for location -->
+                <div v-if="isLoadingLocation" class="location-loading">
+                  <div class="location-loading__spinner">
+                    <div class="spinner"></div>
+                  </div>
+                  <p class="location-loading__text">מאתר מיקום מדויק...</p>
+                  <p class="location-loading__subtext">
+                    אנא המתן, זה עשוי לקחת מספר שניות
+                  </p>
+                </div>
+
+                <!-- AddressAutocomplete - hidden when loading or when location is detected -->
+                <div
+                  v-if="
+                    !selectedMapLocation &&
+                    !isLoadingLocation &&
+                    !detectedLocation
+                  "
+                  class="location-input-wrapper"
+                >
                   <AddressAutocomplete
                     v-model="call.location"
                     input-id="call-location"
@@ -302,11 +326,14 @@
                   />
                 </div>
 
+                <!-- House number input - hidden when loading or when location is detected -->
                 <div
                   v-if="
                     call.location &&
                     call.location !== 'המיקום שלי' &&
-                    !selectedMapLocation
+                    !selectedMapLocation &&
+                    !isLoadingLocation &&
+                    !detectedLocation
                   "
                   class="house-number-input"
                 >
@@ -315,7 +342,11 @@
                     v-model="call.houseNumber"
                     placeholder="מספר בית\בלוק"
                     class="input-small"
+                    :class="{ 'input-small--error': errors.houseNumber }"
                   />
+                  <div v-if="errors.houseNumber" class="msg msg--err">
+                    {{ errors.houseNumber }}
+                  </div>
                 </div>
 
                 <div v-if="selectedMapLocation" class="selected-location">
@@ -332,7 +363,58 @@
                   </button>
                 </div>
 
-                <div v-if="!selectedMapLocation" class="location-actions">
+                <div
+                  v-if="detectedLocation && usingMyLocation"
+                  class="selected-location"
+                >
+                  <div class="selected-location__content">
+                    <span class="selected-location__text">{{
+                      detectedLocation
+                    }}</span>
+                    <button
+                      type="button"
+                      class="selected-location__change"
+                      @click="
+                        detectedLocation = null;
+                        usingMyLocation = false;
+                        call.location = 'המיקום שלי';
+                        call.coordinates = {};
+                        geoCoordinates = null;
+                      "
+                    >
+                      שנה
+                    </button>
+                  </div>
+                  <button
+                    v-if="!isImprovingLocation"
+                    type="button"
+                    class="improve-location-btn"
+                    @click="improveLocation"
+                  >
+                    <span class="improve-location-btn__icon">🎯</span>
+                    <span class="improve-location-btn__text"
+                      >מיקום לא נכון? תן לנו למצוא את המיקום המדוייק</span
+                    >
+                  </button>
+                  <div v-if="isImprovingLocation" class="location-loading">
+                    <div class="location-loading__spinner">
+                      <div class="spinner"></div>
+                    </div>
+                    <p class="location-loading__text">משפר מיקום מדויק...</p>
+                    <p class="location-loading__subtext">
+                      זה עשוי לקחת עד 15 שניות
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  v-if="
+                    !selectedMapLocation &&
+                    !detectedLocation &&
+                    !isLoadingLocation
+                  "
+                  class="location-actions"
+                >
                   <button
                     class="location-btn location-btn--map"
                     type="button"
@@ -345,9 +427,17 @@
                     class="location-btn location-btn--gps"
                     type="button"
                     @click="setMyLocation"
+                    :disabled="isLoadingLocation"
                   >
-                    <span class="location-btn__icon">📍</span>
-                    <span class="location-btn__text">לפי מיקום</span>
+                    <span v-if="isLoadingLocation" class="location-btn__spinner"
+                      >⏳</span
+                    >
+                    <span v-else class="location-btn__icon">📍</span>
+                    <span class="location-btn__text">
+                      {{
+                        isLoadingLocation ? "מאתר מיקום מדויק..." : "לפי מיקום"
+                      }}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -358,7 +448,7 @@
             </section>
           </div>
 
-          <div class="step-actions">
+          <div v-if="!isLoadingLocation" class="step-actions">
             <button class="back-btn" type="button" @click="prevStep">
               חזרה
             </button>
@@ -507,7 +597,7 @@
             </section>
           </div>
 
-          <div class="step-actions">
+          <div v-if="!isLoadingLocation" class="step-actions">
             <button class="back-btn" type="button" @click="prevStep">
               חזרה
             </button>
@@ -532,9 +622,20 @@
           class="step-content step-content--animated"
         >
           <div class="step-container">
+            <!-- Show loading state when fetching payment method details -->
+            <div
+              v-if="isLoadingPaymentMethod && paymentMethodId"
+              class="saved-payment-method-wrapper"
+            >
+              <div class="payment-method-loading">
+                <div class="loading-spinner"></div>
+                <p>טוען פרטי כרטיס...</p>
+              </div>
+            </div>
+
             <!-- Show saved payment method option if exists -->
             <div
-              v-if="savedPaymentMethod && !showChangePaymentMethod"
+              v-else-if="savedPaymentMethod && !showChangePaymentMethod"
               class="saved-payment-method-wrapper"
             >
               <div class="flip-card">
@@ -853,6 +954,7 @@ import { getCurrentLocation } from "@/utils/geolocation";
 import citiesData from "@/APIS/AdressFromIsrael.json";
 import { loadCategories } from "@/utils/categoriesLoader";
 import { loadStripe as loadStripeElements } from "@stripe/stripe-js";
+import { io } from "socket.io-client";
 
 export default {
   name: "CreateCall",
@@ -870,6 +972,9 @@ export default {
       toast: null,
       currentStep: 1,
       isLoading: false,
+      isLoadingLocation: false,
+      isImprovingLocation: false, // האם משפרים את המיקום
+      detectedLocation: null, // הכתובת שנמצאה מ-reverse geocoding
       call: {
         requests: [""], // Array of requests
         desc: "",
@@ -926,6 +1031,8 @@ export default {
       savedPaymentMethod: null, // Saved payment method from DB
       showChangePaymentMethod: false, // Show option to change payment method
       _checkingPaymentMethod: false, // Flag to prevent multiple simultaneous calls
+      socket: null, // WebSocket connection for payment method details
+      isLoadingPaymentMethod: false, // Loading state for payment method details
     };
   },
   computed: {
@@ -1066,9 +1173,11 @@ export default {
           this.toast?.showError("יש למלא מיקום");
           return;
         }
-        // Skip city validation if location was selected from map
+        // Skip city validation if location was selected from map or using my location
         if (
           !this.selectedMapLocation &&
+          !this.usingMyLocation &&
+          !this.detectedLocation &&
           this.call.location !== "המיקום שלי" &&
           !this.isValidCity(this.call.location)
         ) {
@@ -1077,8 +1186,23 @@ export default {
           this.toast?.showError(this.errors.location);
           return;
         }
+
+        // Validate house number if using manual location input (not "לפי מיקום" or map)
+        if (
+          !this.selectedMapLocation &&
+          !this.usingMyLocation &&
+          !this.detectedLocation &&
+          this.call.location !== "המיקום שלי" &&
+          (!this.call.houseNumber || this.call.houseNumber.trim().length === 0)
+        ) {
+          this.errors.houseNumber = "יש למלא מספר בית/בלוק";
+          this.toast?.showError("יש למלא מספר בית/בלוק");
+          return;
+        }
+
         this.clearError("desc");
         this.clearError("location");
+        this.clearError("houseNumber");
       } else if (this.currentStep === 3) {
         // Validate images
         if (
@@ -1216,11 +1340,22 @@ export default {
 
           if (response.data && response.data.success) {
             if (response.data.hasPaymentMethod) {
-              this.savedPaymentMethod = response.data;
               this.paymentMethodId = response.data.paymentMethodId;
               // Use saved payment method automatically, don't show form
               this.showChangePaymentMethod = false;
               this.isCreditCardValid = true; // Mark as valid since we have saved payment method
+
+              // If we have paymentMethodId, fetch card details via WebSocket
+              if (this.paymentMethodId) {
+                this.isLoadingPaymentMethod = true;
+                await this.fetchPaymentMethodDetailsViaWebSocket(
+                  userId,
+                  this.paymentMethodId
+                );
+              } else {
+                // Fallback to response data if no paymentMethodId
+                this.savedPaymentMethod = response.data;
+              }
             } else {
               // No saved payment method, show form to create one
               this.showChangePaymentMethod = false;
@@ -1257,6 +1392,57 @@ export default {
         this.showChangePaymentMethod = false;
         this.savedPaymentMethod = null;
       }
+    },
+    async fetchPaymentMethodDetailsViaWebSocket(userId, paymentMethodId) {
+      return new Promise((resolve, reject) => {
+        // Initialize socket if not already initialized
+        if (!this.socket) {
+          this.socket = io(URL, { transports: ["websocket", "polling"] });
+        }
+
+        // Set timeout for the request
+        const timeout = setTimeout(() => {
+          this.isLoadingPaymentMethod = false;
+          // Fallback to default card details if timeout
+          this.savedPaymentMethod = {
+            paymentMethodId: paymentMethodId,
+            card: {
+              brand: "card",
+              last4: "****",
+              expMonth: null,
+              expYear: null,
+            },
+          };
+          reject(new Error("Timeout waiting for payment method details"));
+        }, 10000); // 10 second timeout
+
+        // Listen for payment method details response
+        const responseHandler = (data) => {
+          if (data.success && data.paymentMethodId === paymentMethodId) {
+            clearTimeout(timeout);
+            this.socket.off("payment-method-details", responseHandler);
+            this.isLoadingPaymentMethod = false;
+            this.savedPaymentMethod = {
+              paymentMethodId: data.paymentMethodId,
+              card: {
+                brand: data.card?.brand || "card",
+                last4: data.card?.last4 || "****",
+                expMonth: data.card?.expMonth || data.card?.exp_month || null,
+                expYear: data.card?.expYear || data.card?.exp_year || null,
+              },
+            };
+            resolve(data);
+          }
+        };
+
+        this.socket.on("payment-method-details", responseHandler);
+
+        // Emit request for payment method details
+        this.socket.emit("get-payment-method-details", {
+          userId: userId,
+          paymentMethodId: paymentMethodId,
+        });
+      });
     },
     async savePaymentMethodToDB(paymentMethodId) {
       try {
@@ -1430,13 +1616,197 @@ export default {
         this.toast?.showError(" לא הצלחנו לעבד את התשלום. אנא נסה שוב.");
       }
     },
-    setMyLocation() {
-      this.call.location = "המיקום שלי";
+    async setMyLocation() {
       this.clearError("location");
       this.usingMyLocation = true;
       this.locationEnglishName = null;
-      if (this.geoCoordinates) {
-        this.call.coordinates = { ...this.geoCoordinates };
+      this.detectedLocation = null;
+
+      // Show loading state for location
+      this.isLoadingLocation = true;
+
+      try {
+        // Get improved location with duration for better accuracy (5 seconds)
+        const { getImprovedLocation } = await import("@/utils/geolocation");
+        const improvedLocation = await getImprovedLocation(5000); // 5 seconds for good accuracy
+
+        if (
+          !improvedLocation ||
+          !improvedLocation.lat ||
+          !improvedLocation.lon
+        ) {
+          throw new Error("לא הצלחנו לקבל מיקום מדויק");
+        }
+
+        this.geoCoordinates = {
+          lat: improvedLocation.lat,
+          lon: improvedLocation.lon,
+        };
+        this.call.coordinates = {
+          lat: improvedLocation.lat,
+          lng: improvedLocation.lon,
+        };
+
+        // Log the coordinates we're using
+        console.log(
+          `[CreateCall] Using location: lat=${improvedLocation.lat.toFixed(
+            6
+          )}, lon=${improvedLocation.lon.toFixed(
+            6
+          )}, accuracy=${improvedLocation.accuracy.toFixed(1)}m`
+        );
+
+        // Now do reverse geocoding to get the address
+        try {
+          const response = await axios.get(`${URL}/reverse-geocode`, {
+            params: {
+              lat: improvedLocation.lat,
+              lng: improvedLocation.lon,
+            },
+          });
+
+          if (response.data && response.data.success) {
+            // Use fullAddress if available, otherwise use address or city
+            let address =
+              response.data.fullAddress ||
+              response.data.address ||
+              response.data.city ||
+              null;
+            const city = response.data.city || null;
+            const streetNumber = response.data.streetNumber || null;
+            const streetName = response.data.streetName || null;
+
+            if (address) {
+              // Clean the address - remove Plus Code patterns if present
+              let cleanedAddress = address;
+              cleanedAddress = cleanedAddress
+                .replace(/\s*[A-Z0-9]+\+[A-Z0-9]+\s*/g, "")
+                .trim();
+
+              this.detectedLocation = cleanedAddress;
+              this.call.location = cleanedAddress;
+              this.locationEnglishName = city || null;
+              this.clearError("location"); // Clear any validation errors
+
+              // If we have street number separately, we can optionally show it
+              // But for now, we'll use the full address from the API
+            } else {
+              this.detectedLocation = "מיקום שנמצא";
+              this.call.location = "מיקום שנמצא";
+              this.clearError("location"); // Clear any validation errors
+            }
+          } else {
+            this.detectedLocation = "מיקום שנמצא";
+            this.call.location = "מיקום שנמצא";
+            this.clearError("location"); // Clear any validation errors
+          }
+        } catch (geocodeError) {
+          console.error("Error in reverse geocoding:", geocodeError);
+          this.detectedLocation = "מיקום שנמצא";
+          this.call.location = "מיקום שנמצא";
+          this.clearError("location"); // Clear any validation errors
+        }
+      } catch (error) {
+        console.error("Error getting location:", error);
+        this.toast?.showError(
+          "לא הצלחנו לקבל את המיקום המדויק. אנא נסה שוב או בחר מיקום ידנית."
+        );
+        this.usingMyLocation = false;
+        this.detectedLocation = null;
+        this.call.location = "המיקום שלי";
+      } finally {
+        this.isLoadingLocation = false;
+      }
+    },
+    async improveLocation() {
+      // Show loading state for improving location
+      this.isImprovingLocation = true;
+
+      try {
+        // Get improved location with longer duration for maximum accuracy (15 seconds)
+        const { getImprovedLocation } = await import("@/utils/geolocation");
+        const improvedLocation = await getImprovedLocation(15000); // 15 seconds for maximum accuracy
+
+        if (
+          !improvedLocation ||
+          !improvedLocation.lat ||
+          !improvedLocation.lon
+        ) {
+          throw new Error("לא הצלחנו לקבל מיקום מדויק יותר");
+        }
+
+        this.geoCoordinates = {
+          lat: improvedLocation.lat,
+          lon: improvedLocation.lon,
+        };
+        this.call.coordinates = {
+          lat: improvedLocation.lat,
+          lng: improvedLocation.lon,
+        };
+
+        // Log the coordinates we're using
+        console.log(
+          `[CreateCall] Improved location: lat=${improvedLocation.lat.toFixed(
+            6
+          )}, lon=${improvedLocation.lon.toFixed(
+            6
+          )}, accuracy=${improvedLocation.accuracy.toFixed(1)}m`
+        );
+
+        // Now do reverse geocoding to get the address
+        try {
+          const response = await axios.get(`${URL}/reverse-geocode`, {
+            params: {
+              lat: improvedLocation.lat,
+              lng: improvedLocation.lon,
+            },
+          });
+
+          if (response.data && response.data.success) {
+            // Use fullAddress if available, otherwise use address or city
+            let address =
+              response.data.fullAddress ||
+              response.data.address ||
+              response.data.city ||
+              null;
+            const city = response.data.city || null;
+
+            if (address) {
+              // Clean the address - remove Plus Code patterns if present
+              let cleanedAddress = address;
+              cleanedAddress = cleanedAddress
+                .replace(/\s*[A-Z0-9]+\+[A-Z0-9]+\s*/g, "")
+                .trim();
+
+              this.detectedLocation = cleanedAddress;
+              this.call.location = cleanedAddress;
+              this.locationEnglishName = city || null;
+              this.clearError("location");
+              this.toast?.showSuccess("מיקום עודכן בהצלחה!");
+            } else {
+              this.detectedLocation = "מיקום שנמצא";
+              this.call.location = "מיקום שנמצא";
+              this.clearError("location");
+              this.toast?.showSuccess("מיקום עודכן בהצלחה!");
+            }
+          } else {
+            this.detectedLocation = "מיקום שנמצא";
+            this.call.location = "מיקום שנמצא";
+            this.clearError("location");
+            this.toast?.showSuccess("מיקום עודכן בהצלחה!");
+          }
+        } catch (geocodeError) {
+          console.error("Error in reverse geocoding:", geocodeError);
+          this.detectedLocation = "מיקום שנמצא";
+          this.call.location = "מיקום שנמצא";
+          this.clearError("location");
+          this.toast?.showSuccess("מיקום עודכן בהצלחה!");
+        }
+      } catch (error) {
+        console.error("Error improving location:", error);
+        this.toast?.showError("לא הצלחנו לשפר את המיקום. אנא נסה שוב.");
+      } finally {
+        this.isImprovingLocation = false;
       }
     },
     onLocationChange(value) {
@@ -1444,10 +1814,17 @@ export default {
 
       if (!value || value.trim() === "" || value !== "המיקום שלי") {
         this.usingMyLocation = false;
+        this.detectedLocation = null;
         this.call.coordinates = {};
 
-        // Skip city validation if location was selected from map
-        if (value && value.trim() !== "" && !this.selectedMapLocation) {
+        // Skip city validation if location was selected from map or using my location
+        if (
+          value &&
+          value.trim() !== "" &&
+          !this.selectedMapLocation &&
+          !this.usingMyLocation &&
+          !this.detectedLocation
+        ) {
           if (!this.isValidCity(value)) {
             this.errors.location =
               "ישוב זה לא נמצא במאגר. בחר ישוב מהרשימה או לחץ על 'לפי מיקום'";
@@ -1850,8 +2227,20 @@ export default {
             lng: this.selectedMapLocation.lng,
             lat: this.selectedMapLocation.lat,
           };
-        } else if (this.usingMyLocation && this.geoCoordinates) {
-          callData.coordinates = { ...this.geoCoordinates };
+        } else if (this.usingMyLocation && this.call.coordinates) {
+          // Use coordinates from call.coordinates (set in setMyLocation)
+          if (this.call.coordinates.lat && this.call.coordinates.lng) {
+            callData.coordinates = {
+              lng: Number(this.call.coordinates.lng),
+              lat: Number(this.call.coordinates.lat),
+            };
+          } else if (this.geoCoordinates) {
+            // Fallback to geoCoordinates if call.coordinates is not set
+            callData.coordinates = {
+              lng: Number(this.geoCoordinates.lon || this.geoCoordinates.lng),
+              lat: Number(this.geoCoordinates.lat),
+            };
+          }
         } else if (
           this.call.coordinates &&
           this.call.coordinates.lat &&
@@ -1859,18 +2248,19 @@ export default {
         ) {
           // Fallback: use coordinates from call.coordinates if selectedMapLocation is not set
           callData.coordinates = {
-            lng: this.call.coordinates.lng,
-            lat: this.call.coordinates.lat,
+            lng: Number(this.call.coordinates.lng),
+            lat: Number(this.call.coordinates.lat),
           };
         }
 
+        // Ensure coordinates format is correct
         if (this.usingMyLocation && callData.coordinates) {
           const lng = callData.coordinates.lng ?? callData.coordinates.lon;
           const lat = callData.coordinates.lat;
           if (lng !== undefined && lat !== undefined) {
             callData.coordinates = { lng: Number(lng), lat: Number(lat) };
           }
-        } else if (!this.usingMyLocation) {
+        } else if (!this.usingMyLocation && !this.selectedMapLocation) {
           delete callData.coordinates;
         }
 
@@ -2480,6 +2870,12 @@ export default {
   beforeUnmount() {
     // Clean up interval when component is destroyed
     this.stopPatienceMessageInterval();
+    // Disconnect WebSocket if connected
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+      this.socket = null;
+    }
   },
   async mounted() {
     try {
@@ -3616,6 +4012,53 @@ $danger: #ff3b3b;
   min-height: 200px; /* Same height as other blocks */
 }
 
+.location-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  min-height: 200px;
+  gap: 16px;
+}
+
+.location-loading__spinner {
+  width: 60px;
+  height: 60px;
+  position: relative;
+}
+
+.location-loading__spinner .spinner {
+  width: 100%;
+  height: 100%;
+  border: 4px solid rgba(255, 106, 0, 0.2);
+  border-top-color: $orange;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.location-loading__text {
+  font-size: 16px;
+  font-weight: 1000;
+  color: $text;
+  margin: 0;
+  text-align: center;
+}
+
+.location-loading__subtext {
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+  text-align: center;
+}
+
 .location-content {
   display: grid;
   gap: 12px;
@@ -3649,18 +4092,26 @@ $danger: #ff3b3b;
 
 .selected-location {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 12px;
   padding: 14px 16px;
   border-radius: 12px;
   background: rgba(255, 159, 28, 0.1);
   border: 1px solid rgba(255, 159, 28, 0.3);
 }
 
+.selected-location__content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .selected-location__text {
   color: $text;
   font-weight: 600;
   font-size: 15px;
+  flex: 1;
 }
 
 .selected-location__change {
@@ -3673,16 +4124,96 @@ $danger: #ff3b3b;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .selected-location__change:hover {
   background: rgba(255, 255, 255, 0.15);
 }
 
+.improve-location-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba($orange, 0.4);
+  background: rgba($orange, 0.15);
+  color: $orange2;
+  font-weight: 900;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.improve-location-btn:hover:not(:disabled) {
+  background: rgba($orange, 0.25);
+  border-color: rgba($orange, 0.55);
+  transform: translateY(-1px);
+}
+
+.improve-location-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.improve-location-btn__icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.improve-location-btn__text {
+  font-size: 13px;
+  font-weight: 900;
+}
+
 .location-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.location-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba($orange, 0.1);
+  color: $text;
+  font-weight: 900;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba($orange, 0.2);
+    border-color: rgba($orange, 0.5);
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  &__icon,
+  &__spinner {
+    font-size: 18px;
+  }
+
+  &__spinner {
+    animation: spin 1s linear infinite;
+  }
+
+  &__text {
+    white-space: nowrap;
+  }
   margin-top: 8px;
 }
 
@@ -3717,13 +4248,24 @@ $danger: #ff3b3b;
   color: #111;
 }
 
-.location-btn--gps:hover {
+.location-btn--gps:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba($orange, 0.4);
 }
 
+.location-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .location-btn__icon {
   font-size: 18px;
+}
+
+.location-btn__spinner {
+  font-size: 18px;
+  animation: spin 1s linear infinite;
 }
 
 .location-btn__text {
@@ -4390,6 +4932,38 @@ $danger: #ff3b3b;
   gap: 20px;
   margin-bottom: 24px;
   padding: 20px 0;
+}
+
+.payment-method-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px 20px;
+  min-height: 200px;
+
+  p {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 16px;
+    font-weight: 800;
+    margin: 0;
+  }
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(255, 106, 0, 0.2);
+  border-top-color: #ff6a00;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .flip-card {

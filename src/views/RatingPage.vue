@@ -318,6 +318,7 @@ export default {
         });
 
         if (this.store?.toast) this.store.toast.showSuccess("הדירוג נשלח");
+        // Navigate to job summary after rating
         this.$router.push(`/job-summary/${this.jobId}`);
       } catch (err) {
         this.uiError = "שגיאה בשליחת הדירוג.";
