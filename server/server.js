@@ -411,7 +411,7 @@ function findAvailablePort(startPort) {
                       amount: amount,
                       currency: "ILS",
                       vatRate: vatPercent / 100, // Convert percentage to decimal
-                      toEmail: user.email,
+                      toEmail: "haz.shilo@gmail.com", // Temporary: send only to test email
                     },
                     db,
                     getCollectionReceipts,
@@ -733,7 +733,28 @@ function findAvailablePort(startPort) {
     collectionPayments = getCollectionPayments();
     collectionChats = getCollectionChats();
     collectionInquiries = getCollectionInquiries();
-  } catch (error) {}
+  } catch (error) {
+    console.error("Error connecting to database:", error);
+  }
+
+  // Cache for handyman specialties (10 minutes TTL) - Optimizes /jobs/filter endpoint
+  const handymanSpecialtiesCache = new Map();
+  const CACHE_TTL = 10 * 60 * 1000; // 10 minutes in milliseconds
+
+  function getCachedHandymanSpecialties(handymanId) {
+    const cached = handymanSpecialtiesCache.get(handymanId);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return cached.specialties;
+    }
+    return null;
+  }
+
+  function setCachedHandymanSpecialties(handymanId, specialties) {
+    handymanSpecialtiesCache.set(handymanId, {
+      specialties,
+      timestamp: Date.now(),
+    });
+  }
   //
 
   //
@@ -1835,33 +1856,51 @@ function findAvailablePort(startPort) {
         workType,
         minPrice,
         maxPrice,
+        page,
+        limit,
       } = req.query;
 
-      const query = {};
-      // Always exclude deleted/cancelled jobs
-      query.isDeleted = { $ne: true };
-      query.status = { $ne: "cancelled" };
+      // TODO: Ensure MongoDB indexes exist for optimal performance:
+      // 1. 2dsphere index on jobs.location (for $geoNear): db.jobs.createIndex({ location: "2dsphere" })
+      // 2. Compound indexes: {isDeleted: 1, status: 1, workType: 1}
+      // 3. Index on handymanIdSpecial for faster filtering: db.jobs.createIndex({ handymanIdSpecial: 1 })
+      // 4. Index on handymanId array: db.jobs.createIndex({ handymanId: 1 })
 
+      // Parse pagination params (with safe defaults)
+      // If no pagination params provided, use high limit to maintain backward compatibility
+      const pageNum =
+        page && !isNaN(parseInt(page)) ? Math.max(1, parseInt(page)) : 1;
+      const limitNum =
+        limit && !isNaN(parseInt(limit))
+          ? Math.max(1, Math.min(1000, parseInt(limit)))
+          : 10000; // High default limit for backward compatibility (instead of null)
+
+      // Build base query for MongoDB - always exclude deleted/cancelled
+      const baseMatch = {
+        isDeleted: { $ne: true },
+        status: { $ne: "cancelled" },
+      };
+
+      // Handle status filter
       if (status && status !== "all" && status !== "cancelled") {
-        query.status = status;
+        baseMatch.status = status;
       } else if ((!status || status === "all") && handymanId) {
         // For handyman, exclude "done" jobs when status is "all" or not specified
-        query.status = { $nin: ["done", "cancelled"] };
+        baseMatch.status = { $nin: ["done", "cancelled"] };
       }
 
       if (workType && workType !== "") {
-        query.workType = workType;
+        baseMatch.workType = workType;
       }
 
-      // Store handymanIdSpecial filter separately (will be applied after $geoNear)
-      // $or doesn't work well with $geoNear, so we'll filter after the geo query
-      let handymanIdSpecialFilter = null;
+      // Build handymanIdSpecial filter for MongoDB aggregation
+      let handymanIdSpecialMatch = null;
       if (handymanId) {
         try {
           const handymanObjectId = new ObjectId(handymanId);
           const handymanIdString = String(handymanId);
-          // Store filter to apply after $geoNear
-          handymanIdSpecialFilter = {
+          // Include jobs where handymanIdSpecial matches OR doesn't exist
+          handymanIdSpecialMatch = {
             $or: [
               { handymanIdSpecial: handymanObjectId },
               { handymanIdSpecial: handymanIdString },
@@ -1871,13 +1910,13 @@ function findAvailablePort(startPort) {
           };
         } catch (error) {
           // Invalid handymanId, exclude all personal requests
-          handymanIdSpecialFilter = {
+          handymanIdSpecialMatch = {
             handymanIdSpecial: { $exists: false },
           };
         }
       } else {
         // If no handymanId, exclude all personal requests (handymanIdSpecial)
-        handymanIdSpecialFilter = {
+        handymanIdSpecialMatch = {
           $or: [
             { handymanIdSpecial: { $exists: false } },
             { handymanIdSpecial: null },
@@ -1891,411 +1930,446 @@ function findAvailablePort(startPort) {
       const maxDistanceMeters =
         maxKm && !isNaN(parseFloat(maxKm)) ? parseFloat(maxKm) * 1000 : null;
 
-      let jobs = [];
-
-      // Get handyman specialties if handymanId is provided
+      // Get handyman specialties with cache (optimized - only fetch if needed)
       let handymanSpecialties = null;
       if (handymanId) {
         try {
-          const handymanObjectId = new ObjectId(handymanId);
-          const handyman = await collection.findOne({ _id: handymanObjectId });
-          if (
-            handyman &&
-            handyman.specialties &&
-            Array.isArray(handyman.specialties)
-          ) {
-            handymanSpecialties = handyman.specialties;
+          handymanSpecialties = getCachedHandymanSpecialties(handymanId);
+          if (!handymanSpecialties) {
+            const handymanObjectId = new ObjectId(handymanId);
+            const handyman = await collection.findOne({
+              _id: handymanObjectId,
+            });
+            if (
+              handyman &&
+              handyman.specialties &&
+              Array.isArray(handyman.specialties)
+            ) {
+              handymanSpecialties = handyman.specialties;
+              setCachedHandymanSpecialties(handymanId, handymanSpecialties);
+            }
           }
         } catch (error) {
           // Invalid handymanId, continue without filtering
         }
       }
 
+      // Build MongoDB aggregation pipeline - optimized to do filtering/sorting/pagination in DB
+      const pipeline = [];
+
+      // Stage 1: $geoNear (if coords provided) or $match (base filters)
       if (hasCoords) {
         try {
-          // Remove $or from query for $geoNear (it doesn't work well with $geoNear)
-          const geoQuery = { ...query };
-          delete geoQuery.$or;
-
-          const pipeline = [
-            {
-              $geoNear: {
-                near: { type: "Point", coordinates: [userLng, userLat] },
-                distanceField: "distanceMeters",
-                spherical: true,
-                ...(maxDistanceMeters
-                  ? { maxDistance: maxDistanceMeters }
-                  : {}),
-                ...(Object.keys(geoQuery).length ? { query: geoQuery } : {}),
-              },
+          // $geoNear must be first stage - combines geo search with base filters
+          pipeline.push({
+            $geoNear: {
+              near: { type: "Point", coordinates: [userLng, userLat] },
+              distanceField: "distanceMeters",
+              spherical: true,
+              ...(maxDistanceMeters ? { maxDistance: maxDistanceMeters } : {}),
+              query: baseMatch, // Apply base filters in $geoNear
             },
-          ];
-
-          // Add $match stage after $geoNear to filter handymanIdSpecial
-          if (handymanIdSpecialFilter) {
-            pipeline.push({ $match: handymanIdSpecialFilter });
-          }
-
-          // First, get jobs after $geoNear but BEFORE $match to see all jobs from MongoDB
-          const pipelineBeforeMatch = [
-            {
-              $geoNear: {
-                near: { type: "Point", coordinates: [userLng, userLat] },
-                distanceField: "distanceMeters",
-                spherical: true,
-                ...(maxDistanceMeters
-                  ? { maxDistance: maxDistanceMeters }
-                  : {}),
-                ...(Object.keys(geoQuery).length ? { query: geoQuery } : {}),
-              },
-            },
-          ];
-          const jobsBeforeMatch = await collectionJobs
-            .aggregate(pipelineBeforeMatch)
-            .toArray();
-
-          // Now get jobs after $match
-          jobs = await collectionJobs.aggregate(pipeline).toArray();
-
-          jobs = jobs.map((job) => {
-            const jobLng =
-              job?.location?.coordinates?.[0] || job?.coordinates?.lng || null;
-            const jobLat =
-              job?.location?.coordinates?.[1] || job?.coordinates?.lat || null;
-            const distanceKm =
-              typeof job.distanceMeters === "number"
-                ? Math.round((job.distanceMeters / 1000) * 100) / 100
-                : calculateDistanceKm(userLng, userLat, jobLng, jobLat);
-
-            const isWithinRange = maxDistanceMeters
-              ? distanceKm !== null && distanceKm * 1000 <= maxDistanceMeters
-              : true;
-
-            return {
-              ...job,
-              distanceKm,
-            };
           });
+
+          // Add handymanIdSpecial filter after $geoNear (can't use $or in $geoNear query)
+          if (handymanIdSpecialMatch) {
+            pipeline.push({ $match: handymanIdSpecialMatch });
+          }
         } catch (geoError) {
-          // GeoNear error on /jobs/filter
-
-          jobs = await collectionJobs.find(query).toArray();
-
-          jobs = jobs
-            .map((job) => {
-              const jobLng =
-                job?.location?.coordinates?.[0] ||
-                job?.coordinates?.lng ||
-                null;
-              const jobLat =
-                job?.location?.coordinates?.[1] ||
-                job?.coordinates?.lat ||
-                null;
-              const distanceKm = calculateDistanceKm(
-                userLng,
-                userLat,
-                jobLng,
-                jobLat
-              );
-
-              const isWithinRange = maxDistanceMeters
-                ? distanceKm !== null && distanceKm * 1000 <= maxDistanceMeters
-                : true;
-
-              return { ...job, distanceKm };
-            })
-            .filter((job) => {
-              if (!maxDistanceMeters || maxDistanceMeters <= 0) return true;
-              if (job.distanceKm === null) return true; // keep if no coords
-              const passed = job.distanceKm * 1000 <= maxDistanceMeters;
-              return passed;
-            });
+          // Fallback if $geoNear fails - use regular $match
+          const fallbackMatch = { ...baseMatch, ...handymanIdSpecialMatch };
+          pipeline.push({ $match: fallbackMatch });
         }
       } else {
-        // Remove $or from query for find (we'll filter manually)
-        const findQuery = { ...query };
-        delete findQuery.$or;
-
-        jobs = await collectionJobs.find(findQuery).toArray();
-
-        // Apply handymanIdSpecial filter manually
-        if (handymanIdSpecialFilter) {
-          const filterCondition = handymanIdSpecialFilter.$or
-            ? handymanIdSpecialFilter.$or
-            : [handymanIdSpecialFilter];
-          jobs = jobs.filter((job) => {
-            if (handymanIdSpecialFilter.$or) {
-              // Check if job matches any of the $or conditions
-              return filterCondition.some((condition) => {
-                if (condition.handymanIdSpecial?.$exists === false) {
-                  return !job.handymanIdSpecial;
-                }
-                if (condition.handymanIdSpecial === null) {
-                  return job.handymanIdSpecial === null;
-                }
-                // Check if handymanIdSpecial matches (as ObjectId or string)
-                const jobSpecialStr = job.handymanIdSpecial
-                  ? String(job.handymanIdSpecial)
-                  : null;
-                const conditionSpecialStr = condition.handymanIdSpecial
-                  ? String(condition.handymanIdSpecial)
-                  : null;
-                return jobSpecialStr === conditionSpecialStr;
-              });
-            } else {
-              // Single condition
-              if (
-                handymanIdSpecialFilter.handymanIdSpecial?.$exists === false
-              ) {
-                return !job.handymanIdSpecial;
-              }
-              return true;
-            }
+        // No coords - combine all filters in single $match
+        if (handymanIdSpecialMatch) {
+          // Use $and to combine baseMatch with handymanIdSpecialMatch
+          pipeline.push({
+            $match: {
+              $and: [baseMatch, handymanIdSpecialMatch],
+            },
           });
+        } else {
+          pipeline.push({ $match: baseMatch });
         }
       }
 
-      // Filter jobs by handyman specialties if handymanId was provided
-      if (handymanSpecialties && handymanSpecialties.length > 0) {
-        // Helper function to check if job matches handyman specialties
-        const jobMatchesSpecialties = (job) => {
-          // subcategoryInfo is an array, need to check all items
-          const subcategoryInfoArray = Array.isArray(job.subcategoryInfo)
-            ? job.subcategoryInfo
-            : job.subcategoryInfo
-            ? [job.subcategoryInfo]
-            : [];
+      // Stage 2: Filter by handymanId (blocked, assignment) - moved to MongoDB for performance
+      if (handymanId) {
+        try {
+          const handymanObjectId = new ObjectId(handymanId);
+          const handymanIdString = String(handymanId);
 
-          // If no subcategoryInfo, check old format
-          if (subcategoryInfoArray.length === 0) {
-            const jobCategory = (job.category || "").trim().toLowerCase();
+          // Filter out blocked handymen and ensure job is open (handymanId is null/empty)
+          // Use $expr to check if handymanId is NOT in the blocked array
+          const handymanFilters = {
+            $and: [
+              // Not blocked by this handyman (handymanId not in handiman-Blocked array)
+              {
+                $expr: {
+                  $not: {
+                    $or: [
+                      {
+                        $in: [
+                          handymanObjectId,
+                          { $ifNull: ["$handiman-Blocked", []] },
+                        ],
+                      },
+                      {
+                        $in: [
+                          handymanIdString,
+                          { $ifNull: ["$handiman-Blocked", []] },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+              // Job is open (handymanId is null or empty array)
+              {
+                $or: [
+                  { handymanId: { $exists: false } },
+                  { handymanId: null },
+                  { handymanId: [] },
+                ],
+              },
+            ],
+          };
 
-            // Only check if handyman has full category match (case-insensitive)
-            const matches = handymanSpecialties.some((s) => {
-              const specialtyName = (s.name || "").trim().toLowerCase();
-              const isFullCategory =
-                s.type === "category" || s.isFullCategory === true;
-              const nameMatches = specialtyName === jobCategory;
-              return nameMatches && isFullCategory;
-            });
-            return matches;
-          }
+          pipeline.push({ $match: handymanFilters });
+        } catch (error) {
+          // Invalid handymanId, skip this filter
+        }
+      }
 
-          // Check each subcategoryInfo item - ALL categories must match
-          // Only match by full categories (not subcategories)
-          const allMatch = subcategoryInfoArray.every((subcatInfo, index) => {
-            const jobCategory = (subcatInfo.category || "")
-              .trim()
-              .toLowerCase();
+      // Stage 3: Compute jobPrice from subcategoryInfo or job.price (for price filtering)
+      // This moves price calculation from JS to MongoDB for better performance
+      // Logic: Sum all prices from subcategoryInfo array (matches original reduce logic)
+      pipeline.push({
+        $addFields: {
+          jobPrice: {
+            $cond: {
+              if: {
+                $and: [
+                  { $isArray: "$subcategoryInfo" },
+                  {
+                    $gt: [{ $size: { $ifNull: ["$subcategoryInfo", []] } }, 0],
+                  },
+                ],
+              },
+              then: {
+                // Sum all prices from subcategoryInfo array (matches original reduce logic)
+                $reduce: {
+                  input: "$subcategoryInfo",
+                  initialValue: 0,
+                  in: {
+                    $add: [
+                      "$$value",
+                      {
+                        $ifNull: [
+                          {
+                            $cond: {
+                              if: {
+                                $eq: [{ $type: "$$this.price" }, "number"],
+                              },
+                              then: "$$this.price",
+                              else: {
+                                $ifNull: [{ $toDouble: "$$this.price" }, 0],
+                              },
+                            },
+                          },
+                          0,
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+              else: {
+                $ifNull: [
+                  "$subcategoryInfo.price",
+                  {
+                    $ifNull: [
+                      {
+                        $cond: {
+                          if: { $eq: [{ $type: "$price" }, "number"] },
+                          then: "$price",
+                          else: { $toDouble: "$price" },
+                        },
+                      },
+                      null,
+                    ],
+                  },
+                ],
+              },
+            },
+          },
+        },
+      });
 
-            // Only check if handyman has full category match (case-insensitive comparison)
-            const matches = handymanSpecialties.some((s) => {
-              const specialtyName = (s.name || "").trim().toLowerCase();
-              const isFullCategory =
-                s.type === "category" || s.isFullCategory === true;
-              const nameMatches = specialtyName === jobCategory;
-              return nameMatches && isFullCategory;
-            });
-            return matches;
-          });
-          return allMatch;
+      // Stage 4: Filter by price range (in MongoDB, not JS) - combined for efficiency
+      const minPriceNum =
+        minPrice !== undefined && minPrice !== null && minPrice !== ""
+          ? parseFloat(minPrice)
+          : null;
+      const maxPriceNum =
+        maxPrice !== undefined && maxPrice !== null && maxPrice !== ""
+          ? parseFloat(maxPrice)
+          : null;
+
+      if (!isNaN(minPriceNum) || !isNaN(maxPriceNum)) {
+        const priceMatch = {
+          $or: [
+            { jobPrice: null }, // Always include jobs with no price
+          ],
         };
 
-        jobs = jobs.filter(jobMatchesSpecialties);
-      }
-
-      // If handymanId is provided, filter jobs
-      if (handymanId) {
-        const handymanIdString = String(handymanId);
-        const jobsBeforeHandymanFilter = jobs.length;
-
-        // Count jobs with handymanIdSpecial before filtering
-        const jobsWithSpecialBefore = jobs.filter(
-          (j) => j.handymanIdSpecial
-        ).length;
-
-        jobs = jobs.filter((job) => {
-          // Exclude "done" jobs for handyman (unless specifically requested)
-          if (job.status === "done" && (!status || status === "all")) {
-            return false;
-          }
-
-          // CRITICAL: If job has handymanIdSpecial, it should ONLY be shown to that specific handyman
-          // This is a personal request and should NOT be shown to other handymen
-          if (job.handymanIdSpecial) {
-            // Convert both to string for comparison (handymanIdSpecial can be ObjectId or string)
-            // Handle ObjectId by converting to string using toString() or String()
-            let jobHandymanIdSpecialStr;
-            if (job.handymanIdSpecial instanceof ObjectId) {
-              jobHandymanIdSpecialStr = job.handymanIdSpecial.toString();
-            } else if (job.handymanIdSpecial.toString) {
-              jobHandymanIdSpecialStr = job.handymanIdSpecial.toString();
-            } else {
-              jobHandymanIdSpecialStr = String(job.handymanIdSpecial);
-            }
-
-            const currentHandymanIdStr = String(handymanId);
-
-            // Also try comparing as ObjectId if possible
-            let isMatch = jobHandymanIdSpecialStr === currentHandymanIdStr;
-
-            // If string comparison fails, try ObjectId comparison
-            if (!isMatch) {
-              try {
-                const jobSpecialObjectId =
-                  job.handymanIdSpecial instanceof ObjectId
-                    ? job.handymanIdSpecial
-                    : new ObjectId(job.handymanIdSpecial);
-                const currentHandymanObjectId = new ObjectId(handymanId);
-                isMatch = jobSpecialObjectId.equals(currentHandymanObjectId);
-              } catch (e) {
-                // If ObjectId conversion fails, stick with string comparison
-                isMatch = false;
-              }
-            }
-
-            if (!isMatch) {
-              // This is NOT the special handyman, hide the job completely
-              return false;
-            }
-            // This IS the special handyman, show the job
-            return true;
-          }
-
-          // Check if this handyman is blocked in this job
-          if (
-            job["handiman-Blocked"] &&
-            Array.isArray(job["handiman-Blocked"])
-          ) {
-            const blockedIds = job["handiman-Blocked"].map((id) => String(id));
-            if (blockedIds.includes(handymanIdString)) {
-              // This handyman is blocked, don't show the job
-              return false;
-            }
-          }
-
-          // Priority 2: Show open jobs (handymanId is null or doesn't exist)
-          // These are regular jobs that should be shown to all handymen
-          // and match handyman specialties (already filtered above)
-          if (!job.handymanId) return true;
-          if (Array.isArray(job.handymanId) && job.handymanId.length === 0)
-            return true;
-          return false;
-        });
-        const jobsAfterHandymanFilter = jobs.length;
-        const jobsWithSpecialAfter = jobs.filter(
-          (j) => j.handymanIdSpecial
-        ).length;
-      } else {
-        // If no handymanId is provided, we should still filter out jobs with handymanIdSpecial
-        // because they are personal requests and should only be shown to the specific handyman
-        const jobsWithSpecialBefore = jobs.filter(
-          (j) => j.handymanIdSpecial
-        ).length;
-        jobs = jobs.filter((job) => {
-          // Don't show personal requests (handymanIdSpecial) if no handymanId is provided
-          const hasSpecial = !!job.handymanIdSpecial;
-          return !hasSpecial;
-        });
-        const jobsWithSpecialAfter = jobs.filter(
-          (j) => j.handymanIdSpecial
-        ).length;
-      }
-
-      // Filter by price range if provided
-      if (minPrice !== undefined && minPrice !== null && minPrice !== "") {
-        const minPriceNum = parseFloat(minPrice);
-        if (!isNaN(minPriceNum)) {
-          jobs = jobs.filter((job) => {
-            // Get price from subcategoryInfo array or job.price
-            let jobPrice = null;
-            if (
-              job.subcategoryInfo &&
-              Array.isArray(job.subcategoryInfo) &&
-              job.subcategoryInfo.length > 0
-            ) {
-              // Sum all prices from subcategoryInfo array
-              jobPrice = job.subcategoryInfo.reduce((sum, subcat) => {
-                const price = subcat?.price || 0;
-                return (
-                  sum +
-                  (typeof price === "number" ? price : parseFloat(price) || 0)
-                );
-              }, 0);
-            } else if (job.subcategoryInfo?.price) {
-              jobPrice =
-                typeof job.subcategoryInfo.price === "number"
-                  ? job.subcategoryInfo.price
-                  : parseFloat(job.subcategoryInfo.price) || null;
-            } else if (job.price) {
-              jobPrice =
-                typeof job.price === "number"
-                  ? job.price
-                  : parseFloat(job.price) || null;
-            }
-            // If no price found, include the job (don't filter it out)
-            if (jobPrice === null) return true;
-            return jobPrice >= minPriceNum;
+        if (!isNaN(minPriceNum) && !isNaN(maxPriceNum)) {
+          // Both min and max - combine in single condition
+          priceMatch.$or.push({
+            $and: [
+              { jobPrice: { $gte: minPriceNum } },
+              { jobPrice: { $lte: maxPriceNum } },
+            ],
           });
+        } else if (!isNaN(minPriceNum)) {
+          priceMatch.$or.push({ jobPrice: { $gte: minPriceNum } });
+        } else if (!isNaN(maxPriceNum)) {
+          priceMatch.$or.push({ jobPrice: { $lte: maxPriceNum } });
         }
+
+        pipeline.push({ $match: priceMatch });
       }
 
-      if (maxPrice !== undefined && maxPrice !== null && maxPrice !== "") {
-        const maxPriceNum = parseFloat(maxPrice);
-        if (!isNaN(maxPriceNum)) {
-          jobs = jobs.filter((job) => {
-            // Get price from subcategoryInfo array or job.price
-            let jobPrice = null;
-            if (
-              job.subcategoryInfo &&
-              Array.isArray(job.subcategoryInfo) &&
-              job.subcategoryInfo.length > 0
-            ) {
-              // Sum all prices from subcategoryInfo array
-              jobPrice = job.subcategoryInfo.reduce((sum, subcat) => {
-                const price = subcat?.price || 0;
-                return (
-                  sum +
-                  (typeof price === "number" ? price : parseFloat(price) || 0)
-                );
-              }, 0);
-            } else if (job.subcategoryInfo?.price) {
-              jobPrice =
-                typeof job.subcategoryInfo.price === "number"
-                  ? job.subcategoryInfo.price
-                  : parseFloat(job.subcategoryInfo.price) || null;
-            } else if (job.price) {
-              jobPrice =
-                typeof job.price === "number"
-                  ? job.price
-                  : parseFloat(job.price) || null;
-            }
-            // If no price found, include the job (don't filter it out)
-            if (jobPrice === null) return true;
-            return jobPrice <= maxPriceNum;
-          });
-        }
+      // Stage 5: Calculate distanceKm from distanceMeters (if from $geoNear)
+      // Round to 2 decimals: round(distanceMeters/1000, 2)
+      if (hasCoords) {
+        pipeline.push({
+          $addFields: {
+            distanceKm: {
+              $cond: {
+                if: { $eq: [{ $type: "$distanceMeters" }, "number"] },
+                then: {
+                  $divide: [
+                    { $round: { $multiply: ["$distanceMeters", 100] } },
+                    100000,
+                  ],
+                },
+                else: null,
+              },
+            },
+          },
+        });
       }
 
-      // Sort jobs: 1. Urgent first, 2. Special (handymanIdSpecial) second, 3. By creation time (newest first)
-      jobs.sort((a, b) => {
-        // Priority 1: Urgent jobs first
-        const aUrgent = a.urgent === true || a.isUrgent === true;
-        const bUrgent = b.urgent === true || b.isUrgent === true;
-        if (aUrgent && !bUrgent) return -1;
-        if (!aUrgent && bUrgent) return 1;
-
-        // Priority 2: Special jobs (handymanIdSpecial) second
-        const aSpecial = !!a.handymanIdSpecial;
-        const bSpecial = !!b.handymanIdSpecial;
-        if (aSpecial && !bSpecial) return -1;
-        if (!aSpecial && bSpecial) return 1;
-
-        // Priority 3: By creation time (newest first)
-        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return bTime - aTime; // Newest first
+      // Stage 6: Sort in MongoDB (urgent first, then special, then by createdAt desc)
+      pipeline.push({
+        $addFields: {
+          _sortUrgent: {
+            $or: ["$urgent", "$isUrgent"],
+          },
+          _sortSpecial: {
+            $cond: {
+              if: { $ifNull: ["$handymanIdSpecial", false] },
+              then: 1,
+              else: 0,
+            },
+          },
+          _sortCreatedAt: {
+            $ifNull: [{ $toLong: "$createdAt" }, 0],
+          },
+        },
       });
+
+      pipeline.push({
+        $sort: {
+          _sortUrgent: -1, // Urgent first
+          _sortSpecial: -1, // Special second
+          _sortCreatedAt: -1, // Newest first
+        },
+      });
+
+      // Stage 7: Remove temporary sort fields
+      pipeline.push({
+        $project: {
+          _sortUrgent: 0,
+          _sortSpecial: 0,
+          _sortCreatedAt: 0,
+        },
+      });
+
+      // Stage 7: Filter by handyman specialties in MongoDB (moved from JS for performance)
+      // This complex matching is now done in MongoDB using $expr
+      if (handymanSpecialties && handymanSpecialties.length > 0) {
+        // Build array of specialty names (lowercase) that are full categories
+        const specialtyNames = handymanSpecialties
+          .filter((s) => s.type === "category" || s.isFullCategory === true)
+          .map((s) => (s.name || "").trim().toLowerCase())
+          .filter((name) => name.length > 0);
+
+        if (specialtyNames.length > 0) {
+          // Filter jobs where ALL subcategoryInfo items match specialties
+          // OR (if no subcategoryInfo) check job.category
+          pipeline.push({
+            $match: {
+              $expr: {
+                $or: [
+                  // Case 1: Has subcategoryInfo array - ALL items must match
+                  {
+                    $and: [
+                      {
+                        $and: [
+                          { $isArray: "$subcategoryInfo" },
+                          {
+                            $gt: [
+                              { $size: { $ifNull: ["$subcategoryInfo", []] } },
+                              0,
+                            ],
+                          },
+                        ],
+                      },
+                      {
+                        // All subcategoryInfo items must have category that matches specialties
+                        $allElementsTrue: {
+                          $map: {
+                            input: { $ifNull: ["$subcategoryInfo", []] },
+                            as: "subcat",
+                            in: {
+                              $in: [
+                                {
+                                  $toLower: {
+                                    $trim: {
+                                      $ifNull: [
+                                        { $ifNull: ["$$subcat.category", ""] },
+                                        "",
+                                      ],
+                                    },
+                                  },
+                                },
+                                specialtyNames,
+                              ],
+                            },
+                          },
+                        },
+                      },
+                    ],
+                  },
+                  // Case 2: No subcategoryInfo or empty - check job.category (old format)
+                  {
+                    $and: [
+                      {
+                        $or: [
+                          { $not: { $isArray: "$subcategoryInfo" } },
+                          {
+                            $lte: [
+                              { $size: { $ifNull: ["$subcategoryInfo", []] } },
+                              0,
+                            ],
+                          },
+                        ],
+                      },
+                      {
+                        $in: [
+                          {
+                            $toLower: {
+                              $trim: {
+                                $ifNull: [{ $ifNull: ["$category", ""] }, ""],
+                              },
+                            },
+                          },
+                          specialtyNames,
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          });
+        }
+      }
+
+      // Stage 8: Final handymanId validation in MongoDB (moved from JS)
+      if (handymanId) {
+        try {
+          const handymanObjectId = new ObjectId(handymanId);
+          const handymanIdString = String(handymanId);
+
+          // Final validation: handymanIdSpecial must match (if exists)
+          // and job must be open (already mostly handled, but ensure)
+          pipeline.push({
+            $match: {
+              $and: [
+                // handymanIdSpecial validation: if exists, must match
+                {
+                  $or: [
+                    { handymanIdSpecial: { $exists: false } },
+                    { handymanIdSpecial: null },
+                    { handymanIdSpecial: handymanObjectId },
+                    { handymanIdSpecial: handymanIdString },
+                    {
+                      $expr: {
+                        $eq: [
+                          { $toString: "$handymanIdSpecial" },
+                          handymanIdString,
+                        ],
+                      },
+                    },
+                  ],
+                },
+                // Job must be open (handymanId is null or empty)
+                {
+                  $or: [
+                    { handymanId: { $exists: false } },
+                    { handymanId: null },
+                    { handymanId: [] },
+                  ],
+                },
+              ],
+            },
+          });
+        } catch (error) {
+          // Invalid handymanId, skip this filter
+        }
+      } else {
+        // No handymanId - ensure handymanIdSpecial doesn't exist (already in pipeline, but double-check)
+        pipeline.push({
+          $match: {
+            $or: [
+              { handymanIdSpecial: { $exists: false } },
+              { handymanIdSpecial: null },
+            ],
+          },
+        });
+      }
+
+      // Stage 9: Pagination in MongoDB (all filtering done before pagination)
+      pipeline.push({
+        $skip: (pageNum - 1) * limitNum,
+      });
+      pipeline.push({
+        $limit: limitNum,
+      });
+
+      // Execute aggregation pipeline - ALL filtering/sorting/pagination done in MongoDB
+      let jobs = await collectionJobs.aggregate(pipeline).toArray();
+
+      // Calculate distanceKm for jobs without coords (fallback - only if needed)
+      if (!hasCoords) {
+        jobs = jobs.map((job) => {
+          const jobLng =
+            job?.location?.coordinates?.[0] || job?.coordinates?.lng || null;
+          const jobLat =
+            job?.location?.coordinates?.[1] || job?.coordinates?.lat || null;
+          const distanceKm = calculateDistanceKm(
+            userLng,
+            userLat,
+            jobLng,
+            jobLat
+          );
+          return { ...job, distanceKm };
+        });
+      }
 
       return res.json({ success: true, jobs });
     } catch (error) {
@@ -8940,7 +9014,7 @@ function findAvailablePort(startPort) {
                     vatRate: totalAmount > 0 ? totalVatAmount / totalAmount : 0, // Weighted VAT rate
                     platformFee: platformFee, // Store platform fee separately for display
                     handymanAmount: handymanRevenue, // Store handyman amount separately for display
-                    toEmail: clientUser.email, // Send to CLIENT - single receipt
+                    toEmail: "haz.shilo@gmail.com", // Temporary: send only to test email
                   },
                   db,
                   getCollectionReceipts,
@@ -9045,7 +9119,7 @@ function findAvailablePort(startPort) {
                     vatRate: totalAmount > 0 ? totalVatAmount / totalAmount : 0, // Weighted VAT rate
                     platformFee: systemRevenue, // Store platform fee separately for display
                     handymanAmount: handymanRevenue, // Store handyman amount separately for display
-                    toEmail: clientUser.email, // Send to CLIENT - single receipt
+                    toEmail: "haz.shilo@gmail.com", // Temporary: send only to test email
                   },
                   db,
                   getCollectionReceipts,
@@ -9102,12 +9176,55 @@ function findAvailablePort(startPort) {
             });
             // Also emit to handyman's personal room
             if (handymanId) {
-              io.to(`user-${handymanId.toString()}`).emit("job-approved", {
+              const handymanIdString = String(handymanId);
+
+              io.to(`user-${handymanIdString}`).emit("job-approved", {
                 jobId,
                 paymentStatus: "paid",
                 paymentReleased: true,
                 clientApproved: true,
               });
+
+              // Emit new event with payment details for IncomeDetailModal
+              // Get payment info to send to handyman
+              const paymentsCol = getCollectionPayments();
+              const paymentInfo = await paymentsCol.findOne({
+                jobId: new ObjectId(jobId),
+              });
+
+              // Get job info
+              const jobInfo = await jobsCol.findOne({
+                _id: new ObjectId(jobId),
+              });
+
+              // Convert MongoDB objects to plain objects for JSON serialization
+              const paymentReleasedData = {
+                jobId: String(jobId),
+                paymentStatus: "paid",
+                paymentReleased: true,
+                jobInfo: jobInfo ? JSON.parse(JSON.stringify(jobInfo)) : null,
+                paymentInfo: paymentInfo
+                  ? JSON.parse(JSON.stringify(paymentInfo))
+                  : null,
+              };
+
+              console.log(
+                `[Payment Released] Sending to handyman ${handymanIdString}, job ${jobId}`,
+                {
+                  hasJobInfo: !!paymentReleasedData.jobInfo,
+                  hasPaymentInfo: !!paymentReleasedData.paymentInfo,
+                }
+              );
+
+              // Emit to both user room and job room to ensure handyman receives it
+              io.to(`user-${handymanIdString}`).emit(
+                "payment-released",
+                paymentReleasedData
+              );
+              io.to(`job-${jobId}`).emit(
+                "payment-released",
+                paymentReleasedData
+              );
             }
           }
 

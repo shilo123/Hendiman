@@ -2336,23 +2336,10 @@ export default {
         typeof jobLocation.lat === "number" &&
         typeof jobLocation.lng === "number";
 
-      // We need starting location (where handyman started) and job location to draw the route
-      // The current handyman location is shown as a marker (dynamic)
-      const hasValidStartingLocation =
-        startingLocation &&
-        typeof startingLocation.lat === "number" &&
-        typeof startingLocation.lng === "number";
-
-      if (hasValidStartingLocation && hasValidJobLocation) {
-        // We have starting location and job location - show route modal
-        // The route line goes from starting location to job location
-        // The handyman marker shows current location (if available)
-        this.showHandymanRouteModal = true;
-      } else {
-        this.toast?.showError(
-          "מיקום יציאת הדרך של ההנדימן לא זמין. ההנדימן צריך לעדכן סטטוס 'יצא לדרך' כדי לאפשר מעקב."
-        );
-      }
+      // Show route modal without validation - allow viewing even if starting location is not available
+      // The route line goes from starting location to job location (if available)
+      // The handyman marker shows current location (if available)
+      this.showHandymanRouteModal = true;
     },
     closeHandymanRouteModal() {
       this.showHandymanRouteModal = false;
@@ -2445,42 +2432,84 @@ export default {
         }
 
         mapboxgl.accessToken = tokenResponse.data.token;
-
         // Get starting location (fixed - where handyman started) and job location
         // Route line goes from starting location to job location
         const startingLoc = this.handymanStartingLocation;
+
+        // Validate job location (required) - also check if coordinates are strings that can be converted
+        if (!this.jobLocation) {
+          this.toast?.showError("מיקום העבודה לא זמין");
+          this.routeLoading = false;
+          return;
+        }
+
+        // Convert coordinates to numbers if they are strings
+        const jobLat =
+          typeof this.jobLocation.lat === "string"
+            ? parseFloat(this.jobLocation.lat)
+            : this.jobLocation.lat;
+        const jobLng =
+          typeof this.jobLocation.lng === "string"
+            ? parseFloat(this.jobLocation.lng)
+            : this.jobLocation.lng;
+
         if (
-          !startingLoc ||
-          !this.jobLocation ||
-          typeof startingLoc?.lat !== "number" ||
-          typeof startingLoc?.lng !== "number" ||
-          typeof this.jobLocation?.lat !== "number" ||
-          typeof this.jobLocation?.lng !== "number"
+          typeof jobLat !== "number" ||
+          typeof jobLng !== "number" ||
+          isNaN(jobLat) ||
+          isNaN(jobLng)
         ) {
-          this.toast?.showError("מיקומים לא תקינים");
+          this.toast?.showError("מיקום העבודה לא תקין");
+          this.routeLoading = false;
           return;
         }
 
         this.routeLoading = true;
 
-        // Fetch route data from server - route from starting location to job location
-        const routeResponse = await axios.get(`${URL}/route-data`, {
-          params: {
-            originLat: startingLoc.lat,
-            originLng: startingLoc.lng,
-            destLat: this.jobLocation.lat,
-            destLng: this.jobLocation.lng,
-          },
-        });
+        // If we have starting location, fetch route. Otherwise, just show map with markers
+        // Convert starting location coordinates to numbers if they are strings
+        const startLat =
+          startingLoc && typeof startingLoc.lat === "string"
+            ? parseFloat(startingLoc.lat)
+            : startingLoc?.lat;
+        const startLng =
+          startingLoc && typeof startingLoc.lng === "string"
+            ? parseFloat(startingLoc.lng)
+            : startingLoc?.lng;
 
-        if (!routeResponse.data.success) {
-          this.toast?.showError("לא ניתן לטעון מסלול");
-          this.routeLoading = false;
-          return;
+        if (
+          startingLoc &&
+          typeof startLat === "number" &&
+          typeof startLng === "number" &&
+          !isNaN(startLat) &&
+          !isNaN(startLng)
+        ) {
+          // Fetch route data from server - route from starting location to job location
+          const routeResponse = await axios.get(`${URL}/route-data`, {
+            params: {
+              originLat: startLat,
+              originLng: startLng,
+              destLat: jobLat,
+              destLng: jobLng,
+            },
+          });
+
+          if (!routeResponse.data.success) {
+            // If route fails, still show map without route
+            console.warn(
+              "Failed to fetch route, showing map without route line"
+            );
+            this.routeData = null;
+            this.travelTimeMinutes = null;
+          } else {
+            this.routeData = routeResponse.data;
+            this.travelTimeMinutes = routeResponse.data.route.durationMinutes;
+          }
+        } else {
+          // No starting location - show map without route
+          this.routeData = null;
+          this.travelTimeMinutes = null;
         }
-
-        this.routeData = routeResponse.data;
-        this.travelTimeMinutes = routeResponse.data.route.durationMinutes;
 
         // Wait for DOM to be ready
         await this.$nextTick();
@@ -2491,51 +2520,60 @@ export default {
           return;
         }
 
+        // Determine map center - use route center if available, otherwise use job location
+        const mapCenter = this.routeData?.center
+          ? [this.routeData.center.lng, this.routeData.center.lat]
+          : [jobLng, jobLat];
+
         // Initialize map - Mapbox expects [lng, lat]
         this.routeMap = new mapboxgl.Map({
           container: mapContainer,
           style: "mapbox://styles/mapbox/streets-v12",
-          center: [
-            routeResponse.data.center.lng,
-            routeResponse.data.center.lat,
-          ],
+          center: mapCenter,
           zoom: 13,
         });
 
         // Wait for map to load
         this.routeMap.on("load", () => {
-          // Add route layer
+          // Add route layer only if we have route data
           if (
-            this.routeMap.getSource("route") &&
-            this.routeMap.getLayer("route")
+            this.routeData &&
+            this.routeData.route &&
+            this.routeData.route.geometry
           ) {
-            this.routeMap.removeLayer("route");
-            this.routeMap.removeSource("route");
+            // Remove existing route if any
+            if (
+              this.routeMap.getSource("route") &&
+              this.routeMap.getLayer("route")
+            ) {
+              this.routeMap.removeLayer("route");
+              this.routeMap.removeSource("route");
+            }
+
+            this.routeMap.addSource("route", {
+              type: "geojson",
+              data: {
+                type: "Feature",
+                properties: {},
+                geometry: this.routeData.route.geometry,
+              },
+            });
+
+            this.routeMap.addLayer({
+              id: "route",
+              type: "line",
+              source: "route",
+              layout: {
+                "line-join": "round",
+                "line-cap": "round",
+              },
+              paint: {
+                "line-color": "#ff6a00",
+                "line-width": 5,
+                "line-opacity": 0.9,
+              },
+            });
           }
-
-          this.routeMap.addSource("route", {
-            type: "geojson",
-            data: {
-              type: "Feature",
-              properties: {},
-              geometry: routeResponse.data.route.geometry,
-            },
-          });
-
-          this.routeMap.addLayer({
-            id: "route",
-            type: "line",
-            source: "route",
-            layout: {
-              "line-join": "round",
-              "line-cap": "round",
-            },
-            paint: {
-              "line-color": "#ff6a00",
-              "line-width": 5,
-              "line-opacity": 0.9,
-            },
-          });
 
           // Add handyman marker (CURRENT location - dynamic)
           // The marker shows the handyman's current position, not the starting point
@@ -2548,23 +2586,33 @@ export default {
             this.cachedLastHandymanLocation || this.lastHandymanLocation;
           const handymanMarkerLocation = currentHandymanLoc || startingLoc; // Fallback to starting location if no current location
 
-          // Create custom marker element for better visibility
-          const handymanMarkerEl = document.createElement("div");
-          handymanMarkerEl.className = "handyman-marker";
-          handymanMarkerEl.style.width = "20px";
-          handymanMarkerEl.style.height = "20px";
-          handymanMarkerEl.style.borderRadius = "50%";
-          handymanMarkerEl.style.backgroundColor = "#ff6a00";
-          handymanMarkerEl.style.border = "3px solid white";
-          handymanMarkerEl.style.boxShadow = "0 2px 4px rgba(0,0,0,0.3)";
-          handymanMarkerEl.style.cursor = "pointer";
+          // Only add handyman marker if we have a valid location
+          if (
+            handymanMarkerLocation &&
+            typeof handymanMarkerLocation.lat === "number" &&
+            typeof handymanMarkerLocation.lng === "number"
+          ) {
+            // Create custom marker element for better visibility
+            const handymanMarkerEl = document.createElement("div");
+            handymanMarkerEl.className = "handyman-marker";
+            handymanMarkerEl.style.width = "20px";
+            handymanMarkerEl.style.height = "20px";
+            handymanMarkerEl.style.borderRadius = "50%";
+            handymanMarkerEl.style.backgroundColor = "#ff6a00";
+            handymanMarkerEl.style.border = "3px solid white";
+            handymanMarkerEl.style.boxShadow = "0 2px 4px rgba(0,0,0,0.3)";
+            handymanMarkerEl.style.cursor = "pointer";
 
-          this.handymanMarker = new mapboxgl.Marker({
-            element: handymanMarkerEl,
-            anchor: "center",
-          })
-            .setLngLat([handymanMarkerLocation.lng, handymanMarkerLocation.lat])
-            .addTo(this.routeMap);
+            this.handymanMarker = new mapboxgl.Marker({
+              element: handymanMarkerEl,
+              anchor: "center",
+            })
+              .setLngLat([
+                handymanMarkerLocation.lng,
+                handymanMarkerLocation.lat,
+              ])
+              .addTo(this.routeMap);
+          }
 
           // Add destination marker (job) - Mapbox expects [lng, lat]
           const jobMarkerEl = document.createElement("div");
@@ -2581,18 +2629,48 @@ export default {
             element: jobMarkerEl,
             anchor: "center",
           })
-            .setLngLat([
-              routeResponse.data.destination.lng,
-              routeResponse.data.destination.lat,
-            ])
+            .setLngLat([jobLng, jobLat])
             .addTo(this.routeMap);
 
-          // Fit map to route bounds
-          const coordinates = routeResponse.data.route.geometry.coordinates;
-          if (coordinates && coordinates.length > 0) {
-            const bounds = coordinates.reduce((bounds, coord) => {
-              return bounds.extend(coord);
-            }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
+          // Fit map to route bounds (only if we have route data)
+          if (
+            this.routeData &&
+            this.routeData.route &&
+            this.routeData.route.geometry &&
+            this.routeData.route.geometry.coordinates
+          ) {
+            const coordinates = this.routeData.route.geometry.coordinates;
+            if (coordinates && coordinates.length > 0) {
+              const bounds = coordinates.reduce((bounds, coord) => {
+                return bounds.extend(coord);
+              }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
+
+              this.routeMap.fitBounds(bounds, {
+                padding: { top: 50, bottom: 50, left: 50, right: 50 },
+                maxZoom: 15,
+              });
+            }
+          } else {
+            // If no route, just fit to job location and handyman location (if available)
+            const bounds = new mapboxgl.LngLatBounds(
+              [jobLng, jobLat],
+              [jobLng, jobLat]
+            );
+
+            // Add handyman location to bounds if available
+            const currentHandymanLoc =
+              this.cachedLastHandymanLocation || this.lastHandymanLocation;
+            const handymanMarkerLocation = currentHandymanLoc || startingLoc;
+            if (
+              handymanMarkerLocation &&
+              typeof handymanMarkerLocation.lat === "number" &&
+              typeof handymanMarkerLocation.lng === "number"
+            ) {
+              bounds.extend([
+                handymanMarkerLocation.lng,
+                handymanMarkerLocation.lat,
+              ]);
+            }
 
             this.routeMap.fitBounds(bounds, {
               padding: { top: 50, bottom: 50, left: 50, right: 50 },

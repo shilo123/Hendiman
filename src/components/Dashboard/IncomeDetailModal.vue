@@ -134,6 +134,21 @@ export default {
       platformFeePercent: null, // Will be loaded dynamically from API
     };
   },
+  watch: {
+    isVisible(newVal) {
+      console.log("[IncomeDetailModal] isVisible changed to:", newVal, {
+        jobInfo: this.jobInfo,
+        paymentInfo: this.paymentInfo,
+      });
+    },
+  },
+  mounted() {
+    console.log("[IncomeDetailModal] Mounted with:", {
+      isVisible: this.isVisible,
+      jobInfo: this.jobInfo,
+      paymentInfo: this.paymentInfo,
+    });
+  },
   computed: {
     totalAmount() {
       return this.paymentInfo?.totalAmount || this.jobInfo?.price || 0;
@@ -153,7 +168,20 @@ export default {
       return this.totalAmount - this.commission - this.urgentFee;
     },
   },
+  watch: {
+    isVisible(newVal) {
+      console.log("[IncomeDetailModal] isVisible changed to:", newVal, {
+        jobInfo: this.jobInfo,
+        paymentInfo: this.paymentInfo,
+      });
+    },
+  },
   async mounted() {
+    console.log("[IncomeDetailModal] Mounted with:", {
+      isVisible: this.isVisible,
+      jobInfo: this.jobInfo,
+      paymentInfo: this.paymentInfo,
+    });
     await this.loadPlatformFee();
   },
   methods: {

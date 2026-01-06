@@ -318,8 +318,13 @@ export default {
         });
 
         if (this.store?.toast) this.store.toast.showSuccess("הדירוג נשלח");
-        // Navigate to job summary after rating
-        this.$router.push(`/job-summary/${this.jobId}`);
+        // Navigate to Dashboard after rating
+        const userId = this.store?.user?._id || this.jobInfo?.clientId?.toString() || this.jobInfo?.clientId;
+        if (userId) {
+          this.$router.push(`/Dashboard/${userId}`);
+        } else {
+          this.$router.push("/");
+        }
       } catch (err) {
         this.uiError = "שגיאה בשליחת הדירוג.";
         if (this.store?.toast) this.store.toast.showError(this.uiError);

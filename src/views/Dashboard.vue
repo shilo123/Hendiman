@@ -46,6 +46,7 @@
         <ClientActions
           v-if="!isHendiman"
           @create-call="onCreateCallCta"
+          @how-it-works="onHowItWorks"
           class="client-actions-top"
         />
 
@@ -67,6 +68,7 @@
           <section v-if="!isHendiman" class="panel client-actions-panel">
             <ClientActions
               @create-call="onCreateCallCta"
+              @how-it-works="onHowItWorks"
               class="client-actions-desktop"
             />
           </section>
@@ -678,6 +680,9 @@
           :jobInfo="incomeDetailJob"
           :paymentInfo="incomeDetailPayment"
           @close="showIncomeDetailModal = false"
+          :key="`income-modal-${
+            incomeDetailJob?._id || incomeDetailJob?.id || 'default'
+          }`"
         />
 
         <!-- Onboarding Required Modal (for handyman) -->
@@ -2877,6 +2882,14 @@ export default {
             }
           });
         }
+
+        // Also join job room when receiving job updates
+        this.socket.on("job-updated", (data) => {
+          if (data && data.jobId) {
+            const jobIdString = String(data.jobId);
+            this.socket.emit("join-job", jobIdString);
+          }
+        });
       });
 
       // Listen for job accepted event (for both clients and handymen)
@@ -2955,7 +2968,7 @@ export default {
         await this.checkForAssignedJob();
       });
 
-      // Listen for job done event (for clients) - redirect to rating page
+      // Listen for job done event (for clients) - show approval modal and navigate to JobSummary
       // Track processed job-done events to prevent duplicate processing
       const processedJobDoneEvents = new Set();
       this.socket.on("job-done", async (data) => {
@@ -2974,9 +2987,31 @@ export default {
         }
 
         if (!this.isHendiman) {
-          // For client: redirect directly to rating page
+          // For client: show approval modal immediately when job-done is received
+          // Find the job and show approval modal
+          const job = this.store.jobs?.find(
+            (j) => String(j._id || j.id) === jobId
+          );
+          if (job) {
+            this.pendingApprovalJob = job;
+            this.showClientApprovalModal = true;
+          } else {
+            // If job not in store, fetch it
+            try {
+              const { URL } = await import("@/Url/url");
+              const response = await axios.get(`${URL}/jobs/${jobId}`);
+              if (response.data?.success && response.data?.job) {
+                this.pendingApprovalJob = response.data.job;
+                this.showClientApprovalModal = true;
+              }
+            } catch (error) {
+              console.error("Error fetching job for approval:", error);
+            }
+          }
+
+          // Navigate to JobSummary page (only jobId, no userId)
           if (jobId) {
-            this.$router.push(`/rating/${jobId}`);
+            this.$router.push(`/job-summary/${jobId}`);
           }
         }
       });
@@ -3051,14 +3086,7 @@ export default {
             this.showHandymanApprovedNotification = true;
             // Hide the "waiting for client approval" notification when payment is released
             this.showHandymanDoneNotification = false;
-
-            // Show income detail modal
-            const job = this.store.jobs?.find(
-              (j) => String(j._id || j.id) === jobId
-            );
-            if (job) {
-              await this.showIncomeDetail(job);
-            }
+            // Note: IncomeDetailModal will be shown via "payment-released" event, not here
           }
 
           // Check if this job needs onboarding
@@ -3082,6 +3110,84 @@ export default {
           this.showHandymanCancelledNotification = true;
           // Refresh jobs to get latest data
           await this.onRefresh();
+        }
+      });
+
+      // Listen for payment-released event (when client releases payment) - show IncomeDetailModal
+      this.socket.on("payment-released", async (data) => {
+        console.log(
+          "[Dashboard] Received payment-released event:",
+          data,
+          "isHendiman:",
+          this.isHendiman
+        );
+
+        // Check if this is for handyman
+        if (!this.isHendiman) {
+          console.log("[Dashboard] Skipping - not handyman");
+          return;
+        }
+
+        if (!data || !data.jobId || !data.paymentReleased) {
+          console.log("[Dashboard] Skipping - missing required data", data);
+          return;
+        }
+
+        const jobId = String(data.jobId || "");
+        console.log(
+          "[Dashboard] Processing payment-released for handyman, jobId:",
+          jobId
+        );
+
+        // Show income detail modal with job and payment info
+        if (data.jobInfo && data.paymentInfo) {
+          // Both jobInfo and paymentInfo are available
+          this.incomeDetailJob = data.jobInfo;
+          this.incomeDetailPayment = data.paymentInfo;
+          this.showIncomeDetailModal = true;
+          console.log(
+            "[Dashboard] IncomeDetailModal shown with jobInfo and paymentInfo",
+            {
+              showIncomeDetailModal: this.showIncomeDetailModal,
+              isHendiman: this.isHendiman,
+              hasJobInfo: !!this.incomeDetailJob,
+              hasPaymentInfo: !!this.incomeDetailPayment,
+            }
+          );
+
+          // Force Vue to update
+          this.$nextTick(() => {
+            console.log(
+              "[Dashboard] After nextTick - showIncomeDetailModal:",
+              this.showIncomeDetailModal
+            );
+          });
+        } else if (data.jobInfo) {
+          // Only jobInfo available, fetch payment info
+          console.log("[Dashboard] Payment info not in event, fetching...");
+          const job = data.jobInfo;
+          await this.showIncomeDetail(job);
+        } else if (data.jobId) {
+          // Only jobId available, fetch both job and payment info
+          console.log(
+            "[Dashboard] Fetching job and payment info for jobId:",
+            jobId
+          );
+          try {
+            const { URL } = await import("@/Url/url");
+            const jobResponse = await axios.get(`${URL}/jobs/${jobId}`);
+            if (jobResponse.data?.success && jobResponse.data?.job) {
+              await this.showIncomeDetail(jobResponse.data.job);
+            } else {
+              console.error("[Dashboard] Failed to fetch job info");
+            }
+          } catch (error) {
+            console.error("[Dashboard] Error fetching job info:", error);
+          }
+        } else {
+          console.error(
+            "[Dashboard] No jobInfo or jobId in payment-released event"
+          );
         }
       });
     },
@@ -3268,13 +3374,8 @@ export default {
           this.showClientApprovalModal = false;
           this.showProblemReportModal = false;
 
-          // Navigate to rating page
-          const jobId =
-            this.pendingApprovalJob?._id || this.pendingApprovalJob?.id;
-          if (jobId) {
-            this.$router.push(`/rating/${jobId}`);
-          }
-
+          // Don't navigate - if client is on JobSummary, they'll stay there
+          // If they're on Dashboard, they can navigate manually if needed
           this.pendingApprovalJob = null;
 
           // Refresh jobs data
@@ -3380,6 +3481,9 @@ export default {
         name: "CreateCall",
         params: { id: this.$route.params.id },
       });
+    },
+    onHowItWorks() {
+      this.$router.push({ name: "About" });
     },
     onGoProfile() {
       this.onOpenProfile();
@@ -6073,14 +6177,11 @@ $r2: 26px;
 
   @media (max-width: 768px) {
     display: block;
-    position: sticky;
-    top: 0;
+    position: relative;
     z-index: 100;
-    background: #0b0b0f;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    backdrop-filter: blur(10px);
-    margin-bottom: 12px;
+    padding: 0;
+    margin: 12px 0 16px 0;
+    backdrop-filter: none;
   }
 }
 
@@ -6171,8 +6272,11 @@ $r2: 26px;
 }
 
 .client-actions-panel {
-  padding: 16px !important;
+  padding: 0 !important;
+  margin: 0;
   display: block; // Visible on desktop
+  background: transparent;
+  border: none;
 
   @media (max-width: 768px) {
     display: none; // Hidden on mobile
