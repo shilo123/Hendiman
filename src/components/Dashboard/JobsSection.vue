@@ -1,20 +1,30 @@
 <template>
   <section class="jobs" id="jobs">
+    <!-- Ambient background (pure HTML/CSS, no logic changes) -->
+    <div class="jobs__amb" aria-hidden="true">
+      <span class="orb orb--1"></span>
+      <span class="orb orb--2"></span>
+      <span class="orb orb--3"></span>
+      <span class="gridGlow"></span>
+    </div>
+
     <!-- Header -->
     <div class="jobs__head">
       <div class="jobs__headText">
+        <!-- <div class="jobs__kicker">HENDIMAN</div> -->
         <h2 class="jobs__title">עבודות</h2>
         <p class="jobs__sub">
           {{
             isHendiman
               ? "עבודות לפי ההתמחויות שלך · סינון לפי סטטוס ומרחק"
-              : "כל הקריאות  · צפייה וסטטוסים"
+              : "כל הקריאות · צפייה וסטטוסים"
           }}
         </p>
       </div>
 
       <button class="btn btn--primary" type="button" @click="$emit('refresh')">
-        ↻ <span class="btn__txt">רענן</span>
+        <span class="btn__ic" aria-hidden="true">↻</span>
+        <span class="btn__txt">רענן</span>
       </button>
     </div>
 
@@ -63,9 +73,11 @@
               איפוס
             </button>
           </div>
+
           <div class="range-display">
             <span class="range-value">עד {{ displayMaxKm }} ק״מ</span>
           </div>
+
           <input
             class="range-input"
             type="range"
@@ -91,6 +103,7 @@
               איפוס
             </button>
           </div>
+
           <div class="price-range price-range--horizontal">
             <div class="price-input-group">
               <label class="price-label">מינימום:</label>
@@ -110,6 +123,7 @@
                 placeholder="0"
               />
             </div>
+
             <div class="price-input-group">
               <label class="price-label">מקסימום:</label>
               <input
@@ -144,6 +158,7 @@
               />
               <span class="radio-label">הכל</span>
             </label>
+
             <label class="radio-item radio-item--inline">
               <input
                 type="radio"
@@ -154,6 +169,7 @@
               />
               <span class="radio-label">קלה</span>
             </label>
+
             <label class="radio-item radio-item--inline">
               <input
                 type="radio"
@@ -164,6 +180,7 @@
               />
               <span class="radio-label">מורכבת</span>
             </label>
+
             <label class="radio-item radio-item--inline">
               <input
                 type="radio"
@@ -177,10 +194,12 @@
           </div>
         </div>
 
-        <!-- Filter Button (visible only on mobile) -->
+        <!-- Filter Button (mobile) -->
         <div class="panel panel--filter panel--filter-mobile">
           <button class="filter-btn" type="button" @click="openFilterModal">
-            <span>🔍 סנן</span>
+            <span class="filter-btn__ic" aria-hidden="true">🔍</span>
+            <span>סנן</span>
+            <span class="filter-btn__hint" aria-hidden="true">חכם</span>
           </button>
         </div>
       </div>
@@ -194,8 +213,16 @@
     >
       <div class="filter-modal" @click.stop>
         <div class="filter-modal__header">
-          <h3 class="filter-modal__title">סנן עבודות</h3>
-          <button class="filter-modal__close" @click="closeFilterModal">
+          <div class="filter-modal__titleWrap">
+            <div class="filter-modal__badge">Filters</div>
+            <h3 class="filter-modal__title">סנן עבודות</h3>
+          </div>
+
+          <button
+            class="filter-modal__close"
+            @click="closeFilterModal"
+            aria-label="סגור"
+          >
             ×
           </button>
         </div>
@@ -240,9 +267,11 @@
                 איפוס
               </button>
             </div>
+
             <div class="range-display">
               <span class="range-value">עד {{ localFilters.maxKm }} ק״מ</span>
             </div>
+
             <input
               class="range-input"
               type="range"
@@ -265,6 +294,7 @@
                 איפוס
               </button>
             </div>
+
             <div class="price-range">
               <div class="price-input-group">
                 <label class="price-label">מינימום:</label>
@@ -276,6 +306,7 @@
                   placeholder="0"
                 />
               </div>
+
               <div class="price-input-group">
                 <label class="price-label">מקסימום:</label>
                 <input
@@ -303,6 +334,7 @@
                 />
                 <span class="radio-label">הכל</span>
               </label>
+
               <label class="radio-item">
                 <input
                   type="radio"
@@ -313,6 +345,7 @@
                 />
                 <span class="radio-label">קלה</span>
               </label>
+
               <label class="radio-item">
                 <input
                   type="radio"
@@ -323,6 +356,7 @@
                 />
                 <span class="radio-label">מורכבת</span>
               </label>
+
               <label class="radio-item">
                 <input
                   type="radio"
@@ -365,11 +399,14 @@
           'job--special': job.handymanIdSpecial,
         }"
       >
+        <div class="job__sheen" aria-hidden="true"></div>
+
         <div class="job__header">
           <div class="job__title">
             {{ getJobDisplayName(job) }}
           </div>
-          <!-- Client job menu button (3 dots) -->
+
+          <!-- Client job menu button -->
           <div
             v-if="!isHendiman && isClientJob(job)"
             class="job__menu"
@@ -384,8 +421,12 @@
               @click.stop="toggleJobMenu(job.id || job._id)"
               aria-label="תפריט עבודה"
             >
+              <span class="job__menuDots" aria-hidden="true">
+                <i></i><i></i><i></i>
+              </span>
               <span class="job__menu-text">אפשרויות</span>
             </button>
+
             <div
               v-if="openJobMenuId === (job.id || job._id)"
               class="job__menu-dropdown"
@@ -450,6 +491,7 @@
           <span v-if="job.urgent || job.isUrgent" class="chip chip--urgent"
             >דחוף</span
           >
+
           <span
             v-if="job.handymanIdSpecial && isHendiman"
             class="chip chip--special"
@@ -482,13 +524,18 @@
           </span>
         </div>
 
-        <button class="job__action" type="button" @click="$emit('view', job)">
-          צפייה
-        </button>
+        <div class="job__footer">
+          <button class="job__action" type="button" @click="$emit('view', job)">
+            <span class="job__actionIc" aria-hidden="true">👁️</span>
+            צפייה
+          </button>
+        </div>
       </article>
 
       <div v-if="!filteredJobs || filteredJobs.length === 0" class="empty">
-        אין עבודות להצגה כרגע.
+        <div class="empty__ic" aria-hidden="true">🧰</div>
+        <div class="empty__title">אין עבודות להצגה כרגע</div>
+        <div class="empty__sub">נסה לרענן או לשנות סינון.</div>
       </div>
     </div>
 
@@ -507,7 +554,7 @@
       </button>
 
       <div class="pager__mid">
-        <div class="dots">
+        <div class="dots" aria-hidden="true">
           <span
             v-for="n in Math.max(
               1,
@@ -554,7 +601,7 @@ export default {
     },
     handymanCoords: { type: Object, default: () => null },
     currentUserId: { type: String, default: null },
-    hideFiltersOnDesktop: { type: Boolean, default: false }, // Hide filters on desktop when filters are shown in aside
+    hideFiltersOnDesktop: { type: Boolean, default: false },
   },
   emits: [
     "refresh",
@@ -574,9 +621,9 @@ export default {
     return {
       isStatusDropdownOpen: false,
       isFilterDropdownOpen: false,
-      localMaxKm: null, // Local value for display while dragging
+      localMaxKm: null,
       showFilterModal: false,
-      openJobMenuId: null, // Track which job menu is open
+      openJobMenuId: null,
       localFilters: {
         status: "all",
         locationType: "residence",
@@ -589,7 +636,6 @@ export default {
   },
   computed: {
     displayMaxKm() {
-      // Show local value while dragging, otherwise show the actual value
       return this.localMaxKm !== null
         ? this.localMaxKm
         : this.handymanFilters.maxKm;
@@ -597,7 +643,6 @@ export default {
   },
   watch: {
     "handymanFilters.maxKm"(newVal) {
-      // Reset local value when actual value changes
       if (this.localMaxKm !== null && this.localMaxKm === newVal) {
         this.localMaxKm = null;
       }
@@ -612,13 +657,11 @@ export default {
   },
   methods: {
     getJobDisplayName(job) {
-      // Handle subcategoryInfo as array
       if (
         Array.isArray(job.subcategoryInfo) &&
         job.subcategoryInfo.length > 0
       ) {
         if (job.subcategoryInfo.length === 1) {
-          // Single job - show name
           return (
             job.subcategoryInfo[0].subcategory ||
             job.subcategoryInfo[0].category ||
@@ -626,11 +669,9 @@ export default {
             "ללא שם"
           );
         } else {
-          // Multiple jobs - show count
           return `${job.subcategoryInfo.length} עבודות`;
         }
       }
-      // Fallback for old format (object) or no subcategoryInfo
       return (
         job.subcategoryInfo?.name ||
         job.subcategoryInfo?.subcategory ||
@@ -645,7 +686,6 @@ export default {
       if (this.isFilterDropdownOpen && !e.target.closest(".filter-dropdown")) {
         this.isFilterDropdownOpen = false;
       }
-      // Close job menu if clicking outside
       if (
         this.openJobMenuId &&
         !e.target.closest(".job__menu") &&
@@ -765,14 +805,12 @@ export default {
       if (diffMins < 60) return `לפני ${diffMins} דקות`;
       if (diffHours < 24) return `לפני ${diffHours} שעות`;
       if (diffDays < 7) return `לפני ${diffDays} ימים`;
-      return null; // לא מציגים יותר מ-7 ימים
+      return null;
     },
     handleKmInput(value) {
-      // Update local value for display while dragging (no filtering)
       this.localMaxKm = Number(value);
     },
     handleKmChange(value) {
-      // Reset local value and emit the change (actual filtering happens here)
       this.localMaxKm = null;
       this.$emit("change-km", value);
     },
@@ -801,7 +839,6 @@ export default {
       this.localFilters.maxPrice = null;
     },
     applyFilters() {
-      // Emit all filter changes
       this.$emit("pick-status", this.localFilters.status);
       this.$emit("change-location-type", this.localFilters.locationType);
       this.$emit("change-km", this.localFilters.maxKm);
@@ -827,99 +864,312 @@ $orange: #ff6a00;
 $orange2: #ff8a2b;
 $orange3: #ffb36b;
 $danger: #ff3b3b;
-$shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
-$shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
+
+$shadow: 0 22px 70px rgba(0, 0, 0, 0.62);
+$shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 
 .jobs {
-  border-radius: 16px;
-  border: 1px solid $stroke;
-  background: linear-gradient(180deg, $card2, rgba(255, 255, 255, 0.04));
+  position: relative;
+  border-radius: 18px;
+  border: 1px solid rgba($orange, 0.18);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.08),
+    rgba(255, 255, 255, 0.04)
+  );
   box-shadow: $shadow;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  isolation: isolate;
+
+  &:before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+        900px 260px at 15% -10%,
+        rgba($orange, 0.18),
+        transparent 58%
+      ),
+      radial-gradient(
+        700px 260px at 110% 20%,
+        rgba($orange2, 0.12),
+        transparent 60%
+      ),
+      radial-gradient(
+        900px 320px at 50% 120%,
+        rgba(255, 255, 255, 0.06),
+        transparent 60%
+      );
+    pointer-events: none;
+    z-index: 0;
+  }
 
   @media (max-width: 768px) {
-    border-radius: 12px;
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55);
+    border-radius: 14px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.62);
+  }
+}
+
+.jobs__amb {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.orb {
+  position: absolute;
+  width: 460px;
+  height: 460px;
+  border-radius: 50%;
+  filter: blur(18px);
+  opacity: 0.9;
+  mix-blend-mode: screen;
+  background: radial-gradient(
+    circle at 35% 30%,
+    rgba($orange, 0.5),
+    transparent 60%
+  );
+  animation: floaty 10s ease-in-out infinite;
+
+  &--1 {
+    top: -220px;
+    right: -170px;
+    background: radial-gradient(
+      circle at 35% 30%,
+      rgba($orange, 0.42),
+      transparent 62%
+    );
+    animation-delay: 0s;
+  }
+  &--2 {
+    bottom: -230px;
+    left: -200px;
+    background: radial-gradient(
+      circle at 40% 35%,
+      rgba($orange2, 0.35),
+      transparent 62%
+    );
+    animation-delay: 1.7s;
+  }
+  &--3 {
+    top: 35%;
+    left: 55%;
+    width: 520px;
+    height: 520px;
+    opacity: 0.5;
+    background: radial-gradient(
+      circle at 35% 30%,
+      rgba(255, 255, 255, 0.16),
+      transparent 62%
+    );
+    animation-delay: 3.2s;
+  }
+}
+
+.gridGlow {
+  position: absolute;
+  inset: 0;
+  opacity: 0.25;
+  background-image: linear-gradient(
+      rgba(255, 255, 255, 0.06) 1px,
+      transparent 1px
+    ),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse at 50% 20%, #000 35%, transparent 70%);
+}
+
+@keyframes floaty {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, 14px, 0) scale(1.03);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
 /* Header */
 .jobs__head {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 12px;
+  padding: 14px 14px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: radial-gradient(
       900px 240px at 20% 0%,
-      rgba($orange, 0.14),
+      rgba($orange, 0.18),
       transparent 55%
     ),
     linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.06),
+      rgba(255, 255, 255, 0.08),
       rgba(255, 255, 255, 0.03)
     );
   direction: rtl;
   text-align: right;
 
   @media (max-width: 768px) {
-    padding: 10px;
+    padding: 12px;
   }
 }
 
 .jobs__headText {
   min-width: 0;
 }
+.jobs__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 1100;
+  letter-spacing: 0.18em;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 4px;
+
+  &:before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    background: linear-gradient(135deg, $orange, $orange2);
+    box-shadow: 0 10px 26px rgba($orange, 0.35);
+  }
+}
 .jobs__title {
   margin: 0;
-  font-size: 18px;
-  font-weight: 1000;
+  font-size: 19px;
+  font-weight: 1100;
 
   @media (max-width: 768px) {
-    font-size: 15px;
+    font-size: 15.5px;
   }
 }
 .jobs__sub {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   color: $muted;
-  font-weight: 800;
+  font-weight: 900;
   font-size: 12px;
   line-height: 1.25;
 
   @media (max-width: 768px) {
-    font-size: 9.5px;
+    font-size: 10px;
   }
 }
 
 /* Button */
 .btn {
-  border-radius: 12px;
+  cursor: pointer;
+  position: relative;
+  border-radius: 14px;
   padding: 10px 12px;
-  border: 1px solid rgba($orange, 0.18);
+  border: 1px solid rgba($orange, 0.22);
   background: rgba(255, 255, 255, 0.06);
   color: $text;
-  cursor: pointer;
-  font-weight: 1000;
+  font-weight: 1100;
   font-size: 13px;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex: 0 0 auto;
+  overflow: hidden;
+  z-index: 1;
+  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 50px;
+    height: 50px;
+    border-radius: inherit;
+    scale: 0;
+    z-index: -1;
+    background: rgba($orange, 0.2);
+    transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35),
+      0 0 0 1px rgba($orange, 0.15) inset;
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba($orange, 0.35);
+  }
+
+  &:hover::before {
+    scale: 3;
+  }
+
+  &:active {
+    transform: translateY(0px) scale(0.98);
+  }
+
+  .btn__ic {
+    position: relative;
+    z-index: 1;
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: transform 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+      background 0.3s ease;
+  }
+
+  &:hover .btn__ic {
+    transform: rotate(180deg) scale(1.1);
+    background: rgba(255, 255, 255, 0.15);
+  }
 
   &--primary {
-    color: #111;
-    border: none;
-    background: linear-gradient(135deg, $orange, $orange2);
-    box-shadow: $shadowO;
+    color: $orange2;
+    border: 2px solid $orange2;
+    background: transparent;
+    box-shadow: 0 8px 24px rgba($orange, 0.15);
+
+    &::before {
+      background: linear-gradient(135deg, $orange, $orange2);
+    }
+
+    &:hover {
+      color: #0b0b0f;
+      scale: 1.05;
+      box-shadow: 0 12px 32px rgba($orange, 0.4),
+        0 0 0 1px rgba($orange, 0.2) inset;
+      border-color: $orange;
+      background: transparent;
+    }
+
+    .btn__ic {
+      background: rgba($orange, 0.15);
+      border-color: rgba($orange, 0.3);
+      color: $orange2;
+    }
+
+    &:hover .btn__ic {
+      background: rgba(255, 255, 255, 0.25);
+      border-color: rgba(255, 255, 255, 0.3);
+      color: #0b0b0f;
+    }
   }
 
   .btn__txt {
-    @media (max-width: 400px) {
+    position: relative;
+    z-index: 1;
+    @media (max-width: 420px) {
       display: none;
     }
   }
@@ -927,15 +1177,24 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   @media (max-width: 768px) {
     padding: 9px 10px;
     font-size: 12px;
-    border-radius: 10px;
+    border-radius: 12px;
+
+    .btn__ic {
+      width: 28px;
+      height: 28px;
+      border-radius: 9px;
+    }
   }
 }
 
 /* Filters */
 .filters {
-  padding: 10px 12px 0;
+  position: relative;
+  z-index: 1;
+  padding: 10px 14px 0;
+
   @media (max-width: 768px) {
-    padding: 8px 10px 0;
+    padding: 8px 12px 0;
   }
 
   &--hidden-desktop {
@@ -951,233 +1210,85 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   gap: 10px;
 
   @media (min-width: 769px) {
-    grid-template-columns: 1fr; /* On desktop, all filters in single column */
+    grid-template-columns: 1fr;
     gap: 12px;
   }
-
   @media (max-width: 768px) {
     grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
   @media (max-width: 400px) {
     grid-template-columns: 1fr;
-    gap: 6px;
+    gap: 8px;
   }
 }
 
 .panel {
-  border-radius: 14px;
+  border-radius: 16px;
   border: 1px solid rgba($orange, 0.18);
   background: rgba(0, 0, 0, 0.22);
   padding: 10px;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(10px);
 
   @media (max-width: 768px) {
-    padding: 8px;
-    border-radius: 12px;
-  }
-  @media (max-width: 400px) {
-    padding: 6px;
-    border-radius: 10px;
+    padding: 9px;
+    border-radius: 14px;
   }
 }
 
 .panel__label {
   font-size: 12px;
-  font-weight: 1000;
+  font-weight: 1100;
   color: rgba(255, 255, 255, 0.78);
   margin-bottom: 8px;
-
-  @media (max-width: 768px) {
-    font-size: 10px;
-    margin-bottom: 6px;
-  }
-  @media (max-width: 400px) {
-    font-size: 9px;
-    margin-bottom: 4px;
-  }
-}
-
-.panel__top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
+
+  @media (max-width: 768px) {
+    font-size: 10px;
+    margin-bottom: 7px;
+  }
 }
 
 .link {
   border: none;
   background: transparent;
   color: $orange3;
-  font-weight: 1000;
+  font-weight: 1100;
   cursor: pointer;
+  border-radius: 10px;
+  transition: background 0.15s ease, transform 0.15s ease;
 
   &--small {
     font-size: 10px;
-    padding: 4px 8px;
-  }
-}
-
-/* Desktop tabs */
-.tabs {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-
-  @media (max-width: 768px) {
-    display: none;
-  }
-}
-.tab {
-  border-radius: 999px;
-  border: 1px solid rgba($orange, 0.18);
-  background: rgba(0, 0, 0, 0.25);
-  padding: 10px 16px;
-  cursor: pointer;
-  display: inline-flex;
-  gap: 10px;
-  align-items: center;
-  font-weight: 1000;
-
-  &--active {
-    background: linear-gradient(135deg, $orange, $orange2);
-    border-color: rgba($orange, 0.55);
-    color: #111;
+    padding: 6px 10px;
+    border: 1px solid rgba($orange, 0.22);
+    background: rgba($orange, 0.08);
   }
 
-  &__txt {
-    font-size: 12px;
-    color: $text;
-  }
-  &__count {
-    font-size: 12px;
-    padding: 4px 10px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    background: rgba(0, 0, 0, 0.25);
-    color: $text;
-  }
-}
-
-/* Mobile select - Hidden on mobile as requested */
-.selectWrap {
-  position: relative;
-  display: none;
-}
-.select {
-  width: 100%;
-  border-radius: 10px;
-  border: 1px solid rgba($orange, 0.25);
-  background: rgba($orange, 0.12);
-  color: $text;
-  font-weight: 1000;
-  font-size: 11px;
-  padding: 10px 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  cursor: pointer;
-
-  @media (max-width: 768px) {
-    padding: 9px 9px;
-    border-radius: 10px;
-  }
-}
-.select__value {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  left: 0;
-  z-index: 50;
-  background: rgba(15, 16, 22, 0.98);
-  border: 1px solid rgba($orange, 0.25);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-  overflow: hidden;
-  max-height: 260px;
-  overflow-y: auto;
-}
-.menu__item {
-  width: 100%;
-  padding: 12px 12px;
-  border: none;
-  background: transparent;
-  color: $text;
-  font-weight: 1000;
-  font-size: 12px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  text-align: right;
-
-  &:last-child {
-    border-bottom: none;
-  }
   &:hover {
-    background: rgba($orange, 0.1);
+    background: rgba($orange, 0.14);
   }
-  &--active {
-    background: rgba($orange, 0.2);
-    color: $orange3;
+  &:active {
+    transform: scale(0.98);
   }
-}
-.menu__label {
-  min-width: 0;
-}
-.menu__count {
-  padding: 4px 8px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(0, 0, 0, 0.25);
-  font-size: 10px;
 }
 
-/* Distance bits */
-.badgeRow {
-  margin: 2px 0 8px;
-}
-.badge {
-  border-radius: 999px;
-  padding: 6px 10px;
-  border: 1px solid rgba($orange, 0.18);
-  background: rgba($orange, 0.12);
-  font-weight: 900;
-  font-size: 12px;
-
-  b {
-    font-weight: 1100;
-    color: $orange3;
-  }
-
-  @media (max-width: 768px) {
-    padding: 4px 8px;
-    font-size: 10px;
-  }
-}
-.range {
-  width: 100%;
-  accent-color: $orange;
-}
 /* Radio Group */
 .radio-group {
   display: flex;
   flex-direction: column;
   gap: 10px;
   margin-top: 10px;
+}
 
-  @media (max-width: 400px) {
-    gap: 8px;
-    margin-top: 6px;
-  }
+.radio-group--horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .radio-item {
@@ -1186,19 +1297,19 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   gap: 10px;
   cursor: pointer;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.03);
-  transition: all 0.2s ease;
-
-  @media (max-width: 400px) {
-    padding: 8px 10px;
-    gap: 8px;
-  }
+  transition: transform 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease;
 
   &:hover {
     background: rgba(255, 255, 255, 0.06);
-    border-color: rgba($orange, 0.2);
+    border-color: rgba($orange, 0.25);
+    transform: translateY(-1px);
+  }
+  &:active {
+    transform: translateY(0px) scale(0.99);
   }
 
   input[type="radio"] {
@@ -1215,219 +1326,218 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     font-weight: 1100;
   }
 }
-
+.radio-item--inline {
+  flex: 1;
+  min-width: 120px;
+}
 .radio-label {
-  color: rgba(255, 255, 255, 0.9);
-  font-weight: 900;
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 1000;
   font-size: 14px;
-  transition: all 0.2s ease;
   user-select: none;
 }
 
-.hint {
-  margin-top: 8px;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.62);
-  font-weight: 800;
-  line-height: 1.2;
-  @media (max-width: 768px) {
-    font-size: 9px;
-    margin-top: 6px;
-  }
+.range-display {
+  margin: 6px 0 10px;
+  text-align: center;
 }
-
-/* Filter Dropdown */
-.panel--filter {
-  position: relative;
-}
-
-.filter-dropdown {
-  position: relative;
-}
-
-.filter-dropdown__button {
-  width: 100%;
-  border-radius: 10px;
-  border: 1px solid rgba($orange, 0.25);
-  background: rgba($orange, 0.12);
-  color: $text;
-  font-weight: 1000;
-  font-size: 11px;
-  padding: 10px 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: rgba($orange, 0.18);
-    border-color: rgba($orange, 0.35);
-  }
-
-  @media (max-width: 768px) {
-    padding: 9px 9px;
-    font-size: 10px;
-  }
-  @media (max-width: 400px) {
-    padding: 8px 8px;
-    font-size: 9px;
-  }
-}
-
-.filter-dropdown__value {
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: right;
-  direction: rtl;
-}
-
-.filter-dropdown__chev {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.7);
-  transition: transform 0.2s ease;
-  flex-shrink: 0;
-}
-
-.filter-dropdown__menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  left: 0;
-  z-index: 100;
-  background: rgba(15, 16, 22, 0.98);
-  border: 1px solid rgba($orange, 0.25);
+.range-value {
+  font-size: 13px;
+  font-weight: 1100;
+  color: $orange2;
+  padding: 8px 14px;
+  background: rgba($orange, 0.14);
+  border: 1px solid rgba($orange, 0.24);
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-  overflow-y: auto;
-  max-height: 500px;
-  padding: 12px;
+  display: inline-block;
+}
 
-  @media (max-width: 400px) {
-    padding: 10px;
-    max-height: 400px;
+.range-input {
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, $orange, $orange2);
+    cursor: pointer;
+    border: 2px solid $bg;
+    box-shadow: 0 8px 18px rgba($orange, 0.35);
+  }
+  &::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, $orange, $orange2);
+    cursor: pointer;
+    border: 2px solid $bg;
+    box-shadow: 0 8px 18px rgba($orange, 0.35);
   }
 }
 
-.filter-menu__section {
-  margin-bottom: 16px;
+.price-range {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.price-range--horizontal {
+  flex-direction: row;
+  gap: 16px;
 
-  &:last-child {
-    margin-bottom: 0;
-  }
-
-  @media (max-width: 400px) {
-    margin-bottom: 12px;
+  .price-input-group {
+    flex: 1;
   }
 }
 
-.filter-menu__title {
-  font-size: 12px;
-  font-weight: 1000;
-  color: rgba(255, 255, 255, 0.85);
-  margin-bottom: 10px;
+.price-input-group {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
+}
+.price-label {
+  font-size: 13px;
+  font-weight: 1000;
+  color: $text;
+  min-width: 72px;
+}
+.price-input {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba($orange, 0.26);
+  background: rgba(255, 255, 255, 0.06);
+  color: $text;
+  font-size: 14px;
+  font-weight: 900;
+  font-family: inherit;
+  transition: box-shadow 0.18s ease, border-color 0.18s ease,
+    background 0.18s ease;
 
-  @media (max-width: 400px) {
-    font-size: 11px;
-    margin-bottom: 8px;
+  &:focus {
+    outline: none;
+    border-color: rgba($orange, 0.7);
+    box-shadow: 0 0 0 4px rgba($orange, 0.18);
+    background: rgba(255, 255, 255, 0.08);
+  }
+  &::placeholder {
+    color: $muted;
   }
 }
 
-/* List */
+/* Jobs list */
 .jobs__list {
-  padding: 12px;
+  position: relative;
+  z-index: 1;
+  padding: 14px;
   display: grid;
   grid-template-columns: 1fr;
-  gap: 10px;
+  gap: 12px;
   overflow-y: auto;
   min-height: 0;
 
   @media (max-width: 768px) {
+    padding: 12px;
+    gap: 10px;
+  }
+}
+
+/* Job card */
+.job {
+  border-radius: 16px;
+  border: 1px solid rgba($orange, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  transition: transform 0.22s ease, border-color 0.22s ease,
+    background 0.22s ease, box-shadow 0.22s ease;
+  position: relative;
+  overflow: hidden;
+
+  &:hover {
+    transform: translateY(-2px);
+    border-color: rgba($orange, 0.28);
+    background: rgba(255, 255, 255, 0.075);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  }
+
+  &--urgent {
+    border-bottom: 3px solid rgba($danger, 0.75);
+    animation: urgentBorderPulse 2s ease-in-out infinite;
+  }
+  &--special {
+    border-bottom: 3px solid rgba(255, 215, 0, 0.7);
+    animation: specialBorderPulse 2s ease-in-out infinite;
+  }
+  &--urgent.job--special {
+    border-bottom: 3px solid rgba(255, 140, 0, 0.8);
+    animation: urgentSpecialBorderPulse 2s ease-in-out infinite;
+  }
+
+  @media (max-width: 768px) {
     padding: 10px;
+    border-radius: 16px;
     gap: 8px;
   }
 }
 
-.job {
-  border-radius: 14px;
-  border: 1px solid rgba($orange, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  padding: 10px;
-  display: grid;
-  gap: 8px;
-  transition: all 0.3s ease;
+.job__sheen {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  background: radial-gradient(
+      700px 200px at 20% 0%,
+      rgba($orange, 0.12),
+      transparent 60%
+    ),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 45%);
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.job__header,
+.job__meta,
+.chips,
+.job__footer {
   position: relative;
-  overflow: hidden;
-
-  @media (max-width: 768px) {
-    padding: 10px; /* חשוב: לא להקטין מדי – נותן אוויר */
-    border-radius: 14px;
-    gap: 8px;
-  }
-
-  // עבודה דחופה - border-bottom עדין עם אנימציה
-  &--urgent {
-    border-bottom: 3px solid rgba($danger, 0.6);
-    animation: urgentBorderPulse 2s ease-in-out infinite;
-  }
-
-  // עבודה ספיישל - border-bottom עדין עם אנימציה
-  &--special {
-    border-bottom: 3px solid rgba(255, 215, 0, 0.6);
-    animation: specialBorderPulse 2s ease-in-out infinite;
-  }
-
-  // אם גם דחוף וגם ספיישל
-  &--urgent.job--special {
-    border-bottom: 3px solid rgba(255, 140, 0, 0.7);
-    animation: urgentSpecialBorderPulse 2s ease-in-out infinite;
-  }
+  z-index: 1;
 }
 
 @keyframes urgentBorderPulse {
   0%,
   100% {
-    border-bottom-color: rgba($danger, 0.6);
+    border-bottom-color: rgba($danger, 0.65);
   }
   50% {
-    border-bottom-color: rgba($danger, 0.9);
+    border-bottom-color: rgba($danger, 0.95);
   }
 }
-
 @keyframes specialBorderPulse {
   0%,
   100% {
     border-bottom-color: rgba(255, 215, 0, 0.6);
   }
   50% {
-    border-bottom-color: rgba(255, 215, 0, 0.9);
+    border-bottom-color: rgba(255, 215, 0, 0.95);
   }
 }
-
 @keyframes urgentSpecialBorderPulse {
   0%,
   100% {
-    border-bottom-color: rgba(255, 140, 0, 0.7);
+    border-bottom-color: rgba(255, 140, 0, 0.75);
   }
   50% {
     border-bottom-color: rgba(255, 140, 0, 1);
-  }
-}
-
-@keyframes chipPulse {
-  0%,
-  100% {
-    box-shadow: 0 0 5px rgba($danger, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 15px rgba($danger, 0.6);
   }
 }
 
@@ -1437,12 +1547,11 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
-  position: relative;
 }
 
 .job__title {
   font-weight: 1100;
-  font-size: 15px;
+  font-size: 15.5px;
   color: $text;
   min-width: 0;
   white-space: nowrap;
@@ -1450,11 +1559,18 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   text-overflow: ellipsis;
 
   @media (max-width: 768px) {
-    font-size: 14px;
+    font-size: 14.5px;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.25;
   }
 }
 
-/* Job Menu (3 dots) */
+/* Job menu */
 .job__menu {
   position: relative;
   flex-shrink: 0;
@@ -1462,38 +1578,49 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 
 .job__menu-btn {
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   cursor: pointer;
-  padding: 8px 14px;
-  display: flex;
+  padding: 8px 12px;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-  color: rgba(255, 255, 255, 0.8);
-  min-height: 36px;
+  gap: 10px;
+  border-radius: 12px;
+  transition: transform 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease;
+  color: rgba(255, 255, 255, 0.85);
+  min-height: 38px;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 1);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba($orange, 0.22);
+    transform: translateY(-1px);
   }
-
   &:active {
-    transform: scale(0.95);
-    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(0px) scale(0.98);
   }
 
   @media (max-width: 768px) {
-    padding: 6px 12px;
-    min-height: 32px;
+    padding: 7px 10px;
+    min-height: 34px;
+  }
+}
+
+.job__menuDots {
+  display: inline-flex;
+  gap: 4px;
+  i {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.75);
+    display: inline-block;
   }
 }
 
 .job__menu-text {
   font-size: 13px;
   line-height: 1;
-  font-weight: 800;
+  font-weight: 1000;
   user-select: none;
   pointer-events: none;
   white-space: nowrap;
@@ -1505,19 +1632,19 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 
 .job__menu-dropdown {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 10px);
   left: 0;
   z-index: 100;
   background: rgba(15, 16, 22, 0.98);
   border: 1px solid rgba($orange, 0.25);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.65);
   overflow: hidden;
-  min-width: 160px;
-  backdrop-filter: blur(10px);
+  min-width: 170px;
+  backdrop-filter: blur(12px);
 
   @media (max-width: 768px) {
-    min-width: 140px;
+    min-width: 150px;
     left: auto;
     right: 0;
   }
@@ -1529,20 +1656,19 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   border: none;
   background: transparent;
   color: $text;
-  font-weight: 900;
+  font-weight: 1000;
   font-size: 13px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 10px;
   text-align: right;
-  transition: all 0.2s ease;
+  transition: background 0.18s ease, color 0.18s ease;
 
   &:hover {
-    background: rgba($orange, 0.15);
+    background: rgba($orange, 0.16);
     color: $orange3;
   }
-
   &:active {
     background: rgba($orange, 0.25);
   }
@@ -1552,40 +1678,15 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     font-size: 12px;
   }
 }
-
 .job__menu-icon {
   font-size: 16px;
   flex-shrink: 0;
-
-  @media (max-width: 768px) {
-    font-size: 14px;
-  }
 }
 
-.job__action {
-  border: none;
-  border-radius: 12px;
-  padding: 8px 10px;
-  font-weight: 1100;
-  cursor: pointer;
-  background: linear-gradient(135deg, $orange, $orange2);
-  color: #111;
-  width: auto;
-  align-self: flex-end;
-  min-width: 80px;
-
-  @media (max-width: 768px) {
-    padding: 5px 8px;
-    border-radius: 8px;
-    font-size: 10px;
-    min-width: 60px;
-  }
-}
-
-/* Meta as two lines */
+/* Meta */
 .job__meta {
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 .metaLine {
   display: flex;
@@ -1598,26 +1699,32 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   line-height: 1.2;
 
   @media (max-width: 768px) {
-    font-size: 11px;
+    font-size: 10.5px;
+    gap: 4px;
   }
 }
 .metaLine--secondary {
-  opacity: 0.95;
+  opacity: 0.96;
 }
 .metaSep {
-  opacity: 0.6;
+  opacity: 0.55;
 }
 .price {
   font-weight: 1100;
   color: $orange3;
-}
+  white-space: nowrap;
 
+  @media (max-width: 768px) {
+    margin-inline-start: auto;
+    font-size: 11px;
+  }
+}
 .metaItem--time {
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.88);
   font-weight: 900;
 }
 
-/* Chips: horizontal scroll on mobile, limit clutter */
+/* Chips */
 .chips {
   display: flex;
   gap: 6px;
@@ -1634,27 +1741,24 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     }
   }
 }
-
-/* במובייל מסתירים צ׳יפים מעבר ל-3 כדי שלא יהיה “גוש” */
-@media (max-width: 768px) {
-  .chips .chip:nth-child(n + 4) {
-    display: none;
-  }
-}
-
 .chip {
   border-radius: 999px;
-  padding: 4px 10px;
-  font-weight: 1000;
+  padding: 5px 11px;
+  font-weight: 1100;
   font-size: 11px;
   border: 1px solid rgba($orange, 0.18);
   background: rgba($orange, 0.12);
   color: $text;
   line-height: 1;
+  transition: transform 0.18s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+  }
 
   @media (max-width: 768px) {
-    font-size: 11px;
-    padding: 4px 10px;
+    font-size: 10px;
+    padding: 4px 9px;
   }
 
   &--urgent {
@@ -1663,31 +1767,27 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     color: #ffd4d4;
     animation: chipPulse 2s ease-in-out infinite;
   }
-
   &--special {
-    border-color: rgba(255, 215, 0, 0.5);
+    border-color: rgba(255, 215, 0, 0.55);
     background: linear-gradient(
       135deg,
       rgba(255, 215, 0, 0.2),
-      rgba(138, 43, 226, 0.2)
+      rgba(138, 43, 226, 0.18)
     );
     color: #ffd700;
     font-weight: 1100;
-    box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.25);
   }
-
   &--status {
     border-color: rgba(255, 255, 255, 0.14);
     background: rgba(255, 255, 255, 0.06);
-    color: rgba(255, 255, 255, 0.86);
+    color: rgba(255, 255, 255, 0.88);
   }
-
   &--done {
-    border-color: rgba(16, 185, 129, 0.4);
-    background: rgba(16, 185, 129, 0.2);
+    border-color: rgba(16, 185, 129, 0.45);
+    background: rgba(16, 185, 129, 0.18);
     color: #10b981;
   }
-
   &--hourly {
     border-color: rgba($orange2, 0.28);
     background: rgba($orange2, 0.14);
@@ -1702,18 +1802,133 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   }
 }
 
+@keyframes chipPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 6px rgba($danger, 0.28);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba($danger, 0.55);
+  }
+}
+
+/* Mobile: keep it clean */
+@media (max-width: 768px) {
+  .chips .chip:nth-child(n + 4) {
+    display: none;
+  }
+  .chips .chip:nth-child(n + 3) {
+    display: none;
+  } /* client – like you had */
+}
+
+/* Footer / Action */
+.job__footer {
+  display: flex;
+  justify-content: flex-start;
+}
+.job__action {
+  cursor: pointer;
+  position: relative;
+  padding: 10px 24px;
+  font-size: 15px;
+  font-weight: 1100;
+  color: $orange2;
+  border: 2px solid $orange2;
+  border-radius: 34px;
+  background-color: transparent;
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 110px;
+  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+  overflow: hidden;
+  z-index: 1;
+  font-family: inherit;
+  box-shadow: 0 8px 24px rgba($orange, 0.15);
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 50px;
+    height: 50px;
+    border-radius: inherit;
+    scale: 0;
+    z-index: -1;
+    background: linear-gradient(135deg, $orange, $orange2);
+    transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  &:hover {
+    color: #0b0b0f;
+    scale: 1.05;
+    box-shadow: 0 12px 32px rgba($orange, 0.4),
+      0 0 0 1px rgba($orange, 0.2) inset;
+    border-color: $orange;
+  }
+
+  &:hover::before {
+    scale: 3;
+  }
+
+  &:active {
+    scale: 1;
+    box-shadow: 0 8px 20px rgba($orange, 0.3);
+  }
+
+  @media (max-width: 768px) {
+    padding: 8px 18px;
+    font-size: 13px;
+    min-width: 164px;
+    border-radius: 28px;
+  }
+}
+.job__actionIc {
+  position: relative;
+  z-index: 1;
+  transition: transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.job__action:hover .job__actionIc {
+  transform: scale(1.1) rotate(5deg);
+}
+
+/* Empty */
 .empty {
-  padding: 14px 10px;
-  border-radius: 14px;
+  padding: 18px 14px;
+  border-radius: 16px;
   border: 1px dashed rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(255, 255, 255, 0.82);
   text-align: center;
-  font-weight: 900;
+  font-weight: 1000;
+  background: rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(10px);
+
+  .empty__ic {
+    font-size: 26px;
+    margin-bottom: 6px;
+  }
+  .empty__title {
+    font-size: 14px;
+  }
+  .empty__sub {
+    margin-top: 6px;
+    font-size: 12px;
+    color: $muted;
+    font-weight: 900;
+  }
 }
 
 /* Pager */
 .pager {
-  padding: 12px;
+  position: relative;
+  z-index: 1;
+  padding: 12px 14px;
   display: grid;
   grid-template-columns: auto 1fr auto;
   gap: 10px;
@@ -1722,11 +1937,10 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   background: rgba(255, 255, 255, 0.03);
 
   @media (max-width: 768px) {
-    padding: 10px;
+    padding: 10px 12px;
     gap: 8px;
   }
 }
-
 .pager__mid {
   display: grid;
   gap: 6px;
@@ -1748,7 +1962,7 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 }
 .pager__txt {
   color: #cbd5e1;
-  font-weight: 800;
+  font-weight: 900;
   font-size: 12px;
   @media (max-width: 768px) {
     font-size: 11px;
@@ -1757,17 +1971,27 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 
 .pageBtn {
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 10px 12px;
-  font-weight: 900;
+  font-weight: 1000;
   font-size: 13px;
   cursor: pointer;
   background: rgba(255, 255, 255, 0.04);
   color: #fff;
+  transition: transform 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease;
 
+  &:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.07);
+  }
+  &:active {
+    transform: translateY(0px) scale(0.98);
+  }
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+    transform: none;
   }
 
   @media (max-width: 768px) {
@@ -1783,91 +2007,48 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 .pageBtn--ghost {
   background: rgba(0, 0, 0, 0.22);
 }
-@media (max-width: 768px) {
-  /* 1. כותרת עבודה – מקסימום 2 שורות */
-  .job__title {
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    line-height: 1.25;
-  }
-
-  /* 2. צ׳יפים – יותר קומפקטיים */
-  .chips {
-    gap: 4px;
-    margin-top: 2px;
-  }
-
-  .chip {
-    padding: 3px 8px;
-    font-size: 10px;
-    border-radius: 999px;
-  }
-
-  /* לקוח: רק 2 צ׳יפים ראשונים (דחוף + סטטוס) */
-  .chips .chip:nth-child(n + 3) {
-    display: none;
-  }
-
-  /* 3. מטא – שורות יותר צפויות אבל קריאות */
-  .metaLine {
-    font-size: 10px;
-    gap: 4px;
-  }
-
-  /* 4. מחיר – מיושר וברור */
-  .price {
-    margin-inline-start: auto;
-    font-weight: 1100;
-    font-size: 11px;
-    white-space: nowrap;
-  }
-
-  /* 5. כרטיס עבודה – פחות “גובה מיותר” */
-  .job {
-    gap: 6px;
-    padding: 8px;
-  }
-
-  /* 6. כפתור צפייה – פחות דומיננטי */
-  .job__action {
-    padding: 7px 10px;
-    font-size: 11px;
-    border-radius: 10px;
-  }
-}
 
 /* Filter Button - Mobile Only */
 .panel--filter-mobile {
   display: none;
-
   @media (max-width: 768px) {
     display: block;
   }
 }
-
 .filter-btn {
   width: 100%;
   padding: 10px 16px;
-  border-radius: 12px;
-  border: 1px solid rgba($orange, 0.3);
-  background: rgba($orange, 0.15);
+  border-radius: 14px;
+  border: 1px solid rgba($orange, 0.32);
+  background: rgba($orange, 0.14);
   color: $orange2;
-  font-weight: 1000;
+  font-weight: 1100;
   font-size: 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
+
+  .filter-btn__hint {
+    font-size: 11px;
+    font-weight: 1100;
+    color: rgba(255, 255, 255, 0.75);
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(0, 0, 0, 0.22);
+  }
 
   &:hover {
-    background: rgba($orange, 0.25);
-    border-color: rgba($orange, 0.5);
+    transform: translateY(-1px);
+    background: rgba($orange, 0.22);
+    border-color: rgba($orange, 0.52);
+  }
+  &:active {
+    transform: translateY(0px) scale(0.99);
   }
 
   @media (max-width: 400px) {
@@ -1879,29 +2060,8 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 /* Desktop Filters - Hidden on mobile */
 .panel--filter-desktop {
   display: none;
-
   @media (min-width: 769px) {
     display: block;
-  }
-}
-
-.radio-group--horizontal {
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.radio-item--inline {
-  flex: 1;
-  min-width: 120px;
-}
-
-.price-range--horizontal {
-  flex-direction: row;
-  gap: 16px;
-
-  .price-input-group {
-    flex: 1;
   }
 }
 
@@ -1912,12 +2072,12 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.78);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10000;
-  padding: 20px;
+  padding: 18px;
   direction: rtl;
 
   @media (min-width: 769px) {
@@ -1927,295 +2087,174 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 
 .filter-modal {
   background: $bg;
-  border-radius: 16px;
-  border: 1px solid rgba($orange, 0.2);
+  border-radius: 18px;
+  border: 1px solid rgba($orange, 0.22);
   max-width: 450px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 26px 90px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
+  position: relative;
+  overflow: hidden;
+
+  &:before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+        600px 240px at 20% 0%,
+        rgba($orange, 0.18),
+        transparent 55%
+      ),
+      radial-gradient(
+        520px 220px at 110% 30%,
+        rgba($orange2, 0.12),
+        transparent 58%
+      );
+    pointer-events: none;
+    z-index: 0;
+  }
 
   @media (max-width: 450px) {
-    max-width: 400px;
-    border-radius: 14px;
+    border-radius: 16px;
   }
 }
 
 .filter-modal__header {
+  position: relative;
+  z-index: 1;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid rgba($orange, 0.2);
-
-  @media (max-width: 450px) {
-    padding: 16px;
-  }
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid rgba($orange, 0.18);
 }
-
+.filter-modal__titleWrap {
+  display: grid;
+  gap: 4px;
+}
+.filter-modal__badge {
+  width: fit-content;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.22);
+  color: rgba(255, 255, 255, 0.72);
+  font-weight: 1100;
+  font-size: 11px;
+}
 .filter-modal__title {
-  font-size: 20px;
-  font-weight: 1000;
+  font-size: 19px;
+  font-weight: 1100;
   color: $orange2;
   margin: 0;
-
-  @media (max-width: 450px) {
-    font-size: 18px;
-  }
 }
 
 .filter-modal__close {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: none;
-  background: rgba(255, 255, 255, 0.1);
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
   color: $text;
   font-size: 24px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: transform 0.18s ease, background 0.18s ease;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.14);
+    transform: rotate(2deg);
+  }
+  &:active {
+    transform: scale(0.98);
   }
 }
 
 .filter-modal__body {
-  padding: 20px;
+  position: relative;
+  z-index: 1;
+  padding: 18px;
   flex: 1;
   overflow-y: auto;
-
-  @media (max-width: 450px) {
-    padding: 16px;
-  }
 }
 
 .filter-section {
-  margin-bottom: 24px;
-
-  &:last-child {
-    margin-bottom: 0;
-  }
+  margin-bottom: 22px;
 }
-
 .filter-section__title {
-  font-size: 14px;
-  font-weight: 1000;
+  font-size: 13px;
+  font-weight: 1100;
   color: $text;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-
-  @media (max-width: 450px) {
-    font-size: 13px;
-    margin-bottom: 10px;
-  }
-}
-
-.radio-group {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.radio-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  padding: 10px;
-  border-radius: 10px;
-  border: 1px solid rgba($orange, 0.2);
-  background: rgba(255, 255, 255, 0.04);
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba($orange, 0.3);
-  }
-
-  input[type="radio"] {
-    width: 18px;
-    height: 18px;
-    cursor: pointer;
-    accent-color: $orange;
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-  }
-
-  input[type="radio"]:checked + .radio-label {
-    color: $orange2;
-    font-weight: 1000;
-  }
-}
-
-.radio-label {
-  font-size: 14px;
-  font-weight: 900;
-  color: $text;
-  flex: 1;
-
-  @media (max-width: 450px) {
-    font-size: 13px;
-  }
-}
-
-.range-display {
-  margin-bottom: 12px;
-  text-align: center;
-}
-
-.range-value {
-  font-size: 16px;
-  font-weight: 1000;
-  color: $orange2;
-  padding: 8px 16px;
-  background: rgba($orange, 0.15);
-  border-radius: 8px;
-  display: inline-block;
-}
-
-.range-input {
-  width: 100%;
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.1);
-  outline: none;
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  cursor: pointer;
-
-  &::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: $orange2;
-    cursor: pointer;
-    border: 2px solid $bg;
-    box-shadow: 0 2px 8px rgba($orange, 0.4);
-  }
-
-  &::-moz-range-thumb {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: $orange2;
-    cursor: pointer;
-    border: 2px solid $bg;
-    box-shadow: 0 2px 8px rgba($orange, 0.4);
-  }
-}
-
-.price-range {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.price-input-group {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.price-label {
-  font-size: 14px;
-  font-weight: 900;
-  color: $text;
-  min-width: 80px;
-
-  @media (max-width: 450px) {
-    font-size: 13px;
-    min-width: 70px;
-  }
-}
-
-.price-input {
-  flex: 1;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba($orange, 0.3);
-  background: rgba(255, 255, 255, 0.06);
-  color: $text;
-  font-size: 14px;
-  font-weight: 900;
-  font-family: inherit;
-
-  &:focus {
-    outline: none;
-    border-color: $orange;
-    box-shadow: 0 0 0 3px rgba($orange, 0.2);
-  }
-
-  &::placeholder {
-    color: $muted;
-  }
-
-  @media (max-width: 450px) {
-    padding: 9px 10px;
-    font-size: 13px;
-  }
 }
 
 .filter-modal__footer {
+  position: relative;
+  z-index: 1;
   display: flex;
   gap: 12px;
-  padding: 20px;
-  border-top: 1px solid rgba($orange, 0.2);
-  background: rgba(0, 0, 0, 0.3);
-
-  @media (max-width: 450px) {
-    padding: 16px;
-    gap: 10px;
-  }
+  padding: 16px 18px;
+  border-top: 1px solid rgba($orange, 0.18);
+  background: rgba(0, 0, 0, 0.28);
 }
-
 .filter-modal__btn {
   flex: 1;
-  padding: 12px 20px;
-  border-radius: 12px;
+  padding: 12px 18px;
+  border-radius: 14px;
   font-size: 14px;
-  font-weight: 1000;
+  font-weight: 1100;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
   border: none;
   font-family: inherit;
 
-  @media (max-width: 450px) {
-    padding: 11px 16px;
-    font-size: 13px;
+  &:active {
+    transform: scale(0.99);
   }
 
   &--cancel {
     background: rgba(255, 255, 255, 0.06);
     color: $text;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-
+    border: 1px solid rgba(255, 255, 255, 0.18);
     &:hover {
       background: rgba(255, 255, 255, 0.1);
     }
   }
-
   &--apply {
     background: linear-gradient(135deg, $orange, $orange2);
     color: #111;
-    box-shadow: $shadowO;
-
+    box-shadow: 0 22px 70px rgba($orange, 0.2);
     &:hover {
       transform: translateY(-1px);
-      box-shadow: 0 20px 50px rgba($orange, 0.25);
+      box-shadow: 0 26px 80px rgba($orange, 0.25);
     }
+  }
+}
+
+/* A11y: reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .orb,
+  .job--urgent,
+  .job--special,
+  .chip--urgent {
+    animation: none !important;
+  }
+  .job,
+  .btn,
+  .pageBtn,
+  .radio-item,
+  .filter-btn,
+  .job__action {
+    transition: none !important;
   }
 }
 </style>

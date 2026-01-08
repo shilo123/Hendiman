@@ -240,6 +240,18 @@ export const useMainStore = defineStore("main", {
     },
   },
   actions: {
+    async checkActiveJob(userId) {
+      try {
+        const response = await axios.get(`${URL}/check-active-job/${userId}`);
+        if (response.data && response.data.success) {
+          return response.data;
+        }
+        return { success: false, hasActiveJob: false };
+      } catch (error) {
+        console.error("Error checking active job:", error);
+        return { success: false, hasActiveJob: false };
+      }
+    },
     async fetchDashboardData(userId, coordinates = null) {
       try {
         this.isLoading = true;

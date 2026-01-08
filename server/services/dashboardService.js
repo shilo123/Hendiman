@@ -167,72 +167,53 @@ async function fetchUser(userId, collection) {
 }
 
 /**
- * Fetch and filter jobs for dashboard
+ * Fetch and filter jobs for dashboard using MongoDB aggregation (FAST!)
  */
 async function fetchJobs(user, collectionJobs) {
+  const fetchJobsStart = Date.now();
+
   if (!collectionJobs) {
     return [];
   }
 
-  // Fetch all jobs (excluding deleted/cancelled)
-  let jobs = await collectionJobs
-    .find(
-      {
-        isDeleted: { $ne: true },
-        status: { $ne: "cancelled" },
-      },
-      {
-        projection: {
-          _id: 1,
-          status: 1,
-          category: 1,
-          subcategoryInfo: 1,
-          clientId: 1,
-          clientName: 1,
-          handymanId: 1,
-          handymanName: 1,
-          handymanIdSpecial: 1,
-          coordinates: 1,
-          location: 1,
-          locationText: 1,
-          when: 1,
-          whenLabel: 1,
-          imageUrl: 1,
-          desc: 1,
-          workType: 1,
-          urgent: 1,
-          createdAt: 1,
-          updatedAt: 1,
-          ratingSubmitted: 1,
-          clientApproved: 1,
-          handymanReceivedPayment: 1,
-          paymentIntentId: 1,
-          paymentStatus: 1,
-          "handiman-Blocked": 1,
-        },
-      }
-    )
-    .toArray();
+  console.log("    📋 [FETCH-JOBS] Building aggregation pipeline...");
+  const pipelineStart = Date.now();
 
-  // Filter out "done" jobs with ratingSubmitted for clients
+  // Build aggregation pipeline to do ALL filtering in MongoDB (much faster than JS)
+  const pipeline = [];
+
+  // Stage 1: Base match - exclude deleted/cancelled
+  const baseMatch = {
+    isDeleted: { $ne: true },
+    status: { $ne: "cancelled" },
+  };
+
+  // Stage 2: Filter by user type and status
   if (!user.isHandyman) {
-    jobs = jobs.filter((job) => {
-      // Priority 1: Keep "done" jobs that need client approval
-      if (
-        job.status === "done" &&
-        (job.clientApproved === false || job.clientApproved == null)
-      ) {
-        return true;
-      }
-      // Priority 2: If job is done and rating was submitted, exclude it
-      if (job.status === "done" && job.ratingSubmitted === true) {
-        return false;
-      }
-      return true;
-    });
+    // For clients: exclude "done" jobs with ratingSubmitted, but keep "done" jobs that need approval
+    baseMatch.$or = [
+      { status: { $ne: "done" } },
+      {
+        $and: [
+          { status: "done" },
+          {
+            $or: [
+              { clientApproved: false },
+              { clientApproved: null },
+              { clientApproved: { $exists: false } },
+            ],
+          },
+        ],
+      },
+    ];
+  } else {
+    // For handymen: exclude "done" jobs
+    baseMatch.status = { $nin: ["done", "cancelled"] };
   }
 
-  // Filter jobs by handyman specialties if user is a handyman
+  pipeline.push({ $match: baseMatch });
+
+  // Stage 3: Filter by handyman specialties (if handyman)
   if (
     user.isHandyman &&
     user.specialties &&
@@ -240,122 +221,224 @@ async function fetchJobs(user, collectionJobs) {
     user.specialties.length > 0
   ) {
     const handymanSpecialties = user.specialties;
+    const specialtyNames = handymanSpecialties
+      .filter((s) => s.type === "category" || s.isFullCategory === true)
+      .map((s) => (s.name || "").trim().toLowerCase())
+      .filter((name) => name.length > 0);
 
-    const jobMatchesSpecialties = (job) => {
-      const subcategoryInfoArray = Array.isArray(job.subcategoryInfo)
-        ? job.subcategoryInfo
-        : job.subcategoryInfo
-        ? [job.subcategoryInfo]
-        : [];
-
-      if (subcategoryInfoArray.length === 0) {
-        const jobCategory = (job.category || "").trim().toLowerCase();
-        const matches = handymanSpecialties.some((s) => {
-          const specialtyName = (s.name || "").trim().toLowerCase();
-          const isFullCategory =
-            s.type === "category" || s.isFullCategory === true;
-          const nameMatches = specialtyName === jobCategory;
-          return nameMatches && isFullCategory;
-        });
-        return matches;
-      }
-
-      const allMatch = subcategoryInfoArray.every((subcatInfo) => {
-        const jobCategory = (subcatInfo.category || "").trim().toLowerCase();
-        const matches = handymanSpecialties.some((s) => {
-          const specialtyName = (s.name || "").trim().toLowerCase();
-          const isFullCategory =
-            s.type === "category" || s.isFullCategory === true;
-          const nameMatches = specialtyName === jobCategory;
-          return nameMatches && isFullCategory;
-        });
-        return matches;
+    if (specialtyNames.length > 0) {
+      pipeline.push({
+        $match: {
+          $expr: {
+            $or: [
+              // Case 1: Has subcategoryInfo array - ALL items must match
+              {
+                $and: [
+                  {
+                    $and: [
+                      { $isArray: "$subcategoryInfo" },
+                      {
+                        $gt: [
+                          { $size: { $ifNull: ["$subcategoryInfo", []] } },
+                          0,
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    $allElementsTrue: {
+                      $map: {
+                        input: { $ifNull: ["$subcategoryInfo", []] },
+                        as: "subcat",
+                        in: {
+                          $in: [
+                            {
+                              $toLower: {
+                                $trim: {
+                                  input: {
+                                    $ifNull: [
+                                      { $ifNull: ["$$subcat.category", ""] },
+                                      "",
+                                    ],
+                                  },
+                                },
+                              },
+                            },
+                            specialtyNames,
+                          ],
+                        },
+                      },
+                    },
+                  },
+                ],
+              },
+              // Case 2: No subcategoryInfo - check job.category
+              {
+                $and: [
+                  {
+                    $or: [
+                      { $not: { $isArray: "$subcategoryInfo" } },
+                      {
+                        $lte: [
+                          { $size: { $ifNull: ["$subcategoryInfo", []] } },
+                          0,
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    $in: [
+                      {
+                        $toLower: {
+                          $trim: {
+                            input: {
+                              $ifNull: [{ $ifNull: ["$category", ""] }, ""],
+                            },
+                          },
+                        },
+                      },
+                      specialtyNames,
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
       });
-      return allMatch;
-    };
-
-    jobs = jobs.filter(jobMatchesSpecialties);
+    }
   }
 
-  // Filter handymanIdSpecial for handymen
+  // Stage 4: Filter handymanIdSpecial and blocked handymen (if handyman)
   if (user.isHandyman && user._id) {
     const handymanIdString = String(user._id);
     const handymanObjectId =
       user._id instanceof ObjectId ? user._id : new ObjectId(user._id);
 
-    jobs = jobs.filter((job) => {
-      // Check if this handyman is blocked in this job
-      if (job["handiman-Blocked"] && Array.isArray(job["handiman-Blocked"])) {
-        const blockedIds = job["handiman-Blocked"].map((id) => String(id));
-        if (blockedIds.includes(handymanIdString)) {
-          return false;
-        }
-      }
-
-      // If job has handymanIdSpecial, it should ONLY be shown to that specific handyman
-      if (job.handymanIdSpecial) {
-        let jobHandymanIdSpecialStr;
-        if (job.handymanIdSpecial instanceof ObjectId) {
-          jobHandymanIdSpecialStr = job.handymanIdSpecial.toString();
-        } else if (job.handymanIdSpecial.toString) {
-          jobHandymanIdSpecialStr = job.handymanIdSpecial.toString();
-        } else {
-          jobHandymanIdSpecialStr = String(job.handymanIdSpecial);
-        }
-
-        let isMatch = jobHandymanIdSpecialStr === handymanIdString;
-
-        if (!isMatch) {
-          try {
-            const jobSpecialObjectId =
-              job.handymanIdSpecial instanceof ObjectId
-                ? job.handymanIdSpecial
-                : new ObjectId(job.handymanIdSpecial);
-            isMatch = jobSpecialObjectId.equals(handymanObjectId);
-          } catch (e) {
-            isMatch = false;
-          }
-        }
-
-        return isMatch;
-      }
-
-      return true;
+    pipeline.push({
+      $match: {
+        $and: [
+          // Not blocked
+          {
+            $expr: {
+              $not: {
+                $or: [
+                  {
+                    $in: [
+                      handymanObjectId,
+                      { $ifNull: ["$handiman-Blocked", []] },
+                    ],
+                  },
+                  {
+                    $in: [
+                      handymanIdString,
+                      { $ifNull: ["$handiman-Blocked", []] },
+                    ],
+                  },
+                ],
+              },
+            },
+          },
+          // handymanIdSpecial validation: if exists, must match
+          {
+            $or: [
+              { handymanIdSpecial: { $exists: false } },
+              { handymanIdSpecial: null },
+              { handymanIdSpecial: handymanObjectId },
+              { handymanIdSpecial: handymanIdString },
+              {
+                $expr: {
+                  $eq: [{ $toString: "$handymanIdSpecial" }, handymanIdString],
+                },
+              },
+            ],
+          },
+          // Job is open (handymanId is null or empty)
+          {
+            $or: [
+              { handymanId: { $exists: false } },
+              { handymanId: null },
+              { handymanId: [] },
+            ],
+          },
+        ],
+      },
+    });
+  } else if (!user.isHandyman) {
+    // For clients: filter out "done" jobs (except those needing approval)
+    pipeline.push({
+      $match: {
+        $or: [
+          { status: { $ne: "done" } },
+          {
+            $and: [
+              { status: "done" },
+              {
+                $or: [
+                  { clientApproved: false },
+                  { clientApproved: null },
+                  { clientApproved: { $exists: false } },
+                ],
+              },
+            ],
+          },
+        ],
+      },
     });
   }
 
-  // Filter out "done" jobs for clients
-  if (!user.isHandyman) {
-    jobs = jobs.filter((job) => {
-      if (
-        job.status === "done" &&
-        (job.clientApproved === false || job.clientApproved == null)
-      ) {
-        return true;
-      }
-      if (job.status === "done") {
-        return false;
-      }
-      return true;
-    });
-  }
-
-  // Sort jobs: 1. Urgent first, 2. Special (handymanIdSpecial) second, 3. By creation time (newest first)
-  jobs.sort((a, b) => {
-    const aUrgent = a.urgent === true || a.isUrgent === true;
-    const bUrgent = b.urgent === true || b.isUrgent === true;
-    if (aUrgent && !bUrgent) return -1;
-    if (!aUrgent && bUrgent) return 1;
-
-    const aSpecial = !!a.handymanIdSpecial;
-    const bSpecial = !!b.handymanIdSpecial;
-    if (aSpecial && !bSpecial) return -1;
-    if (!aSpecial && bSpecial) return 1;
-
-    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-    return bTime - aTime;
+  // Stage 5: Sort (urgent first, then special, then by createdAt desc)
+  pipeline.push({
+    $addFields: {
+      _sortUrgent: {
+        $or: ["$urgent", "$isUrgent"],
+      },
+      _sortSpecial: {
+        $cond: {
+          if: { $ifNull: ["$handymanIdSpecial", false] },
+          then: 1,
+          else: 0,
+        },
+      },
+      _sortCreatedAt: {
+        $ifNull: [{ $toLong: "$createdAt" }, 0],
+      },
+    },
   });
+
+  pipeline.push({
+    $sort: {
+      _sortUrgent: -1,
+      _sortSpecial: -1,
+      _sortCreatedAt: -1,
+    },
+  });
+
+  pipeline.push({
+    $project: {
+      _sortUrgent: 0,
+      _sortSpecial: 0,
+      _sortCreatedAt: 0,
+    },
+  });
+
+  const pipelineBuildTime = ((Date.now() - pipelineStart) / 1000).toFixed(3);
+  console.log(
+    `    ✅ [FETCH-JOBS] Pipeline built: ${pipelineBuildTime}s, ${pipeline.length} stages`
+  );
+
+  // Execute aggregation
+  console.log("    🚀 [FETCH-JOBS] Executing aggregation...");
+  const dbQueryStart = Date.now();
+  let jobs = await collectionJobs.aggregate(pipeline).toArray();
+
+  const dbQueryTime = ((Date.now() - dbQueryStart) / 1000).toFixed(3);
+  console.log(
+    `    ✅ [FETCH-JOBS] Aggregation completed: ${dbQueryTime}s, found ${jobs.length} jobs`
+  );
+
+  const totalTime = ((Date.now() - fetchJobsStart) / 1000).toFixed(3);
+  console.log(`    🎉 [FETCH-JOBS] Total time: ${totalTime}s`);
 
   return jobs;
 }
@@ -364,6 +447,11 @@ async function fetchJobs(user, collectionJobs) {
  * Fetch handimands (handymen) for dashboard
  */
 async function fetchHandimands(user, lng, lat, collection) {
+  const fetchHandimandsStart = Date.now();
+  console.log(
+    `    👷 [FETCH-HANDIMANDS] Starting (lng: ${lng}, lat: ${lat})...`
+  );
+
   if (!collection) {
     return [];
   }
@@ -376,6 +464,8 @@ async function fetchHandimands(user, lng, lat, collection) {
 
     if (!isNaN(userLng) && !isNaN(userLat)) {
       try {
+        console.log("    📍 [FETCH-HANDIMANDS] Querying with geoNear...");
+        const geoQueryStart = Date.now();
         handimands = await collection
           .find({
             isHandyman: true,
@@ -390,21 +480,70 @@ async function fetchHandimands(user, lng, lat, collection) {
             },
           })
           .toArray();
+        const geoQueryTime = ((Date.now() - geoQueryStart) / 1000).toFixed(3);
+        console.log(
+          `    ✅ [FETCH-HANDIMANDS] Geo query completed: ${geoQueryTime}s, found ${handimands.length} handimands`
+        );
 
+        console.log("    🗺️  [FETCH-HANDIMANDS] Calculating travel times...");
+        const travelTimesStart = Date.now();
         handimands = await calculateTravelTimes(userLng, userLat, handimands);
+        const travelTimesTime = (
+          (Date.now() - travelTimesStart) /
+          1000
+        ).toFixed(3);
+        console.log(
+          `    ✅ [FETCH-HANDIMANDS] Travel times calculated: ${travelTimesTime}s`
+        );
       } catch (geoError) {
+        console.log(
+          "    ⚠️  [FETCH-HANDIMANDS] Geo query failed, using fallback:",
+          geoError.message
+        );
         // Fallback: שלוף את כל ההנדימנים
+        const fallbackStart = Date.now();
         handimands = await collection.find({ isHandyman: true }).toArray();
+        const fallbackTime = ((Date.now() - fallbackStart) / 1000).toFixed(3);
+        console.log(
+          `    ✅ [FETCH-HANDIMANDS] Fallback query completed: ${fallbackTime}s, found ${handimands.length} handimands`
+        );
 
         if (!isNaN(userLng) && !isNaN(userLat)) {
+          console.log(
+            "    🗺️  [FETCH-HANDIMANDS] Calculating travel times (fallback)..."
+          );
+          const travelTimesStart = Date.now();
           handimands = await calculateTravelTimes(userLng, userLat, handimands);
+          const travelTimesTime = (
+            (Date.now() - travelTimesStart) /
+            1000
+          ).toFixed(3);
+          console.log(
+            `    ✅ [FETCH-HANDIMANDS] Travel times calculated: ${travelTimesTime}s`
+          );
         }
       }
     } else {
+      console.log(
+        "    📋 [FETCH-HANDIMANDS] No coords, fetching all handimands..."
+      );
+      const allStart = Date.now();
       handimands = await collection.find({ isHandyman: true }).toArray();
+      const allTime = ((Date.now() - allStart) / 1000).toFixed(3);
+      console.log(
+        `    ✅ [FETCH-HANDIMANDS] Query completed: ${allTime}s, found ${handimands.length} handimands`
+      );
     }
   } else {
+    console.log(
+      "    📋 [FETCH-HANDIMANDS] No coords, fetching all handimands..."
+    );
+    const allStart = Date.now();
     handimands = await collection.find({ isHandyman: true }).toArray();
+    const allTime = ((Date.now() - allStart) / 1000).toFixed(3);
+    console.log(
+      `    ✅ [FETCH-HANDIMANDS] Query completed: ${allTime}s, found ${handimands.length} handimands`
+    );
   }
 
   // Mark blocked handymen if user has handiman-Blocked array
@@ -425,6 +564,9 @@ async function fetchHandimands(user, lng, lat, collection) {
       isBlocked: false,
     }));
   }
+
+  const totalTime = ((Date.now() - fetchHandimandsStart) / 1000).toFixed(3);
+  console.log(`    🎉 [FETCH-HANDIMANDS] Total time: ${totalTime}s`);
 
   return handimands;
 }
@@ -466,20 +608,82 @@ async function fetchDashboardData(
   collection,
   collectionJobs
 ) {
+  const startTime = Date.now();
+  let lastCheckpoint = startTime;
+
+  const logCheckpoint = (name) => {
+    const now = Date.now();
+    const elapsed = ((now - lastCheckpoint) / 1000).toFixed(3);
+    const total = ((now - startTime) / 1000).toFixed(3);
+    console.log(
+      `  ✅ [DASHBOARD-SERVICE] ${name}: +${elapsed}s (total: ${total}s)`
+    );
+    lastCheckpoint = now;
+  };
+
+  console.log("🔄 [DASHBOARD-SERVICE] Starting fetchDashboardData...");
+
   // Validate collections
   if (!collection) {
     throw new Error("Database not connected");
   }
 
   // Fetch user first (needed for other queries)
+  console.log("👤 [DASHBOARD-SERVICE] Fetching user...");
   const user = await fetchUser(userId, collection);
+  logCheckpoint("Fetch user");
+  console.log(
+    "  ✅ [DASHBOARD-SERVICE] User found:",
+    user.isHandyman ? "Handyman" : "Client"
+  );
 
   // Fetch all data in parallel
+  console.log("🔄 [DASHBOARD-SERVICE] Starting parallel fetches...");
+  const parallelStart = Date.now();
+
   const [jobs, handimands, stats] = await Promise.all([
-    fetchJobs(user, collectionJobs),
-    fetchHandimands(user, lng, lat, collection),
-    fetchStats(collection),
+    (async () => {
+      console.log("  📋 [DASHBOARD-SERVICE] Starting fetchJobs...");
+      const jobsStart = Date.now();
+      const result = await fetchJobs(user, collectionJobs);
+      const jobsTime = ((Date.now() - jobsStart) / 1000).toFixed(3);
+      console.log(
+        `  ✅ [DASHBOARD-SERVICE] fetchJobs completed: ${jobsTime}s, found ${result.length} jobs`
+      );
+      return result;
+    })(),
+    (async () => {
+      console.log("  👷 [DASHBOARD-SERVICE] Starting fetchHandimands...");
+      const handimandsStart = Date.now();
+      const result = await fetchHandimands(user, lng, lat, collection);
+      const handimandsTime = ((Date.now() - handimandsStart) / 1000).toFixed(3);
+      console.log(
+        `  ✅ [DASHBOARD-SERVICE] fetchHandimands completed: ${handimandsTime}s, found ${result.length} handimands`
+      );
+      return result;
+    })(),
+    (async () => {
+      console.log("  📊 [DASHBOARD-SERVICE] Starting fetchStats...");
+      const statsStart = Date.now();
+      const result = await fetchStats(collection);
+      const statsTime = ((Date.now() - statsStart) / 1000).toFixed(3);
+      console.log(
+        `  ✅ [DASHBOARD-SERVICE] fetchStats completed: ${statsTime}s`
+      );
+      return result;
+    })(),
   ]);
+
+  const parallelTime = ((Date.now() - parallelStart) / 1000).toFixed(3);
+  console.log(
+    `✅ [DASHBOARD-SERVICE] All parallel fetches completed: ${parallelTime}s`
+  );
+  logCheckpoint("Parallel fetches");
+
+  const totalTime = ((Date.now() - startTime) / 1000).toFixed(3);
+  console.log(
+    `🎉 [DASHBOARD-SERVICE] fetchDashboardData complete: ${totalTime}s total`
+  );
 
   return {
     user,

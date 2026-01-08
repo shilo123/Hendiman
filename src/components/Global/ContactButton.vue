@@ -19,8 +19,10 @@ export default {
   name: "ContactButton",
   computed: {
     showButton() {
-      // Show everywhere (including Dashboard)
-      return true;
+      // Show only on specific pages: Dashboard, CreateCall, logIn, Register
+      const routeName = this.$route?.name;
+      const allowedRoutes = ["Dashboard", "CreateCall", "logIn", "Register"];
+      return allowedRoutes.includes(routeName);
     },
   },
   methods: {

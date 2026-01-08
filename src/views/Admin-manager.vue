@@ -1217,395 +1217,7 @@
         <CancellationsTab v-if="activeTab === 'cancellations'" />
 
         <!-- Expenses Tab -->
-        <div v-if="activeTab === 'expenses'" class="tab-panel">
-          <div class="financials-section">
-            <div class="financials-header">
-              <h2 class="financials-title">פירוט הוצאות והכנסות</h2>
-              <button
-                class="refresh-financials-btn"
-                type="button"
-                @click="loadFinancials"
-              >
-                ↻ רענן
-              </button>
-            </div>
-
-            <div v-if="isLoadingFinancials" class="loading-state">
-              טוען נתונים פיננסיים...
-            </div>
-
-            <div v-else class="financials-content">
-              <!-- Expenses -->
-              <div class="financials-card financials-card--expenses">
-                <div class="financials-card__header">
-                  <h3 class="financials-card__title">💰 הוצאות</h3>
-                </div>
-                <div class="financials-card__body">
-                  <div class="financial-item">
-                    <div class="financial-item__label">הוצאות AI</div>
-                    <div
-                      class="financial-item__value financial-item__value--expense"
-                    >
-                      {{ getCurrencySymbol("expenses.AI expenses")
-                      }}{{
-                        formatCurrency(
-                          getDisplayValue(
-                            "expenses.AI expenses",
-                            financials.expenses["AI expenses"]
-                          )
-                        )
-                      }}
-                    </div>
-                    <div class="financial-item__actions">
-                      <button
-                        class="financial-action-btn financial-action-btn--add"
-                        @click="
-                          openEditFinancialModal(
-                            'expenses.AI expenses',
-                            financials.expenses['AI expenses']
-                          )
-                        "
-                      >
-                        ✏️
-                      </button>
-                    </div>
-                  </div>
-                  <div class="financial-item">
-                    <div class="financial-item__label">הוצאות DB</div>
-                    <div
-                      class="financial-item__value financial-item__value--expense"
-                    >
-                      {{ getCurrencySymbol("expenses.DB expenses")
-                      }}{{
-                        formatCurrency(
-                          getDisplayValue(
-                            "expenses.DB expenses",
-                            financials.expenses["DB expenses"]
-                          )
-                        )
-                      }}
-                    </div>
-                    <div class="financial-item__actions">
-                      <button
-                        class="financial-action-btn financial-action-btn--add"
-                        @click="
-                          openEditFinancialModal(
-                            'expenses.DB expenses',
-                            financials.expenses['DB expenses']
-                          )
-                        "
-                      >
-                        ✏️
-                      </button>
-                    </div>
-                  </div>
-                  <div class="financial-item">
-                    <div class="financial-item__label">הוצאות API</div>
-                    <div
-                      class="financial-item__value financial-item__value--expense"
-                    >
-                      {{ getCurrencySymbol("expenses.API expenses")
-                      }}{{
-                        formatCurrency(
-                          getDisplayValue(
-                            "expenses.API expenses",
-                            financials.expenses["API expenses"]
-                          )
-                        )
-                      }}
-                    </div>
-                    <div class="financial-item__actions">
-                      <button
-                        class="financial-action-btn financial-action-btn--add"
-                        @click="
-                          openEditFinancialModal(
-                            'expenses.API expenses',
-                            financials.expenses['API expenses']
-                          )
-                        "
-                      >
-                        ✏️
-                      </button>
-                    </div>
-                  </div>
-                  <div class="financial-item">
-                    <div class="financial-item__label">הוצאות שיווק</div>
-                    <div
-                      class="financial-item__value financial-item__value--expense"
-                    >
-                      {{ getCurrencySymbol("expenses.Marketing expenses")
-                      }}{{
-                        formatCurrency(
-                          getDisplayValue(
-                            "expenses.Marketing expenses",
-                            financials.expenses["Marketing expenses"]
-                          )
-                        )
-                      }}
-                    </div>
-                    <div class="financial-item__actions">
-                      <button
-                        class="financial-action-btn financial-action-btn--add"
-                        @click="
-                          openEditFinancialModal(
-                            'expenses.Marketing expenses',
-                            financials.expenses['Marketing expenses']
-                          )
-                        "
-                      >
-                        ✏️
-                      </button>
-                    </div>
-                  </div>
-                  <div class="financial-item">
-                    <div class="financial-item__label">עמלת סליקה</div>
-                    <div
-                      class="financial-item__value financial-item__value--expense"
-                    >
-                      {{ getCurrencySymbol("expenses.clearing fee")
-                      }}{{
-                        formatCurrency(
-                          getDisplayValue(
-                            "expenses.clearing fee",
-                            financials.expenses["clearing fee"]
-                          )
-                        )
-                      }}
-                    </div>
-                    <div class="financial-item__actions">
-                      <button
-                        class="financial-action-btn financial-action-btn--add"
-                        @click="
-                          openEditFinancialModal(
-                            'expenses.clearing fee',
-                            financials.expenses['clearing fee']
-                          )
-                        "
-                      >
-                        ✏️
-                      </button>
-                    </div>
-                  </div>
-                  <div class="financial-item financial-item--total">
-                    <div class="financial-item__label">סה"כ הוצאות</div>
-                    <div
-                      class="financial-item__value financial-item__value--total-expense"
-                    >
-                      ₪{{
-                        formatCurrency(
-                          getDisplayValue(
-                            "expenses.AI expenses",
-                            financials.expenses["AI expenses"]
-                          ) +
-                            getDisplayValue(
-                              "expenses.DB expenses",
-                              financials.expenses["DB expenses"]
-                            ) +
-                            getDisplayValue(
-                              "expenses.API expenses",
-                              financials.expenses["API expenses"]
-                            ) +
-                            getDisplayValue(
-                              "expenses.Marketing expenses",
-                              financials.expenses["Marketing expenses"]
-                            ) +
-                            getDisplayValue(
-                              "expenses.clearing fee",
-                              financials.expenses["clearing fee"]
-                            )
-                        )
-                      }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Revenue -->
-              <div class="financials-card financials-card--revenue">
-                <div class="financials-card__header">
-                  <h3 class="financials-card__title">💵 הכנסות</h3>
-                </div>
-                <div class="financials-card__body">
-                  <div class="financial-item">
-                    <div class="financial-item__label">עמלות</div>
-                    <div
-                      class="financial-item__value financial-item__value--revenue"
-                    >
-                      {{ getCurrencySymbol("Revenue.Fees")
-                      }}{{
-                        formatCurrency(
-                          getDisplayValue(
-                            "Revenue.Fees",
-                            financials.Revenue.Fees
-                          )
-                        )
-                      }}
-                    </div>
-                    <div class="financial-item__actions">
-                      <button
-                        class="financial-action-btn financial-action-btn--add"
-                        @click="
-                          openEditFinancialModal(
-                            'Revenue.Fees',
-                            financials.Revenue.Fees
-                          )
-                        "
-                      >
-                        ✏️
-                      </button>
-                    </div>
-                  </div>
-                  <div class="financial-item">
-                    <div class="financial-item__label">רישומים</div>
-                    <div
-                      class="financial-item__value financial-item__value--revenue"
-                    >
-                      {{ getCurrencySymbol("Revenue.Drawings")
-                      }}{{
-                        formatCurrency(
-                          getDisplayValue(
-                            "Revenue.Drawings",
-                            financials.Revenue.Drawings
-                          )
-                        )
-                      }}
-                    </div>
-                    <div class="financial-item__actions">
-                      <button
-                        class="financial-action-btn financial-action-btn--add"
-                        @click="
-                          openEditFinancialModal(
-                            'Revenue.Drawings',
-                            financials.Revenue.Drawings
-                          )
-                        "
-                      >
-                        ✏️
-                      </button>
-                    </div>
-                  </div>
-                  <div class="financial-item">
-                    <div class="financial-item__label">קריאת חירום</div>
-                    <div
-                      class="financial-item__value financial-item__value--revenue"
-                    >
-                      {{ getCurrencySymbol("Revenue.Urgent call")
-                      }}{{
-                        formatCurrency(
-                          getDisplayValue(
-                            "Revenue.Urgent call",
-                            financials.Revenue["Urgent call"]
-                          )
-                        )
-                      }}
-                    </div>
-                    <div class="financial-item__actions">
-                      <button
-                        class="financial-action-btn financial-action-btn--add"
-                        @click="
-                          openEditFinancialModal(
-                            'Revenue.Urgent call',
-                            financials.Revenue['Urgent call']
-                          )
-                        "
-                      >
-                        ✏️
-                      </button>
-                    </div>
-                  </div>
-                  <div class="financial-item financial-item--total">
-                    <div class="financial-item__label">סה"כ הכנסות</div>
-                    <div
-                      class="financial-item__value financial-item__value--total-revenue"
-                    >
-                      ₪{{
-                        formatCurrency(
-                          getDisplayValue(
-                            "Revenue.Fees",
-                            financials.Revenue.Fees
-                          ) +
-                            getDisplayValue(
-                              "Revenue.Drawings",
-                              financials.Revenue.Drawings
-                            ) +
-                            getDisplayValue(
-                              "Revenue.Urgent call",
-                              financials.Revenue["Urgent call"]
-                            )
-                        )
-                      }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Summary -->
-              <div class="financials-summary">
-                <div class="summary-card">
-                  <div class="summary-card__label">רווח/הפסד נטו</div>
-                  <div
-                    class="summary-card__value"
-                    :class="{
-                      'summary-card__value--profit': netProfit >= 0,
-                      'summary-card__value--loss': netProfit < 0,
-                    }"
-                  >
-                    ₪{{ formatCurrency(Math.abs(netProfit)) }}
-                    <span class="summary-card__indicator">{{
-                      netProfit >= 0 ? "רווח" : "הפסד"
-                    }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Chart -->
-              <div class="financials-chart">
-                <div class="chart-header">
-                  <h3 class="chart-title">גרף רווח/הפסד</h3>
-                  <div class="chart-period-selector">
-                    <button
-                      class="period-btn"
-                      :class="{
-                        'period-btn--active': chartPeriod === 'hourly',
-                      }"
-                      @click="loadChartData('hourly')"
-                    >
-                      שעתי
-                    </button>
-                    <button
-                      class="period-btn"
-                      :class="{ 'period-btn--active': chartPeriod === 'daily' }"
-                      @click="loadChartData('daily')"
-                    >
-                      יומי
-                    </button>
-                    <button
-                      class="period-btn"
-                      :class="{
-                        'period-btn--active': chartPeriod === 'weekly',
-                      }"
-                      @click="loadChartData('weekly')"
-                    >
-                      שבועי
-                    </button>
-                    <button
-                      class="period-btn"
-                      :class="{
-                        'period-btn--active': chartPeriod === 'monthly',
-                      }"
-                      @click="loadChartData('monthly')"
-                    >
-                      חודשי
-                    </button>
-                  </div>
-                </div>
-                <div class="chart-container">
-                  <canvas ref="chartCanvas"></canvas>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ExpensesTab v-if="activeTab === 'expenses'" />
 
         <!-- Free Handyman Registration Tab -->
         <div v-if="activeTab === 'free-handyman'" class="tab-panel">
@@ -1832,64 +1444,6 @@
       </div>
 
       <!-- Category Edit Modal -->
-      <!-- Edit Financial Modal -->
-      <div
-        v-if="showEditFinancialModal"
-        class="modal-overlay"
-        @click="closeEditFinancialModal"
-      >
-        <div class="modal-content" @click.stop>
-          <div class="modal-header">
-            <h3 class="modal-title">עריכת סכום</h3>
-            <button class="modal-close" @click="closeEditFinancialModal">
-              ×
-            </button>
-          </div>
-          <div class="modal-body">
-            <div class="form-field">
-              <label class="form-label">{{ editFinancialFieldLabel }}</label>
-              <div class="current-value">
-                ערך נוכחי: ₪{{
-                  formatCurrency(
-                    getDisplayValue(
-                      editFinancialField,
-                      editFinancialCurrentValue
-                    )
-                  )
-                }}
-              </div>
-            </div>
-            <div class="form-field">
-              <label class="form-label">סכום לשינוי (₪)</label>
-              <input
-                v-model.number="editFinancialAmount"
-                type="number"
-                step="0.01"
-                class="form-input"
-                placeholder="הכנס סכום"
-                min="0"
-              />
-            </div>
-            <div class="financial-edit-buttons">
-              <button class="btn btn--primary" @click="updateFinancial('add')">
-                ➕ הוסף
-              </button>
-              <button
-                class="btn btn--danger"
-                @click="updateFinancial('subtract')"
-              >
-                ➖ הורד
-              </button>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn--ghost" @click="closeEditFinancialModal">
-              ביטול
-            </button>
-          </div>
-        </div>
-      </div>
-
       <!-- Delete Payment Confirmation Modal -->
       <div
         v-if="showDeletePaymentModal"
@@ -2046,7 +1600,6 @@
 import axios from "axios";
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
-import { Chart, registerables } from "chart.js";
 import AddressAutocomplete from "@/components/Global/AddressAutocomplete.vue";
 import CategoryCheckboxSelector from "@/components/Global/CategoryCheckboxSelector.vue";
 import ReceiptsTab from "@/components/Admin/ReceiptsTab.vue";
@@ -2054,8 +1607,7 @@ import UsersTab from "@/components/Admin/UsersTab.vue";
 import CategoriesTab from "@/components/Admin/CategoriesTab.vue";
 import StatusTab from "@/components/Admin/StatusTab.vue";
 import CancellationsTab from "@/components/Admin/CancellationsTab.vue";
-
-Chart.register(...registerables);
+import ExpensesTab from "@/components/Admin/ExpensesTab.vue";
 
 export default {
   name: "AdminManager",
@@ -2067,6 +1619,7 @@ export default {
     CategoriesTab,
     StatusTab,
     CancellationsTab,
+    ExpensesTab,
   },
   data() {
     return {
@@ -2095,33 +1648,7 @@ export default {
       selectedJobDetails: null,
       isLoadingJobDetails: false,
       selectedImageModal: null,
-      // Financials
-      financials: {
-        expenses: {
-          "AI expenses": 0,
-          "DB expenses": 0,
-          "API expenses": 0,
-          "Marketing expenses": 0,
-          "clearing fee": 0,
-        },
-        Revenue: {
-          Fees: 0,
-          Drawings: 0,
-          "Urgent call": 0,
-        },
-      },
-      isLoadingFinancials: false,
-      // Exchange rate
-      usdToIlsRate: 1, // Default rate, will be fetched
-      isLoadingExchangeRate: false,
-      // Edit Financial Modal
-      showEditFinancialModal: false,
-      editFinancialField: "",
-      editFinancialCurrentValue: 0,
-      editFinancialAmount: 0,
       toast: null,
-      // Chart
-      chart: null,
       // Free Handyman Registration
       freeHandymanShowPassword: false,
       isSubmittingFreeHandyman: false,
@@ -2145,8 +1672,6 @@ export default {
         isHandyman: true,
         trialExpiresAt: "always", // Free forever - replaces handimanFree
       },
-      chartPeriod: "daily",
-      chartData: [],
       // Status
       // Payments
       payments: [],
@@ -2223,54 +1748,6 @@ export default {
       }
       return filtered;
     },
-    netProfit() {
-      // כל הערכים מחושבים בשקלים תוך התחשבות בשדות שכבר בשקלים
-      const totalRevenue =
-        this.getDisplayValue("Revenue.Fees", this.financials.Revenue.Fees) +
-        this.getDisplayValue(
-          "Revenue.Drawings",
-          this.financials.Revenue.Drawings
-        ) +
-        this.getDisplayValue(
-          "Revenue.Urgent call",
-          this.financials.Revenue["Urgent call"]
-        );
-      const totalExpenses =
-        this.getDisplayValue(
-          "expenses.AI expenses",
-          this.financials.expenses["AI expenses"]
-        ) +
-        this.getDisplayValue(
-          "expenses.DB expenses",
-          this.financials.expenses["DB expenses"]
-        ) +
-        this.getDisplayValue(
-          "expenses.API expenses",
-          this.financials.expenses["API expenses"]
-        ) +
-        this.getDisplayValue(
-          "expenses.Marketing expenses",
-          this.financials.expenses["Marketing expenses"]
-        ) +
-        this.getDisplayValue(
-          "expenses.clearing fee",
-          this.financials.expenses["clearing fee"]
-        );
-      return totalRevenue - totalExpenses;
-    },
-    editFinancialFieldLabel() {
-      const fieldMap = {
-        "expenses.AI expenses": "הוצאות AI",
-        "expenses.DB expenses": "הוצאות DB",
-        "expenses.API expenses": "הוצאות API",
-        "expenses.Marketing expenses": "הוצאות שיווק",
-        "expenses.clearing fee": "עמלת סליקה",
-        "Revenue.Fees": "עמלות",
-        "Revenue.Drawings": "רישומים",
-        "Revenue.Urgent call": "קריאת חירום",
-      };
-      return fieldMap[this.editFinancialField] || this.editFinancialField;
-    },
     filteredPayments() {
       let filtered = [...this.payments];
 
@@ -2342,13 +1819,6 @@ export default {
     },
   },
   async mounted() {
-    await this.loadExchangeRate();
-    if (this.activeTab === "expenses") {
-      await this.loadFinancials();
-      // טען את הגרף אוטומטית עם התקופה הנוכחית (או daily כברירת מחדל)
-      await this.$nextTick();
-      await this.loadChartData(this.chartPeriod || "daily");
-    }
     if (this.activeTab === "status") {
     }
     if (this.activeTab === "settings") {
@@ -2367,12 +1837,6 @@ export default {
       if (newTab === "jobs") {
         this.loadJobs();
       }
-      if (newTab === "expenses") {
-        await this.loadFinancials();
-        // טען את הגרף אוטומטית עם התקופה הנוכחית (או daily כברירת מחדל)
-        await this.$nextTick();
-        await this.loadChartData(this.chartPeriod || "daily");
-      }
       if (newTab === "payments") {
         this.loadPayments(this.paymentsPagination.page);
       }
@@ -2386,29 +1850,10 @@ export default {
       }
     },
   },
-  beforeUnmount() {
-    if (this.chart) {
-      this.chart.destroy();
-      this.chart = null;
-    }
-  },
   methods: {
     getCategorySpecialties(specialties) {
       if (!specialties || !Array.isArray(specialties)) return [];
       return specialties.filter((s) => s.type === "category");
-    },
-    async loadExchangeRate() {
-      try {
-        const response = await axios.get(
-          "https://api.frankfurter.app/latest?from=USD&to=ILS"
-        );
-        if (response.data && response.data.rates && response.data.rates.ILS) {
-          this.usdToIlsRate = response.data.rates.ILS;
-        }
-      } catch (error) {
-        // Keep default rate of 1 if API fails
-        this.usdToIlsRate = 1;
-      }
     },
     formatDate(date) {
       if (!date) return "-";
@@ -2436,7 +1881,6 @@ export default {
         } else {
           this.jobs = response.data?.jobs || [];
         }
-        console.log("🔍 [Admin] Loaded jobs:", this.jobs.length);
       } catch (error) {
         console.error("❌ [Admin] Error loading jobs:", error);
         this.toast.showError(
@@ -2544,55 +1988,6 @@ export default {
       if (diffYears === 1) return "שנה אחת";
       return `${diffYears} שנים`;
     },
-    isAlreadyInILS(field) {
-      // שדות שכבר מאוחסנים בשקלים ולא צריך להמיר אותם
-      const fieldsInILS = [
-        "Revenue.Urgent call", // קריאת חירום
-        "Revenue.Drawings", // רישומים
-        "Revenue.Fees", // עמלות
-        "expenses.clearing fee", // עמלת סליקה
-      ];
-      return fieldsInILS.includes(field);
-    },
-    getDisplayValue(field, value) {
-      // אם השדה כבר בשקלים, מחזיר את הערך כמו שהוא
-      // אחרת, ממיר מדולרים לשקלים
-      if (this.isAlreadyInILS(field)) {
-        return value;
-      }
-      return value * this.usdToIlsRate;
-    },
-    getCurrencySymbol(field) {
-      // כל הערכים מוצגים בשקלים
-      return "₪";
-    },
-    async loadFinancials() {
-      this.isLoadingFinancials = true;
-      try {
-        const response = await axios.get(`${URL}/admin/financials`);
-        if (response.data.success) {
-          this.financials = response.data.financials || {
-            expenses: {
-              "AI expenses": 0,
-              "DB expenses": 0,
-              "API expenses": 0,
-              "Marketing expenses": 0,
-              "clearing fee": 0,
-              'מע"מ': 0,
-            },
-            Revenue: {
-              Fees: 0,
-              Drawings: 0,
-              "Urgent call": 0,
-            },
-          };
-        }
-      } catch (error) {
-        this.toast?.showError(" לא הצלחנו לטעון את הנתונים הפיננסיים");
-      } finally {
-        this.isLoadingFinancials = false;
-      }
-    },
     formatCurrency(value) {
       return new Intl.NumberFormat("en-US", {
         minimumFractionDigits: 6,
@@ -2604,193 +1999,6 @@ export default {
         minimumFractionDigits: 0,
         maximumFractionDigits: 2,
       }).format(value || 0);
-    },
-    openEditFinancialModal(field, currentValue) {
-      this.editFinancialField = field;
-      this.editFinancialCurrentValue = currentValue || 0;
-      this.editFinancialAmount = 0;
-      this.showEditFinancialModal = true;
-    },
-    closeEditFinancialModal() {
-      this.showEditFinancialModal = false;
-      this.editFinancialField = "";
-      this.editFinancialCurrentValue = 0;
-      this.editFinancialAmount = 0;
-    },
-    async updateFinancial(operation) {
-      if (!this.editFinancialAmount || this.editFinancialAmount <= 0) {
-        this.toast?.showError("יש להזין סכום תקין");
-        return;
-      }
-
-      try {
-        await axios.post(`${URL}/admin/financials/update`, {
-          field: this.editFinancialField,
-          amount: this.editFinancialAmount,
-          operation: operation,
-        });
-
-        this.toast?.showSuccess(
-          `הסכום ${operation === "add" ? "נוסף" : "הוסר"} בהצלחה`
-        );
-        await this.loadFinancials();
-        this.closeEditFinancialModal();
-      } catch (error) {
-        this.toast?.showError(
-          error.response?.data?.message || " לא הצלחנו לעדכן את הסכום"
-        );
-      }
-    },
-    async loadChartData(period = "daily") {
-      this.chartPeriod = period;
-      try {
-        const response = await axios.get(
-          `${URL}/admin/financials/chart?period=${period}`
-        );
-        if (response.data.success) {
-          this.chartData = response.data.chartData || [];
-          // המתן שהדום יעודכן לפני שרטוט הגרף
-          await this.$nextTick();
-          this.renderChart();
-        }
-      } catch (error) {
-        this.toast?.showError(" לא הצלחנו לטעון את נתוני הגרף");
-      }
-    },
-    renderChart() {
-      if (!this.$refs.chartCanvas) return;
-
-      // Destroy existing chart if exists
-      if (this.chart) {
-        this.chart.destroy();
-      }
-
-      const ctx = this.$refs.chartCanvas.getContext("2d");
-
-      // Format labels based on period
-      const labels = this.chartData.map((item) => {
-        const date = new Date(item.date);
-        switch (this.chartPeriod) {
-          case "hourly":
-            return date.toLocaleTimeString("he-IL", {
-              hour: "2-digit",
-              minute: "2-digit",
-              day: "numeric",
-              month: "short",
-            });
-          case "weekly":
-            return `שבוע ${item.dateLabel.split("-")[1]}, ${
-              item.dateLabel.split("-")[0]
-            }`;
-          case "monthly":
-            const monthNames = [
-              "ינואר",
-              "פברואר",
-              "מרץ",
-              "אפריל",
-              "מאי",
-              "יוני",
-              "יולי",
-              "אוגוסט",
-              "ספטמבר",
-              "אוקטובר",
-              "נובמבר",
-              "דצמבר",
-            ];
-            const [year, month] = item.dateLabel.split("-");
-            return `${monthNames[parseInt(month) - 1]} ${year}`;
-          default: // daily
-            return date.toLocaleDateString("he-IL", {
-              day: "numeric",
-              month: "short",
-            });
-        }
-      });
-
-      this.chart = new Chart(ctx, {
-        type: "line",
-        data: {
-          labels: labels.reverse(), // Reverse for RTL
-          datasets: [
-            {
-              label: "רווח/הפסד",
-              data: this.chartData
-                .map((item) => (item.profit || 0) * this.usdToIlsRate)
-                .reverse(),
-              borderColor: "#10b981",
-              backgroundColor: "rgba(16, 185, 129, 0.1)",
-              tension: 0.4,
-              fill: true,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              display: true,
-              position: "top",
-              labels: {
-                color: "rgba(255, 255, 255, 0.92)",
-                font: {
-                  family: "Heebo",
-                  size: 12,
-                  weight: "bold",
-                },
-                padding: 15,
-              },
-            },
-            tooltip: {
-              backgroundColor: "rgba(11, 11, 15, 0.95)",
-              borderColor: "rgba(16, 185, 129, 0.3)",
-              borderWidth: 1,
-              titleColor: "#10b981",
-              bodyColor: "rgba(255, 255, 255, 0.92)",
-              padding: 12,
-              displayColors: true,
-              callbacks: {
-                label: function (context) {
-                  const profit = context.parsed.y;
-                  const profitLabel = profit >= 0 ? "רווח" : "הפסד";
-                  return `${profitLabel}: ₪${Math.abs(profit).toFixed(2)}`;
-                },
-              },
-            },
-          },
-          scales: {
-            x: {
-              grid: {
-                color: "rgba(255, 255, 255, 0.1)",
-              },
-              ticks: {
-                color: "rgba(255, 255, 255, 0.62)",
-                font: {
-                  family: "Heebo",
-                  size: 11,
-                  weight: "bold",
-                },
-              },
-            },
-            y: {
-              grid: {
-                color: "rgba(255, 255, 255, 0.1)",
-              },
-              ticks: {
-                color: "rgba(255, 255, 255, 0.62)",
-                font: {
-                  family: "Heebo",
-                  size: 11,
-                  weight: "bold",
-                },
-                callback: function (value) {
-                  return "₪" + value.toFixed(2);
-                },
-              },
-            },
-          },
-        },
-      });
     },
     async loadPayments(page = 1) {
       this.isLoadingPayments = true;

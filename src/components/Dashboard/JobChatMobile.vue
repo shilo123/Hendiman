@@ -1306,18 +1306,170 @@ export default {
     },
   },
   created() {
+    console.log("[JobChatMobile] ========== CREATED ==========");
+    console.log("[JobChatMobile] created() - isHandyman:", this.isHandyman);
+    console.log("[JobChatMobile] created() - jobs:", this.jobs);
+    console.log("[JobChatMobile] created() - job:", this.job);
+
     this.toast = useToast();
     const job = this.currentJob;
+    console.log("[JobChatMobile] created() - currentJob:", job);
     this.localJobStatus = job?.status || null;
+    console.log(
+      "[JobChatMobile] created() - localJobStatus:",
+      this.localJobStatus
+    );
   },
   async mounted() {
+    console.log("[JobChatMobile] ========== MOUNTED START ==========");
+    console.log("[JobChatMobile] isHandyman:", this.isHandyman);
+    console.log("[JobChatMobile] jobs prop:", this.jobs);
+    console.log("[JobChatMobile] job prop:", this.job);
+    console.log("[JobChatMobile] currentJobIndex:", this.currentJobIndex);
+
     window.addEventListener("click", this.onOutsideTools);
     window.addEventListener("visibilitychange", this.handleVisibilityChange);
     window.addEventListener("beforeunload", this.saveMessagesBeforeUnload);
 
     // Load messages from sessionStorage first if available for fast display
     const job = this.currentJob;
+    console.log("[JobChatMobile] currentJob computed:", job);
+
+    if (!job) {
+      console.error(
+        "[JobChatMobile] ❌ No current job in mounted, waiting and retrying..."
+      );
+      console.error("[JobChatMobile] jobs array:", this.jobs);
+      console.error("[JobChatMobile] job prop:", this.job);
+      console.error("[JobChatMobile] currentJobIndex:", this.currentJobIndex);
+
+      // Wait a bit and try again - maybe job is loaded asynchronously
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const retryJob = this.currentJob;
+      if (!retryJob) {
+        console.error("[JobChatMobile] ❌ Still no job after retry");
+        // Don't return - try to continue anyway
+      } else {
+        console.log("[JobChatMobile] ✅ Got job after retry:", retryJob);
+        // Use retryJob
+        const retryJobId = retryJob?.id || retryJob?._id;
+        if (retryJobId) {
+          const jobIdStr = String(retryJobId);
+          let hasCachedMessages = false;
+
+          // Try sessionStorage first
+          const storedMessages = this.loadMessagesFromStorage();
+          if (storedMessages && storedMessages.length > 0) {
+            this.messages = storedMessages;
+            this.messagesCache[jobIdStr] = [...storedMessages];
+            hasCachedMessages = true;
+            this.$nextTick(() => {
+              this.scrollToBottom();
+            });
+          } else if (
+            this.messagesCache[jobIdStr] &&
+            this.messagesCache[jobIdStr].length > 0
+          ) {
+            this.messages = [...this.messagesCache[jobIdStr]];
+            hasCachedMessages = true;
+            this.$nextTick(() => {
+              this.scrollToBottom();
+            });
+          }
+
+          this.initWebSocket();
+
+          if (!hasCachedMessages) {
+            this.loadMessages()
+              .then(() => {
+                this.$nextTick(() => {
+                  this.scrollToBottom();
+                });
+              })
+              .catch((error) => {
+                console.error("[JobChatMobile] Error loading messages:", error);
+                if (this.messages.length === 0) {
+                  this.toast?.showError("שגיאה בטעינת הודעות");
+                }
+              });
+          } else {
+            setTimeout(() => {
+              this.loadMessages().catch((error) => {
+                console.warn("[JobChatMobile] Background sync failed:", error);
+              });
+            }, 100);
+          }
+          return;
+        }
+      }
+    }
+
     const jobId = job?.id || job?._id;
+    console.log("[JobChatMobile] jobId extracted:", jobId);
+
+    if (!jobId) {
+      console.error(
+        "[JobChatMobile] ❌ No jobId in mounted, waiting and retrying..."
+      );
+      console.error("[JobChatMobile] job object:", job);
+
+      // Wait a bit and try again
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const retryJob = this.currentJob;
+      const retryJobId = retryJob?.id || retryJob?._id;
+      if (!retryJobId) {
+        console.error("[JobChatMobile] ❌ Still no jobId after retry");
+        // Don't return - try to continue anyway with empty messages
+      } else {
+        console.log("[JobChatMobile] ✅ Got jobId after retry:", retryJobId);
+        const jobIdStr = String(retryJobId);
+        let hasCachedMessages = false;
+
+        const storedMessages = this.loadMessagesFromStorage();
+        if (storedMessages && storedMessages.length > 0) {
+          this.messages = storedMessages;
+          this.messagesCache[jobIdStr] = [...storedMessages];
+          hasCachedMessages = true;
+          this.$nextTick(() => {
+            this.scrollToBottom();
+          });
+        } else if (
+          this.messagesCache[jobIdStr] &&
+          this.messagesCache[jobIdStr].length > 0
+        ) {
+          this.messages = [...this.messagesCache[jobIdStr]];
+          hasCachedMessages = true;
+          this.$nextTick(() => {
+            this.scrollToBottom();
+          });
+        }
+
+        this.initWebSocket();
+
+        if (!hasCachedMessages) {
+          this.loadMessages()
+            .then(() => {
+              this.$nextTick(() => {
+                this.scrollToBottom();
+              });
+            })
+            .catch((error) => {
+              console.error("[JobChatMobile] Error loading messages:", error);
+              if (this.messages.length === 0) {
+                this.toast?.showError("שגיאה בטעינת הודעות");
+              }
+            });
+        } else {
+          setTimeout(() => {
+            this.loadMessages().catch((error) => {
+              console.warn("[JobChatMobile] Background sync failed:", error);
+            });
+          }, 100);
+        }
+        return;
+      }
+    }
+
     let hasCachedMessages = false;
     if (jobId) {
       const jobIdStr = String(jobId);
@@ -1343,16 +1495,35 @@ export default {
       }
     }
 
+    // Initialize WebSocket first (non-blocking)
     this.initWebSocket();
+
     // Only load from server if we don't have cached messages
     if (!hasCachedMessages) {
-      await this.loadMessages();
-      this.scrollToBottom();
+      // Load messages in parallel with WebSocket init (non-blocking)
+      this.loadMessages()
+        .then(() => {
+          this.$nextTick(() => {
+            this.scrollToBottom();
+          });
+        })
+        .catch((error) => {
+          // Log error for debugging
+          console.error("[JobChatMobile] Error loading messages:", error);
+          // Show error only if we have no messages at all
+          if (this.messages.length === 0) {
+            this.toast?.showError("שגיאה בטעינת הודעות");
+          }
+        });
     } else {
       // We have cached messages, sync from server in background without clearing UI
-      this.loadMessages().catch(() => {
-        // Silent fail - we already have messages from cache
-      });
+      // Use setTimeout to defer to next tick for better performance
+      setTimeout(() => {
+        this.loadMessages().catch((error) => {
+          // Silent fail - we already have messages from cache
+          console.warn("[JobChatMobile] Background sync failed:", error);
+        });
+      }, 100);
     }
 
     // Initialize unread counts for all jobs
@@ -1657,7 +1828,9 @@ export default {
 
     initWebSocket() {
       const job = this.currentJob;
-      if (!job?.id && !job?._id) return;
+      if (!job?.id && !job?._id) {
+        return;
+      }
 
       if (this.socket) {
         this.socket.removeAllListeners();
@@ -1666,11 +1839,47 @@ export default {
       }
 
       const jobId = job.id || job._id;
+      const jobIdString = String(jobId);
 
-      this.socket = io(URL, { transports: ["websocket", "polling"] });
+      this.socket = io(URL, {
+        transports: ["websocket", "polling"],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 5,
+      });
 
+      // Handle connection success
       this.socket.on("connect", () => {
-        this.socket.emit("join-job", String(jobId));
+        this.socket.emit("join-job", jobIdString);
+      });
+
+      // Handle connection errors
+      this.socket.on("connect_error", (error) => {
+        this.toast?.showError("שגיאה בחיבור לשרת. מנסה להתחבר מחדש...");
+      });
+
+      // Handle disconnection
+      this.socket.on("disconnect", (reason) => {
+        if (reason === "io server disconnect") {
+          // Server disconnected, need to reconnect manually
+          this.socket.connect();
+        }
+      });
+
+      // Handle reconnection
+      this.socket.on("reconnect", (attemptNumber) => {
+        this.socket.emit("join-job", jobIdString);
+      });
+
+      // Handle reconnection attempts
+      this.socket.on("reconnect_attempt", () => {
+        // Silent reconnect attempt
+      });
+
+      // Handle reconnection failure
+      this.socket.on("reconnect_failed", () => {
+        this.toast?.showError("לא ניתן להתחבר לשרת. אנא רענן את הדף.");
       });
 
       this.socket.on("job-status-updated", (data) => {
@@ -1877,12 +2086,29 @@ export default {
     },
 
     async loadMessages() {
+      console.log("[JobChatMobile] loadMessages() called");
       try {
         const job = this.currentJob;
+        console.log("[JobChatMobile] loadMessages - currentJob:", job);
+
+        if (!job) {
+          console.warn("[JobChatMobile] No current job found in loadMessages");
+          return;
+        }
+
         const jobId = job?.id || job?._id;
-        if (!jobId) return;
+        console.log("[JobChatMobile] loadMessages - jobId:", jobId);
+
+        if (!jobId) {
+          console.warn("[JobChatMobile] No jobId found in current job:", job);
+          return;
+        }
 
         const jobIdStr = String(jobId);
+        console.log(
+          "[JobChatMobile] loadMessages - fetching from:",
+          `${URL}/jobs/${jobId}/messages`
+        );
 
         // Reset unread count for current job when loading messages
         this.unreadCounts[jobIdStr] = 0;
@@ -1890,9 +2116,32 @@ export default {
         // Save current messages as fallback in case of error
         const currentMessages = [...this.messages];
 
-        // Always load from server to ensure we have the latest messages
-        // (cache is only for fast display while switching tabs, not for persistence across refreshes)
-        const { data } = await axios.get(`${URL}/jobs/${jobId}/messages`);
+        // Load from server with timeout to prevent hanging
+        let response;
+        try {
+          response = await Promise.race([
+            axios.get(`${URL}/jobs/${jobId}/messages`, {
+              timeout: 10000, // 10 second timeout (increased for slower connections)
+            }),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("Request timeout")), 10000)
+            ),
+          ]);
+        } catch (timeoutError) {
+          // If timeout, try to use cached messages if available
+          const jobIdStr = String(jobId);
+          if (
+            this.messagesCache[jobIdStr] &&
+            this.messagesCache[jobIdStr].length > 0
+          ) {
+            this.messages = [...this.messagesCache[jobIdStr]];
+            return; // Use cached messages
+          }
+          throw timeoutError; // Re-throw if no cache available
+        }
+
+        // Extract data from axios response
+        const data = response?.data || response;
 
         // Check if data exists and has messages array
         if (data && data.success && Array.isArray(data.messages)) {
@@ -1968,11 +2217,13 @@ export default {
           // If we have current messages, keep them (don't clear)
         }
       } catch (e) {
+        // Log error for debugging
+        console.error("[JobChatMobile] Error in loadMessages:", e);
+
         // On error, don't clear messages - keep what we have
         // Only show error if we don't have any messages at all
         if (this.messages.length === 0) {
-          this.toast?.showError("שגיאה בטעינת הודעות");
-          // Try to load from cache as last resort
+          // Try to load from cache as last resort BEFORE showing error
           const job = this.currentJob;
           const jobId = job?.id || job?._id;
           if (jobId) {
@@ -1980,15 +2231,19 @@ export default {
             const cachedMessages = this.messagesCache[jobIdStr];
             if (cachedMessages && cachedMessages.length > 0) {
               this.messages = [...cachedMessages];
+              return; // Successfully loaded from cache
             } else {
               // Try sessionStorage
               const storedMessages = this.loadMessagesFromStorage();
               if (storedMessages && storedMessages.length > 0) {
                 this.messages = storedMessages;
                 this.messagesCache[jobIdStr] = [...storedMessages];
+                return; // Successfully loaded from storage
               }
             }
           }
+          // Only show error if we truly have no messages
+          this.toast?.showError("שגיאה בטעינת הודעות");
         }
         // If we already have messages, silently fail (don't clear them)
       }
@@ -2852,7 +3107,7 @@ export default {
       this.scrollToBottom();
 
       try {
-        await axios.post(`${URL}/jobs/${jobId}/messages`, {
+        const response = await axios.post(`${URL}/jobs/${jobId}/messages`, {
           text: t,
           senderId: userId,
           isHandyman: this.isHandyman,

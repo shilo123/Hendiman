@@ -1242,6 +1242,8 @@ export default {
     JobChatMobile,
     AddressAutocomplete,
     MinimizableNotification,
+    ProblemReportModal,
+    IncomeDetailModal,
   },
   data() {
     return {
@@ -1295,6 +1297,7 @@ export default {
       dirFilters: { q: "", minRating: 0, minJobs: 0 },
       activeAssignedJob: null,
       isChatMinimized: false,
+      pendingActiveJobId: null, // Store active job ID from fast check
       doneJobsCache: [], // Cache for done jobs that need client approval (persists after refresh)
       showJobCancelledModal: false,
       cancelledBy: "handyman", // Track who cancelled: "handyman" or "client"
@@ -3344,6 +3347,11 @@ export default {
         // Don't show modal on error - might be temporary issue
       }
     },
+    onJobApproved() {
+      // Handler for job-approved event from ClientActions
+      // This is a placeholder - actual approval is handled in handleClientApprove
+      this.onRefresh();
+    },
     async handleClientApprove() {
       if (!this.pendingApprovalJob || this.isApprovingPayment) return;
 
@@ -4284,6 +4292,146 @@ export default {
     },
   },
   async mounted() {
+    // Fast check for active job (runs in parallel with dashboard data loading)
+    const userId = this.$route.params.id;
+    let activeJobCheckPromise = null;
+    if (userId) {
+      console.log("[Dashboard] 🚀 Starting checkActiveJob for user:", userId);
+      // Call check-active-job in parallel with fetchDashboardData
+      activeJobCheckPromise = this.store
+        .checkActiveJob(userId)
+        .then((result) => {
+          console.log("[Dashboard] 📥 checkActiveJob result:", result);
+          if (result && result.success && result.hasActiveJob && result.jobId) {
+            console.log(
+              "[Dashboard] ✅ Active job found:",
+              result.jobId,
+              "status:",
+              result.status
+            );
+
+            // If we got the full job object, verify user is assigned and use it immediately
+            if (
+              result.job &&
+              result.job.status !== "open" &&
+              result.job.status !== "done"
+            ) {
+              // Verify user is assigned to this job
+              const userIdStr = String(userId);
+              let isUserAssigned = false;
+
+              if (this.isHendiman) {
+                // For handyman - check if handymanId matches (support array)
+                if (result.job.handymanId) {
+                  if (Array.isArray(result.job.handymanId)) {
+                    isUserAssigned = result.job.handymanId.some((id) => {
+                      const idStr = id?._id
+                        ? String(id._id)
+                        : id?.$oid
+                        ? String(id.$oid)
+                        : String(id);
+                      return idStr === userIdStr;
+                    });
+                  } else {
+                    const handymanIdStr = result.job.handymanId?._id
+                      ? String(result.job.handymanId._id)
+                      : result.job.handymanId?.$oid
+                      ? String(result.job.handymanId.$oid)
+                      : String(result.job.handymanId);
+                    isUserAssigned = handymanIdStr === userIdStr;
+                  }
+                }
+              } else {
+                // For client - check if clientId matches
+                const clientIdStr = result.job.clientId?._id
+                  ? String(result.job.clientId._id)
+                  : String(result.job.clientId || "");
+                isUserAssigned =
+                  clientIdStr === userIdStr && !!result.job.handymanId;
+              }
+
+              if (isUserAssigned) {
+                this.activeAssignedJob = result.job;
+                this.isChatMinimized = false;
+                console.log(
+                  "[Dashboard] ✅ Chat opened immediately with job object:",
+                  result.jobId,
+                  "user is assigned"
+                );
+                return; // Done - chat is open
+              } else {
+                console.log(
+                  "[Dashboard] ⚠️ Active job found but user is not assigned:",
+                  result.jobId
+                );
+              }
+            }
+
+            // Otherwise, store the active job ID - will be used after dashboard data loads
+            this.pendingActiveJobId = result.jobId;
+            // Try to find job immediately if store already has jobs
+            this.$nextTick(() => {
+              const job = this.store.jobs?.find(
+                (j) => String(j._id || j.id) === String(result.jobId)
+              );
+              if (job && job.status !== "open" && job.status !== "done") {
+                // Verify user is assigned to this job
+                const userIdStr = String(userId);
+                let isUserAssigned = false;
+
+                if (this.isHendiman) {
+                  // For handyman - check if handymanId matches (support array)
+                  if (job.handymanId) {
+                    if (Array.isArray(job.handymanId)) {
+                      isUserAssigned = job.handymanId.some((id) => {
+                        const idStr = id?._id
+                          ? String(id._id)
+                          : id?.$oid
+                          ? String(id.$oid)
+                          : String(id);
+                        return idStr === userIdStr;
+                      });
+                    } else {
+                      const handymanIdStr = job.handymanId?._id
+                        ? String(job.handymanId._id)
+                        : job.handymanId?.$oid
+                        ? String(job.handymanId.$oid)
+                        : String(job.handymanId);
+                      isUserAssigned = handymanIdStr === userIdStr;
+                    }
+                  }
+                } else {
+                  // For client - check if clientId matches
+                  const clientIdStr = job.clientId?._id
+                    ? String(job.clientId._id)
+                    : String(job.clientId || "");
+                  isUserAssigned =
+                    clientIdStr === userIdStr && !!job.handymanId;
+                }
+
+                if (isUserAssigned) {
+                  this.activeAssignedJob = job;
+                  this.isChatMinimized = false;
+                  console.log(
+                    "[Dashboard] ✅ Chat opened immediately for active job:",
+                    result.jobId,
+                    "user is assigned"
+                  );
+                  this.pendingActiveJobId = null; // Clear since we found it
+                } else {
+                  console.log(
+                    "[Dashboard] ⚠️ Active job found but user is not assigned:",
+                    result.jobId
+                  );
+                }
+              }
+            });
+          }
+        })
+        .catch((error) => {
+          console.error("[Dashboard] ❌ Error checking active job:", error);
+        });
+    }
     // Don't clear activeAssignedJob on mount - let checkForAssignedJob handle it
     // this.activeAssignedJob = null;
 
@@ -4426,11 +4574,138 @@ export default {
         await this.$nextTick();
         this.checkForAssignedJobFromData(data);
 
+        // Check if we have a pending active job from the fast check
+        if (this.pendingActiveJobId && !this.activeAssignedJob) {
+          const pendingJob = this.store.jobs?.find(
+            (j) => String(j._id || j.id) === String(this.pendingActiveJobId)
+          );
+          if (
+            pendingJob &&
+            pendingJob.status !== "open" &&
+            pendingJob.status !== "done"
+          ) {
+            // Verify user is assigned to this job
+            const userId = this.store.user?._id || this.me?._id;
+            const userIdStr = String(userId);
+            let isUserAssigned = false;
+
+            if (this.isHendiman) {
+              // For handyman - check if handymanId matches (support array)
+              if (pendingJob.handymanId) {
+                if (Array.isArray(pendingJob.handymanId)) {
+                  isUserAssigned = pendingJob.handymanId.some((id) => {
+                    const idStr = id?._id
+                      ? String(id._id)
+                      : id?.$oid
+                      ? String(id.$oid)
+                      : String(id);
+                    return idStr === userIdStr;
+                  });
+                } else {
+                  const handymanIdStr = pendingJob.handymanId?._id
+                    ? String(pendingJob.handymanId._id)
+                    : pendingJob.handymanId?.$oid
+                    ? String(pendingJob.handymanId.$oid)
+                    : String(pendingJob.handymanId);
+                  isUserAssigned = handymanIdStr === userIdStr;
+                }
+              }
+            } else {
+              // For client - check if clientId matches
+              const clientIdStr = pendingJob.clientId?._id
+                ? String(pendingJob.clientId._id)
+                : String(pendingJob.clientId || "");
+              isUserAssigned =
+                clientIdStr === userIdStr && !!pendingJob.handymanId;
+            }
+
+            if (isUserAssigned) {
+              this.activeAssignedJob = pendingJob;
+              this.isChatMinimized = false;
+              console.log(
+                "[Dashboard] ✅ Chat opened for pending active job:",
+                this.pendingActiveJobId,
+                "user is assigned"
+              );
+              this.pendingActiveJobId = null; // Clear
+            } else {
+              console.log(
+                "[Dashboard] ⚠️ Pending job found but user is not assigned:",
+                this.pendingActiveJobId
+              );
+              this.pendingActiveJobId = null; // Clear invalid pending job
+            }
+          }
+        }
+
         // אם לא מצאנו עבודה משובצת, נבדוק שוב אחרי שהנתונים נטענו לגמרי
         if (!this.activeAssignedJob) {
           // נבדוק גם ב-store.jobs (למקרה שהנתונים עודכנו אחרי checkForAssignedJobFromData)
           setTimeout(() => {
             this.checkForAssignedJob();
+            // Also check pending active job again after delay
+            if (this.pendingActiveJobId && !this.activeAssignedJob) {
+              const pendingJob = this.store.jobs?.find(
+                (j) => String(j._id || j.id) === String(this.pendingActiveJobId)
+              );
+              if (
+                pendingJob &&
+                pendingJob.status !== "open" &&
+                pendingJob.status !== "done"
+              ) {
+                // Verify user is assigned to this job
+                const userId = this.store.user?._id || this.me?._id;
+                const userIdStr = String(userId);
+                let isUserAssigned = false;
+
+                if (this.isHendiman) {
+                  // For handyman - check if handymanId matches (support array)
+                  if (pendingJob.handymanId) {
+                    if (Array.isArray(pendingJob.handymanId)) {
+                      isUserAssigned = pendingJob.handymanId.some((id) => {
+                        const idStr = id?._id
+                          ? String(id._id)
+                          : id?.$oid
+                          ? String(id.$oid)
+                          : String(id);
+                        return idStr === userIdStr;
+                      });
+                    } else {
+                      const handymanIdStr = pendingJob.handymanId?._id
+                        ? String(pendingJob.handymanId._id)
+                        : pendingJob.handymanId?.$oid
+                        ? String(pendingJob.handymanId.$oid)
+                        : String(pendingJob.handymanId);
+                      isUserAssigned = handymanIdStr === userIdStr;
+                    }
+                  }
+                } else {
+                  // For client - check if clientId matches
+                  const clientIdStr = pendingJob.clientId?._id
+                    ? String(pendingJob.clientId._id)
+                    : String(pendingJob.clientId || "");
+                  isUserAssigned =
+                    clientIdStr === userIdStr && !!pendingJob.handymanId;
+                }
+
+                if (isUserAssigned) {
+                  this.activeAssignedJob = pendingJob;
+                  this.isChatMinimized = false;
+                  console.log(
+                    "[Dashboard] ✅ Chat opened for pending active job (delayed):",
+                    this.pendingActiveJobId,
+                    "user is assigned"
+                  );
+                  this.pendingActiveJobId = null; // Clear
+                } else {
+                  console.log(
+                    "[Dashboard] ⚠️ Pending job found but user is not assigned (delayed):",
+                    this.pendingActiveJobId
+                  );
+                  this.pendingActiveJobId = null; // Clear invalid pending job
+                }
+              }
+            }
           }, 500);
         }
 

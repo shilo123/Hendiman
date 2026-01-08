@@ -1648,13 +1648,6 @@ export default {
         };
 
         // Log the coordinates we're using
-        console.log(
-          `[CreateCall] Using location: lat=${improvedLocation.lat.toFixed(
-            6
-          )}, lon=${improvedLocation.lon.toFixed(
-            6
-          )}, accuracy=${improvedLocation.accuracy.toFixed(1)}m`
-        );
 
         // Now do reverse geocoding to get the address
         try {
@@ -1745,13 +1738,6 @@ export default {
         };
 
         // Log the coordinates we're using
-        console.log(
-          `[CreateCall] Improved location: lat=${improvedLocation.lat.toFixed(
-            6
-          )}, lon=${improvedLocation.lon.toFixed(
-            6
-          )}, accuracy=${improvedLocation.accuracy.toFixed(1)}m`
-        );
 
         // Now do reverse geocoding to get the address
         try {

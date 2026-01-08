@@ -8,6 +8,9 @@
       role="dialog"
       aria-modal="true"
     >
+      <!-- Ambient glow -->
+      <div class="ps__glow" aria-hidden="true"></div>
+
       <!-- Handle (mobile) -->
       <div class="ps__handle" />
 
@@ -58,37 +61,52 @@
         <section class="card">
           <div class="card__head">
             <h3 class="card__title">פרטים אישיים</h3>
+            <span class="card__hint"
+              >עדכון הפרטים נשמר רק בלחיצה על “שמור”</span
+            >
           </div>
 
           <div class="grid">
             <label class="field">
               <span class="field__label">שם</span>
-              <input
-                v-model="form.name"
-                class="field__input"
-                type="text"
-                inputmode="text"
-              />
+              <div class="field__control">
+                <span class="field__icon" aria-hidden="true">👤</span>
+                <input
+                  v-model="form.name"
+                  class="field__input"
+                  type="text"
+                  inputmode="text"
+                  placeholder="השם שלך"
+                />
+              </div>
             </label>
 
             <label class="field">
               <span class="field__label">טלפון</span>
-              <input
-                v-model="form.phone"
-                class="field__input"
-                type="tel"
-                inputmode="tel"
-              />
+              <div class="field__control">
+                <span class="field__icon" aria-hidden="true">📞</span>
+                <input
+                  v-model="form.phone"
+                  class="field__input"
+                  type="tel"
+                  inputmode="tel"
+                  placeholder="05X-XXXXXXX"
+                />
+              </div>
             </label>
 
             <label class="field wide">
               <span class="field__label">אימייל</span>
-              <input
-                v-model="form.email"
-                class="field__input"
-                type="email"
-                inputmode="email"
-              />
+              <div class="field__control">
+                <span class="field__icon" aria-hidden="true">✉️</span>
+                <input
+                  v-model="form.email"
+                  class="field__input"
+                  type="email"
+                  inputmode="email"
+                  placeholder="name@email.com"
+                />
+              </div>
             </label>
 
             <div class="field wide">
@@ -96,13 +114,18 @@
 
               <!-- City picker trigger -->
               <button class="picker" type="button" @click="openCityPicker">
-                <span class="picker__value">
-                  {{ cityInput?.trim() ? cityInput : "בחר עיר" }}
+                <span class="picker__left">
+                  <span class="picker__icon" aria-hidden="true">📍</span>
+                  <span class="picker__value">
+                    {{ cityInput?.trim() ? cityInput : "בחר עיר" }}
+                  </span>
                 </span>
-                <span class="picker__chev">▾</span>
+                <span class="picker__chev" aria-hidden="true">▾</span>
               </button>
 
-              <span v-if="cityError" class="field__error">{{ cityError }}</span>
+              <span v-if="cityError" class="field__error">
+                {{ cityError }}
+              </span>
             </div>
           </div>
         </section>
@@ -110,8 +133,15 @@
         <!-- Specialties (handyman only) -->
         <section v-if="isHandyman" class="card">
           <div class="card__head card__head--row">
-            <h3 class="card__title">תחומי התמחות</h3>
+            <div class="card__headCol">
+              <h3 class="card__title">תחומי התמחות</h3>
+              <span class="card__hint"
+                >ככה המערכת תדע להתאים לך עבודות בול</span
+              >
+            </div>
+
             <button class="linkBtn" type="button" @click="specOpen = !specOpen">
+              <span class="linkBtn__dot" aria-hidden="true"></span>
               {{ specOpen ? "הסתר" : "ערוך" }}
             </button>
           </div>
@@ -121,8 +151,9 @@
               v-for="spec in form.specialties"
               :key="spec.name || spec"
               class="chip"
+              :title="spec.name || spec"
             >
-              {{ spec.name || spec }}
+              <span class="chip__txt">{{ spec.name || spec }}</span>
               <button
                 class="chip__x"
                 type="button"
@@ -147,6 +178,7 @@
             <!-- Payment Account Setup (handyman only) -->
             <div v-if="isHandyman" class="action-item">
               <div class="action-item__label">חשבון תשלומים</div>
+
               <a
                 v-if="onboardingUrl"
                 :href="onboardingUrl"
@@ -154,11 +186,12 @@
                 rel="noopener noreferrer"
                 class="action-btn action-btn--payment"
               >
-                <span>💳</span>
+                <span class="action-btn__icon" aria-hidden="true">💳</span>
                 <span class="action-btn__text">{{
                   hasPaymentAccount ? "שינוי חשבון" : "הגדר חשבון"
                 }}</span>
               </a>
+
               <button
                 v-else
                 class="action-btn action-btn--payment"
@@ -166,7 +199,7 @@
                 @click="fetchOnboardingLink"
                 :disabled="isLoadingOnboarding"
               >
-                <span>💳</span>
+                <span class="action-btn__icon" aria-hidden="true">💳</span>
                 <span class="action-btn__text">{{
                   isLoadingOnboarding
                     ? "טוען..."
@@ -185,7 +218,7 @@
                 type="button"
                 @click="goToPaymentSettings"
               >
-                <span>💳</span>
+                <span class="action-btn__icon" aria-hidden="true">💳</span>
                 <span class="action-btn__text">שינוי אשראי לחיוב מנוי</span>
               </button>
             </div>
@@ -199,7 +232,7 @@
                 @click="handleLogout"
                 :disabled="isLoggingOut"
               >
-                <span>🚪</span>
+                <span class="action-btn__icon" aria-hidden="true">🚪</span>
                 <span class="action-btn__text">{{
                   isLoggingOut ? "מתנתק..." : "התנתק"
                 }}</span>
@@ -214,7 +247,7 @@
                 type="button"
                 @click="showDeleteConfirm = true"
               >
-                <span>🗑️</span>
+                <span class="action-btn__icon" aria-hidden="true">🗑️</span>
                 <span class="action-btn__text">מחק משתמש</span>
               </button>
             </div>
@@ -242,19 +275,26 @@
       <div class="pickerModal__card">
         <div class="pickerModal__head">
           <div class="pickerModal__title">בחר עיר</div>
-          <button class="ps__iconBtn" type="button" @click="closeCityPicker">
+          <button
+            class="ps__iconBtn ps__iconBtn--sm"
+            type="button"
+            @click="closeCityPicker"
+          >
             ✕
           </button>
         </div>
 
-        <input
-          v-model="citySearch"
-          class="pickerModal__search"
-          type="text"
-          autocomplete="off"
-          placeholder="חפש עיר…"
-          @input="onCitySearch"
-        />
+        <div class="pickerModal__searchWrap">
+          <span class="pickerModal__searchIcon" aria-hidden="true">🔎</span>
+          <input
+            v-model="citySearch"
+            class="pickerModal__search"
+            type="text"
+            autocomplete="off"
+            placeholder="חפש עיר…"
+            @input="onCitySearch"
+          />
+        </div>
 
         <div class="pickerModal__list">
           <button
@@ -264,12 +304,20 @@
             class="pickerModal__item"
             @click="selectCity(c.name)"
           >
-            {{ c.name }}
+            <span class="pickerModal__itemIcon" aria-hidden="true">📍</span>
+            <span class="pickerModal__itemTxt">{{ c.name }}</span>
+            <span class="pickerModal__itemChev" aria-hidden="true">›</span>
           </button>
 
           <div v-if="filteredCities.length === 0" class="pickerModal__empty">
             לא נמצאה עיר
           </div>
+        </div>
+
+        <div class="pickerModal__footer">
+          <button class="btn btn--ghost" type="button" @click="closeCityPicker">
+            סגור
+          </button>
         </div>
       </div>
     </div>
@@ -281,15 +329,14 @@
       dir="rtl"
       @click.self="showCancelSubscriptionConfirm = false"
     >
-      <div class="cancelSubscriptionModal__content">
-        <div class="cancelSubscriptionModal__icon">🚫</div>
-        <h2 class="cancelSubscriptionModal__title">ביטול מנוי</h2>
-        <p class="cancelSubscriptionModal__message">
-          האם אתה בטוח שברצונך לבטל את המנוי?
-        </p>
-        <div class="cancelSubscriptionModal__actions">
+      <div class="modal">
+        <div class="modal__icon">🚫</div>
+        <h2 class="modal__title">ביטול מנוי</h2>
+        <p class="modal__message">האם אתה בטוח שברצונך לבטל את המנוי?</p>
+
+        <div class="modal__actions">
           <button
-            class="cancelSubscriptionModal__btn cancelSubscriptionModal__btn--cancel"
+            class="modal__btn modal__btn--ghost"
             type="button"
             @click="showCancelSubscriptionConfirm = false"
             :disabled="isCancellingSubscription"
@@ -297,7 +344,7 @@
             בטל
           </button>
           <button
-            class="cancelSubscriptionModal__btn cancelSubscriptionModal__btn--confirm"
+            class="modal__btn modal__btn--danger"
             type="button"
             @click="handleCancelSubscription"
             :disabled="isCancellingSubscription"
@@ -315,22 +362,23 @@
       dir="rtl"
       @click.self="showDeleteConfirm = false"
     >
-      <div class="deleteUserModal__content">
-        <div class="deleteUserModal__icon">⚠️</div>
-        <h2 class="deleteUserModal__title">מחיקת משתמש</h2>
-        <p class="deleteUserModal__message">
+      <div class="modal modal--warn">
+        <div class="modal__icon">⚠️</div>
+        <h2 class="modal__title">מחיקת משתמש</h2>
+        <p class="modal__message">
           האם אתה בטוח שברצונך למחוק את המשתמש? פעולה זו אינה הפיכה.
         </p>
-        <div class="deleteUserModal__actions">
+
+        <div class="modal__actions">
           <button
-            class="deleteUserModal__btn deleteUserModal__btn--cancel"
+            class="modal__btn modal__btn--ghost"
             type="button"
             @click="showDeleteConfirm = false"
           >
             בטל
           </button>
           <button
-            class="deleteUserModal__btn deleteUserModal__btn--confirm"
+            class="modal__btn modal__btn--danger"
             type="button"
             @click="handleDeleteUser"
             :disabled="isDeleting"
@@ -391,7 +439,7 @@ export default {
       const q = (this.citySearch || "").trim();
       const list = cities.filter((c) => c.name && typeof c.name === "string");
 
-      if (!q) return list.slice(1, 60); // יותר נוח ברשימה
+      if (!q) return list.slice(1, 60);
       return list.filter((c) => c.name.includes(q)).slice(0, 60);
     },
   },
@@ -404,12 +452,10 @@ export default {
         this.form = this.buildForm(val);
         this.cityInput = val?.address || "";
 
-        // Check subscription status
         this.hasActiveSubscription =
           val?.hasActiveSubscription === true ||
           val?.trialExpiresAt === "always";
 
-        // תיקון: חיפוש לפי address (לא val.city)
         if (val?.address) {
           const foundCity = cities.find((c) => c.name === val.address);
           this.cityEnglishName = foundCity
@@ -428,7 +474,6 @@ export default {
         this.specOpen = false;
         this.cityError = "";
       } else if (v && this.isHandyman) {
-        // Check onboarding status when profile sheet opens
         this.checkOnboardingStatus();
       }
     },
@@ -452,9 +497,7 @@ export default {
       this.cityPickerOpen = false;
       this.citySearch = "";
     },
-    onCitySearch() {
-      // לא צריך כלום, computed עושה
-    },
+    onCitySearch() {},
     selectCity(name) {
       this.form.address = name;
       this.cityInput = name;
@@ -498,7 +541,6 @@ export default {
 
       this.form.address = this.cityInput.trim();
 
-      // שלח גם שם עיר באנגלית
       this.$emit("save", {
         ...this.form,
         cityEnglishName: this.cityEnglishName,
@@ -541,17 +583,11 @@ export default {
     async handleLogout() {
       this.isLoggingOut = true;
       try {
-        // Call logout endpoint
         await axios.get(`${URL}/auth/logout`);
-
-        // Emit logout event to parent
         this.$emit("logout");
         this.$emit("close");
-
-        // Redirect to home page
         this.$router.push("/");
       } catch (error) {
-        // Even if logout fails on server, still redirect
         this.$emit("logout");
         this.$emit("close");
         this.$router.push("/");
@@ -559,6 +595,7 @@ export default {
         this.isLoggingOut = false;
       }
     },
+
     async handleCancelSubscription() {
       const userId = this.user?._id || this.user?.id;
       if (!userId) {
@@ -568,31 +605,16 @@ export default {
 
       this.isCancellingSubscription = true;
       try {
-        console.log(
-          "[ProfileSheet] Cancelling subscription for userId:",
-          userId
-        );
         const response = await axios.post(
           `${URL}/api/subscription/cancel`,
-          {
-            userId: String(userId),
-          },
-          {
-            timeout: 30000, // 30 seconds timeout
-          }
-        );
-
-        console.log(
-          "[ProfileSheet] Cancel subscription response:",
-          response.data
+          { userId: String(userId) },
+          { timeout: 30000 }
         );
 
         if (response.data && response.data.success) {
           this.showCancelSubscriptionConfirm = false;
           this.toast?.showSuccess("המנוי בוטל בהצלחה");
-          // Refresh user data
           this.$emit("refresh-user");
-          // Update local state
           this.hasActiveSubscription = false;
         } else {
           const errorMessage = response.data?.message || "שגיאה בביטול המנוי";
@@ -607,16 +629,13 @@ export default {
         let errorMessage = "שגיאה בביטול המנוי";
 
         if (error.response) {
-          // Server responded with error
           errorMessage =
             error.response.data?.message ||
             error.response.data?.error ||
             `שגיאת שרת: ${error.response.status}`;
         } else if (error.request) {
-          // Request was made but no response received
           errorMessage = "לא התקבלה תשובה מהשרת. אנא נסה שוב מאוחר יותר.";
         } else {
-          // Error in request setup
           errorMessage = error.message || "שגיאה בביטול המנוי";
         }
 
@@ -630,9 +649,7 @@ export default {
       if (!this.isHandyman) return;
 
       const handymanId = this.user?._id || this.user?.id;
-      if (!handymanId) {
-        return;
-      }
+      if (!handymanId) return;
 
       try {
         const response = await axios.get(
@@ -641,15 +658,11 @@ export default {
 
         if (response.data && response.data.success) {
           const { needsOnboarding } = response.data;
-
-          // Update hasPaymentAccount based on onboarding status
           this.hasPaymentAccount = !needsOnboarding;
 
           if (needsOnboarding) {
-            // Fetch onboarding link
             await this.fetchOnboardingLink();
           } else {
-            // Onboarding is complete, clear URL
             this.onboardingUrl = null;
           }
         }
@@ -657,7 +670,6 @@ export default {
         this.toast?.showError(
           " לא הצלחנו ליצור קישור הגדרת תשלומים. אנא נסה שוב מאוחר יותר."
         );
-        // Don't show error to user - just try to fetch link
         await this.fetchOnboardingLink();
       }
     },
@@ -667,6 +679,7 @@ export default {
 
       const handymanId = this.user?._id || this.user?.id;
       if (!handymanId) return;
+
       this.isLoadingOnboarding = true;
       try {
         const response = await axios.post(
@@ -691,6 +704,7 @@ export default {
         this.isLoadingOnboarding = false;
       }
     },
+
     goToPaymentSettings() {
       const userId = this.user?._id || this.user?.id;
       if (!userId) {
@@ -712,42 +726,91 @@ $bg: #0b0b0f;
 $panel: #0f1016;
 $text: rgba(255, 255, 255, 0.92);
 $muted: rgba(255, 255, 255, 0.6);
+$stroke: rgba(255, 255, 255, 0.1);
+$stroke2: rgba(255, 255, 255, 0.14);
 $orange: #ff6a00;
 $orange2: #ff8a2b;
+$orange3: #ffb36b;
+$danger: #ef4444;
+$shadow: 0 24px 70px rgba(0, 0, 0, 0.62);
+$shadowO: 0 18px 55px rgba(255, 106, 0, 0.22);
 
 .ps {
   position: fixed;
   inset: 0;
-  z-index: 100001; /* Higher than DashboardTopBar (100000) */
+  z-index: 100001;
   display: flex;
-  align-items: flex-end; /* bottom sheet feel */
+  align-items: flex-end;
   justify-content: center;
-  font-family: "Heebo", sans-serif;
+  font-family: "Heebo", system-ui, -apple-system, Segoe UI, Arial, sans-serif;
 }
 
 .ps__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.62);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.64);
+  backdrop-filter: blur(8px);
 }
 
 .ps__panel {
   position: relative;
-  width: min(720px, 100vw);
-  height: min(86vh, 760px);
-  background: $panel;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 18px 18px 0 0;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  width: min(740px, 100vw);
+  height: min(86vh, 780px);
+  background: radial-gradient(
+      900px 260px at 18% 0%,
+      rgba($orange, 0.22),
+      transparent 60%
+    ),
+    radial-gradient(
+      700px 260px at 85% 18%,
+      rgba($orange2, 0.16),
+      transparent 58%
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.12)),
+    $panel;
+  border: 1px solid rgba($orange, 0.18);
+  border-bottom: 0;
+  border-radius: 20px 20px 0 0;
+  box-shadow: $shadow;
   overflow: hidden;
   color: $text;
   display: flex;
   flex-direction: column;
+  transform: translateY(0);
+  animation: sheetIn 0.28s cubic-bezier(0.2, 0.9, 0.2, 1);
 }
 
 .ps__panel--handyman {
-  width: min(860px, 100vw);
+  width: min(900px, 100vw);
+}
+
+.ps__glow {
+  position: absolute;
+  inset: -2px;
+  pointer-events: none;
+  background: radial-gradient(
+      1200px 420px at 20% -10%,
+      rgba($orange, 0.18),
+      transparent 55%
+    ),
+    radial-gradient(
+      900px 380px at 90% 0%,
+      rgba($orange2, 0.12),
+      transparent 55%
+    );
+  filter: blur(14px);
+  opacity: 0.9;
+}
+
+@keyframes sheetIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @media (max-width: 768px) {
@@ -759,11 +822,17 @@ $orange2: #ff8a2b;
 }
 
 .ps__handle {
-  width: 44px;
-  height: 5px;
+  width: 54px;
+  height: 6px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  margin: 10px auto 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.18),
+    rgba($orange, 0.22),
+    rgba(255, 255, 255, 0.18)
+  );
+  margin: 10px auto 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
 }
 
 .ps__header {
@@ -773,28 +842,52 @@ $orange2: #ff8a2b;
   padding: 10px 12px 12px;
   background: linear-gradient(
     180deg,
-    rgba(15, 16, 22, 0.98),
-    rgba(15, 16, 22, 0.92)
+    rgba(10, 11, 16, 0.92),
+    rgba(10, 11, 16, 0.86)
   );
-  border-bottom: 1px solid rgba($orange, 0.12);
+  border-bottom: 1px solid rgba($orange, 0.14);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  backdrop-filter: blur(10px);
 }
 
 .ps__iconBtn {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.22);
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.28);
   color: $text;
   font-size: 16px;
   display: grid;
   place-items: center;
   cursor: pointer;
   flex-shrink: 0;
+  transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.ps__iconBtn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba($orange, 0.25);
+  transform: translateY(-1px);
+}
+
+.ps__iconBtn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.ps__iconBtn--sm {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+}
+
+.ps__iconBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba($orange, 0.22);
+  border-color: rgba($orange, 0.35);
 }
 
 .ps__headText {
@@ -806,29 +899,15 @@ $orange2: #ff8a2b;
   margin: 0;
   font-size: 18px;
   font-weight: 1000;
-  line-height: 1.1;
+  line-height: 1.15;
+  letter-spacing: 0.2px;
 }
 
 .ps__sub {
   margin: 4px 0 0;
   font-size: 12px;
   color: $muted;
-  font-weight: 800;
-}
-
-.ps__chip {
-  padding: 8px 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 1000;
-  border: 1px solid rgba($orange, 0.22);
-  color: $orange2;
-  background: rgba(255, 255, 255, 0.03);
-  white-space: nowrap;
-}
-.ps__chip--handyman {
-  border-color: rgba($orange, 0.35);
-  color: $orange;
+  font-weight: 900;
 }
 
 .ps__headerRight {
@@ -838,45 +917,70 @@ $orange2: #ff8a2b;
   flex-shrink: 0;
 }
 
+.ps__chip {
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 1000;
+  border: 1px solid rgba($orange, 0.22);
+  color: $orange2;
+  background: rgba(255, 255, 255, 0.04);
+  white-space: nowrap;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+}
+
+.ps__chip--handyman {
+  border-color: rgba($orange, 0.38);
+  color: $orange3;
+  background: rgba($orange, 0.08);
+}
+
 .ps__cancelSubscriptionBtn {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
+  border-radius: 12px;
+  border: 1px solid rgba($danger, 0.32);
+  background: rgba($danger, 0.12);
+  color: #ff6b6b;
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 1000;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease;
   white-space: nowrap;
 }
 
 .ps__cancelSubscriptionBtn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba($danger, 0.2);
+  border-color: rgba($danger, 0.5);
   transform: translateY(-1px);
+}
+
+.ps__cancelSubscriptionBtn:active {
+  transform: translateY(0) scale(0.99);
+}
+
+.ps__cancelSubscriptionBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba($danger, 0.22);
 }
 
 .ps__cancelSubscriptionBtn__icon {
   font-size: 14px;
   line-height: 1;
 }
-
 .ps__cancelSubscriptionBtn__text {
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 1000;
 }
 
 @media (max-width: 400px) {
   .ps__cancelSubscriptionBtn {
-    padding: 6px 10px;
-    font-size: 10px;
+    padding: 7px 10px;
   }
   .ps__cancelSubscriptionBtn__text {
-    display: none; /* Hide text on very small screens, show only icon */
+    display: none;
   }
 }
 
@@ -891,20 +995,31 @@ $orange2: #ff8a2b;
 }
 
 .card {
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 255, 255, 0.03)
+  );
   padding: 12px;
-}
-
-.card--danger {
-  border-color: rgba(239, 68, 68, 0.22);
-  background: rgba(239, 68, 68, 0.06);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.22);
 }
 
 .card__head {
   margin-bottom: 10px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
 }
+
+.card__headCol {
+  display: grid;
+  gap: 3px;
+}
+
 .card__head--row {
   display: flex;
   align-items: center;
@@ -916,7 +1031,13 @@ $orange2: #ff8a2b;
   margin: 0;
   font-size: 13px;
   font-weight: 1000;
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.card__hint {
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 900;
+  font-size: 11px;
 }
 
 .grid {
@@ -924,6 +1045,7 @@ $orange2: #ff8a2b;
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
 }
+
 @media (max-width: 520px) {
   .grid {
     grid-template-columns: 1fr;
@@ -944,37 +1066,66 @@ $orange2: #ff8a2b;
 .field__label {
   font-size: 12px;
   font-weight: 900;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.field__control {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.field__icon {
+  position: absolute;
+  right: 12px;
+  font-size: 14px;
+  opacity: 0.85;
+  pointer-events: none;
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.22));
 }
 
 .field__input {
-  height: 44px;
+  width: 100%;
+  height: 46px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.18);
+  background: rgba(0, 0, 0, 0.2);
   color: $text;
-  padding: 0 12px;
+  padding: 0 40px 0 12px;
   font-weight: 900;
   outline: none;
   font-size: 15px;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.15s ease,
+    background 0.2s ease;
+}
+
+.field__input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+  font-weight: 800;
 }
 
 .field__input:focus {
-  border-color: rgba($orange, 0.45);
+  border-color: rgba($orange, 0.5);
   box-shadow: 0 0 0 3px rgba($orange, 0.14);
+  background: rgba(0, 0, 0, 0.26);
+}
+
+.field__input:focus-visible {
+  outline: none;
 }
 
 .field__error {
   font-size: 12px;
   color: #ff8888;
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .picker {
-  height: 44px;
+  width: 100%;
+  height: 46px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.18);
+  background: rgba(0, 0, 0, 0.2);
   color: $text;
   padding: 0 12px;
   display: flex;
@@ -982,25 +1133,87 @@ $orange2: #ff8a2b;
   justify-content: space-between;
   font-weight: 1000;
   cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.picker__left {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.picker__icon {
+  font-size: 14px;
+  opacity: 0.9;
 }
 
 .picker__value {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 90%;
+  max-width: 92%;
 }
 
 .picker__chev {
-  opacity: 0.7;
+  opacity: 0.75;
+  transition: transform 0.2s ease;
+}
+
+.picker:hover {
+  border-color: rgba($orange, 0.25);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-1px);
+}
+
+.picker:active {
+  transform: translateY(0) scale(0.995);
+}
+
+.picker:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba($orange, 0.18);
+  border-color: rgba($orange, 0.35);
 }
 
 .linkBtn {
-  border: none;
-  background: transparent;
-  color: $orange2;
+  border: 1px solid rgba($orange, 0.22);
+  background: rgba($orange, 0.08);
+  color: $orange3;
   font-weight: 1000;
   cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease;
+  white-space: nowrap;
+}
+
+.linkBtn__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, $orange, $orange2);
+  box-shadow: 0 0 0 4px rgba($orange, 0.12);
+}
+
+.linkBtn:hover {
+  background: rgba($orange, 0.12);
+  border-color: rgba($orange, 0.35);
+  transform: translateY(-1px);
+}
+
+.linkBtn:active {
+  transform: translateY(0) scale(0.99);
+}
+
+.linkBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba($orange, 0.18);
 }
 
 .chips {
@@ -1016,20 +1229,44 @@ $orange2: #ff8a2b;
   gap: 8px;
   border-radius: 999px;
   padding: 8px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.06);
   font-weight: 900;
   font-size: 12px;
+  max-width: 100%;
+}
+
+.chip__txt {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chip__x {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.22);
   color: $text;
   cursor: pointer;
+  transition: transform 0.12s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.chip__x:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba($orange, 0.22);
+  transform: translateY(-1px);
+}
+
+.chip__x:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.chip__x:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba($orange, 0.16);
 }
 
 .specEditor {
@@ -1040,83 +1277,20 @@ $orange2: #ff8a2b;
 
 .muted {
   color: $muted;
-  font-weight: 800;
+  font-weight: 900;
   font-size: 12px;
 }
 
-.logoutBtn {
-  width: 100%;
-  height: 44px;
-  border-radius: 14px;
-  border: 1px solid rgba($orange, 0.35);
-  background: rgba($orange, 0.12);
-  color: $orange;
-  font-weight: 1000;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.logoutBtn:hover:not(:disabled) {
-  background: rgba($orange, 0.18);
-  border-color: rgba($orange, 0.45);
-}
-
-.logoutBtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.paymentBtn {
-  width: 100%;
-  height: 44px;
-  border-radius: 14px;
-  border: 1px solid rgba($orange, 0.35);
-  background: rgba($orange, 0.12);
-  color: $orange;
-  font-weight: 1000;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  text-decoration: none;
-}
-
-.paymentBtn:hover:not(:disabled) {
-  background: rgba($orange, 0.18);
-  border-color: rgba($orange, 0.45);
-}
-
-.paymentBtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.paymentBtn span {
-  font-size: 18px;
-}
-
-.dangerBtn {
-  width: 100%;
-  height: 44px;
-  border-radius: 14px;
-  border: 1px solid rgba(239, 68, 68, 0.35);
-  background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
-  font-weight: 1000;
-  cursor: pointer;
-}
-
-/* Actions grid - all buttons in one row */
+/* Actions */
 .card--actions {
   padding: 16px;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 106, 0, 0.05) 0%,
-    rgba(255, 138, 43, 0.03) 100%
-  );
-  border: 1px solid rgba($orange, 0.15);
+  background: radial-gradient(
+      900px 260px at 30% 0%,
+      rgba($orange, 0.14),
+      transparent 55%
+    ),
+    linear-gradient(135deg, rgba(255, 106, 0, 0.06), rgba(255, 138, 43, 0.03));
+  border: 1px solid rgba($orange, 0.18);
   border-radius: 18px;
 }
 
@@ -1136,7 +1310,7 @@ $orange2: #ff8a2b;
 .action-item__label {
   font-size: 11px;
   font-weight: 1000;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.68);
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -1146,27 +1320,27 @@ $orange2: #ff8a2b;
 
 .action-btn {
   width: 100%;
-  min-height: 48px;
-  border-radius: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
+  min-height: 50px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   background: linear-gradient(
     135deg,
-    rgba(255, 255, 255, 0.08) 0%,
-    rgba(255, 255, 255, 0.04) 100%
+    rgba(255, 255, 255, 0.09),
+    rgba(255, 255, 255, 0.04)
   );
   color: $text;
   font-weight: 1000;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.18s ease, box-shadow 0.25s ease,
+    border-color 0.2s ease, background 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 10px 8px;
+  gap: 8px;
+  padding: 10px 10px;
   text-decoration: none;
-  flex-direction: row;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
   position: relative;
   overflow: hidden;
 }
@@ -1174,144 +1348,51 @@ $orange2: #ff8a2b;
 .action-btn::before {
   content: "";
   position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.1),
-    transparent
+  inset: 0;
+  background: radial-gradient(
+    500px 120px at 20% 0%,
+    rgba(255, 255, 255, 0.12),
+    transparent 60%
   );
-  transition: left 0.5s;
-}
-
-.action-btn:hover:not(:disabled)::before {
-  left: 100%;
+  opacity: 0;
+  transition: opacity 0.25s ease;
 }
 
 .action-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: rgba($orange, 0.22);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
   background: linear-gradient(
     135deg,
-    rgba(255, 255, 255, 0.12) 0%,
-    rgba(255, 255, 255, 0.08) 100%
+    rgba(255, 255, 255, 0.12),
+    rgba(255, 255, 255, 0.06)
   );
-  border-color: rgba(255, 255, 255, 0.25);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.action-btn:hover:not(:disabled)::before {
+  opacity: 1;
 }
 
 .action-btn:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(0) scale(0.995);
 }
 
 .action-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
-.action-btn--payment {
-  border-color: rgba($orange, 0.4);
-  background: linear-gradient(
-    135deg,
-    rgba($orange, 0.18) 0%,
-    rgba($orange2, 0.12) 100%
-  );
-  color: $orange2;
-  box-shadow: 0 2px 12px rgba($orange, 0.2);
+.action-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba($orange, 0.18), 0 18px 44px rgba(0, 0, 0, 0.34);
 }
 
-.action-btn--payment:hover:not(:disabled) {
-  background: linear-gradient(
-    135deg,
-    rgba($orange, 0.25) 0%,
-    rgba($orange2, 0.18) 100%
-  );
-  border-color: rgba($orange, 0.55);
-  box-shadow: 0 4px 20px rgba($orange, 0.35);
-}
-
-.action-btn--payment span:first-child,
-.action-btn--subscription span:first-child,
-.action-btn--logout span:first-child,
-.action-btn--danger span:first-child {
+.action-btn__icon {
   font-size: 16px;
-  flex-shrink: 0;
   line-height: 1;
-}
-
-.action-btn--payment span:first-child {
-  filter: drop-shadow(0 2px 4px rgba($orange, 0.3));
-}
-
-.action-btn--subscription {
-  border-color: rgba(76, 175, 80, 0.4);
-  background: linear-gradient(
-    135deg,
-    rgba(76, 175, 80, 0.18) 0%,
-    rgba(139, 195, 74, 0.12) 100%
-  );
-  color: #4caf50;
-  box-shadow: 0 2px 12px rgba(76, 175, 80, 0.2);
-}
-
-.action-btn--subscription:hover:not(:disabled) {
-  background: linear-gradient(
-    135deg,
-    rgba(76, 175, 80, 0.25) 0%,
-    rgba(139, 195, 74, 0.18) 100%
-  );
-  border-color: rgba(76, 175, 80, 0.55);
-  box-shadow: 0 4px 20px rgba(76, 175, 80, 0.35);
-}
-
-.action-btn--subscription span:first-child {
-  filter: drop-shadow(0 2px 4px rgba(76, 175, 80, 0.3));
-}
-
-.action-btn--logout {
-  border-color: rgba($orange, 0.4);
-  background: linear-gradient(
-    135deg,
-    rgba($orange, 0.15) 0%,
-    rgba($orange2, 0.1) 100%
-  );
-  color: $orange2;
-  box-shadow: 0 2px 12px rgba($orange, 0.15);
-}
-
-.action-btn--logout:hover:not(:disabled) {
-  background: linear-gradient(
-    135deg,
-    rgba($orange, 0.22) 0%,
-    rgba($orange2, 0.15) 100%
-  );
-  border-color: rgba($orange, 0.55);
-  box-shadow: 0 4px 20px rgba($orange, 0.3);
-}
-
-.action-btn--danger {
-  border-color: rgba(239, 68, 68, 0.4);
-  background: linear-gradient(
-    135deg,
-    rgba(239, 68, 68, 0.18) 0%,
-    rgba(220, 38, 38, 0.12) 100%
-  );
-  color: #ef4444;
-  box-shadow: 0 2px 12px rgba(239, 68, 68, 0.2);
-}
-
-.action-btn--danger:hover:not(:disabled) {
-  background: linear-gradient(
-    135deg,
-    rgba(239, 68, 68, 0.25) 0%,
-    rgba(220, 38, 38, 0.18) 100%
-  );
-  border-color: rgba(239, 68, 68, 0.55);
-  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.35);
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.25));
 }
 
 .action-btn__text {
@@ -1322,69 +1403,52 @@ $orange2: #ff8a2b;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
-  font-weight: 900;
+  font-weight: 1000;
 }
 
-/* Mobile responsive - 400px and below */
-@media (max-width: 400px) {
-  .actions-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-  }
-
-  .card--actions {
-    padding: 12px;
-  }
-
-  .action-btn {
-    min-height: 46px;
-    padding: 8px 6px;
-    border-radius: 10px;
-    font-size: 11px;
-  }
-
-  .action-btn__text {
-    font-size: 10px;
-  }
-
-  .action-item__label {
-    font-size: 9px;
-  }
-
-  .action-btn--payment span:first-child,
-  .action-btn--subscription span:first-child,
-  .action-btn--logout span:first-child,
-  .action-btn--danger span:first-child {
-    font-size: 14px;
-  }
+.action-btn--payment {
+  border-color: rgba($orange, 0.36);
+  background: linear-gradient(
+    135deg,
+    rgba($orange, 0.18),
+    rgba($orange2, 0.12)
+  );
+  color: $orange3;
+  box-shadow: 0 14px 34px rgba($orange, 0.18);
 }
 
-/* Tablet and small desktop - between 400px and 600px */
-@media (min-width: 401px) and (max-width: 600px) {
-  .actions-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
+.action-btn--payment:hover:not(:disabled) {
+  border-color: rgba($orange, 0.55);
+  box-shadow: 0 18px 44px rgba($orange, 0.26);
 }
 
-/* Desktop - better spacing */
-@media (min-width: 601px) {
-  .actions-grid {
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 14px;
-  }
-
-  .action-btn {
-    min-height: 52px;
-    font-size: 12px;
-  }
-
-  .action-btn__text {
-    font-size: 11px;
-  }
+.action-btn--subscription {
+  border-color: rgba(76, 175, 80, 0.4);
+  background: linear-gradient(
+    135deg,
+    rgba(76, 175, 80, 0.16),
+    rgba(139, 195, 74, 0.11)
+  );
+  color: #8cff9d;
 }
 
-/* Sticky footer buttons (mobile friendly) */
+.action-btn--logout {
+  border-color: rgba($orange2, 0.34);
+  background: linear-gradient(135deg, rgba($orange, 0.14), rgba($orange2, 0.1));
+  color: $orange3;
+}
+
+.action-btn--danger {
+  border-color: rgba($danger, 0.42);
+  background: linear-gradient(
+    135deg,
+    rgba($danger, 0.18),
+    rgba(220, 38, 38, 0.12)
+  );
+  color: #ff8a8a;
+}
+
+/* Footer */
 .ps__footer {
   position: sticky;
   bottom: 0;
@@ -1394,19 +1458,22 @@ $orange2: #ff8a2b;
   padding: 12px;
   background: linear-gradient(
     180deg,
-    rgba(15, 16, 22, 0.92),
-    rgba(15, 16, 22, 0.98)
+    rgba(10, 11, 16, 0.78),
+    rgba(10, 11, 16, 0.92)
   );
-  border-top: 1px solid rgba($orange, 0.1);
+  border-top: 1px solid rgba($orange, 0.12);
+  backdrop-filter: blur(10px);
 }
 
 .btn {
   flex: 1;
-  height: 44px;
+  height: 46px;
   border-radius: 14px;
   font-weight: 1100;
   cursor: pointer;
   border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease,
+    background 0.2s ease;
 }
 
 .btn--ghost {
@@ -1414,34 +1481,63 @@ $orange2: #ff8a2b;
   color: $text;
 }
 
+.btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba($orange, 0.18);
+  transform: translateY(-1px);
+}
+
 .btn--primary {
   background: linear-gradient(135deg, $orange, $orange2);
   color: #0b0b0f;
   border-color: rgba($orange, 0.55);
+  box-shadow: $shadowO;
+}
+
+.btn--primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 22px 60px rgba($orange, 0.25);
+}
+
+.btn:active {
+  transform: translateY(0) scale(0.995);
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba($orange, 0.18);
 }
 
 /* City picker modal */
 .pickerModal {
   position: fixed;
   inset: 0;
-  z-index: 100002; /* Higher than ProfileSheet */
+  z-index: 100002;
   background: rgba(0, 0, 0, 0.72);
   display: flex;
   align-items: flex-end;
   justify-content: center;
   padding: 0;
+  backdrop-filter: blur(8px);
 }
 
 .pickerModal__card {
   width: 100%;
-  max-width: 720px;
-  height: min(72vh, 560px);
-  background: rgba(15, 16, 22, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 18px 18px 0 0;
+  max-width: 740px;
+  height: min(74vh, 600px);
+  background: radial-gradient(
+      900px 260px at 20% 0%,
+      rgba($orange, 0.18),
+      transparent 55%
+    ),
+    rgba(15, 16, 22, 0.98);
+  border: 1px solid rgba($orange, 0.18);
+  border-radius: 20px 20px 0 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-shadow: $shadow;
+  animation: sheetIn 0.28s cubic-bezier(0.2, 0.9, 0.2, 1);
 }
 
 .pickerModal__head {
@@ -1458,16 +1554,34 @@ $orange2: #ff8a2b;
   color: $text;
 }
 
-.pickerModal__search {
+.pickerModal__searchWrap {
   margin: 12px;
-  height: 44px;
+  position: relative;
+}
+
+.pickerModal__searchIcon {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.85;
+}
+
+.pickerModal__search {
+  width: 100%;
+  height: 46px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.18);
+  background: rgba(0, 0, 0, 0.2);
   color: $text;
-  padding: 0 12px;
+  padding: 0 44px 0 12px;
   font-weight: 900;
   outline: none;
+}
+
+.pickerModal__search:focus {
+  border-color: rgba($orange, 0.45);
+  box-shadow: 0 0 0 3px rgba($orange, 0.14);
 }
 
 .pickerModal__list {
@@ -1481,13 +1595,49 @@ $orange2: #ff8a2b;
   width: 100%;
   text-align: right;
   padding: 14px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.05);
   color: $text;
-  font-weight: 900;
+  font-weight: 1000;
   cursor: pointer;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.pickerModal__itemIcon {
+  opacity: 0.9;
+}
+
+.pickerModal__itemTxt {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pickerModal__itemChev {
+  opacity: 0.75;
+  font-size: 18px;
+}
+
+.pickerModal__item:hover {
+  background: rgba($orange, 0.12);
+  border-color: rgba($orange, 0.22);
+  transform: translateY(-1px);
+}
+
+.pickerModal__item:active {
+  transform: translateY(0) scale(0.995);
+}
+
+.pickerModal__item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba($orange, 0.16);
 }
 
 .pickerModal__empty {
@@ -1497,76 +1647,14 @@ $orange2: #ff8a2b;
   font-weight: 900;
 }
 
-/* Delete modal (שמרתי שלך, רק קצת טאצ' מובייל) */
-.deleteUserModal {
-  position: fixed;
-  inset: 0;
-  z-index: 100003; /* Higher than pickerModal */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
-  padding: 16px;
-}
-.deleteUserModal__content {
-  background: linear-gradient(
-    180deg,
-    rgba(0, 0, 0, 0.95),
-    rgba(15, 16, 22, 0.98)
-  );
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  padding: 22px;
-  width: min(420px, 92vw);
-  text-align: center;
-}
-.deleteUserModal__icon {
-  font-size: 44px;
-  margin-bottom: 12px;
-}
-.deleteUserModal__title {
-  font-size: 20px;
-  font-weight: 1000;
-  color: #fff;
-  margin: 0 0 12px 0;
-}
-.deleteUserModal__message {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.82);
-  margin: 0 0 18px 0;
-  line-height: 1.5;
-}
-.deleteUserModal__actions {
-  display: flex;
-  gap: 10px;
-}
-@media (max-width: 520px) {
-  .deleteUserModal__actions {
-    flex-direction: column;
-  }
-}
-.deleteUserModal__btn {
-  flex: 1;
-  height: 44px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: $text;
-  font-weight: 1000;
-  cursor: pointer;
-}
-.deleteUserModal__btn--confirm {
-  border-color: rgba(239, 68, 68, 0.35);
-  background: rgba(239, 68, 68, 0.16);
-  color: #ef4444;
-}
-.deleteUserModal__btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.pickerModal__footer {
+  padding: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.25);
 }
 
-/* Cancel Subscription Modal */
+/* Unified modal look */
+.deleteUserModal,
 .cancelSubscriptionModal {
   position: fixed;
   inset: 0;
@@ -1574,79 +1662,162 @@ $orange2: #ff8a2b;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(8px);
   padding: 16px;
 }
 
-.cancelSubscriptionModal__content {
-  background: linear-gradient(
-    180deg,
-    rgba(0, 0, 0, 0.95),
-    rgba(15, 16, 22, 0.98)
-  );
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  border-radius: 20px;
+.modal {
+  background: radial-gradient(
+      900px 260px at 20% 0%,
+      rgba($orange, 0.16),
+      transparent 58%
+    ),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.92), rgba(15, 16, 22, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 22px;
   padding: 22px;
-  width: min(420px, 92vw);
+  width: min(440px, 92vw);
   text-align: center;
+  box-shadow: $shadow;
+  animation: popIn 0.22s ease-out;
 }
 
-.cancelSubscriptionModal__icon {
-  font-size: 44px;
+.modal--warn {
+  border-color: rgba($danger, 0.22);
+}
+
+@keyframes popIn {
+  from {
+    transform: translateY(8px) scale(0.98);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.modal__icon {
+  font-size: 46px;
   margin-bottom: 12px;
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));
 }
 
-.cancelSubscriptionModal__title {
+.modal__title {
   font-size: 20px;
   font-weight: 1000;
   color: #fff;
-  margin: 0 0 12px 0;
+  margin: 0 0 10px 0;
 }
 
-.cancelSubscriptionModal__message {
+.modal__message {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(255, 255, 255, 0.84);
   margin: 0 0 18px 0;
-  line-height: 1.5;
+  line-height: 1.55;
+  font-weight: 800;
 }
 
-.cancelSubscriptionModal__actions {
+.modal__actions {
   display: flex;
   gap: 10px;
 }
 
 @media (max-width: 520px) {
-  .cancelSubscriptionModal__actions {
+  .modal__actions {
     flex-direction: column;
   }
 }
 
-.cancelSubscriptionModal__btn {
+.modal__btn {
   flex: 1;
-  height: 44px;
+  height: 46px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.06);
   color: $text;
   font-weight: 1000;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease;
 }
 
-.cancelSubscriptionModal__btn--confirm {
-  border-color: rgba(239, 68, 68, 0.35);
-  background: rgba(239, 68, 68, 0.16);
-  color: #ef4444;
+.modal__btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
 }
 
-.cancelSubscriptionModal__btn--confirm:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.25);
-  border-color: rgba(239, 68, 68, 0.5);
+.modal__btn--danger {
+  border-color: rgba($danger, 0.38);
+  background: rgba($danger, 0.16);
+  color: #ff8a8a;
 }
 
-.cancelSubscriptionModal__btn:disabled {
+.modal__btn--danger:hover:not(:disabled) {
+  background: rgba($danger, 0.24);
+  border-color: rgba($danger, 0.55);
+  transform: translateY(-1px);
+}
+
+.modal__btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.modal__btn:active {
+  transform: translateY(0) scale(0.995);
+}
+
+.modal__btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba($orange, 0.16);
+}
+
+/* Mobile polish */
+@media (max-width: 400px) {
+  .actions-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .card--actions {
+    padding: 12px;
+  }
+
+  .action-btn {
+    min-height: 46px;
+    padding: 8px 8px;
+    border-radius: 12px;
+  }
+
+  .action-btn__text {
+    font-size: 10px;
+  }
+
+  .action-item__label {
+    font-size: 9px;
+  }
+
+  .ps__title {
+    font-size: 16px;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .ps__panel,
+  .pickerModal__card,
+  .modal {
+    animation: none !important;
+  }
+  .action-btn,
+  .btn,
+  .picker,
+  .ps__iconBtn,
+  .linkBtn,
+  .chip__x,
+  .pickerModal__item {
+    transition: none !important;
+  }
 }
 </style>

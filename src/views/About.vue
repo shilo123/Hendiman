@@ -1,303 +1,396 @@
 <template>
-  <div class="about-page" dir="rtl" lang="he">
-    <div class="container">
-      <!-- Top Bar -->
-      <header class="topbar">
-        <div class="brand" aria-label="Hendiman brand">
-          <div class="logo" aria-hidden="true">H</div>
-          <div class="brand-text">
-            <h1>הנדימן</h1>
-            <p>בעיות קטנות — פתרונות גדולים</p>
-          </div>
-        </div>
-
-        <nav class="nav" aria-label="ניווט">
-          <RouterLink class="navlink" to="/">בית</RouterLink>
-          <RouterLink class="navlink active" to="/about">אודות</RouterLink>
-          <RouterLink class="navlink" to="/register">הרשמה</RouterLink>
-          <RouterLink class="navlink" to="/login">כניסה</RouterLink>
-        </nav>
-      </header>
-
-      <!-- Hero -->
-      <section class="hero" aria-labelledby="about-title">
-        <div class="hero-grid">
-          <div class="hero-main">
-            <div class="kicker">
-              <span class="dot"></span>
-              שקיפות • מהירות • מקצועיות
-            </div>
-
-            <h2 id="about-title">אודות <span>הנדימן</span></h2>
-
-            <p class="subtitle">
-              הנדימן היא פלטפורמה שמחברת בין לקוחות לאנשי מקצוע למשימות
-              יום-יומיות — מהרכבה קטנה ועד תיקון שדורש יד מקצועית. במקום לחפש
-              “מישהו שמכיר מישהו”, לפתוח אינסוף שיחות ולרדוף אחרי זמינות — אתה
-              יוצר קריאה מסודרת, מקבל התאמה, וסוגר עבודה בצורה ברורה ונוחה.
-            </p>
-
-            <div class="cta-row" role="group" aria-label="פעולות">
-              <RouterLink class="btn btn-primary" to="/register"
-                >הצטרף עכשיו</RouterLink
-              >
-              <RouterLink class="btn btn-ghost" to="/login"
-                >יש לי משתמש</RouterLink
-              >
-              <a class="btn btn-ghost" href="#how-it-works">איך זה עובד</a>
-            </div>
-
-            <div class="note">
-              <strong>חשוב:</strong> שיתוף מיקום (אם מופעל) נעשה רק לצורך שירות
-              ותיאום, ובשגרה אנחנו שואפים למינימום מידע. אין “מעקב קבוע” אחרי
-              הנדימנים מחוץ לעבודה פעילה.
-            </div>
-          </div>
-
-          <aside class="card summary" aria-label="סיכום מהיר">
-            <p class="mini-title">מה מקבלים פה בפועל</p>
-
-            <div class="stat">
-              <div>
-                <strong>יצירת קריאה מהירה</strong><br />
-                <span>בוחרים/כותבים מה צריך, מצרפים פרטים, ושולחים.</span>
-              </div>
-              <span class="emoji" aria-hidden="true">⚡</span>
-            </div>
-
-            <div class="stat">
-              <div>
-                <strong>התאמה חכמה עם AI</strong><br />
-                <span>המערכת מסדרת קטגוריות ובקשות גם כשכתבת חופשי.</span>
-              </div>
-              <span class="emoji" aria-hidden="true">🤖</span>
-            </div>
-
-            <div class="stat">
-              <div>
-                <strong>סטטוסים ושקיפות</strong><br />
-                <span>“בדרך”, “הגעתי”, “בוצע” — כולם רואים מה קורה.</span>
-              </div>
-              <span class="emoji" aria-hidden="true">✅</span>
-            </div>
-
-            <div class="stat">
-              <div>
-                <strong>התראות חכמות</strong><br />
-                <span>עדכונים חשובים בזמן אמת כדי שלא תפספס.</span>
-              </div>
-              <span class="emoji" aria-hidden="true">🔔</span>
-            </div>
-          </aside>
-        </div>
-      </section>
-
-      <!-- Main -->
-      <main class="main">
-        <!-- How it works -->
-        <section
-          id="how-it-works"
-          class="card section"
-          aria-labelledby="how-title"
-        >
-          <h3 id="how-title">איך זה עובד</h3>
-          <p class="text">
-            בהנדימן יש שני צדדים: <strong>לקוח</strong> שמזמין עבודה, ו<strong
-              >הנדימן</strong
-            >
-            (איש מקצוע) שמקבל קריאות ומבצע אותן. כל התהליך בנוי כך שיהיה קל,
-            ברור ומהיר — במיוחד במובייל. <br /><br />
-            הלקוח יכול לעבוד בשתי דרכים:
-            <strong>לבחור קטגוריה</strong> (למי שאוהב סדר), או
-            <strong>לכתוב טקסט חופשי</strong> (למי שרוצה תכלס ולרוץ). המערכת
-            עוזרת להפוך “דיבור חופשי” למשהו מסודר שאפשר לעבוד איתו.
-          </p>
-
-          <div class="steps" aria-label="שלבים">
-            <div class="step">
-              <div class="badge">1</div>
-              <h4>יוצרים קריאה</h4>
-              <p>
-                הלקוח מתאר מה צריך. אפשר לבחור קטגוריה, ואפשר להוסיף כמה בקשות
-                בשדות נפרדים או טקסט חופשי (למשל: “תליית מדף + תיקון דלת + החלפת
-                ברז”). כדי לחסוך בלגן, אנחנו מעדיפים פירוט קצר וברור: מה, איפה,
-                ומתי.
-              </p>
-            </div>
-
-            <div class="step">
-              <div class="badge">2</div>
-              <h4>התאמה והצעות</h4>
-              <p>
-                אנשי מקצוע רלוונטיים מקבלים את הקריאה. הלקוח רואה מי זמין, ולפי
-                הצורך מתקדם לשלב הבא. המטרה: פחות “תתקשר אליי”, יותר תיאום מסודר
-                בתוך המערכת.
-              </p>
-            </div>
-
-            <div class="step">
-              <div class="badge">3</div>
-              <h4>ביצוע ועדכונים</h4>
-              <p>
-                בזמן עבודה יש סטטוסים (לדוגמה: “בדרך”, “הגעתי”, “בוצע”). אם
-                מופעל שיתוף מיקום — הוא נועד לתת ללקוח שקט נפשי ו-ETA משוער, ולא
-                להפוך את ההנדימן ל”מטרה במעקב”.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <!-- Audience + AI -->
-        <section class="grid-2">
-          <div class="card section" aria-labelledby="audience-title">
-            <h3 id="audience-title">למי זה מיועד</h3>
-            <p class="text">
-              <strong>לקוחות:</strong> מי שצריך פתרון מהיר בבית או בעסק — בלי
-              להתחיל לחפש “מומלץ בקבוצה”. זה מתאים במיוחד למי שאין לו זמן להתעסק
-              עם טלפונים, הודעות והמתנות. <br /><br />
-              <strong>הנדימנים:</strong> אנשי מקצוע שרוצים לקבל עבודות בצורה
-              מסודרת לפי תחומי התמחות, ולבנות לעצמם מוניטין דרך עבודה נקייה
-              ושקופה.
-            </p>
-
-            <div class="pill-row" aria-label="דוגמאות">
-              <span class="pill"
-                ><strong>בית:</strong> הרכבות, תלייה, תיקונים</span
-              >
-              <span class="pill"
-                ><strong>אינסטלציה:</strong> נזילות, ברזים, סתימות</span
-              >
-              <span class="pill"
-                ><strong>חשמל:</strong> החלפות, נקודות, תקלות</span
-              >
-              <span class="pill"
-                ><strong>עסקים:</strong> תחזוקה שוטפת ומהירה</span
-              >
-            </div>
-          </div>
-
-          <div class="card section" aria-labelledby="ai-title">
-            <h3 id="ai-title">איך אנחנו משתמשים ב-AI</h3>
-            <p class="text">
-              אנשים לא תמיד יודעים לבחור קטגוריה או “לנסח מקצועית”. לכן ה-AI
-              שלנו עוזר לקחת תיאור חופשי ולהפוך אותו להזמנה מסודרת:
-              <br /><br />
-              <strong>1) זיהוי קטגוריות:</strong> אם כתבת “יש לי נזילה ובנוסף
-              צריך לתלות מדף” — ה-AI מזהה שזה אינסטלציה + תלייה/הרכבה.
-              <br />
-              <strong>2) פירוק לבקשות:</strong> מפצל את הטקסט לסעיפים שאפשר
-              לעבוד איתם (כל סעיף = משימה).
-              <br />
-              <strong>3) סיכום נקי:</strong> יוצר תקציר ברור להצגה להנדימן כדי
-              לצמצם אי-הבנות.
-              <br />
-              <strong>4) שאלות הבהרה:</strong> במקום שתיתקע — ה-AI יכול להציע
-              שאלות קצרות (“זה קיר בטון או גבס?”, “יש גישה לברז הראשי?”).
-              <br /><br />
-              המטרה לא “להחליף” אנשים — אלא להפוך את התהליך למהיר ומדויק יותר.
-            </p>
-
-            <div class="note">
-              <strong>שקיפות:</strong> ה-AI מסייע בסידור והצעות. ההחלטות בפועל
-              (מה להזמין, למי, ואיך) נשארות בידיים של המשתמשים.
-            </div>
-          </div>
-        </section>
-
-        <!-- Privacy -->
-        <section class="card section" aria-labelledby="privacy-title">
-          <h3 id="privacy-title">פרטיות ומיקום</h3>
-          <p class="text">
-            פרטיות זה לא “בונוס”, זה בסיס. מיקום (כשקיים) נועד בעיקר לתיאום
-            והגעה.
-            <br /><br />
-            <strong>עיקרון פשוט:</strong> שיתוף מיקום רלוונטי רק בזמן עבודה
-            פעילה, ורק לצורך שירות (ETA/הגעה). אנחנו שואפים לשמור מינימום מידע,
-            ולתת שליטה מלאה.
-          </p>
-
-          <div class="pill-row" aria-label="עקרונות פרטיות">
-            <span class="pill"
-              >שיתוף מיקום: <strong>רק בזמן עבודה</strong></span
-            >
-            <span class="pill">שמירה: <strong>מינימום מידע</strong></span>
-            <span class="pill">שליטה: <strong>כיבוי/הפעלה</strong></span>
-            <span class="pill">מטרה: <strong>הגעה ותיאום</strong></span>
-          </div>
-        </section>
-
-        <!-- FAQ -->
-        <section class="card section" aria-labelledby="faq-title">
-          <h3 id="faq-title">שאלות נפוצות</h3>
-
-          <div class="faq">
-            <details>
-              <summary>איך שולחים קריאה עם כמה עבודות?</summary>
-              <p class="text">
-                או שמוסיפים כמה שדות (כל שדה = משימה), או כותבים טקסט חופשי.
-                ה-AI מסדר את זה לקטגוריות וסעיפים, ואז גם הלקוח וגם ההנדימן
-                רואים “רשימת משימות” נקייה.
-              </p>
-            </details>
-
-            <details>
-              <summary>איך יודעים שההנדימן בדרך?</summary>
-              <p class="text">
-                יש סטטוס “בדרך” וזמן הגעה משוער. אם מופעל שיתוף מיקום — הוא נועד
-                לשירות בלבד, ולא למעקב מחוץ לעבודה.
-              </p>
-            </details>
-
-            <details>
-              <summary>אפשר להשתמש בלי AI?</summary>
-              <p class="text">
-                כן. אפשר לבחור קטגוריות ידנית ולכתוב תיאור רגיל. ה-AI הוא “בוסט”
-                שמקל — לא חובה.
-              </p>
-            </details>
-
-            <details>
-              <summary>מה קורה אחרי שהעבודה מסתיימת?</summary>
-              <p class="text">
-                הסטטוס נסגר, ההתראות מפסיקות, ואם יש שיתוף מיקום — הוא מפסיק.
-                המטרה היא להשאיר תהליך נקי ולא “לגרור” מידע שלא צריך.
-              </p>
-            </details>
-          </div>
-        </section>
-
-        <!-- CTA -->
-        <section class="card section" aria-labelledby="cta2-title">
-          <h3 id="cta2-title">יאללה, מתחילים?</h3>
-          <p class="text">
-            אם אתה לקוח — תיצור קריאה ותראה כמה זה פשוט. אם אתה הנדימן — תצטרף
-            ותתחיל לקבל פניות רלוונטיות.
-          </p>
-
-          <div class="cta-row" role="group" aria-label="קריאה לפעולה">
-            <RouterLink class="btn btn-primary" to="/register"
-              >הרשמה</RouterLink
-            >
-            <RouterLink class="btn btn-ghost" to="/login">כניסה</RouterLink>
-            <RouterLink class="btn btn-ghost" to="/">חזרה לבית</RouterLink>
-          </div>
-        </section>
-      </main>
-
-      <footer class="footer">
-        <div class="small">
-          © {{ year }} הנדימן • בעיות קטנות — פתרונות גדולים
-          <br />
-          <span class="muted">עיצוב: שחור + כתום, עם מחשבה על UX במובייל.</span>
-        </div>
-
-        <div class="small links">
-          <RouterLink class="navlink" to="/privacy">מדיניות פרטיות</RouterLink>
-          <RouterLink class="navlink" to="/terms">תנאי שימוש</RouterLink>
-          <RouterLink class="navlink" to="/contact">צור קשר</RouterLink>
-        </div>
-      </footer>
+  <div class="about-page" dir="rtl">
+    <!-- Ambient background -->
+    <div class="bg-orbs" aria-hidden="true">
+      <span class="orb o1"></span>
+      <span class="orb o2"></span>
+      <span class="orb o3"></span>
+      <span class="grid"></span>
     </div>
+
+    <!-- Top nav / quick scroll -->
+    <header class="topbar glass">
+      <div class="brand">
+        <div class="logo">H</div>
+        <div class="brand-text">
+          <div class="title">Hendiman</div>
+          <div class="subtitle">הסיפור שלנו • איך זה עובד • למה זה מטורף</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn ghost" @click="scrollTo('about-hero')">התחלה</button>
+        <button class="btn ghost" @click="scrollTo('about-explainer')">
+          איך זה עובד
+        </button>
+        <button class="btn ghost" @click="scrollTo('about-features')">
+          פיצ׳רים
+        </button>
+        <button class="btn ghost" @click="scrollTo('about-faq')">שאלות</button>
+      </div>
+    </header>
+
+    <!-- HERO -->
+    <section id="about-hero" class="hero">
+      <div class="hero-inner">
+        <div class="hero-left">
+          <div class="kicker glass">
+            <span class="dot"></span>
+            כמו Gett — רק לבית שלך
+          </div>
+
+          <h1 class="hero-title">
+            כשצריך לתקן משהו בבית —
+            <span class="accent">מזמינים Hendiman</span>
+          </h1>
+
+          <p class="hero-desc">
+            מזמינים הנדימן עד הבית, רואים מיקום בזמן אמת ו-ETA, שולחים תמונות של
+            התקלה, ויש צ׳אט שמתקדם מהר ובצורה מקצועית.
+          </p>
+
+          <div class="hero-cta">
+            <button class="btn primary" @click="scrollTo('about-explainer')">
+              בוא תראה איך זה עובד
+              <span class="arrow">→</span>
+            </button>
+            <button class="btn glassy" @click="scrollTo('about-features')">
+              כל הפיצ׳רים
+            </button>
+          </div>
+
+          <div class="stats-row">
+            <div class="stat glass">
+              <div class="stat-num">Live</div>
+              <div class="stat-text">מיקום בזמן אמת</div>
+            </div>
+            <div class="stat glass">
+              <div class="stat-num">AI</div>
+              <div class="stat-text">זיהוי עבודה מפלט חופשי</div>
+            </div>
+            <div class="stat glass">
+              <div class="stat-num">Secure</div>
+              <div class="stat-text">שחרור תשלום רק באישור לקוח</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-right">
+          <div class="phone glass">
+            <div class="phone-top">
+              <span class="pill"></span>
+              <div class="dots"><span></span><span></span><span></span></div>
+            </div>
+
+            <div class="screen">
+              <div class="map">
+                <div class="map-badge glass">
+                  <div class="badge-title">הנדימן בדרך</div>
+                  <div class="badge-sub">ETA: 8 דקות • מרחק: 1.2 ק״מ</div>
+                </div>
+
+                <div class="pin p1"></div>
+                <div class="pin p2"></div>
+
+                <div class="route"></div>
+              </div>
+
+              <div class="card glass">
+                <div class="card-row">
+                  <div class="avatar"></div>
+                  <div class="card-col">
+                    <div class="card-title">דניאל — הנדימן</div>
+                    <div class="card-sub">⭐ 4.9 • 312 עבודות</div>
+                  </div>
+                  <div class="tag">זמין</div>
+                </div>
+
+                <div class="chip-row">
+                  <span class="chip">הרכבה</span>
+                  <span class="chip">סתימה</span>
+                  <span class="chip">תיקון</span>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="mini-chat">
+                  <div class="msg left glass">שלחתי תמונות, זו תקלה קטנה</div>
+                  <div class="msg right">קיבלתי. מגיע עוד 8 דקות 👌</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="floating glass f1">
+            <div class="f-title">צ׳אט מקצועי</div>
+            <div class="f-sub">נפתח אוטומטית אחרי קבלת עבודה</div>
+          </div>
+          <div class="floating glass f2">
+            <div class="f-title">Stripe</div>
+            <div class="f-sub">תשלום מוחזק ומשתחרר רק באישור לקוח</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- EXPLAINER (with required id for quick scroll) -->
+    <section id="about-explainer" class="section">
+      <div class="section-head">
+        <h2 class="section-title">איך זה עובד בפועל</h2>
+        <p class="section-sub">
+          4 שלבים פשוטים — מהפלט הקצר ועד שהכל מסודר בבית.
+        </p>
+      </div>
+
+      <div class="timeline">
+        <div class="step glass">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-title">פלט קצר + AI</div>
+            <div class="step-text">
+              המשתמש מקליד פלט קצר וה-AI מחפש אובייקט עבודה ומחיר. אם לא נמצא /
+              לא מדויק — פותחים להצעת מחיר.
+            </div>
+          </div>
+        </div>
+
+        <div class="step glass">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-title">תיאור ומיקום</div>
+            <div class="step-text">
+              המשתמש מוסיף תיאור מלא ומיקום, כדי להתאים את ההנדימנים הנכונים.
+            </div>
+          </div>
+        </div>
+
+        <div class="step glass">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-title">תמונות/וידאו + קושי + דחוף</div>
+            <div class="step-text">
+              מוסיפים תמונות/סרטונים, בוחרים קלה/מורכבת/קשה, ואפשר לסמן קריאה
+              דחופה (+10 שקלות).
+            </div>
+          </div>
+        </div>
+
+        <div class="step glass">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-title">תשלום ואישור שחרור</div>
+            <div class="step-text">
+              התשלום נגבה באמצעות Stripe ומוחזק במערכת. רק אחרי סיום עבודה
+              ואישור הלקוח — התשלום משתחרר להנדימן.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURES / VIDEOS -->
+    <section id="about-features" class="section">
+      <div class="section-head">
+        <h2 class="section-title">מה רואים בתוך האפליקקה</h2>
+        <p class="section-sub">
+          הסברים טקסטואליים + סרטון לכל נושא (מוכן לשים את הקישורים שלך).
+        </p>
+      </div>
+
+      <div class="features-grid">
+        <article class="feature glass">
+          <div class="feature-top">
+            <h3 class="feature-title">איך יוצרים קריאה</h3>
+            <span class="pill-tag">Step-by-step</span>
+          </div>
+          <p class="feature-text">
+            יצירת קריאה בארבעה שלבים: פלט קצר (AI), תיאור ומיקום, מדיה וקושי,
+            תשלום.
+          </p>
+
+          <div class="video-wrap">
+            <video
+              class="video"
+              controls
+              preload="metadata"
+              :poster="posters.create"
+            >
+              <source src="" type="video/mp4" />
+              הדפדפן לא תומך בוידאו.
+            </video>
+            <div class="video-hint">הדבק כאן קישור/קובץ mp4</div>
+          </div>
+        </article>
+
+        <article class="feature glass">
+          <div class="feature-top">
+            <h3 class="feature-title">בחירת הנדימן ספציפי</h3>
+            <span class="pill-tag">Special</span>
+          </div>
+          <p class="feature-text">
+            אפשר לבחור הנדימן ספציפי (ספיישל) ואז מוצג הנדימן אחד בלבד לקריאה.
+          </p>
+
+          <div class="video-wrap">
+            <video
+              class="video"
+              controls
+              preload="metadata"
+              :poster="posters.pickOne"
+            >
+              <source src="" type="video/mp4" />
+              הדפדפן לא תומך בוידאו.
+            </video>
+            <div class="video-hint">הדבק כאן קישור/קובץ mp4</div>
+          </div>
+        </article>
+
+        <article class="feature glass">
+          <div class="feature-top">
+            <h3 class="feature-title">בחירת הצעת מחיר</h3>
+            <span class="pill-tag">Quote</span>
+          </div>
+          <p class="feature-text">
+            אם ה-AI לא מצא התאמה לקטגוריות/מחיר — הקריאה נפתחת להצעת מחיר מצד
+            ההנדימן.
+          </p>
+
+          <div class="video-wrap">
+            <video
+              class="video"
+              controls
+              preload="metadata"
+              :poster="posters.quote"
+            >
+              <source src="" type="video/mp4" />
+              הדפדפן לא תומך בוידאו.
+            </video>
+            <div class="video-hint">הדבק כאן קישור/קובץ mp4</div>
+          </div>
+        </article>
+
+        <article class="feature glass">
+          <div class="feature-top">
+            <h3 class="feature-title">חסימה</h3>
+            <span class="pill-tag">Safety</span>
+          </div>
+          <p class="feature-text">
+            ניתן לחסום משתמשים שמפרים את תנאי השימוש (ניהול מערכת).
+          </p>
+
+          <div class="video-wrap">
+            <video
+              class="video"
+              controls
+              preload="metadata"
+              :poster="posters.block"
+            >
+              <source src="" type="video/mp4" />
+              הדפדפן לא תומך בוידאו.
+            </video>
+            <div class="video-hint">הדבק כאן קישור/קובץ mp4</div>
+          </div>
+        </article>
+
+        <article class="feature glass">
+          <div class="feature-top">
+            <h3 class="feature-title">דירוג ותגובות</h3>
+            <span class="pill-tag">Trust</span>
+          </div>
+          <p class="feature-text">
+            לאחר סיום עבודה ניתן לדרג את ההנדימן ולכתוב תגובה.
+          </p>
+
+          <div class="video-wrap">
+            <video
+              class="video"
+              controls
+              preload="metadata"
+              :poster="posters.rating"
+            >
+              <source src="" type="video/mp4" />
+              הדפדפן לא תומך בוידאו.
+            </video>
+            <div class="video-hint">הדבק כאן קישור/קובץ mp4</div>
+          </div>
+        </article>
+
+        <article class="feature glass">
+          <div class="feature-top">
+            <h3 class="feature-title">קריאה דחופה</h3>
+            <span class="pill-tag">Boost</span>
+          </div>
+          <p class="feature-text">
+            המשתמש יכול לסמן קריאה דחופה בעלות 10 שקלות כדי שתוצג מעל קריאות
+            אחרות.
+          </p>
+
+          <div class="video-wrap">
+            <video
+              class="video"
+              controls
+              preload="metadata"
+              :poster="posters.urgent"
+            >
+              <source src="" type="video/mp4" />
+              הדפדפן לא תומך בוידאו.
+            </video>
+            <div class="video-hint">הדבק כאן קישור/קובץ mp4</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section id="about-faq" class="section">
+      <div class="section-head">
+        <h2 class="section-title">שאלות נפוצות</h2>
+        <p class="section-sub">בלי חפירות — תשובות קצרות וברורות.</p>
+      </div>
+
+      <div class="faq">
+        <details class="qa glass" open>
+          <summary>מתי הכסף משתחרר להנדימן?</summary>
+          <p>
+            רק אחרי שההנדימן מסיים את העבודה ורק באישור הלקוח התשלום משתחרר.
+          </p>
+        </details>
+
+        <details class="qa glass">
+          <summary>איך נפתח הצ׳אט?</summary>
+          <p>
+            ברגע שהנדימן מקבל את העבודה — הצ׳אט נפתח אוטומטית בין הלקוח להנדימן.
+          </p>
+        </details>
+
+        <details class="qa glass">
+          <summary>מה קורה אם ה-AI לא מצא התאמה?</summary>
+          <p>הקריאה נפתחת להצעת מחיר על ידי ההנדימן.</p>
+        </details>
+
+        <details class="qa glass">
+          <summary>אפשר לבטל עבודה?</summary>
+          <p>
+            כן. בביטול יש אפשרות טקסט חופשי, וההנהלה מחליטה האם לגבות קנס עד 200
+            שקלות.
+          </p>
+        </details>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer glass">
+      <div class="foot-left">
+        <div class="foot-title">Hendiman</div>
+        <div class="foot-sub">שחור • כתום • אפור • חד • נקי</div>
+      </div>
+
+      <div class="foot-right">
+        <button class="btn ghost" @click="scrollTo('about-hero')">
+          חזרה למעלה
+        </button>
+      </div>
+    </footer>
   </div>
 </template>
 
@@ -306,416 +399,806 @@ export default {
   name: "AboutView",
   data() {
     return {
-      year: new Date().getFullYear(),
+      posters: {
+        create:
+          "data:image/svg+xml;charset=UTF-8," +
+          encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675">
+              <defs>
+                <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#0b0b10"/>
+                  <stop offset="1" stop-color="#1a1a24"/>
+                </linearGradient>
+              </defs>
+              <rect width="1200" height="675" fill="url(#g)"/>
+              <circle cx="220" cy="180" r="120" fill="rgba(255,140,0,0.22)"/>
+              <circle cx="980" cy="520" r="180" fill="rgba(255,140,0,0.14)"/>
+              <text x="70" y="370" font-size="58" fill="rgba(255,255,255,0.92)" font-family="Arial">איך יוצרים קריאה</text>
+              <text x="70" y="430" font-size="28" fill="rgba(255,255,255,0.62)" font-family="Arial">וידאו דמו • MP4</text>
+            </svg>
+          `),
+        pickOne:
+          "data:image/svg+xml;charset=UTF-8," +
+          encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675">
+              <rect width="1200" height="675" fill="#0b0b10"/>
+              <rect x="0" y="0" width="1200" height="675" fill="rgba(255,140,0,0.10)"/>
+              <text x="70" y="370" font-size="58" fill="rgba(255,255,255,0.92)" font-family="Arial">בחירת הנדימן ספציפי</text>
+              <text x="70" y="430" font-size="28" fill="rgba(255,255,255,0.62)" font-family="Arial">וידאו דמו • MP4</text>
+            </svg>
+          `),
+        quote:
+          "data:image/svg+xml;charset=UTF-8," +
+          encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675">
+              <defs>
+                <radialGradient id="r" cx="30%" cy="30%" r="80%">
+                  <stop offset="0" stop-color="rgba(255,140,0,0.25)"/>
+                  <stop offset="1" stop-color="#0b0b10"/>
+                </radialGradient>
+              </defs>
+              <rect width="1200" height="675" fill="url(#r)"/>
+              <text x="70" y="370" font-size="58" fill="rgba(255,255,255,0.92)" font-family="Arial">בחירת הצעת מחיר</text>
+              <text x="70" y="430" font-size="28" fill="rgba(255,255,255,0.62)" font-family="Arial">וידאו דמו • MP4</text>
+            </svg>
+          `),
+        block:
+          "data:image/svg+xml;charset=UTF-8," +
+          encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675">
+              <rect width="1200" height="675" fill="#0b0b10"/>
+              <circle cx="600" cy="340" r="230" fill="rgba(255,140,0,0.16)"/>
+              <text x="70" y="370" font-size="58" fill="rgba(255,255,255,0.92)" font-family="Arial">חסימה</text>
+              <text x="70" y="430" font-size="28" fill="rgba(255,255,255,0.62)" font-family="Arial">וידאו דמו • MP4</text>
+            </svg>
+          `),
+        rating:
+          "data:image/svg+xml;charset=UTF-8," +
+          encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675">
+              <rect width="1200" height="675" fill="#0b0b10"/>
+              <text x="70" y="370" font-size="58" fill="rgba(255,255,255,0.92)" font-family="Arial">דירוג ותגובות</text>
+              <text x="70" y="430" font-size="28" fill="rgba(255,255,255,0.62)" font-family="Arial">וידאו דמו • MP4</text>
+              <text x="70" y="500" font-size="40" fill="rgba(255,140,0,0.95)" font-family="Arial">★★★★★</text>
+            </svg>
+          `),
+        urgent:
+          "data:image/svg+xml;charset=UTF-8," +
+          encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675">
+              <defs>
+                <linearGradient id="g2" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stop-color="#0b0b10"/>
+                  <stop offset="1" stop-color="rgba(255,140,0,0.18)"/>
+                </linearGradient>
+              </defs>
+              <rect width="1200" height="675" fill="url(#g2)"/>
+              <text x="70" y="370" font-size="58" fill="rgba(255,255,255,0.92)" font-family="Arial">קריאה דחופה</text>
+              <text x="70" y="430" font-size="28" fill="rgba(255,255,255,0.62)" font-family="Arial">וידאו דמו • MP4</text>
+            </svg>
+          `),
+      },
     };
+  },
+  methods: {
+    scrollTo(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
   },
 };
 </script>
 
 <style scoped>
+/* ============ Theme ============ */
 .about-page {
   min-height: 100vh;
-  color: #f3f4f6;
-  background: radial-gradient(
-      900px 500px at 15% 10%,
-      rgba(255, 122, 24, 0.18),
-      transparent 55%
-    ),
-    radial-gradient(
-      900px 500px at 85% 20%,
-      rgba(255, 154, 60, 0.1),
-      transparent 55%
-    ),
-    linear-gradient(180deg, #0b0b0f, #050507 70%);
+  color: rgba(255, 255, 255, 0.92);
+  background: #07070b;
+  position: relative;
+  overflow-x: hidden;
+  padding-bottom: 30px;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
 }
 
-.container {
-  width: min(1120px, 92vw);
-  margin: 0 auto;
-  padding: 28px 0 80px;
+/* Background orbs + grid */
+.bg-orbs {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.orb {
+  position: absolute;
+  filter: blur(60px);
+  border-radius: 999px;
+  opacity: 0.9;
+  transform: translateZ(0);
+}
+.o1 {
+  width: 520px;
+  height: 520px;
+  left: -120px;
+  top: -140px;
+  background: rgba(255, 140, 0, 0.18);
+}
+.o2 {
+  width: 460px;
+  height: 460px;
+  right: -140px;
+  top: 120px;
+  background: rgba(255, 140, 0, 0.14);
+}
+.o3 {
+  width: 640px;
+  height: 640px;
+  left: 20%;
+  bottom: -280px;
+  background: rgba(255, 140, 0, 0.12);
+}
+.grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.18;
+  background-image: linear-gradient(
+      rgba(255, 255, 255, 0.06) 1px,
+      transparent 1px
+    ),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(
+    circle at 50% 30%,
+    rgba(0, 0, 0, 1),
+    rgba(0, 0, 0, 0)
+  );
 }
 
+/* Glass utility */
+.glass {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Top bar */
 .topbar {
+  position: sticky;
+  top: 10px;
+  margin: 14px auto 0;
+  width: min(1180px, calc(100% - 24px));
+  z-index: 10;
+  border-radius: 18px;
+  padding: 12px 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(16, 16, 24, 0.65);
-  backdrop-filter: blur(10px);
-  border-radius: 18px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
 }
-
 .brand {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 240px;
 }
-
 .logo {
   width: 44px;
   height: 44px;
   border-radius: 14px;
-  background: radial-gradient(
-      circle at 30% 30%,
-      rgba(255, 255, 255, 0.18),
-      transparent 40%
-    ),
-    linear-gradient(135deg, #ff7a18, #ff9a3c);
-  box-shadow: 0 10px 22px rgba(255, 122, 24, 0.25);
   display: grid;
   place-items: center;
   font-weight: 900;
   letter-spacing: 0.5px;
-  color: #111;
-  user-select: none;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 140, 0, 0.95),
+    rgba(255, 140, 0, 0.35)
+  );
+  box-shadow: 0 20px 50px rgba(255, 140, 0, 0.18);
 }
-
-.brand-text h1 {
+.brand-text .title {
+  font-weight: 800;
   font-size: 16px;
-  margin: 0;
-  line-height: 1.1;
 }
-.brand-text p {
-  margin: 2px 0 0;
+.brand-text .subtitle {
   font-size: 12px;
-  color: #b6b8c0;
+  opacity: 0.7;
+  margin-top: 2px;
 }
 
-.nav {
+.actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
-.navlink {
-  padding: 9px 12px;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  color: #b6b8c0;
-  font-size: 13px;
-  transition: 0.15s ease;
-  text-decoration: none;
+/* Buttons */
+.btn {
+  border: 0;
+  outline: none;
+  cursor: pointer;
+  padding: 10px 12px;
+  border-radius: 14px;
+  color: rgba(255, 255, 255, 0.92);
+  transition: transform 160ms ease, background 160ms ease, border 160ms ease,
+    box-shadow 160ms ease;
+  user-select: none;
 }
-.navlink:hover {
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: #f3f4f6;
-}
-.navlink.active {
-  border-color: rgba(255, 122, 24, 0.35);
-  background: rgba(255, 122, 24, 0.08);
-  color: #f3f4f6;
+.btn:active {
+  transform: translateY(1px) scale(0.99);
 }
 
-.hero {
-  margin-top: 18px;
-  padding: 28px 22px;
+.btn.ghost {
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 18px;
+}
+.btn.ghost:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 140, 0, 0.2);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.btn.primary {
   background: linear-gradient(
-    180deg,
-    rgba(16, 16, 24, 0.78),
-    rgba(16, 16, 24, 0.45)
+    135deg,
+    rgba(255, 140, 0, 0.95),
+    rgba(255, 140, 0, 0.45)
   );
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 22px 70px rgba(255, 140, 0, 0.18);
+  font-weight: 800;
+}
+.btn.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 26px 80px rgba(255, 140, 0, 0.24);
+}
+
+.btn.glassy {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.btn.glassy:hover {
+  border-color: rgba(255, 140, 0, 0.22);
+  transform: translateY(-1px);
+}
+
+.arrow {
+  margin-right: 8px;
+  opacity: 0.95;
+}
+
+/* Hero */
+.hero {
+  position: relative;
+  z-index: 1;
+  padding: 46px 0 26px;
+}
+.hero-inner {
+  width: min(1180px, calc(100% - 24px));
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 22px;
+  align-items: center;
+}
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  opacity: 0.9;
+}
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255, 140, 0, 0.95);
+  box-shadow: 0 0 0 6px rgba(255, 140, 0, 0.12);
+}
+
+.hero-title {
+  font-size: clamp(30px, 4vw, 52px);
+  line-height: 1.05;
+  margin: 14px 0 10px;
+  font-weight: 900;
+  letter-spacing: -0.6px;
+}
+.accent {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 140, 0, 0.95),
+    rgba(255, 255, 255, 0.88)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hero-desc {
+  font-size: 14px;
+  opacity: 0.78;
+  max-width: 58ch;
+  line-height: 1.65;
+}
+.hero-cta {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 16px;
+}
+.stat {
+  padding: 12px 12px;
+  border-radius: 16px;
+}
+.stat-num {
+  font-weight: 900;
+  color: rgba(255, 140, 0, 0.95);
+  font-size: 16px;
+}
+.stat-text {
+  font-size: 12px;
+  opacity: 0.72;
+  margin-top: 4px;
+}
+
+/* Phone mock */
+.phone {
+  border-radius: 26px;
+  padding: 12px;
   position: relative;
   overflow: hidden;
 }
-.hero::after {
+.phone-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 6px 10px;
+}
+.pill {
+  width: 120px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.dots {
+  display: flex;
+  gap: 6px;
+  opacity: 0.65;
+}
+.dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.screen {
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.32);
+}
+.map {
+  position: relative;
+  height: 210px;
+  background: radial-gradient(
+      circle at 30% 30%,
+      rgba(255, 140, 0, 0.2),
+      transparent 50%
+    ),
+    radial-gradient(circle at 75% 70%, rgba(255, 140, 0, 0.14), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0));
+  overflow: hidden;
+}
+.map::after {
   content: "";
   position: absolute;
-  inset: -2px;
-  background: radial-gradient(
-    700px 320px at 28% 10%,
-    rgba(255, 122, 24, 0.22),
-    transparent 62%
+  inset: 0;
+  background-image: linear-gradient(
+      rgba(255, 255, 255, 0.06) 1px,
+      transparent 1px
+    ),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.28;
+  mask-image: radial-gradient(
+    circle at 55% 40%,
+    rgba(0, 0, 0, 1),
+    rgba(0, 0, 0, 0)
   );
-  pointer-events: none;
 }
-.hero-grid {
-  position: relative;
-  display: grid;
-  grid-template-columns: 1.25fr 0.75fr;
-  gap: 18px;
-  align-items: start;
-}
-@media (max-width: 900px) {
-  .hero-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.kicker {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  padding: 7px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 999px;
-  color: #b6b8c0;
-  font-size: 12px;
-  width: fit-content;
-}
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ff7a18;
-  box-shadow: 0 0 0 5px rgba(255, 122, 24, 0.12);
-}
-
-.hero h2 {
-  margin: 12px 0 10px;
-  font-size: 36px;
-  line-height: 1.08;
-  letter-spacing: -0.4px;
-}
-.hero h2 span {
-  color: #ff7a18;
-}
-.subtitle {
-  margin: 0;
-  color: #b6b8c0;
-  font-size: 15px;
-  line-height: 1.75;
-  max-width: 62ch;
-}
-
-.cta-row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 18px;
-}
-
-.btn {
-  padding: 11px 14px;
+.map-badge {
+  position: absolute;
+  right: 12px;
+  top: 12px;
   border-radius: 14px;
-  border: 1px solid transparent;
-  font-weight: 800;
-  font-size: 14px;
-  transition: 0.15s ease;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  text-decoration: none;
+  padding: 10px 10px;
 }
-.btn-primary {
-  background: linear-gradient(135deg, #ff7a18, #ff9a3c);
-  color: #111;
-  box-shadow: 0 12px 24px rgba(255, 122, 24, 0.18);
+.badge-title {
+  font-weight: 900;
+  font-size: 12px;
 }
-.btn-primary:hover {
-  transform: translateY(-1px);
+.badge-sub {
+  font-size: 11px;
+  opacity: 0.75;
+  margin-top: 2px;
 }
-.btn-ghost {
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: #f3f4f6;
+
+.pin {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 140, 0, 0.95);
+  box-shadow: 0 0 0 8px rgba(255, 140, 0, 0.15);
+  z-index: 2;
+  animation: pulse 1.9s ease-in-out infinite;
 }
-.btn-ghost:hover {
-  background: rgba(255, 255, 255, 0.06);
-  transform: translateY(-1px);
+.p1 {
+  left: 22%;
+  top: 58%;
+}
+.p2 {
+  left: 68%;
+  top: 34%;
+  animation-delay: 0.35s;
+}
+
+.route {
+  position: absolute;
+  left: 28%;
+  top: 52%;
+  width: 260px;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 140, 0, 0),
+    rgba(255, 140, 0, 0.95),
+    rgba(255, 140, 0, 0)
+  );
+  transform: rotate(-18deg);
+  opacity: 0.85;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.95;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 0.75;
+  }
 }
 
 .card {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(16, 16, 24, 0.55);
-  border-radius: 18px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-  padding: 16px;
-}
-
-.summary .mini-title {
-  margin: 0 0 8px;
-  font-size: 13px;
-  color: #b6b8c0;
-  letter-spacing: 0.2px;
-}
-
-.stat {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
   padding: 12px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.card-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.avatar {
+  width: 36px;
+  height: 36px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.card-col {
+  flex: 1;
+  min-width: 0;
+}
+.card-title {
+  font-weight: 900;
+  font-size: 13px;
+}
+.card-sub {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+.tag {
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 140, 0, 0.16);
+  border: 1px solid rgba(255, 140, 0, 0.25);
+}
+
+.chip-row {
+  display: flex;
+  gap: 6px;
   margin-top: 10px;
+  flex-wrap: wrap;
 }
-.stat strong {
-  font-size: 14px;
-}
-.stat span {
-  color: #b6b8c0;
-  font-size: 12px;
-  line-height: 1.5;
-}
-.emoji {
+.chip {
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   opacity: 0.9;
 }
+.divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 10px 0;
+}
 
-.main {
-  margin-top: 18px;
+.mini-chat {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 14px;
+  gap: 8px;
+}
+.msg {
+  font-size: 12px;
+  padding: 10px 10px;
+  border-radius: 14px;
+  line-height: 1.35;
+}
+.msg.left {
+  justify-self: start;
+  max-width: 78%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.msg.right {
+  justify-self: end;
+  max-width: 78%;
+  background: rgba(255, 140, 0, 0.16);
+  border: 1px solid rgba(255, 140, 0, 0.22);
 }
 
-.section {
-  padding: 18px;
+.floating {
+  position: absolute;
+  right: 18px;
+  padding: 10px 10px;
+  border-radius: 16px;
+  width: 210px;
+  z-index: 2;
+  animation: floaty 4.4s ease-in-out infinite;
 }
-
-.section h3 {
-  margin: 0 0 10px;
-  font-size: 18px;
-  letter-spacing: -0.2px;
+.f1 {
+  top: 82px;
+  transform: translateX(10px);
 }
-
-.text {
-  margin: 0;
-  color: #b6b8c0;
-  line-height: 1.85;
-  font-size: 14px;
+.f2 {
+  bottom: 26px;
+  transform: translateX(-4px);
+  animation-delay: 0.7s;
 }
-
-.grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
+.f-title {
+  font-weight: 900;
+  font-size: 12px;
 }
-@media (max-width: 900px) {
-  .grid-2 {
-    grid-template-columns: 1fr;
+.f-sub {
+  font-size: 11px;
+  opacity: 0.72;
+  margin-top: 3px;
+}
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
   }
 }
 
-.steps {
+/* Sections */
+.section {
+  position: relative;
+  z-index: 1;
+  padding: 28px 0;
+}
+.section-head {
+  width: min(1180px, calc(100% - 24px));
+  margin: 0 auto 14px;
+}
+.section-title {
+  font-weight: 1000;
+  letter-spacing: -0.3px;
+  margin: 0;
+  font-size: 22px;
+}
+.section-sub {
+  margin: 8px 0 0;
+  opacity: 0.72;
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 80ch;
+}
+
+/* Timeline */
+.timeline {
+  width: min(1180px, calc(100% - 24px));
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.step {
+  border-radius: 18px;
+  padding: 14px 14px;
+  display: flex;
+  gap: 12px;
+  transition: transform 180ms ease, border-color 180ms ease;
+}
+.step:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 140, 0, 0.22);
+}
+.step-num {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-weight: 1000;
+  color: rgba(255, 140, 0, 0.95);
+  background: rgba(255, 140, 0, 0.14);
+  border: 1px solid rgba(255, 140, 0, 0.22);
+  flex: 0 0 auto;
+}
+.step-title {
+  font-weight: 900;
+  font-size: 13px;
+}
+.step-text {
+  margin-top: 6px;
+  font-size: 12px;
+  opacity: 0.72;
+  line-height: 1.6;
+}
+
+/* Features grid */
+.features-grid {
+  width: min(1180px, calc(100% - 24px));
+  margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
-  margin-top: 12px;
 }
-@media (max-width: 900px) {
-  .steps {
-    grid-template-columns: 1fr;
-  }
+.feature {
+  border-radius: 18px;
+  padding: 14px 14px;
+  transition: transform 180ms ease, border-color 180ms ease;
 }
-.step {
-  padding: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.03);
+.feature:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 140, 0, 0.22);
 }
-.badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 10px;
-  background: rgba(255, 122, 24, 0.18);
-  border: 1px solid rgba(255, 122, 24, 0.35);
-  color: #ff9a3c;
-  font-weight: 900;
-  margin-bottom: 10px;
+.feature-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
 }
-.step h4 {
-  margin: 0 0 6px;
-  font-size: 15px;
-  color: #f3f4f6;
-}
-.step p {
+.feature-title {
   margin: 0;
-  color: #b6b8c0;
-  font-size: 13px;
-  line-height: 1.75;
+  font-size: 14px;
+  font-weight: 950;
+}
+.pill-tag {
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  opacity: 0.9;
+}
+.feature-text {
+  margin: 10px 0 12px;
+  font-size: 12px;
+  opacity: 0.72;
+  line-height: 1.6;
 }
 
-.pill-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 12px;
+/* Video */
+.video-wrap {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.25);
 }
-.pill {
+.video {
+  width: 100%;
+  display: block;
+  aspect-ratio: 16 / 9;
+  background: rgba(0, 0, 0, 0.25);
+}
+.video-hint {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  font-size: 11px;
   padding: 8px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: #b6b8c0;
-  font-size: 12px;
-}
-.pill strong {
-  color: #f3f4f6;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  opacity: 0.85;
 }
 
+/* FAQ */
 .faq {
-  margin-top: 12px;
+  width: min(1180px, calc(100% - 24px));
+  margin: 0 auto;
   display: grid;
   gap: 10px;
 }
-details {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.03);
-  padding: 12px 12px;
+.qa {
+  border-radius: 18px;
+  padding: 12px 14px;
 }
-summary {
+.qa summary {
   cursor: pointer;
   font-weight: 900;
-  color: #f3f4f6;
-  outline: none;
+  font-size: 13px;
+  list-style: none;
 }
-details .text {
-  margin-top: 10px;
+.qa summary::-webkit-details-marker {
+  display: none;
 }
-
-.note {
-  margin-top: 10px;
-  padding: 12px 12px;
-  border-radius: 16px;
-  border: 1px dashed rgba(255, 122, 24, 0.35);
-  background: rgba(255, 122, 24, 0.06);
-  color: #b6b8c0;
+.qa p {
+  margin: 10px 0 0;
   font-size: 12px;
-  line-height: 1.7;
-}
-.note strong {
-  color: #f3f4f6;
-}
-
-.footer {
-  margin-top: 18px;
-  padding: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 18px;
-  background: rgba(16, 16, 24, 0.55);
-  color: #b6b8c0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.small {
-  font-size: 12px;
+  opacity: 0.72;
   line-height: 1.6;
 }
-.muted {
-  color: #b6b8c0;
-}
-.links {
+
+/* Footer */
+.footer {
+  width: min(1180px, calc(100% - 24px));
+  margin: 18px auto 0;
+  border-radius: 18px;
+  padding: 12px 14px;
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  position: relative;
+  z-index: 1;
+}
+.foot-title {
+  font-weight: 1000;
+}
+.foot-sub {
+  opacity: 0.7;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+/* Responsive */
+@media (max-width: 980px) {
+  .hero-inner {
+    grid-template-columns: 1fr;
+  }
+  .floating {
+    display: none;
+  }
+  .timeline {
+    grid-template-columns: 1fr;
+  }
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+  .stats-row {
+    grid-template-columns: 1fr;
+  }
+  .actions {
+    display: none;
+  }
 }
 </style>

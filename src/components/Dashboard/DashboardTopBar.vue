@@ -9,6 +9,7 @@
             v-if="!imageLoaded && me.avatarUrl"
             class="me__avatar-skeleton"
           ></div>
+
           <img
             v-if="me.avatarUrl"
             class="me__avatar"
@@ -18,15 +19,24 @@
             @load="imageLoaded = true"
             @error="imageLoaded = true"
           />
+
           <div v-else class="me__avatar me__avatar--placeholder">
             <span class="me__avatar-placeholder-icon">👤</span>
           </div>
-          <div class="me__edit-overlay">
+
+          <!-- Overlay -->
+          <div class="me__edit-overlay" aria-hidden="true">
             <span class="me__edit-text">ערוך פרופיל</span>
           </div>
+
+          <!-- Glow ring -->
+          <div class="me__ring" aria-hidden="true"></div>
         </div>
 
-        <div class="me__status-indicator">
+        <div
+          class="me__status-indicator"
+          :title="isHendiman ? (isAvailable ? 'זמין' : 'לא זמין') : 'מחובר'"
+        >
           <span
             class="dot"
             :class="{
@@ -39,13 +49,23 @@
 
       <div class="me__meta">
         <div class="me__name">{{ me.name }}</div>
-        <div class="me__role">{{ isHendiman ? "הנדימן" : "לקוח" }}</div>
+        <div class="me__role">
+          <span
+            class="role-pill"
+            :class="{
+              'role-pill--handy': isHendiman,
+              'role-pill--client': !isHendiman,
+            }"
+          >
+            {{ isHendiman ? "הנדימן" : "לקוח" }}
+          </span>
+        </div>
       </div>
 
-      <span class="me__chev">›</span>
+      <span class="me__chev" aria-hidden="true">›</span>
     </button>
 
-    <!-- RIGHT: Actions + KPI (same row always on mobile) -->
+    <!-- RIGHT: Actions + KPI -->
     <div class="right">
       <!-- Return to job (desktop only) -->
       <button
@@ -57,6 +77,7 @@
       >
         <span class="btn__icon">🔧</span>
         <span class="btn__text">חזור לעבודה שלך</span>
+        <span class="btn__spark" aria-hidden="true"></span>
       </button>
 
       <!-- Ratings (handyman) -->
@@ -69,7 +90,8 @@
         title="הדירוגים והביקורות שלי"
       >
         <span class="btn__icon">⭐</span>
-        <span class="btn__text">הדירוגים והביקורות שלי</span>
+        <span class="btn__text">הדירוגים שלי</span>
+        <span class="btn__spark" aria-hidden="true"></span>
       </button>
 
       <!-- Desktop: KPI -->
@@ -77,16 +99,19 @@
         <div class="kpi__item">
           <div class="kpi__num">{{ stats.clients }}</div>
           <div class="kpi__label">לקוחות</div>
+          <span class="kpi__shine" aria-hidden="true"></span>
         </div>
 
         <div class="kpi__item">
           <div class="kpi__num">{{ stats.handymen }}</div>
           <div class="kpi__label">הנדימנים</div>
+          <span class="kpi__shine" aria-hidden="true"></span>
         </div>
 
         <div class="kpi__item kpi__item--hot">
           <div class="kpi__num">{{ stats.users }}</div>
           <div class="kpi__label">משתמשים</div>
+          <span class="kpi__shine" aria-hidden="true"></span>
         </div>
       </div>
     </div>
@@ -114,15 +139,12 @@ export default {
   data() {
     return {
       isMobile: window.innerWidth <= 768,
-      imageLoaded: false, // Track if profile image has loaded
+      imageLoaded: false,
     };
   },
   watch: {
     "me.avatarUrl"(newUrl) {
-      // Reset loading state when avatar URL changes
-      if (newUrl) {
-        this.imageLoaded = false;
-      }
+      if (newUrl) this.imageLoaded = false;
     },
   },
   mounted() {
@@ -142,7 +164,7 @@ export default {
 <style lang="scss" scoped>
 $bg: #0b0b0f;
 $card: rgba(255, 255, 255, 0.06);
-$card2: rgba(255, 255, 255, 0.085);
+$card2: rgba(255, 255, 255, 0.095);
 $stroke: rgba(255, 255, 255, 0.12);
 $text: rgba(255, 255, 255, 0.92);
 $muted: rgba(255, 255, 255, 0.62);
@@ -151,12 +173,12 @@ $orange: #ff6a00;
 $orange2: #ff8a2b;
 $orange3: #ffb36b;
 
-$shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
-$shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
+$shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+$shadowO: 0 18px 55px rgba(255, 106, 0, 0.2);
 
 @mixin focusRing {
   outline: none;
-  box-shadow: 0 0 0 3px rgba($orange, 0.32);
+  box-shadow: 0 0 0 4px rgba($orange, 0.28);
 }
 
 .top {
@@ -168,18 +190,29 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   min-width: 0;
 
   @media (max-width: 768px) {
-    // חד-שורה קשיח
     flex-wrap: nowrap;
     gap: 8px;
 
     margin-bottom: 6px;
-    padding: 8px 10px;
-    background: linear-gradient(180deg, $card2, $card);
-    border-radius: 14px;
-    border: 1px solid $stroke;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    padding: 10px 12px;
+
+    border-radius: 16px;
+    border: 1px solid rgba($orange, 0.18);
+    background: radial-gradient(
+        700px 160px at 10% 0%,
+        rgba($orange, 0.18),
+        transparent 60%
+      ),
+      radial-gradient(
+        600px 140px at 90% 0%,
+        rgba(16, 185, 129, 0.12),
+        transparent 55%
+      ),
+      linear-gradient(180deg, $card2, $card);
+
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 
     position: sticky;
     top: 0;
@@ -194,20 +227,47 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 
 /* LEFT: profile */
 .me {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
-  background: linear-gradient(180deg, $card2, $card);
-  border: 1px solid rgba($orange, 0.22);
-  border-radius: 999px;
   padding: 10px 14px;
+
+  border-radius: 999px;
+  border: 1px solid rgba($orange, 0.22);
+
+  background: radial-gradient(
+      140px 60px at 20% 0%,
+      rgba($orange, 0.2),
+      transparent 60%
+    ),
+    linear-gradient(180deg, $card2, $card);
+
   box-shadow: $shadow;
   cursor: pointer;
-  transition: transform 140ms ease, box-shadow 140ms ease;
+  transition: transform 140ms ease, box-shadow 140ms ease,
+    border-color 140ms ease;
   min-width: 0;
+  overflow: hidden;
+
+  /* moving light */
+  &::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    background: linear-gradient(
+      120deg,
+      transparent,
+      rgba(255, 255, 255, 0.1),
+      transparent
+    );
+    transform: translateX(-60%);
+    opacity: 0;
+    transition: opacity 180ms ease;
+    pointer-events: none;
+  }
 
   @media (max-width: 768px) {
-    // קומפקט במובייל כדי להשאיר מקום ל-KPI
     padding: 6px 8px;
     border-radius: 14px;
     gap: 8px;
@@ -217,7 +277,14 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   &:hover {
     transform: translateY(-1px);
     box-shadow: $shadow, $shadowO;
+    border-color: rgba($orange, 0.34);
+
+    &::before {
+      opacity: 1;
+      animation: sweep 1.1s ease-in-out infinite;
+    }
   }
+
   &:focus {
     @include focusRing;
   }
@@ -234,6 +301,29 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     display: inline-block;
   }
 
+  &__ring {
+    position: absolute;
+    inset: -6px;
+    border-radius: 999px;
+    background: radial-gradient(
+      closest-side,
+      rgba($orange, 0),
+      rgba($orange, 0) 60%,
+      rgba($orange, 0.22) 78%,
+      rgba($orange2, 0) 100%
+    );
+    opacity: 0;
+    transform: scale(0.92);
+    transition: opacity 180ms ease, transform 180ms ease;
+    pointer-events: none;
+  }
+
+  &:hover .me__ring {
+    opacity: 1;
+    transform: scale(1);
+    animation: ringPulse 1.4s ease-in-out infinite;
+  }
+
   &__avatar {
     width: 40px;
     height: 40px;
@@ -241,7 +331,7 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     object-fit: cover;
     border: 2px solid rgba($orange, 0.35);
     display: block;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.3s ease, transform 0.25s ease;
 
     @media (max-width: 768px) {
       width: 30px;
@@ -252,23 +342,27 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     &--loading {
       opacity: 0;
     }
+  }
 
-    &--placeholder {
-      background: linear-gradient(
-        135deg,
-        rgba($orange, 0.2),
-        rgba($orange2, 0.15)
-      );
-      border-color: rgba($orange, 0.3);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
+  &:hover .me__avatar {
+    transform: scale(1.03);
+  }
+
+  &__avatar--placeholder {
+    background: linear-gradient(
+      135deg,
+      rgba($orange, 0.22),
+      rgba($orange2, 0.14)
+    );
+    border-color: rgba($orange, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   &__avatar-placeholder-icon {
     font-size: 20px;
-    opacity: 0.7;
+    opacity: 0.75;
 
     @media (max-width: 768px) {
       font-size: 16px;
@@ -284,11 +378,11 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     background: linear-gradient(
       90deg,
       rgba(255, 255, 255, 0.1) 0%,
-      rgba(255, 255, 255, 0.2) 50%,
+      rgba(255, 255, 255, 0.22) 50%,
       rgba(255, 255, 255, 0.1) 100%
     );
     background-size: 200% 100%;
-    animation: skeleton-loading 1.5s ease-in-out infinite;
+    animation: skeleton-loading 1.3s ease-in-out infinite;
     border: 2px solid rgba($orange, 0.35);
     z-index: 1;
 
@@ -312,8 +406,8 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     position: absolute;
     inset: 0;
     border-radius: 999px;
-    background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.82);
+    backdrop-filter: blur(6px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -322,18 +416,19 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     pointer-events: none;
   }
 
-  &__edit-text {
-    color: $orange;
-    font-weight: 900;
-    font-size: 9px;
-    text-align: center;
-    line-height: 1.2;
-    padding: 0 4px;
+  /* FIX: overlay works on hover of the whole button */
+  &:hover .me__edit-overlay {
+    opacity: 1;
   }
 
-  &:hover .me__avatar-container:hover .me__edit-overlay {
-    opacity: 1;
-    pointer-events: auto;
+  &__edit-text {
+    color: $orange2;
+    font-weight: 1000;
+    font-size: 10px;
+    text-align: center;
+    line-height: 1.1;
+    padding: 0 6px;
+    text-shadow: 0 10px 24px rgba($orange, 0.25);
   }
 
   &__status-indicator {
@@ -344,9 +439,10 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     height: 16px;
     border-radius: 50%;
     border: 2px solid $bg;
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.35);
     display: grid;
     place-items: center;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
 
     @media (max-width: 768px) {
       width: 12px;
@@ -360,13 +456,8 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   &__meta {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
     min-width: 0;
-
-    @media (max-width: 768px) {
-      // במובייל — מציגים את השם והתפקיד
-      gap: 2px;
-    }
   }
 
   &__name {
@@ -378,30 +469,54 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 
     @media (max-width: 768px) {
       font-size: 12px;
-      font-weight: 900;
+      font-weight: 1000;
     }
   }
 
   &__role {
-    font-weight: 900;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .role-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
     font-size: 11px;
-    color: $muted;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-weight: 1000;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.78);
+
+    &--handy {
+      border-color: rgba($orange, 0.22);
+      background: rgba($orange, 0.1);
+      color: $orange2;
+    }
+
+    &--client {
+      border-color: rgba(16, 185, 129, 0.22);
+      background: rgba(16, 185, 129, 0.1);
+      color: #34d399;
+    }
 
     @media (max-width: 768px) {
       font-size: 9px;
-      font-weight: 800;
-      color: rgba(255, 255, 255, 0.5);
+      padding: 3px 8px;
+      border-radius: 12px;
     }
   }
 
   &__chev {
-    color: rgba($orange3, 0.9);
+    color: rgba($orange3, 0.95);
     font-weight: 1000;
     font-size: 18px;
     margin-right: 4px;
+    text-shadow: 0 10px 22px rgba($orange, 0.22);
 
     @media (max-width: 768px) {
       display: none;
@@ -415,10 +530,8 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   align-items: center;
   gap: 10px;
   min-width: 0;
-  position: relative;
 
   @media (max-width: 768px) {
-    // חד-שורה קשיח + בלי wrap
     flex: 1 1 auto;
     flex-wrap: nowrap;
     gap: 8px;
@@ -429,23 +542,35 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 
 /* Buttons */
 .btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
   border-radius: 999px;
-  border: 1px solid rgba($orange, 0.3);
-  background: linear-gradient(135deg, rgba($orange, 0.15), rgba($orange2, 0.1));
+  border: 1px solid rgba($orange, 0.28);
+
+  background: radial-gradient(
+      120px 60px at 20% 0%,
+      rgba($orange, 0.18),
+      transparent 60%
+    ),
+    linear-gradient(135deg, rgba($orange, 0.14), rgba($orange2, 0.1));
+
   color: $orange2;
   cursor: pointer;
   font-weight: 1000;
   font-size: 13px;
-  box-shadow: 0 4px 12px rgba($orange, 0.1);
-  transition: transform 120ms ease, box-shadow 120ms ease;
+
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+  transition: transform 120ms ease, box-shadow 120ms ease,
+    border-color 120ms ease;
+  overflow: hidden;
 
   &:hover {
     transform: translateY(-1px);
-    box-shadow: 0 6px 18px rgba($orange, 0.22);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+    border-color: rgba($orange, 0.42);
   }
   &:focus {
     @include focusRing;
@@ -454,13 +579,33 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   &__icon {
     font-size: 16px;
     line-height: 1;
+    filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.35));
   }
   &__text {
     white-space: nowrap;
   }
 
+  /* tiny moving spark */
+  &__spark {
+    position: absolute;
+    inset: -2px;
+    background: linear-gradient(
+      120deg,
+      transparent,
+      rgba(255, 255, 255, 0.1),
+      transparent
+    );
+    transform: translateX(-70%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  &:hover &__spark {
+    opacity: 1;
+    animation: sweep 1.15s ease-in-out infinite;
+  }
+
   @media (max-width: 768px) {
-    // במובייל: כפתורים קטנים יותר
     padding: 8px 10px;
     border-radius: 14px;
     flex: 0 0 auto;
@@ -476,7 +621,6 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   @media (max-width: 768px) {
     padding: 8px 10px;
     border-radius: 14px;
-    flex: 0 0 auto;
     font-size: 11px;
     gap: 6px;
 
@@ -508,7 +652,7 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   color: #ef4444;
 }
 
-/* KPI: forced single row */
+/* KPI */
 .kpi {
   display: flex;
   align-items: center;
@@ -522,7 +666,14 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   }
 
   &__item {
-    background: linear-gradient(180deg, $card2, $card);
+    position: relative;
+    background: radial-gradient(
+        140px 60px at 20% 0%,
+        rgba($orange, 0.1),
+        transparent 60%
+      ),
+      linear-gradient(180deg, $card2, $card);
+
     border: 1px solid $stroke;
     border-radius: 999px;
     padding: 10px 12px;
@@ -531,39 +682,40 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
     align-items: baseline;
     justify-content: center;
     gap: 8px;
-    min-width: 0;
+    overflow: hidden;
 
-    @media (max-width: 768px) {
-      // הכי חשוב: כולם שווים ומצטמצמים שווה
-      flex: 1 1 0;
-      padding: 6px 8px;
-      border-radius: 14px;
-      gap: 6px;
-      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+    &:hover .kpi__shine {
+      opacity: 1;
+      animation: sweep 1.4s ease-in-out infinite;
     }
+  }
+
+  &__shine {
+    position: absolute;
+    inset: -2px;
+    background: linear-gradient(
+      120deg,
+      transparent,
+      rgba(255, 255, 255, 0.1),
+      transparent
+    );
+    transform: translateX(-70%);
+    opacity: 0;
+    pointer-events: none;
   }
 
   &__num {
     font-size: 18px;
     font-weight: 1000;
     color: $text;
-
-    @media (max-width: 768px) {
-      font-size: 12px;
-      line-height: 1;
-    }
+    text-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
   }
 
   &__label {
     font-size: 12px;
-    font-weight: 900;
+    font-weight: 1000;
     color: $muted;
     white-space: nowrap;
-
-    @media (max-width: 768px) {
-      font-size: 9px;
-      line-height: 1;
-    }
   }
 
   &__item--hot {
@@ -592,26 +744,57 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   &--on {
     background: $orange;
     box-shadow: 0 0 0 3px rgba($orange, 0.22);
-
-    @media (max-width: 768px) {
-      box-shadow: 0 0 0 2px rgba($orange, 0.22);
-    }
+    animation: dotPulse 1.6s ease-in-out infinite;
   }
 
   &--green {
     background: #10b981;
     box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22);
-
-    @media (max-width: 768px) {
-      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.22);
-    }
+    animation: dotPulse 1.8s ease-in-out infinite;
   }
 }
 
-/* אם המסך ממש צר — מסתירים תוויות KPI ומשאירים רק מספרים (עדיין אותה שורה) */
+/* tiny screens */
 @media (max-width: 360px) {
   .kpi__label {
     display: none;
+  }
+}
+
+/* ===== Animations ===== */
+@keyframes sweep {
+  0% {
+    transform: translateX(-70%);
+  }
+  100% {
+    transform: translateX(70%);
+  }
+}
+@keyframes ringPulse {
+  0%,
+  100% {
+    filter: blur(0px);
+    opacity: 0.85;
+  }
+  50% {
+    filter: blur(0.6px);
+    opacity: 1;
+  }
+}
+@keyframes dotPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
   }
 }
 </style>

@@ -1853,12 +1853,17 @@ function findAvailablePort(startPort) {
         lng,
         lat,
         handymanId,
+        clientId,
         workType,
         minPrice,
         maxPrice,
         page,
         limit,
       } = req.query;
+
+      // Note: We removed the pre-check for user-associated jobs to improve performance
+      // The aggregation pipeline will handle filtering efficiently with proper indexes
+      // User-associated jobs will be included in results through the normal filtering process
 
       // TODO: Ensure MongoDB indexes exist for optimal performance:
       // 1. 2dsphere index on jobs.location (for $geoNear): db.jobs.createIndex({ location: "2dsphere" })
@@ -1937,7 +1942,8 @@ function findAvailablePort(startPort) {
           handymanSpecialties = getCachedHandymanSpecialties(handymanId);
           if (!handymanSpecialties) {
             const handymanObjectId = new ObjectId(handymanId);
-            const handyman = await collection.findOne({
+            const usersCol = getCollection();
+            const handyman = await usersCol.findOne({
               _id: handymanObjectId,
             });
             if (
@@ -2198,7 +2204,7 @@ function findAvailablePort(startPort) {
         },
       });
 
-      // Stage 7: Filter by handyman specialties in MongoDB (moved from JS for performance)
+      // Stage 8: Filter by handyman specialties in MongoDB (moved from JS for performance)
       // This complex matching is now done in MongoDB using $expr
       if (handymanSpecialties && handymanSpecialties.length > 0) {
         // Build array of specialty names (lowercase) that are full categories
@@ -2239,10 +2245,14 @@ function findAvailablePort(startPort) {
                                 {
                                   $toLower: {
                                     $trim: {
-                                      $ifNull: [
-                                        { $ifNull: ["$$subcat.category", ""] },
-                                        "",
-                                      ],
+                                      input: {
+                                        $ifNull: [
+                                          {
+                                            $ifNull: ["$$subcat.category", ""],
+                                          },
+                                          "",
+                                        ],
+                                      },
                                     },
                                   },
                                 },
@@ -2273,7 +2283,9 @@ function findAvailablePort(startPort) {
                           {
                             $toLower: {
                               $trim: {
-                                $ifNull: [{ $ifNull: ["$category", ""] }, ""],
+                                input: {
+                                  $ifNull: [{ $ifNull: ["$category", ""] }, ""],
+                                },
                               },
                             },
                           },
@@ -2289,7 +2301,7 @@ function findAvailablePort(startPort) {
         }
       }
 
-      // Stage 8: Final handymanId validation in MongoDB (moved from JS)
+      // Stage 9: Final handymanId validation in MongoDB (moved from JS)
       if (handymanId) {
         try {
           const handymanObjectId = new ObjectId(handymanId);
@@ -2343,7 +2355,7 @@ function findAvailablePort(startPort) {
         });
       }
 
-      // Stage 9: Pagination in MongoDB (all filtering done before pagination)
+      // Stage 10: Pagination in MongoDB (all filtering done before pagination)
       pipeline.push({
         $skip: (pageNum - 1) * limitNum,
       });
@@ -2377,9 +2389,189 @@ function findAvailablePort(startPort) {
         success: false,
         message: "שגיאה בסינון העבודות",
         error: error.message,
+        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
       });
     }
   });
+  // Fast endpoint to check if user has active job (for immediate chat opening)
+  app.get("/check-active-job/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (!collectionJobs) {
+        return res.status(500).json({
+          success: false,
+          message: "Database not connected",
+        });
+      }
+
+      let userId;
+      try {
+        userId = new ObjectId(id);
+      } catch (objectIdError) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid user ID format",
+        });
+      }
+
+      // Quick query: find active jobs (any status except "open" or "done")
+      // This includes: assigned, on_the_way, in_progress, and any other active status
+      const userIdString = String(userId);
+
+      // Build query to find jobs where user is handyman or client
+      // Support handymanId as: single ObjectId, single string, array of ObjectIds, array of strings
+      let activeJob = null;
+      try {
+        // Try SIMPLE queries first (these are indexed and FAST)
+        // Only use complex $expr query as last resort
+        // Priority: Try the FASTEST queries first (direct ObjectId match on array field)
+        // MongoDB can use index on array field with direct value match
+        const simpleQueries = [
+          // Handyman direct ObjectId match (FASTEST - works with array field and index)
+          {
+            handymanId: userId,
+            status: { $nin: ["open", "done", "cancelled"] },
+            isDeleted: { $ne: true },
+          },
+          // Handyman string match
+          {
+            handymanId: userIdString,
+            status: { $nin: ["open", "done", "cancelled"] },
+            isDeleted: { $ne: true },
+          },
+          // Client direct match
+          {
+            clientId: userId,
+            status: { $nin: ["open", "done", "cancelled"] },
+            isDeleted: { $ne: true },
+          },
+          {
+            clientId: userIdString,
+            status: { $nin: ["open", "done", "cancelled"] },
+            isDeleted: { $ne: true },
+          },
+          // Handyman $in (SLOWER - only if direct match didn't work)
+          {
+            handymanId: { $in: [userId, userIdString] },
+            status: { $nin: ["open", "done", "cancelled"] },
+            isDeleted: { $ne: true },
+          },
+        ];
+
+        // Try each simple query until we find a match (these are FAST with indexes)
+        for (let i = 0; i < simpleQueries.length; i++) {
+          try {
+            activeJob = await collectionJobs.findOne(simpleQueries[i], {
+              maxTimeMS: 5000, // Timeout after 5 seconds per query
+            });
+            if (activeJob) {
+              break;
+            }
+          } catch (queryErr) {
+            // Continue to next query
+          }
+        }
+
+        // If not found with simple queries, try complex query for arrays with ObjectId objects (SLOW - last resort)
+        if (!activeJob) {
+          const complexQuery = {
+            $and: [
+              {
+                $expr: {
+                  $gt: [
+                    {
+                      $size: {
+                        $filter: {
+                          input: { $ifNull: ["$handymanId", []] },
+                          as: "handyman",
+                          cond: {
+                            $or: [
+                              { $eq: ["$$handyman", userId] },
+                              { $eq: ["$$handyman", userIdString] },
+                            ],
+                          },
+                        },
+                      },
+                    },
+                    0,
+                  ],
+                },
+              },
+              {
+                status: { $nin: ["open", "done", "cancelled"] },
+              },
+              { isDeleted: { $ne: true } },
+            ],
+          };
+          activeJob = await collectionJobs.findOne(complexQuery);
+        }
+      } catch (queryError) {
+        return res.status(500).json({
+          success: false,
+          message: "Error querying database",
+          error: queryError.message,
+        });
+      }
+
+      if (activeJob) {
+        // Convert MongoDB object to plain object
+        const jobObj = activeJob.toObject ? activeJob.toObject() : activeJob;
+
+        // Verify the job is actually assigned (has handymanId for clients, or user is in handymanId for handymen)
+        let isJobAssigned = false;
+
+        // Check if user is handyman (by checking if handymanId matches)
+        const isHandymanMatch =
+          (Array.isArray(jobObj.handymanId) &&
+            jobObj.handymanId.some((id) => {
+              const idStr = id?._id
+                ? String(id._id)
+                : id?.$oid
+                ? String(id.$oid)
+                : String(id);
+              return idStr === userIdString;
+            })) ||
+          (!Array.isArray(jobObj.handymanId) &&
+            String(
+              jobObj.handymanId?._id ||
+                jobObj.handymanId?.$oid ||
+                jobObj.handymanId ||
+                ""
+            ) === userIdString);
+
+        // Check if user is client
+        const isClientMatch =
+          String(jobObj.clientId?._id || jobObj.clientId || "") ===
+          userIdString;
+
+        // Job is assigned if: (user is handyman) OR (user is client AND job has handymanId)
+        isJobAssigned =
+          isHandymanMatch || (isClientMatch && !!jobObj.handymanId);
+
+        if (isJobAssigned) {
+          return res.json({
+            success: true,
+            hasActiveJob: true,
+            jobId: jobObj._id.toString(),
+            status: jobObj.status,
+            job: jobObj, // Return full job object for immediate use
+          });
+        }
+      }
+      return res.json({
+        success: true,
+        hasActiveJob: false,
+      });
+    } catch (error) {
+      console.error("Error in /check-active-job:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error checking active job",
+        error: error.message,
+      });
+    }
+  });
+
   app.get("/GetDataDeshboard/:id", async (req, res) => {
     try {
       if (!collection) {
@@ -8623,14 +8815,6 @@ function findAvailablePort(startPort) {
                   paymentIntent = confirmedPaymentIntent;
                 } catch (confirmError) {
                   // If confirmation fails, return error
-                  console.error(`[jobs/approve] ❌ Error confirming payment:`, {
-                    error: confirmError.message,
-                    type: confirmError.type,
-                    code: confirmError.code,
-                    decline_code: confirmError.decline_code,
-                    payment_intent: confirmError.payment_intent,
-                    stack: confirmError.stack,
-                  });
                   return res.status(400).json({
                     success: false,
                     message:
@@ -8660,14 +8844,6 @@ function findAvailablePort(startPort) {
                 }
               } catch (innerError) {
                 // If any error occurs in the try block above, return error
-                console.error(
-                  `[jobs/approve] ❌ Error in payment method processing:`,
-                  {
-                    error: innerError.message,
-                    type: innerError.type,
-                    code: innerError.code,
-                  }
-                );
                 return res.status(400).json({
                   success: false,
                   message:
@@ -8706,9 +8882,6 @@ function findAvailablePort(startPort) {
                 updateSucceeded = true;
               } catch (updateError) {
                 // If update fails, we'll need to provide return_url when confirming
-                console.warn(
-                  `[jobs/approve] ⚠️ Warning: Could not update payment intent: ${updateError.message}`
-                );
               }
 
               // Now try to confirm the payment intent
@@ -8731,14 +8904,6 @@ function findAvailablePort(startPort) {
                 );
               paymentIntent = confirmedPaymentIntent;
             } catch (confirmError) {
-              console.error(
-                `[jobs/approve] ❌ Error confirming payment (no saved method):`,
-                {
-                  error: confirmError.message,
-                  type: confirmError.type,
-                  code: confirmError.code,
-                }
-              );
               return res.status(400).json({
                 success: false,
                 message:
@@ -9208,14 +9373,6 @@ function findAvailablePort(startPort) {
                   : null,
               };
 
-              console.log(
-                `[Payment Released] Sending to handyman ${handymanIdString}, job ${jobId}`,
-                {
-                  hasJobInfo: !!paymentReleasedData.jobInfo,
-                  hasPaymentInfo: !!paymentReleasedData.paymentInfo,
-                }
-              );
-
               // Emit to both user room and job room to ensure handyman receives it
               io.to(`user-${handymanIdString}`).emit(
                 "payment-released",
@@ -9389,12 +9546,7 @@ function findAvailablePort(startPort) {
             "❌ [JOBS/APPROVE] Payment Error stack:",
             paymentError.stack
           );
-          console.error("❌ [JOBS/APPROVE] Payment Error details:", {
-            message: paymentError.message,
-            name: paymentError.name,
-            jobId: jobId,
-            clientId: clientId,
-          });
+          // Payment error
           // Job is already marked as clientApproved, but payment failed
           // Return success but with warning
           return res.status(500).json({
@@ -9415,14 +9567,7 @@ function findAvailablePort(startPort) {
         });
       }
     } catch (error) {
-      console.error("❌ [JOBS/APPROVE] Error approving job:", error);
-      console.error("❌ [JOBS/APPROVE] Error stack:", error.stack);
-      console.error("❌ [JOBS/APPROVE] Error details:", {
-        message: error.message,
-        name: error.name,
-        jobId: req.body?.jobId,
-        clientId: req.body?.clientId,
-      });
+      // Error approving job
       return res.status(500).json({
         success: false,
         message: "Error approving job",
@@ -9648,7 +9793,6 @@ function findAvailablePort(startPort) {
         message: "Hours worked updated successfully",
       });
     } catch (error) {
-      console.error("❌ [Hours Worked] Error:", error);
       return res.status(500).json({
         success: false,
         message: "Error updating hours worked",
@@ -10095,15 +10239,23 @@ function findAvailablePort(startPort) {
       }
 
       const chatsCol = getCollectionChats();
-      const chat = await chatsCol.findOne({ jobId: new ObjectId(jobId) });
+      // Use projection to only fetch content field (faster)
+      const chat = await chatsCol.findOne(
+        { jobId: new ObjectId(jobId) },
+        { projection: { content: 1 } } // Only fetch content field
+      );
 
       if (!chat) {
         return res.json({ success: true, messages: [] });
       }
 
+      // Return only the last 100 messages for performance (most recent)
+      const messages = chat.content || [];
+      const recentMessages = messages.slice(-100);
+
       return res.json({
         success: true,
-        messages: chat.content || [],
+        messages: recentMessages,
       });
     } catch (error) {
       return res.status(500).json({
@@ -10186,55 +10338,23 @@ function findAvailablePort(startPort) {
         if (location) messageObj.customerLocation = location;
       }
 
-      // Find or create chat document
-      let chat = await chatsCol.findOne({ jobId: new ObjectId(jobId) });
-
-      if (!chat) {
-        // Create new chat document
-        chat = {
-          jobId: new ObjectId(jobId),
-          customerID: customerId,
-          handymanID: handymanId,
-          content: [messageObj],
-        };
-        await chatsCol.insertOne(chat);
-      } else {
-        // Add message to existing chat
-        const updateResult = await chatsCol.updateOne(
-          { jobId: new ObjectId(jobId) },
-          { $push: { content: messageObj } }
-        );
-
-        // Check if content array has more than 100 messages
-        const updatedChat = await chatsCol.findOne({
-          jobId: new ObjectId(jobId),
-        });
-        if (
-          updatedChat &&
-          updatedChat.content &&
-          updatedChat.content.length > 100
-        ) {
-          // Remove first 50 messages
-          const newContent = updatedChat.content.slice(50);
-          await chatsCol.updateOne(
-            { jobId: new ObjectId(jobId) },
-            { $set: { content: newContent } }
-          );
-        }
-      }
-
-      // Emit WebSocket event to notify clients
+      // Emit WebSocket event IMMEDIATELY (before saving to DB) for real-time delivery
       const io = req.app.get("io");
       if (io) {
-        io.to(`job-${jobId}`).emit("new-message", {
-          jobId,
+        // Convert jobId to string to ensure it matches the room name
+        const jobIdString = String(jobId);
+        const roomName = `job-${jobIdString}`;
+
+        // Send message immediately via WebSocket for instant delivery
+        io.to(roomName).emit("new-message", {
+          jobId: jobIdString,
           message: messageObj,
         });
 
         // If handyman sent location, emit real-time location update
         if (senderIsHandyman && location) {
-          io.to(`job-${jobId}`).emit("handyman-location-updated", {
-            jobId,
+          io.to(roomName).emit("handyman-location-updated", {
+            jobId: jobIdString,
             location: {
               lat: location.lat,
               lng: location.lng,
@@ -10242,64 +10362,157 @@ function findAvailablePort(startPort) {
             timestamp: new Date().toISOString(),
           });
         }
+      } else {
+        console.error("[Server] WebSocket io not available");
       }
 
-      // Send Push Notification to recipient - CRITICAL: Send on EVERY message
-      const usersCol = getCollection();
-      try {
-        if (senderIsHandyman) {
-          // Handyman sent message, notify client
-          if (customerId) {
-            const clientObjectId =
-              customerId instanceof ObjectId
-                ? customerId
-                : new ObjectId(customerId);
-            const client = await usersCol.findOne({ _id: clientObjectId });
+      // Return response IMMEDIATELY after WebSocket emit for instant feedback
+      // All other operations (DB save, push notifications) happen in background
+      res.json({ success: true, message: messageObj });
 
-            if (client?.fcmToken) {
-              const handymanName =
-                Array.isArray(job.handymanName) && job.handymanName.length > 0
-                  ? job.handymanName[0]
-                  : "ההנדימן";
+      // Save to database AFTER emitting (non-blocking for real-time delivery)
+      // This happens in background - doesn't block the response
+      (async () => {
+        try {
+          // Find or create chat document
+          let chat = await chatsCol.findOne({ jobId: new ObjectId(jobId) });
 
-              const messagePreview = text
-                ? text.substring(0, 50) + (text.length > 50 ? "..." : "")
-                : imageUrl
-                ? "📷 תמונה"
-                : location
-                ? "📍 מיקום"
-                : "הודעה חדשה";
+          if (!chat) {
+            // Create new chat document
+            chat = {
+              jobId: new ObjectId(jobId),
+              customerID: customerId,
+              handymanID: handymanId,
+              content: [messageObj],
+            };
+            await chatsCol.insertOne(chat);
+          } else {
+            // Add message to existing chat
+            const updateResult = await chatsCol.updateOne(
+              { jobId: new ObjectId(jobId) },
+              { $push: { content: messageObj } }
+            );
 
-              const pushResult = await sendPushNotification(
-                client.fcmToken,
-                handymanName,
-                messagePreview,
-                {
-                  type: "new_message",
-                  jobId: jobId.toString(),
-                  senderId: senderId.toString(),
-                }
+            // Check if content array has more than 100 messages
+            const updatedChat = await chatsCol.findOne({
+              jobId: new ObjectId(jobId),
+            });
+            if (
+              updatedChat &&
+              updatedChat.content &&
+              updatedChat.content.length > 100
+            ) {
+              // Remove first 50 messages
+              const newContent = updatedChat.content.slice(50);
+              await chatsCol.updateOne(
+                { jobId: new ObjectId(jobId) },
+                { $set: { content: newContent } }
               );
-
-              if (pushResult.shouldRemove) {
-                await usersCol.updateOne(
-                  { _id: clientObjectId },
-                  { $unset: { fcmToken: "" } }
-                );
-              }
             }
           }
-        } else {
-          // Client sent message, notify handyman(s)
-          // If handymanId is array, send to all handymen
-          if (Array.isArray(handymanId)) {
-            // Send to all handymen
-            for (const hId of handymanId) {
+        } catch (dbError) {
+          console.error("Error saving message to database:", dbError);
+          // Don't fail the request if DB save fails - message already sent via WebSocket
+        }
+      })();
+
+      // Send Push Notification to recipient - CRITICAL: Send on EVERY message
+      // This happens in background (non-blocking)
+      (async () => {
+        try {
+          const usersCol = getCollection();
+          if (senderIsHandyman) {
+            // Handyman sent message, notify client
+            if (customerId) {
+              const clientObjectId =
+                customerId instanceof ObjectId
+                  ? customerId
+                  : new ObjectId(customerId);
+              const client = await usersCol.findOne({ _id: clientObjectId });
+
+              if (client?.fcmToken) {
+                const handymanName =
+                  Array.isArray(job.handymanName) && job.handymanName.length > 0
+                    ? job.handymanName[0]
+                    : "ההנדימן";
+
+                const messagePreview = text
+                  ? text.substring(0, 50) + (text.length > 50 ? "..." : "")
+                  : imageUrl
+                  ? "📷 תמונה"
+                  : location
+                  ? "📍 מיקום"
+                  : "הודעה חדשה";
+
+                const pushResult = await sendPushNotification(
+                  client.fcmToken,
+                  handymanName,
+                  messagePreview,
+                  {
+                    type: "new_message",
+                    jobId: jobId.toString(),
+                    senderId: senderId.toString(),
+                  }
+                );
+
+                if (pushResult.shouldRemove) {
+                  await usersCol.updateOne(
+                    { _id: clientObjectId },
+                    { $unset: { fcmToken: "" } }
+                  );
+                }
+              }
+            }
+          } else {
+            // Client sent message, notify handyman(s)
+            // If handymanId is array, send to all handymen
+            if (Array.isArray(handymanId)) {
+              // Send to all handymen
+              for (const hId of handymanId) {
+                const handymanObjectId =
+                  hId instanceof ObjectId ? hId : new ObjectId(hId);
+                const handyman = await usersCol.findOne({
+                  _id: handymanObjectId,
+                });
+                if (handyman?.fcmToken) {
+                  const clientName = job.clientName || "הלקוח";
+                  const messagePreview = text
+                    ? text.substring(0, 50) + (text.length > 50 ? "..." : "")
+                    : imageUrl
+                    ? "📷 תמונה"
+                    : location
+                    ? "📍 מיקום"
+                    : "הודעה חדשה";
+
+                  const pushResult = await sendPushNotification(
+                    handyman.fcmToken,
+                    clientName,
+                    messagePreview,
+                    {
+                      type: "new_message",
+                      jobId: jobId.toString(),
+                      senderId: senderId.toString(),
+                    }
+                  );
+
+                  if (pushResult.shouldRemove) {
+                    await usersCol.updateOne(
+                      { _id: handymanObjectId },
+                      { $unset: { fcmToken: "" } }
+                    );
+                  }
+                }
+              }
+            } else if (handymanId) {
+              // Single handyman
               const handymanObjectId =
-                hId instanceof ObjectId ? hId : new ObjectId(hId);
+                handymanId instanceof ObjectId
+                  ? handymanId
+                  : new ObjectId(handymanId);
               const handyman = await usersCol.findOne({
                 _id: handymanObjectId,
               });
+
               if (handyman?.fcmToken) {
                 const clientName = job.clientName || "הלקוח";
                 const messagePreview = text
@@ -10329,51 +10542,11 @@ function findAvailablePort(startPort) {
                 }
               }
             }
-          } else if (handymanId) {
-            // Single handyman
-            const handymanObjectId =
-              handymanId instanceof ObjectId
-                ? handymanId
-                : new ObjectId(handymanId);
-            const handyman = await usersCol.findOne({
-              _id: handymanObjectId,
-            });
-
-            if (handyman?.fcmToken) {
-              const clientName = job.clientName || "הלקוח";
-              const messagePreview = text
-                ? text.substring(0, 50) + (text.length > 50 ? "..." : "")
-                : imageUrl
-                ? "📷 תמונה"
-                : location
-                ? "📍 מיקום"
-                : "הודעה חדשה";
-
-              const pushResult = await sendPushNotification(
-                handyman.fcmToken,
-                clientName,
-                messagePreview,
-                {
-                  type: "new_message",
-                  jobId: jobId.toString(),
-                  senderId: senderId.toString(),
-                }
-              );
-
-              if (pushResult.shouldRemove) {
-                await usersCol.updateOne(
-                  { _id: handymanObjectId },
-                  { $unset: { fcmToken: "" } }
-                );
-              }
-            }
           }
+        } catch (pushError) {
+          // Don't fail the request if push notification fails
         }
-      } catch (pushError) {
-        // Don't fail the request if push notification fails
-      }
-
-      return res.json({ success: true, message: messageObj });
+      })();
     } catch (error) {
       return res.status(500).json({
         success: false,
@@ -10466,18 +10639,20 @@ function findAvailablePort(startPort) {
       }
 
       // Delete chat from database after rating is submitted (job is completed)
-      let deleteResult = await chatsCol.deleteOne({
-        jobId: new ObjectId(jobId),
-      });
-      if (deleteResult.deletedCount === 0) {
-        // Try alternative: jobId might be stored as string in some cases
-        deleteResult = await chatsCol.deleteOne({ jobId: jobId });
-      }
-      if (deleteResult.deletedCount === 0) {
-        // Try with jobId as string
-        deleteResult = await chatsCol.deleteOne({
-          jobId: String(jobId),
+      // Delete all chats related to this jobId (regardless of how jobId is stored)
+      try {
+        const deleteResult = await chatsCol.deleteMany({
+          $or: [
+            { jobId: new ObjectId(jobId) },
+            { jobId: jobId },
+            { jobId: String(jobId) },
+            { jobId: jobId.toString() },
+          ],
         });
+        // Chat deleted successfully (even if deletedCount is 0, it means no chat existed)
+      } catch (deleteError) {
+        // Log error but don't fail the rating submission
+        console.error("Error deleting chat after rating:", deleteError);
       }
 
       // Emit WebSocket event to handyman that rating was submitted
@@ -10670,16 +10845,11 @@ function findAvailablePort(startPort) {
         }
       } catch (ratingError) {
         // Don't fail the request if rating calculation fails
-        console.error(
-          "⚠️ [jobs/rate] Error calculating average rating:",
-          ratingError.message
-        );
+        console.error(ratingError.message);
       }
 
       return res.json({ success: true });
     } catch (error) {
-      console.error("❌ [jobs/rate] Error in rating endpoint:", error);
-      console.error("❌ [jobs/rate] Error stack:", error.stack);
       return res.status(500).json({
         success: false,
         message: "Error submitting rating",
@@ -12474,7 +12644,6 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           })
           .toArray();
       } catch (error) {
-        console.error("❌ [CREATE-CALL-V2] Error finding handymen:", error);
         return res.status(500).json({
           success: false,
           message: "מצטערים, אין הנדימנים באזורך",
@@ -13238,7 +13407,6 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       } = req.body;
 
       if (!handymen || !Array.isArray(handymen) || handymen.length === 0) {
-        console.error("❌ [split-call-v2] No handymen provided");
         return res.status(400).json({
           success: false,
           message: "לא נמצאו הנדימנים",
@@ -13250,7 +13418,6 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         !Array.isArray(matchedSubcategories) ||
         matchedSubcategories.length === 0
       ) {
-        console.error("❌ [split-call-v2] No matched subcategories provided");
         return res.status(400).json({
           success: false,
           message: "לא נמצאו תחומים מתאימים",
@@ -13341,13 +13508,6 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         if (Number.isFinite(parsedLng) && Number.isFinite(parsedLat)) {
           userLng = parsedLng;
           userLat = parsedLat;
-        } else {
-          console.error("❌ [split-call-v2] Failed to parse coordinates:", {
-            rawLng,
-            parsedLng,
-            parsedLat,
-            coordinates,
-          });
         }
       } else if (locationEnglishName || selectedCity || location) {
         // Find coordinates via Google Maps Geocoding API
@@ -13370,7 +13530,6 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
               return null;
             }
           } catch (error) {
-            console.error("❌ [split-call-v2] Error geocoding:", error.message);
             return null;
           }
         };
@@ -13384,10 +13543,6 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       }
 
       if (!userLng || !userLat) {
-        console.error("❌ [split-call-v2] Missing coordinates:", {
-          userLng,
-          userLat,
-        });
         return res.status(400).json({
           success: false,
           message: "לא ניתן למצוא את המיקום. אנא בחר מיקום תקין.",
@@ -13455,10 +13610,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
             handyman = await collection.findOne({ _id: handymanObjectId });
           }
         } catch (error) {
-          console.error(
-            "❌ [split-call-v2] Error fetching handyman:",
-            error.message
-          );
+          console.error(error.message);
           continue;
         }
 
@@ -13600,8 +13752,6 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         jobs: createdJobs,
       });
     } catch (error) {
-      console.error("❌ [split-call-v2] Error splitting call:", error);
-      console.error("❌ [split-call-v2] Error stack:", error.stack);
       return res.status(500).json({
         success: false,
         message: "שגיאה בפיצול הקריאה",
@@ -17120,7 +17270,9 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
     // Join room for a specific job
     socket.on("join-job", (jobId) => {
-      socket.join(`job-${jobId}`);
+      const jobIdString = String(jobId);
+      const roomName = `job-${jobIdString}`;
+      socket.join(roomName);
     });
 
     // Leave room for a specific job

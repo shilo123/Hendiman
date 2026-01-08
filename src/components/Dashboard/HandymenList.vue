@@ -1,161 +1,198 @@
 <template>
-  <div>
-    <div class="handymen-list">
-      <div
+  <section class="nearby">
+    <!-- Wrapper header (clean + premium) -->
+    <!-- <header class="nearby__header">
+      <div class="nearby__titleWrap">
+        <h2 class="nearby__title">הנדימנים באזורך</h2>
+        <p class="nearby__hint">לחץ על כפתור לפעולה</p>
+      </div>
+
+      <div class="nearby__pill" v-if="filteredHandymen?.length">
+        <span class="nearby__pillNum">{{ filteredHandymen.length }}</span>
+        <span class="nearby__pillTxt">תוצאות</span>
+      </div>
+    </header> -->
+
+    <div class="handymen-list" role="list" aria-label="הנדימנים באזורך">
+      <article
         v-for="h in filteredHandymen"
         :key="h.id || h._id"
         class="hcard"
         :class="{ 'hcard--blocked': h.isBlocked }"
+        role="listitem"
       >
-        <!-- Mobile: Row 1 - Avatar + Name + Rating -->
-        <div class="hcard__top">
-          <div class="hcard__images">
+        <!-- Row 1: avatar + name + rating -->
+        <div class="hcard__row1">
+          <div class="hcard__avatar">
             <img
               class="hcard__av"
               :src="getHandymanImage(h)"
-              alt="handyman"
+              alt=""
               @error="onImageError"
+              loading="lazy"
+              decoding="async"
             />
             <img
               class="hcard__logo"
               :src="getHandymanLogo(h)"
-              alt="logo"
+              alt=""
               @error="onLogoError"
+              loading="lazy"
+              decoding="async"
             />
           </div>
-          <div class="hcard__meta">
-            <div class="hcard__name">{{ h.username }}</div>
-            <div
-              v-if="h.rating !== null && h.rating !== undefined && h.rating > 0"
-              class="hcard__rating hcard__rating--compact"
-            >
-              <div class="hcard__rating-stars">
-                <template v-for="i in 5" :key="i">
-                  <font-awesome-icon
-                    v-if="i <= getFullStars(h.rating)"
-                    :icon="['fas', 'star']"
-                    class="hcard__star hcard__star--full"
-                  />
-                  <font-awesome-icon
-                    v-else-if="
-                      i === getFullStars(h.rating) + 1 && hasHalfStar(h.rating)
-                    "
-                    :icon="['fas', 'star-half-stroke']"
-                    class="hcard__star hcard__star--half"
-                  />
-                  <font-awesome-icon
-                    v-else
-                    :icon="['fas', 'star']"
-                    class="hcard__star hcard__star--empty"
-                  />
-                </template>
+
+          <div class="hcard__main">
+            <div class="hcard__nameLine">
+              <div class="hcard__name" :title="h.username">
+                {{ h.username }}
               </div>
-              <span class="hcard__rating-number">{{
-                formatRating(h.rating)
-              }}</span>
+              <span v-if="h.isBlocked" class="tag tag--danger">חסום</span>
             </div>
-            <div
-              v-else
-              class="hcard__rating hcard__rating--no-rating hcard__rating--compact"
-            >
-              אין דירוג עדיין
+
+            <div class="hcard__ratingLine">
+              <template
+                v-if="
+                  h.rating !== null && h.rating !== undefined && h.rating > 0
+                "
+              >
+                <div class="stars" aria-label="דירוג">
+                  <template v-for="i in 5" :key="i">
+                    <font-awesome-icon
+                      v-if="i <= getFullStars(h.rating)"
+                      :icon="['fas', 'star']"
+                      class="star star--full"
+                    />
+                    <font-awesome-icon
+                      v-else-if="
+                        i === getFullStars(h.rating) + 1 &&
+                        hasHalfStar(h.rating)
+                      "
+                      :icon="['fas', 'star-half-stroke']"
+                      class="star star--half"
+                    />
+                    <font-awesome-icon
+                      v-else
+                      :icon="['fas', 'star']"
+                      class="star star--empty"
+                    />
+                  </template>
+                </div>
+
+                <span class="hcard__score">{{ formatRating(h.rating) }}</span>
+              </template>
+
+              <span v-else class="hcard__noRating">אין דירוג</span>
             </div>
           </div>
-        </div>
 
-        <!-- Mobile: Row 2 - Jobs count + Travel time (scrollable) -->
-        <div class="hcard__middle">
-          <div class="hcard__sub">
-            {{ h.jobDone || 0 }} עבודות
-            <span
-              v-if="
-                h.travelTimeMinutes !== null &&
-                h.travelTimeMinutes !== undefined
-              "
-              class="hcard__travel-time"
-            >
-              · <span v-if="h.travelTimeMinutes === 0">📍 בעיר שלך</span>
-              <span v-else>🚗 {{ h.travelTimeMinutes }} דק'</span>
-            </span>
-          </div>
-        </div>
-
-        <!-- Mobile: Row 3 - Actions (grid of 3 buttons) -->
-        <div class="hcard__actions">
+          <!-- micro info button (kept) -->
           <button
-            class="mini mini--ghost"
+            class="iconBtn"
             type="button"
             @click="$emit('view-details', h.id || h._id)"
+            title="פרטים"
+            aria-label="פרטים"
+          >
+            <font-awesome-icon :icon="['fas', 'info-circle']" />
+          </button>
+        </div>
+
+        <!-- Row 2: compact chips (only 2) -->
+        <div class="hcard__row2" aria-label="מידע קצר">
+          <span class="chip">🧰 {{ h.jobDone || 0 }} עבודות</span>
+
+          <span
+            v-if="
+              h.travelTimeMinutes !== null && h.travelTimeMinutes !== undefined
+            "
+            class="chip"
+            :class="h.travelTimeMinutes === 0 ? 'chip--good' : 'chip--travel'"
+          >
+            <template v-if="h.travelTimeMinutes === 0">📍 בעיר שלך</template>
+            <template v-else>🚗 {{ h.travelTimeMinutes }} דק'</template>
+          </span>
+        </div>
+
+        <!-- Row 3: THREE buttons in ONE row (small, equal width) -->
+        <div class="hcard__row3" aria-label="פעולות">
+          <!-- <button
+            class="miniBtn miniBtn--ghost"
+            type="button"
+            @click="$emit('view-details', h.id || h._id)"
+            title="ראה עוד"
           >
             <font-awesome-icon
               :icon="['fas', 'info-circle']"
-              class="mini__icon"
+              class="miniBtn__ic"
             />
             ראה עוד
-          </button>
+          </button> -->
+
           <button
-            class="mini mini--primary"
+            class="miniBtn miniBtn--primary"
             type="button"
             @click="$emit('personal-request', h.id || h._id)"
+            title="הזמן"
           >
-            <font-awesome-icon :icon="['fas', 'calendar']" class="mini__icon" />
+            <font-awesome-icon
+              :icon="['fas', 'calendar']"
+              class="miniBtn__ic"
+            />
             הזמן
           </button>
+
           <button
-            class="mini"
-            :class="h.isBlocked ? 'mini--unblock' : 'mini--block'"
+            class="miniBtn"
+            :class="h.isBlocked ? 'miniBtn--ok' : 'miniBtn--danger'"
             type="button"
             @click="$emit('block-handyman', h.id || h._id, h.isBlocked)"
             :title="h.isBlocked ? 'בטל חסימת הנדימן' : 'חסום הנדימן'"
           >
             <font-awesome-icon
               :icon="h.isBlocked ? ['fas', 'unlock'] : ['fas', 'ban']"
-              class="mini__icon"
+              class="miniBtn__ic"
             />
-            {{ h.isBlocked ? "בטל חסימה" : "חסום הנדימן" }}
+            {{ h.isBlocked ? "בטל" : "חסום" }}
           </button>
         </div>
-      </div>
+      </article>
     </div>
 
     <!-- Pagination -->
     <div class="pagination" v-if="pagination.totalPages > 1">
       <button
-        class="btn btn--ghost pagination__btn pagination__btn--prev"
+        class="pbtn"
         type="button"
         :disabled="!pagination.hasPrev"
         @click="$emit('prev-page')"
       >
-        הקודם ←
+        הקודם
       </button>
+
       <span class="pagination__info">
-        עמוד {{ pagination.currentPage || pagination.page }} מתוך
+        {{ pagination.currentPage || pagination.page }} /
         {{ pagination.totalPages }}
       </span>
+
       <button
-        class="btn btn--ghost pagination__btn pagination__btn--next"
+        class="pbtn"
         type="button"
         :disabled="!pagination.hasNext"
         @click="$emit('next-page')"
       >
-        → הבא
+        הבא
       </button>
     </div>
-  </div>
+  </section>
 </template>
 
 <script>
 export default {
   name: "HandymenList",
   props: {
-    filteredHandymen: {
-      type: Array,
-      required: true,
-    },
-    pagination: {
-      type: Object,
-      required: true,
-    },
+    filteredHandymen: { type: Array, required: true },
+    pagination: { type: Object, required: true },
   },
   emits: [
     "view-details",
@@ -169,7 +206,6 @@ export default {
       if (rating === null || rating === undefined) return "0.0";
       const numRating = Number(rating);
       if (isNaN(numRating)) return "0.0";
-      // הצג עם ספרה עשרונית אחת אם יש עשרוניות
       return numRating % 1 === 0 ? numRating.toFixed(0) : numRating.toFixed(1);
     },
     getFullStars(rating) {
@@ -186,14 +222,9 @@ export default {
     },
     getHandymanImage(handyman) {
       const defaultImage = "/img/Hendima-logo.png";
-
-      if (!handyman || !handyman.imageUrl) {
-        return defaultImage;
-      }
+      if (!handyman || !handyman.imageUrl) return defaultImage;
 
       const imageUrl = handyman.imageUrl;
-
-      // בדוק אם imageUrl ריק או לא תקין
       if (
         typeof imageUrl !== "string" ||
         imageUrl.trim() === "" ||
@@ -204,11 +235,9 @@ export default {
       ) {
         return defaultImage;
       }
-
       return imageUrl;
     },
     onImageError(event) {
-      // אם התמונה נכשלה בטעינה, החלף לתמונת ברירת מחדל
       const defaultImage = "/img/Hendima-logo.png";
       if (
         event.target.src !== defaultImage &&
@@ -219,14 +248,9 @@ export default {
     },
     getHandymanLogo(handyman) {
       const defaultLogo = "/img/Hendima-logo.png";
-
-      if (!handyman || !handyman.logoUrl) {
-        return defaultLogo;
-      }
+      if (!handyman || !handyman.logoUrl) return defaultLogo;
 
       const logoUrl = handyman.logoUrl;
-
-      // בדוק אם logoUrl ריק או לא תקין
       if (
         typeof logoUrl !== "string" ||
         logoUrl.trim() === "" ||
@@ -235,11 +259,9 @@ export default {
       ) {
         return defaultLogo;
       }
-
       return logoUrl;
     },
     onLogoError(event) {
-      // אם הלוגו נכשל בטעינה, החלף ללוגו ברירת מחדל
       const defaultLogo = "/img/Hendima-logo.png";
       if (
         event.target.src !== defaultLogo &&
@@ -254,593 +276,551 @@ export default {
 
 <style lang="scss" scoped>
 $font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-  "Helvetica Neue", Arial, sans-serif;
+  Arial, sans-serif;
 
 $bg: #0b0b0f;
+$text: rgba(255, 255, 255, 0.92);
+$muted: rgba(255, 255, 255, 0.62);
+
 $orange: #ff6a00;
 $orange2: #ff8a2b;
-$orange3: #ffb36b;
-$muted: rgba(255, 255, 255, 0.62);
-$text: rgba(255, 255, 255, 0.92);
 
 @mixin focusRing {
   outline: none;
-  box-shadow: 0 0 0 3px rgba($orange, 0.32);
+  box-shadow: 0 0 0 4px rgba($orange, 0.22);
 }
 
-.handymen-list {
+.nearby {
   font-family: $font-family;
-  display: grid;
-  gap: 10px;
-  margin-top: 12px;
-
-  @media (max-width: 768px) {
-    gap: 6px;
-  }
 }
 
-.hcard {
-  border-radius: 20px;
-  border: 1px solid rgba($orange, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  padding: 10px;
+/* Wrapper header: premium but light */
+.nearby__header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease,
-    filter 120ms ease;
-
-  @media (max-width: 768px) {
-    flex-direction: column;
-    align-items: stretch;
-    padding: 12px;
-    border-radius: 16px;
-    gap: 10px;
-  }
-
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 14px 22px rgba($orange, 0.12);
-  }
-
-  // Desktop: left section (avatar + meta)
-  &__left {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-
-    @media (max-width: 768px) {
-      display: none;
-    }
-  }
-
-  // Mobile: top row (avatar + name + rating)
-  &__top {
-    display: none;
-
-    @media (max-width: 768px) {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-  }
-
-  // Mobile: middle row (jobs count + travel time)
-  &__middle {
-    display: none;
-
-    @media (max-width: 768px) {
-      display: block;
-    }
-  }
-
-  &__images {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  &__av {
-    width: 44px;
-    height: 44px;
-    border-radius: 999px;
-    border: 2px solid rgba($orange, 0.28);
-    object-fit: cover;
-
-    @media (max-width: 768px) {
-      width: 32px;
-      height: 32px;
-      border-width: 1.5px;
-    }
-  }
-
-  &__logo {
-    position: absolute;
-    bottom: -2px;
-    left: -2px;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    border: 2px solid $bg;
-    object-fit: cover;
-    background: $bg;
-
-    @media (max-width: 768px) {
-      width: 16px;
-      height: 16px;
-      border-width: 1.5px;
-      bottom: -1px;
-      left: -1px;
-    }
-  }
-
-  &__name {
-    font-weight: 1100;
-
-    @media (max-width: 768px) {
-      font-size: 12px;
-    }
-  }
-
-  &__rating {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 4px;
-    margin-bottom: 2px;
-
-    @media (max-width: 768px) {
-      gap: 4px;
-      margin-top: 0;
-      margin-bottom: 0;
-    }
-
-    &--compact {
-      @media (max-width: 768px) {
-        margin-top: 2px;
-        margin-bottom: 0;
-      }
-    }
-  }
-
-  &__rating-stars {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    flex-direction: row-reverse;
-
-    @media (max-width: 768px) {
-      gap: 2px;
-    }
-  }
-
-  &__rating--compact &__rating-stars {
-    @media (max-width: 768px) {
-      gap: 1px;
-    }
-  }
-
-  &__star {
-    font-size: 11px;
-    line-height: 1;
-    display: inline-block;
-    transition: opacity 0.2s ease, color 0.2s ease;
-    color: #ffd700;
-
-    @media (max-width: 768px) {
-      font-size: 8px;
-    }
-
-    &--full {
-      color: #ffd700;
-      opacity: 1;
-    }
-
-    &--half {
-      color: #ffd700;
-      opacity: 1;
-    }
-
-    &--empty {
-      color: rgba(255, 255, 255, 0.3);
-      opacity: 1;
-    }
-  }
-
-  &__rating {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-
-    &--no-rating {
-      color: rgba(255, 255, 255, 0.5);
-      font-size: 12px;
-      font-weight: 700;
-      font-style: italic;
-
-      @media (max-width: 768px) {
-        font-size: 10px;
-      }
-    }
-  }
-
-  &__rating-number {
-    color: $orange2;
-    font-weight: 1000;
-    font-size: 12px;
-
-    @media (max-width: 768px) {
-      font-size: 9px;
-    }
-  }
-
-  &__rating--compact &__rating-number {
-    @media (max-width: 768px) {
-      font-size: 9px;
-    }
-  }
-
-  &__sub {
-    margin-top: 2px;
-    color: rgba(255, 255, 255, 0.62);
-    font-weight: 900;
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    flex-wrap: wrap;
-
-    @media (max-width: 768px) {
-      font-size: 11px;
-      margin-top: 0;
-      gap: 4px;
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none; // Firefox
-      -ms-overflow-style: none; // IE/Edge
-
-      &::-webkit-scrollbar {
-        display: none; // Chrome/Safari
-      }
-    }
-  }
-
-  &__travel-time {
-    color: $orange2;
-    font-weight: 1000;
-  }
-
-  &__actions {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    align-items: center;
-
-    @media (max-width: 768px) {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 4px;
-      width: 100%;
-      direction: rtl;
-    }
-
-    @media (max-width: 360px) {
-      grid-template-columns: 1fr 1fr;
-      gap: 4px;
-
-      .mini:last-child {
-        grid-column: 1 / -1;
-        width: 100%;
-      }
-    }
-  }
-}
-
-.pagination {
-  display: flex;
   justify-content: space-between;
-  align-items: center;
   gap: 12px;
-  margin-top: 16px;
-  padding: 12px;
+  padding: 10px 12px;
   border-radius: 16px;
-  border: 1px solid rgba($orange, 0.18);
-  background: rgba(255, 255, 255, 0.04);
-
-  @media (max-width: 768px) {
-    flex-direction: row;
-    gap: 6px;
-    padding: 8px 10px;
-    margin-top: 12px;
-  }
-
-  &__info {
-    color: $muted;
-    font-weight: 900;
-    font-size: 12px;
-    white-space: nowrap;
-    flex-shrink: 0;
-
-    @media (max-width: 768px) {
-      font-size: 9px;
-      order: 2;
-    }
-  }
-
-  .btn {
-    min-width: 100px;
-
-    @media (max-width: 768px) {
-      min-width: auto;
-      width: auto;
-      padding: 4px 8px;
-      font-size: 9px;
-      flex: 0 0 auto;
-    }
-
-    &:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-      pointer-events: none;
-    }
-  }
-
-  &__btn {
-    @media (max-width: 768px) {
-      order: 1;
-
-      &--prev {
-        order: 1;
-      }
-
-      &--next {
-        order: 3;
-      }
-    }
-  }
+  border: 1px solid rgba($orange, 0.16);
+  background: radial-gradient(
+      260px 120px at 10% 0%,
+      rgba($orange, 0.16),
+      transparent 60%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.06),
+      rgba(255, 255, 255, 0.035)
+    );
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
+  margin: 8px 0 10px;
 }
 
-.mini {
+.nearby__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 1100;
+  color: $orange2;
+  line-height: 1.1;
+}
+
+.nearby__hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.nearby__pill {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
   border-radius: 999px;
-  padding: 9px 10px;
+  border: 1px solid rgba($orange, 0.18);
+  background: rgba($orange, 0.1);
+}
+
+.nearby__pillNum {
+  width: 26px;
+  height: 26px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, $orange, $orange2);
+  color: #111;
+  font-weight: 1100;
+}
+
+.nearby__pillTxt {
+  color: rgba(255, 255, 255, 0.75);
   font-weight: 1000;
   font-size: 12px;
-  border: 1px solid rgba($orange, 0.25);
-  background: rgba($orange, 0.12);
-  color: $text;
-  cursor: pointer;
+}
+
+/* List */
+.handymen-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+/* Card: compact, readable */
+.hcard {
+  border-radius: 18px;
+  border: 1px solid rgba($orange, 0.14);
+  background: radial-gradient(
+      220px 120px at 12% 0%,
+      rgba($orange, 0.12),
+      transparent 62%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.065),
+      rgba(255, 255, 255, 0.04)
+    );
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.42);
+
+  padding: 12px;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  transition: all 0.2s ease;
-  position: relative;
-  overflow: hidden;
-  white-space: nowrap;
+  flex-direction: column;
+  gap: 10px;
 
-  @media (max-width: 768px) {
-    padding: 6px 4px;
-    font-size: 8px;
-    gap: 2px;
-    min-height: 32px;
-    border-radius: 8px;
-    width: 100%;
-    max-width: 100%;
-  }
-
-  @media (max-width: 360px) {
-    min-height: 32px;
-    font-size: 7px;
-    padding: 5px 3px;
-    gap: 2px;
-  }
-
-  &::before {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 0;
-    height: 0;
-    border-radius: 50%;
-    background: rgba($orange, 0.2);
-    transform: translate(-50%, -50%);
-    transition: width 0.4s ease, height 0.4s ease;
-  }
+  transition: transform 140ms ease, box-shadow 140ms ease,
+    border-color 140ms ease;
 
   &:hover {
     transform: translateY(-2px);
-    border-color: rgba($orange, 0.4);
-    background: rgba($orange, 0.18);
-    box-shadow: 0 6px 16px rgba($orange, 0.2);
-
-    &::before {
-      width: 200px;
-      height: 200px;
-    }
+    border-color: rgba($orange, 0.24);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.52);
   }
 
-  &:active {
-    transform: translateY(0) scale(0.98);
-  }
-
-  &:focus {
-    @include focusRing;
-  }
-
-  &__icon {
-    font-size: 11px;
-    transition: transform 0.2s ease;
-    flex-shrink: 0;
-
-    @media (max-width: 768px) {
-      font-size: 7px;
-    }
-
-    @media (max-width: 360px) {
-      font-size: 6px;
-    }
-  }
-
-  &:hover &__icon {
-    transform: scale(1.1);
-  }
-
-  &--ghost {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.18);
-    color: $text;
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.12);
-      border-color: rgba(255, 255, 255, 0.28);
-      box-shadow: 0 6px 16px rgba(255, 255, 255, 0.1);
-
-      &::before {
-        background: rgba(255, 255, 255, 0.1);
-      }
-    }
-  }
-
-  &--primary {
-    border: none;
-    background: linear-gradient(135deg, $orange, $orange2);
-    color: #111;
-    box-shadow: 0 4px 12px rgba($orange, 0.3);
-
-    &:hover {
-      background: linear-gradient(135deg, $orange2, $orange);
-      box-shadow: 0 6px 20px rgba($orange, 0.4);
-      transform: translateY(-2px);
-
-      &::before {
-        background: rgba(255, 255, 255, 0.15);
-      }
-    }
-
-    .mini__icon {
-      color: #111;
-    }
-  }
-
-  &--block {
-    padding: 6px 8px;
-    border-color: rgba(239, 68, 68, 0.4);
-    background: rgba(239, 68, 68, 0.15);
-    color: rgba(239, 68, 68, 0.9);
-
-    @media (max-width: 768px) {
-      padding: 4px 5px;
-    }
-
-    &:hover {
-      border-color: rgba(239, 68, 68, 0.6);
-      background: rgba(239, 68, 68, 0.25);
-      box-shadow: 0 6px 16px rgba(239, 68, 68, 0.2);
-
-      &::before {
-        background: rgba(239, 68, 68, 0.1);
-      }
-    }
-
-    .mini__icon {
-      color: rgba(239, 68, 68, 0.9);
-    }
-  }
-
-  &--unblock {
-    padding: 6px 8px;
-    border-color: rgba(34, 197, 94, 0.4);
-    background: rgba(34, 197, 94, 0.15);
-    color: rgba(34, 197, 94, 0.9);
-
-    @media (max-width: 768px) {
-      padding: 4px 5px;
-    }
-
-    &:hover {
-      border-color: rgba(34, 197, 94, 0.6);
-      background: rgba(34, 197, 94, 0.25);
-      box-shadow: 0 6px 16px rgba(34, 197, 94, 0.2);
-
-      &::before {
-        background: rgba(34, 197, 94, 0.1);
-      }
-    }
-
-    .mini__icon {
-      color: rgba(34, 197, 94, 0.9);
-    }
+  &:focus-within {
+    border-color: rgba($orange, 0.3);
   }
 }
 
-.hcard--blocked {
-  opacity: 0.5;
-  filter: grayscale(0.3);
-
-  .hcard__name,
-  .hcard__rating,
-  .hcard__sub {
-    opacity: 0.7;
-  }
-
-  // Keep buttons fully visible (not dimmed)
-  .hcard__actions,
-  .mini {
-    opacity: 1 !important;
-    filter: none !important;
-  }
-
-  &:hover {
-    opacity: 0.6;
-    filter: grayscale(0.2);
-
-    .hcard__actions,
-    .mini {
-      opacity: 1 !important;
-      filter: none !important;
-    }
-  }
+/* Row 1 */
+.hcard__row1 {
+  display: grid;
+  grid-template-columns: 52px 1fr 36px;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
 }
 
-.btn {
-  border-radius: 16px;
-  padding: 11px 12px;
-  border: 1px solid rgba($orange, 0.18);
-  background: rgba(255, 255, 255, 0.06);
+.hcard__avatar {
+  width: 52px;
+  height: 52px;
+  position: relative;
+}
+
+.hcard__av {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  border: 2px solid rgba($orange, 0.32);
+  object-fit: cover;
+  background: $bg;
+}
+
+.hcard__logo {
+  position: absolute;
+  bottom: -2px;
+  left: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid $bg;
+  object-fit: cover;
+  background: $bg;
+}
+
+.hcard__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hcard__nameLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.hcard__name {
   color: $text;
-  cursor: pointer;
-  font-weight: 1000;
-  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
-  font-size: 13px;
+  font-weight: 1100;
+  font-size: 14px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-  @media (max-width: 768px) {
-    padding: 6px 8px;
-    font-size: 10px;
-    border-radius: 10px;
-    min-height: 32px;
+.tag {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-weight: 1100;
+  font-size: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+}
+.tag--danger {
+  border-color: rgba(239, 68, 68, 0.28);
+  background: rgba(239, 68, 68, 0.12);
+  color: rgba(239, 68, 68, 0.95);
+}
+
+.hcard__ratingLine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-direction: row-reverse;
+}
+
+.star {
+  font-size: 12px;
+  line-height: 1;
+
+  &--full,
+  &--half {
+    color: #ffd700;
+    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.3));
   }
+  &--empty {
+    color: rgba(255, 255, 255, 0.22);
+  }
+}
+
+.hcard__score {
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba($orange, 0.16);
+  background: rgba($orange, 0.08);
+  color: $orange2;
+  font-weight: 1100;
+  font-size: 12px;
+}
+
+.hcard__noRating {
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 900;
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* Micro icon button */
+.iconBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 140ms ease, background 140ms ease,
+    border-color 140ms ease;
 
   &:hover {
     transform: translateY(-1px);
-    box-shadow: 0 14px 22px rgba($orange, 0.12);
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+
+  &:focus-visible {
+    @include focusRing;
+  }
+}
+
+/* Row 2: only 2 chips */
+.hcard__row2 {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.chip {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.86);
+  font-weight: 1000;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.chip--travel {
+  border-color: rgba($orange, 0.16);
+  background: rgba($orange, 0.08);
+}
+
+.chip--good {
+  border-color: rgba(16, 185, 129, 0.22);
+  background: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+}
+
+/* Row 3: three equal small buttons in one row */
+.hcard__row3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.miniBtn {
+  min-height: 40px;
+  border-radius: 14px;
+  padding: 8px 8px;
+  font-weight: 1100;
+  font-size: 12px;
+
+  border: 1px solid rgba($orange, 0.18);
+  background: rgba($orange, 0.09);
+  color: $text;
+
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease,
+    border-color 140ms ease;
+
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: rgba($orange, 0.3);
+    background: rgba($orange, 0.13);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.38);
   }
 
   &:active {
     transform: translateY(0) scale(0.99);
   }
 
-  &:focus {
+  &:focus-visible {
     @include focusRing;
   }
+}
 
-  &--ghost {
-    background: rgba(0, 0, 0, 0.22);
-    border-color: rgba(255, 255, 255, 0.12);
+.miniBtn__ic {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.miniBtn--primary {
+  border: none;
+  background: linear-gradient(135deg, $orange, $orange2);
+  color: #111;
+  box-shadow: 0 14px 26px rgba($orange, 0.18);
+
+  &:hover {
+    background: linear-gradient(135deg, $orange2, $orange);
+    box-shadow: 0 18px 34px rgba($orange, 0.26);
+  }
+
+  .miniBtn__ic {
+    color: #111;
+  }
+}
+
+.miniBtn--ghost {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+}
+
+.miniBtn--danger {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.14);
+  color: rgba(239, 68, 68, 0.95);
+
+  &:hover {
+    border-color: rgba(239, 68, 68, 0.46);
+    background: rgba(239, 68, 68, 0.22);
+    box-shadow: 0 16px 30px rgba(239, 68, 68, 0.12);
+  }
+}
+
+.miniBtn--ok {
+  border-color: rgba(34, 197, 94, 0.3);
+  background: rgba(34, 197, 94, 0.14);
+  color: rgba(34, 197, 94, 0.95);
+
+  &:hover {
+    border-color: rgba(34, 197, 94, 0.46);
+    background: rgba(34, 197, 94, 0.22);
+    box-shadow: 0 16px 30px rgba(34, 197, 94, 0.12);
+  }
+}
+
+/* Blocked state */
+.hcard--blocked {
+  opacity: 0.62;
+  filter: grayscale(0.18);
+
+  &:hover {
+    opacity: 0.75;
+    filter: grayscale(0.1);
+  }
+}
+
+/* Pagination */
+.pagination {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba($orange, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.pagination__info {
+  text-align: center;
+  color: $muted;
+  font-weight: 1100;
+  font-size: 12px;
+}
+
+.pbtn {
+  min-height: 40px;
+  border-radius: 14px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.18);
+  color: $text;
+  cursor: pointer;
+  font-weight: 1100;
+  transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 14px 26px rgba(0, 0, 0, 0.28);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    @include focusRing;
+  }
+}
+
+/* === MAX 420px: super tight, super clean === */
+@media (max-width: 420px) {
+  .nearby__header {
+    padding: 10px 10px;
+    border-radius: 14px;
+  }
+
+  .nearby__title {
+    font-size: 14px;
+  }
+
+  .nearby__hint {
+    font-size: 11px;
+    margin-top: 5px;
+  }
+
+  .hcard {
+    padding: 11px;
+    border-radius: 16px;
+    gap: 9px;
+  }
+
+  .hcard__row1 {
+    grid-template-columns: 48px 1fr 34px;
+    gap: 9px;
+  }
+
+  .hcard__avatar {
+    width: 48px;
+    height: 48px;
+  }
+
+  .hcard__av {
+    width: 48px;
+    height: 48px;
+  }
+
+  .hcard__name {
+    font-size: 13px;
+  }
+
+  .chip {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .hcard__row3 {
+    gap: 6px;
+  }
+
+  .miniBtn {
+    min-height: 38px;
+    font-size: 11px;
+    padding: 7px 6px;
+    border-radius: 12px;
+    gap: 5px;
+  }
+
+  .miniBtn__ic {
+    font-size: 12px;
+  }
+
+  .pagination {
+    grid-template-columns: 1fr auto 1fr;
+    padding: 10px 10px;
+    border-radius: 14px;
+  }
+
+  .pbtn {
+    min-height: 38px;
+    font-size: 12px;
+    border-radius: 12px;
+  }
+}
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
   }
 }
 </style>

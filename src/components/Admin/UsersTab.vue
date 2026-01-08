@@ -1,234 +1,374 @@
 <template>
   <div class="users-section">
-    <div class="users-section__header">
-      <h2 class="users-section__title">משתמשים</h2>
-      <div class="users-section__controls">
-        <div class="users-section__filters">
-          <input
-            v-model="userFilters.search"
-            type="text"
-            class="filter-input"
-            placeholder="חפש לפי שם או אימייל..."
-            @input="filterUsers"
-          />
-          <select
-            v-model="userFilters.sortBy"
-            class="filter-select"
-            @change="filterUsers"
+    <!-- HERO HEADER -->
+    <div class="users-hero">
+      <div class="users-hero__top">
+        <div class="users-hero__titlewrap">
+          <h2 class="users-section__title">משתמשים</h2>
+          <div class="users-hero__subtitle">
+            ניהול, חיפוש, סינון ופעולות מהירות — הכל במקום אחד
+          </div>
+        </div>
+
+        <div class="users-hero__meta">
+          <div class="meta-chip meta-chip--handy">
+            👷 הנדימנים: <b>{{ handymenCount }}</b>
+          </div>
+          <div class="meta-chip meta-chip--client">
+            👥 לקוחות: <b>{{ clientsCount }}</b>
+          </div>
+          <div class="meta-chip meta-chip--total">
+            🧾 סה"כ: <b>{{ usersPagination.total || 0 }}</b>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="users-hero__controls">
+        <div class="controls-left">
+          <div class="search-wrap">
+            <span class="search-icon">🔎</span>
+            <input
+              v-model="userFilters.search"
+              type="text"
+              class="filter-input"
+              placeholder="חפש לפי שם או אימייל..."
+              @input="filterUsers"
+            />
+            <button
+              v-if="userFilters.search"
+              class="clear-search-btn"
+              type="button"
+              title="נקה חיפוש"
+              @click="
+                userFilters.search = '';
+                filterUsers();
+              "
+            >
+              ✕
+            </button>
+          </div>
+
+          <div class="select-wrap">
+            <span class="select-icon">⇅</span>
+            <select
+              v-model="userFilters.sortBy"
+              class="filter-select"
+              @change="filterUsers"
+            >
+              <option value="">מיין לפי</option>
+              <option value="username">שם משתמש</option>
+              <option value="createdAt">תאריך יצירה</option>
+              <option value="rating">דירוג</option>
+              <option value="jobDone">עבודות שבוצעו</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="user-type-tabs" role="tablist" aria-label="סוג משתמש">
+          <button
+            class="user-type-tab"
+            role="tab"
+            :aria-selected="userFilters.userType === 'handyman'"
+            :class="{
+              'user-type-tab--active': userFilters.userType === 'handyman',
+            }"
+            @click="switchUserType('handyman')"
           >
-            <option value="">מיין לפי</option>
-            <option value="username">שם משתמש</option>
-            <option value="createdAt">תאריך יצירה</option>
-            <option value="rating">דירוג</option>
-            <option value="jobDone">עבודות שבוצעו</option>
-          </select>
+            <span class="tab-icon">👷</span>
+            הנדימנים
+            <span class="tab-count">{{ handymenCount }}</span>
+          </button>
+
+          <button
+            class="user-type-tab"
+            role="tab"
+            :aria-selected="userFilters.userType === 'client'"
+            :class="{
+              'user-type-tab--active': userFilters.userType === 'client',
+            }"
+            @click="switchUserType('client')"
+          >
+            <span class="tab-icon">👥</span>
+            לקוחות
+            <span class="tab-count">{{ clientsCount }}</span>
+          </button>
         </div>
       </div>
     </div>
 
-    <!-- User Type Tabs -->
-    <div class="user-type-tabs">
-      <button
-        class="user-type-tab"
-        :class="{
-          'user-type-tab--active': userFilters.userType === 'handyman',
-        }"
-        @click="switchUserType('handyman')"
-      >
-        הנדימנים ({{ handymenCount }})
-      </button>
-      <button
-        class="user-type-tab"
-        :class="{
-          'user-type-tab--active': userFilters.userType === 'client',
-        }"
-        @click="switchUserType('client')"
-      >
-        לקוחות ({{ clientsCount }})
-      </button>
+    <!-- LOADING -->
+    <div v-if="isLoadingUsers" class="loading-state">
+      <div class="skeleton-title"></div>
+      <div class="skeleton-row" v-for="i in 6" :key="i"></div>
+      <div class="loading-text">טוען משתמשים...</div>
     </div>
 
-    <div v-if="isLoadingUsers" class="loading-state">טוען משתמשים...</div>
+    <!-- TABLE -->
+    <div v-else class="users-surface">
+      <div class="users-surface__top">
+        <div class="results-hint">
+          מציג <b>{{ filteredUsers.length }}</b> תוצאות בעמוד הזה
+          <span class="muted">·</span>
+          עמוד <b>{{ usersPagination.page }}</b> מתוך
+          <b>{{ usersPagination.totalPages }}</b>
+        </div>
 
-    <div v-else class="users-table-wrapper">
-      <table class="users-table">
-        <thead>
-          <tr>
-            <th>שם משתמש</th>
-            <th>אימייל</th>
-            <th>טלפון</th>
-            <th>כתובת/עיר</th>
-            <th v-if="userFilters.userType === 'handyman'">תחומי התמחות</th>
-            <th v-if="userFilters.userType === 'handyman'">דירוג</th>
-            <th v-if="userFilters.userType === 'handyman'">עבודות שבוצעו</th>
-            <th v-if="userFilters.userType === 'client'">מספר הזמנות</th>
-            <th>נוצר ב</th>
-            <th>היה פעיל לאחרונה</th>
-            <th>חסום</th>
-            <th>פעולות</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="user in filteredUsers"
-            :key="user._id || user.id"
-            class="users-table__row"
-          >
-            <td>
-              <div class="user-cell">
-                <img
-                  v-if="user.imageUrl"
-                  :src="user.imageUrl"
-                  :alt="user.username"
-                  class="user-avatar"
-                  @error="handleImageError"
-                />
-                <span>{{ user.username || "ללא שם" }}</span>
-              </div>
-            </td>
-            <td>{{ user.email || "-" }}</td>
-            <td>{{ user.phone || "-" }}</td>
-            <td>{{ user.city || user.address || "-" }}</td>
-            <td v-if="userFilters.userType === 'handyman'">
-              <div
-                v-if="user.specialties && user.specialties.length > 0"
-                class="specialties-list"
-              >
-                <span
-                  v-for="(spec, idx) in getCategorySpecialties(
-                    user.specialties
-                  ).slice(0, 3)"
-                  :key="idx"
-                  class="specialty-badge"
-                >
-                  {{ spec.name }}
-                </span>
-                <span
-                  v-if="getCategorySpecialties(user.specialties).length > 3"
-                  class="specialty-more"
-                >
-                  +{{ getCategorySpecialties(user.specialties).length - 3 }}
-                </span>
-              </div>
-              <span v-else class="no-data-small">אין</span>
-            </td>
-            <td v-if="userFilters.userType === 'handyman'">
-              <span v-if="user.rating && user.rating > 0">
-                {{ user.rating.toFixed(1) }} ⭐
-              </span>
-              <span v-else class="no-rating">אין דירוג</span>
-            </td>
-            <td v-if="userFilters.userType === 'handyman'">
-              {{ user.jobDone || 0 }}
-            </td>
-            <td v-if="userFilters.userType === 'client'">
-              {{ user.Ordered || 0 }}
-            </td>
-            <td>
-              <div class="date-cell">
-                <div class="date-value">
-                  {{ user.createdAt ? formatDate(user.createdAt) : "-" }}
-                </div>
-                <div
-                  v-if="user.createdAt"
-                  class="date-tooltip"
-                  :title="getTimeAgo(user.createdAt)"
-                >
-                  {{ getTimeAgo(user.createdAt) }}
-                </div>
-              </div>
-            </td>
-            <td>
-              <div class="date-cell">
-                <div
-                  v-if="user['last-activity']"
-                  class="date-tooltip"
-                  :title="formatDate(user['last-activity'])"
-                >
-                  {{ getTimeAgo(user["last-activity"]) }}
-                </div>
-                <span v-else class="no-data-small">לא זמין</span>
-              </div>
-            </td>
-            <td>
-              <button
-                class="block-user-btn"
-                :class="{
-                  'block-user-btn--blocked': user.IsBlocked === true,
-                }"
-                type="button"
-                @click="toggleBlockUser(user)"
-                :title="user.IsBlocked === true ? 'ביטול חסימה' : 'חסום'"
-              >
-                <font-awesome-icon
-                  :icon="
-                    user.IsBlocked === true ? ['fas', 'ban'] : ['fas', 'check']
-                  "
-                />
-                {{ user.IsBlocked === true ? "חסום" : "פעיל" }}
-              </button>
-            </td>
-            <td>
-              <div class="actions-buttons">
-                <button
-                  class="edit-user-btn"
-                  type="button"
-                  @click="editUser(user)"
-                  title="ערוך משתמש"
-                >
-                  <font-awesome-icon :icon="['fas', 'edit']" />
-                </button>
-                <button
-                  class="send-message-btn"
-                  type="button"
-                  @click="sendMessage(user)"
-                  title="שלח הודעה"
-                >
-                  <font-awesome-icon :icon="['fas', 'comment']" />
-                </button>
-                <button
-                  class="delete-user-btn"
-                  type="button"
-                  @click="confirmDeleteUser(user)"
-                  title="מחק משתמש"
-                >
-                  <font-awesome-icon :icon="['fas', 'trash']" />
-                </button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="filteredUsers.length === 0">
-            <td
-              :colspan="userFilters.userType === 'handyman' ? 11 : 9"
-              class="no-data"
+        <div class="surface-actions">
+          <div class="pill">
+            {{
+              userFilters.userType === "handyman"
+                ? "מצב הנדימנים"
+                : "מצב לקוחות"
+            }}
+          </div>
+        </div>
+      </div>
+
+      <div class="users-table-wrapper">
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th>משתמש</th>
+              <th>אימייל</th>
+              <th>טלפון</th>
+              <th>כתובת/עיר</th>
+
+              <th v-if="userFilters.userType === 'handyman'">תחומי התמחות</th>
+              <th v-if="userFilters.userType === 'handyman'">דירוג</th>
+              <th v-if="userFilters.userType === 'handyman'">עבודות</th>
+
+              <th v-if="userFilters.userType === 'client'">הזמנות</th>
+
+              <th>נוצר</th>
+              <th>פעילות אחרונה</th>
+              <th>סטטוס</th>
+              <th class="th-actions">פעולות</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr
+              v-for="user in filteredUsers"
+              :key="user._id || user.id"
+              class="users-table__row"
             >
-              אין משתמשים להצגה
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <!-- Pagination for Users -->
-    <div v-if="usersPagination.totalPages > 0" class="pagination">
-      <button
-        class="pagination-btn"
-        :disabled="usersPagination.page === 1"
-        @click="loadUsers(usersPagination.page - 1)"
-      >
-        הקודם
-      </button>
-      <span class="pagination-info">
-        עמוד {{ usersPagination.page }} מתוך
-        {{ usersPagination.totalPages }} (סה"כ
-        {{ usersPagination.total }} משתמשים)
-      </span>
-      <button
-        class="pagination-btn"
-        :disabled="usersPagination.page >= usersPagination.totalPages"
-        @click="loadUsers(usersPagination.page + 1)"
-      >
-        הבא
-      </button>
+              <!-- USER -->
+              <td>
+                <div class="user-cell">
+                  <div class="avatar-wrap">
+                    <img
+                      v-if="user.imageUrl"
+                      :src="user.imageUrl"
+                      :alt="user.username"
+                      class="user-avatar"
+                      @error="handleImageError"
+                    />
+                    <div v-else class="avatar-fallback">
+                      {{ (user.username || "?").slice(0, 1).toUpperCase() }}
+                    </div>
+                  </div>
+
+                  <div class="user-main">
+                    <div class="user-name">
+                      {{ user.username || "ללא שם" }}
+                    </div>
+                    <div class="user-sub muted">
+                      {{ user.firstName || "" }}
+                    </div>
+                  </div>
+                </div>
+              </td>
+
+              <td>
+                <span class="mono">{{ user.email || "-" }}</span>
+              </td>
+
+              <td>
+                <span class="mono">{{ user.phone || "-" }}</span>
+              </td>
+
+              <td>
+                <span>{{ user.city || user.address || "-" }}</span>
+              </td>
+
+              <!-- SPECIALTIES -->
+              <td v-if="userFilters.userType === 'handyman'">
+                <div
+                  v-if="user.specialties && user.specialties.length > 0"
+                  class="specialties-list"
+                >
+                  <span
+                    v-for="(spec, idx) in getCategorySpecialties(
+                      user.specialties
+                    ).slice(0, 3)"
+                    :key="idx"
+                    class="specialty-badge"
+                    :title="spec.name"
+                  >
+                    {{ spec.name }}
+                  </span>
+                  <span
+                    v-if="getCategorySpecialties(user.specialties).length > 3"
+                    class="specialty-more"
+                    :title="
+                      getCategorySpecialties(user.specialties)
+                        .map((s) => s.name)
+                        .join(', ')
+                    "
+                  >
+                    +{{ getCategorySpecialties(user.specialties).length - 3 }}
+                  </span>
+                </div>
+                <span v-else class="no-data-small">אין</span>
+              </td>
+
+              <!-- RATING -->
+              <td v-if="userFilters.userType === 'handyman'">
+                <span v-if="user.rating && user.rating > 0" class="rating-pill">
+                  <span class="rating-star">⭐</span>
+                  {{ user.rating.toFixed(1) }}
+                </span>
+                <span v-else class="no-rating">אין דירוג</span>
+              </td>
+
+              <!-- JOBS -->
+              <td v-if="userFilters.userType === 'handyman'">
+                <span class="count-pill">{{ user.jobDone || 0 }}</span>
+              </td>
+
+              <!-- ORDERS -->
+              <td v-if="userFilters.userType === 'client'">
+                <span class="count-pill count-pill--violet">{{
+                  user.Ordered || 0
+                }}</span>
+              </td>
+
+              <!-- CREATED -->
+              <td>
+                <div class="date-cell">
+                  <div class="date-value">
+                    {{ user.createdAt ? formatDate(user.createdAt) : "-" }}
+                  </div>
+                  <div
+                    v-if="user.createdAt"
+                    class="date-tooltip"
+                    :title="getTimeAgo(user.createdAt)"
+                  >
+                    {{ getTimeAgo(user.createdAt) }}
+                  </div>
+                </div>
+              </td>
+
+              <!-- LAST ACTIVITY -->
+              <td>
+                <div class="date-cell">
+                  <div
+                    v-if="user['last-activity']"
+                    class="date-tooltip"
+                    :title="formatDate(user['last-activity'])"
+                  >
+                    {{ getTimeAgo(user["last-activity"]) }}
+                  </div>
+                  <span v-else class="no-data-small">לא זמין</span>
+                </div>
+              </td>
+
+              <!-- STATUS -->
+              <td>
+                <button
+                  class="block-user-btn"
+                  :class="{
+                    'block-user-btn--blocked': user.IsBlocked === true,
+                  }"
+                  type="button"
+                  @click="toggleBlockUser(user)"
+                  :title="user.IsBlocked === true ? 'ביטול חסימה' : 'חסום'"
+                >
+                  <font-awesome-icon
+                    :icon="
+                      user.IsBlocked === true
+                        ? ['fas', 'ban']
+                        : ['fas', 'check']
+                    "
+                  />
+                  <span class="status-text">
+                    {{ user.IsBlocked === true ? "חסום" : "פעיל" }}
+                  </span>
+                </button>
+              </td>
+
+              <!-- ACTIONS -->
+              <td class="td-actions">
+                <div class="actions-buttons">
+                  <button
+                    class="icon-btn icon-btn--edit"
+                    type="button"
+                    @click="editUser(user)"
+                    title="ערוך משתמש"
+                  >
+                    <font-awesome-icon :icon="['fas', 'edit']" />
+                  </button>
+
+                  <button
+                    class="icon-btn icon-btn--message"
+                    type="button"
+                    @click="sendMessage(user)"
+                    title="שלח הודעה"
+                  >
+                    <font-awesome-icon :icon="['fas', 'comment']" />
+                  </button>
+
+                  <button
+                    class="icon-btn icon-btn--delete"
+                    type="button"
+                    @click="confirmDeleteUser(user)"
+                    title="מחק משתמש"
+                  >
+                    <font-awesome-icon :icon="['fas', 'trash']" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+
+            <tr v-if="filteredUsers.length === 0">
+              <td
+                :colspan="userFilters.userType === 'handyman' ? 12 : 10"
+                class="no-data"
+              >
+                אין משתמשים להצגה
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div v-if="usersPagination.totalPages > 0" class="pagination">
+        <button
+          class="pagination-btn"
+          :disabled="usersPagination.page === 1"
+          @click="loadUsers(usersPagination.page - 1)"
+        >
+          הקודם
+        </button>
+
+        <span class="pagination-info">
+          עמוד <b>{{ usersPagination.page }}</b> מתוך
+          <b>{{ usersPagination.totalPages }}</b>
+          <span class="muted">·</span>
+          סה"כ <b>{{ usersPagination.total }}</b> משתמשים
+        </span>
+
+        <button
+          class="pagination-btn"
+          :disabled="usersPagination.page >= usersPagination.totalPages"
+          @click="loadUsers(usersPagination.page + 1)"
+        >
+          הבא
+        </button>
+      </div>
     </div>
 
     <!-- Edit User Modal -->
@@ -242,53 +382,61 @@
           <h3 class="modal-title">ערוך משתמש</h3>
           <button class="modal-close" @click="closeEditUserModal">×</button>
         </div>
+
         <div class="modal-body">
-          <div class="form-field">
-            <label class="form-label">שם משתמש</label>
-            <input
-              v-model="userForm.username"
-              type="text"
-              class="form-input"
-              placeholder="שם משתמש"
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-label">אימייל</label>
-            <input
-              v-model="userForm.email"
-              type="email"
-              class="form-input"
-              placeholder="אימייל"
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-label">טלפון</label>
-            <input
-              v-model="userForm.phone"
-              type="tel"
-              class="form-input"
-              placeholder="טלפון"
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-label">עיר</label>
-            <input
-              v-model="userForm.city"
-              type="text"
-              class="form-input"
-              placeholder="עיר"
-            />
-          </div>
-          <div class="form-field">
-            <label class="form-label">כתובת</label>
-            <input
-              v-model="userForm.address"
-              type="text"
-              class="form-input"
-              placeholder="כתובת"
-            />
+          <div class="form-grid">
+            <div class="form-field">
+              <label class="form-label">שם משתמש</label>
+              <input
+                v-model="userForm.username"
+                type="text"
+                class="form-input"
+                placeholder="שם משתמש"
+              />
+            </div>
+
+            <div class="form-field">
+              <label class="form-label">אימייל</label>
+              <input
+                v-model="userForm.email"
+                type="email"
+                class="form-input"
+                placeholder="אימייל"
+              />
+            </div>
+
+            <div class="form-field">
+              <label class="form-label">טלפון</label>
+              <input
+                v-model="userForm.phone"
+                type="tel"
+                class="form-input"
+                placeholder="טלפון"
+              />
+            </div>
+
+            <div class="form-field">
+              <label class="form-label">עיר</label>
+              <input
+                v-model="userForm.city"
+                type="text"
+                class="form-input"
+                placeholder="עיר"
+              />
+            </div>
+
+            <div class="form-field form-field--wide">
+              <label class="form-label">כתובת</label>
+              <input
+                v-model="userForm.address"
+                type="text"
+                class="form-input"
+                placeholder="כתובת"
+              />
+            </div>
           </div>
         </div>
+
         <div class="modal-footer">
           <button class="btn btn--ghost" @click="closeEditUserModal">
             ביטול
@@ -311,6 +459,7 @@
           </h3>
           <button class="modal-close" @click="closeSendMessageModal">×</button>
         </div>
+
         <div class="modal-body">
           <div class="form-field">
             <label class="form-label">תוכן ההודעה</label>
@@ -320,8 +469,10 @@
               placeholder="הזן את תוכן ההודעה..."
               rows="5"
             ></textarea>
+            <div class="hint">טיפ: הודעה קצרה וברורה מביאה מענה יותר מהר.</div>
           </div>
         </div>
+
         <div class="modal-footer">
           <button class="btn btn--ghost" @click="closeSendMessageModal">
             ביטול
@@ -348,6 +499,7 @@
           <h3 class="modal-title">מחיקת משתמש</h3>
           <button class="modal-close" @click="closeDeleteUserModal">×</button>
         </div>
+
         <div class="modal-body">
           <div class="confirm-message">
             האם אתה בטוח שברצונך למחוק את המשתמש
@@ -357,6 +509,7 @@
             פעולה זו לא ניתנת לביטול!
           </div>
         </div>
+
         <div class="modal-footer">
           <button class="btn btn--ghost" @click="closeDeleteUserModal">
             ביטול
@@ -694,70 +847,219 @@ export default {
 </script>
 
 <style scoped lang="scss">
+/* ===== Tokens ===== */
 $font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
   "Helvetica Neue", Arial, sans-serif;
+
 $orange: #ff6a00;
 $orange2: #ff8a2b;
-$text: rgba(255, 255, 255, 0.92);
-$muted: rgba(255, 255, 255, 0.6);
-$bg: #0b0b0f;
 
-.users-section__header {
+$text: rgba(255, 255, 255, 0.92);
+$muted: rgba(255, 255, 255, 0.62);
+$muted2: rgba(255, 255, 255, 0.48);
+
+$bg: #0b0b0f;
+$panel: #0f1016;
+
+$success: #10b981;
+$danger: #ef4444;
+$info: #3b82f6;
+$violet: #8b5cf6;
+
+/* ===== Base ===== */
+.users-section {
+  color: $text;
+  animation: fadeIn 0.35s ease;
+}
+
+.muted {
+  color: $muted;
+}
+
+.mono {
+  font-family: "Courier New", monospace;
+}
+
+/* ===== HERO ===== */
+.users-hero {
+  border-radius: 18px;
+  border: 1px solid rgba($orange, 0.22);
+  background: radial-gradient(
+      1100px 420px at 0% 0%,
+      rgba($orange, 0.18),
+      transparent 60%
+    ),
+    radial-gradient(
+      900px 360px at 100% 0%,
+      rgba($success, 0.14),
+      transparent 60%
+    ),
+    rgba(255, 255, 255, 0.03);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.38);
+  overflow: hidden;
+  position: relative;
+  padding: 18px;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      120deg,
+      rgba(255, 255, 255, 0.07),
+      transparent 45%,
+      rgba(255, 255, 255, 0.02)
+    );
+    pointer-events: none;
+  }
+}
+
+.users-hero__top {
+  position: relative;
+  z-index: 1;
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-bottom: 20px;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 
 .users-section__title {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 1000;
   color: $orange2;
+  margin: 0;
+  letter-spacing: 0.2px;
+  text-shadow: 0 12px 32px rgba($orange, 0.25);
 }
 
-.users-section__controls {
+.users-hero__subtitle {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 900;
+  color: $muted2;
+}
+
+.users-hero__meta {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  width: 100%;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.users-section__filters {
+.meta-chip {
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 1000;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(11, 11, 15, 0.35);
+  backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.86);
+
+  b {
+    color: $text;
+  }
+
+  &--handy {
+    border-color: rgba($info, 0.25);
+  }
+  &--client {
+    border-color: rgba($violet, 0.25);
+  }
+  &--total {
+    border-color: rgba($orange, 0.25);
+  }
+}
+
+.users-hero__controls {
+  position: relative;
+  z-index: 1;
+  margin-top: 14px;
   display: flex;
   gap: 12px;
+  justify-content: space-between;
+  align-items: center;
   flex-wrap: wrap;
+}
+
+/* ===== Controls ===== */
+.controls-left {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.search-wrap,
+.select-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon,
+.select-icon {
+  position: absolute;
+  right: 12px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  pointer-events: none;
 }
 
 .filter-input,
 .filter-select {
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba($orange, 0.3);
+  padding: 10px 12px;
+  padding-right: 36px;
+  border-radius: 12px;
+  border: 1px solid rgba($orange, 0.22);
   background: rgba(255, 255, 255, 0.06);
   color: $text;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 900;
   font-family: $font-family;
-  min-width: 200px;
+  min-width: 260px;
+  transition: border-color 0.18s ease, background 0.18s ease,
+    box-shadow 0.18s ease;
 
   &::placeholder {
     color: $muted;
+    font-weight: 800;
   }
 
   &:focus {
     outline: none;
-    border-color: $orange;
-    box-shadow: 0 0 0 3px rgba($orange, 0.2);
+    border-color: rgba($orange, 0.58);
+    background: rgba(255, 255, 255, 0.09);
+    box-shadow: 0 0 0 4px rgba($orange, 0.12);
+  }
+}
+
+.clear-search-btn {
+  position: absolute;
+  left: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.18);
+    transform: translateY(-1px);
   }
 }
 
 .filter-select {
   cursor: pointer;
   appearance: none;
+  padding-left: 42px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ff8a2b' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: left 12px center;
-  padding-left: 36px;
+  background-position: left 14px center;
   background-size: 12px;
 
   option {
@@ -765,284 +1067,488 @@ $bg: #0b0b0f;
     color: $text;
     padding: 8px;
   }
-
-  &:hover {
-    border-color: rgba($orange, 0.5);
-  }
 }
 
-.users-table-wrapper {
-  overflow-x: auto;
-  border-radius: 12px;
-  border: 1px solid rgba($orange, 0.2);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.users-table {
-  width: 100%;
-  border-collapse: collapse;
-
-  thead {
-    background: rgba($orange, 0.1);
-  }
-
-  th {
-    padding: 14px 12px;
-    text-align: right;
-    font-size: 13px;
-    font-weight: 1000;
-    color: $orange2;
-    border-bottom: 1px solid rgba($orange, 0.2);
-    white-space: nowrap;
-  }
-
-  td {
-    padding: 12px;
-    text-align: right;
-    font-size: 13px;
-    font-weight: 800;
-    color: $text;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    vertical-align: middle;
-  }
-
-  tbody tr {
-    transition: background 0.2s ease;
-
-    &:hover {
-      background: rgba($orange, 0.05);
-    }
-
-    &:last-child td {
-      border-bottom: none;
-    }
-  }
-}
-
+/* ===== Tabs ===== */
 .user-type-tabs {
   display: flex;
-  gap: 8px;
-  border-bottom: 2px solid rgba($orange, 0.2);
-  margin-bottom: 20px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .user-type-tab {
-  padding: 10px 20px;
-  border: none;
-  background: transparent;
-  color: $muted;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(11, 11, 15, 0.35);
+  backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.78);
   font-size: 14px;
-  font-weight: 900;
+  font-weight: 1000;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
-  transition: all 0.2s ease;
-  white-space: nowrap;
+  transition: transform 0.18s ease, border-color 0.18s ease,
+    background 0.18s ease, box-shadow 0.18s ease;
   font-family: $font-family;
 
+  .tab-icon {
+    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.3));
+  }
+
+  .tab-count {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 1000;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.86);
+  }
+
   &:hover {
-    color: $orange2;
+    transform: translateY(-2px);
+    background: rgba(11, 11, 15, 0.42);
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
   }
 
   &--active {
     color: $orange2;
-    border-bottom-color: $orange;
+    border-color: rgba($orange, 0.42);
+    background: rgba($orange, 0.1);
+    box-shadow: 0 0 0 1px rgba($orange, 0.08) inset;
+
+    .tab-count {
+      border-color: rgba($orange, 0.38);
+      background: rgba($orange, 0.14);
+      color: $orange2;
+    }
   }
 }
 
+/* ===== Loading Skeleton ===== */
+.loading-state {
+  margin-top: 14px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05),
+    rgba(255, 255, 255, 0.09),
+    rgba(255, 255, 255, 0.05)
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.15s ease-in-out infinite;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+}
+
+.skeleton-title {
+  height: 18px;
+  width: 220px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  margin-bottom: 12px;
+}
+.skeleton-row {
+  height: 44px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  margin-bottom: 10px;
+}
+.loading-text {
+  margin-top: 8px;
+  color: rgba(255, 255, 255, 0.72);
+  font-weight: 1000;
+}
+
+/* ===== Surface (table container) ===== */
+.users-surface {
+  margin-top: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba($orange, 0.18);
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.32);
+  overflow: hidden;
+}
+
+.users-surface__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(11, 11, 15, 0.25);
+}
+
+.results-hint {
+  font-size: 13px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.84);
+
+  .muted {
+    margin: 0 8px;
+    color: rgba(255, 255, 255, 0.45);
+  }
+}
+
+.surface-actions .pill {
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 1000;
+  border: 1px solid rgba($orange, 0.22);
+  background: rgba($orange, 0.1);
+  color: $orange2;
+}
+
+/* ===== Table ===== */
+.users-table-wrapper {
+  overflow-x: auto;
+}
+
+.users-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: rgba(11, 11, 15, 0.92);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba($orange, 0.18);
+    color: $orange2;
+    font-size: 12px;
+    font-weight: 1000;
+    letter-spacing: 0.2px;
+    padding: 14px 12px;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  tbody td {
+    padding: 12px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 850;
+    color: $text;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    vertical-align: middle;
+    background: rgba(255, 255, 255, 0.01);
+  }
+
+  .th-actions,
+  .td-actions {
+    text-align: left;
+  }
+
+  tbody .users-table__row {
+    transition: transform 0.18s ease, background 0.18s ease,
+      box-shadow 0.18s ease;
+
+    &:hover {
+      background: rgba($orange, 0.05);
+      box-shadow: 0 0 0 1px rgba($orange, 0.12) inset;
+    }
+
+    &:hover td {
+      background: rgba(255, 255, 255, 0.015);
+    }
+  }
+}
+
+/* ===== User cell ===== */
 .user-cell {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  min-width: 220px;
+}
+
+.avatar-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba($orange, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
 }
 
 .user-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border: 1px solid rgba($orange, 0.3);
-  flex-shrink: 0;
+  display: block;
 }
 
+.avatar-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 1000;
+  color: rgba(255, 255, 255, 0.86);
+  background: radial-gradient(
+      120px 60px at 30% 0%,
+      rgba($orange, 0.22),
+      transparent 60%
+    ),
+    rgba(255, 255, 255, 0.06);
+}
+
+.user-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.user-name {
+  font-weight: 1000;
+  color: rgba(255, 255, 255, 0.92);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.user-sub {
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* ===== Badges ===== */
 .specialties-list {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
 }
-
 .specialty-badge {
-  padding: 4px 8px;
-  border-radius: 6px;
-  background: rgba($orange, 0.15);
-  border: 1px solid rgba($orange, 0.3);
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba($orange, 0.12);
+  border: 1px solid rgba($orange, 0.22);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 1000;
   color: $orange2;
   white-space: nowrap;
 }
-
 .specialty-more {
   font-size: 11px;
-  font-weight: 800;
-  color: $muted;
+  font-weight: 1000;
+  color: rgba(255, 255, 255, 0.68);
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
 }
 
-.no-data-small {
+.rating-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba($success, 0.28);
+  background: rgba($success, 0.14);
+  color: rgba($success, 0.98);
+  font-weight: 1000;
+}
+.rating-star {
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.25));
+}
+
+.count-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba($info, 0.24);
+  background: rgba($info, 0.12);
+  color: rgba(59, 130, 246, 0.95);
+  font-weight: 1000;
+
+  &--violet {
+    border-color: rgba($violet, 0.24);
+    background: rgba($violet, 0.12);
+    color: rgba(167, 139, 250, 0.95);
+  }
+}
+
+.no-data-small,
+.no-rating {
   font-size: 12px;
-  color: $muted;
+  color: rgba(255, 255, 255, 0.55);
   font-style: italic;
 }
 
-.actions-buttons {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
+/* ===== Dates ===== */
 .date-cell {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-
 .date-value {
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 900;
   color: $text;
 }
-
 .date-tooltip {
   font-size: 11px;
-  color: $muted;
-  font-weight: 700;
-}
-
-.no-rating {
-  font-size: 12px;
-  color: $muted;
-  font-style: italic;
-}
-
-.block-user-btn {
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
-  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
   font-weight: 800;
+}
+
+/* ===== Status button ===== */
+.block-user-btn {
+  padding: 7px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba($success, 0.28);
+  background: rgba($success, 0.14);
+  color: rgba($success, 0.98);
+  font-size: 12px;
+  font-weight: 1000;
   cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
+  transition: transform 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease, box-shadow 0.18s ease;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.22);
 
   &:hover {
-    background: rgba(16, 185, 129, 0.25);
-    border-color: rgba(16, 185, 129, 0.5);
+    background: rgba($success, 0.22);
+    border-color: rgba($success, 0.45);
+    transform: translateY(-1px);
   }
 
   &--blocked {
-    border-color: rgba(239, 68, 68, 0.3);
-    background: rgba(239, 68, 68, 0.15);
-    color: #ef4444;
+    border-color: rgba($danger, 0.28);
+    background: rgba($danger, 0.14);
+    color: rgba($danger, 0.98);
 
     &:hover {
-      background: rgba(239, 68, 68, 0.25);
-      border-color: rgba(239, 68, 68, 0.5);
+      background: rgba($danger, 0.22);
+      border-color: rgba($danger, 0.45);
+    }
+  }
+
+  .status-text {
+    font-family: $font-family;
+  }
+}
+
+/* ===== Actions ===== */
+.actions-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.22);
+
+  &:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.16);
+  }
+
+  &--edit {
+    border-color: rgba($orange, 0.22);
+    background: rgba($orange, 0.1);
+    color: $orange2;
+
+    &:hover {
+      border-color: rgba($orange, 0.4);
+      background: rgba($orange, 0.16);
+    }
+  }
+
+  &--message {
+    border-color: rgba($info, 0.22);
+    background: rgba($info, 0.1);
+    color: rgba(59, 130, 246, 0.95);
+
+    &:hover {
+      border-color: rgba($info, 0.4);
+      background: rgba($info, 0.16);
+    }
+  }
+
+  &--delete {
+    border-color: rgba($danger, 0.22);
+    background: rgba($danger, 0.1);
+    color: rgba($danger, 0.95);
+
+    &:hover {
+      border-color: rgba($danger, 0.4);
+      background: rgba($danger, 0.16);
     }
   }
 }
 
-.edit-user-btn,
-.send-message-btn,
-.delete-user-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  font-size: 14px;
-}
-
-.edit-user-btn {
-  background: rgba($orange, 0.15);
-  color: $orange2;
-  border: 1px solid rgba($orange, 0.3);
-
-  &:hover {
-    background: rgba($orange, 0.25);
-    border-color: rgba($orange, 0.5);
-  }
-}
-
-.send-message-btn {
-  background: rgba(59, 130, 246, 0.15);
-  color: #3b82f6;
-  border: 1px solid rgba(59, 130, 246, 0.3);
-
-  &:hover {
-    background: rgba(59, 130, 246, 0.25);
-    border-color: rgba(59, 130, 246, 0.5);
-  }
-}
-
-.delete-user-btn {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-
-  &:hover {
-    background: rgba(239, 68, 68, 0.25);
-    border-color: rgba(239, 68, 68, 0.5);
-  }
-}
-
+/* ===== Empty ===== */
 .no-data {
   text-align: center;
-  padding: 40px;
+  padding: 34px 16px;
   color: $muted;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 1000;
 }
 
-.loading-state {
-  text-align: center;
-  padding: 40px;
-  color: $text;
-  font-size: 16px;
-}
-
+/* ===== Pagination ===== */
 .pagination {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 16px;
-  margin-top: 24px;
+  gap: 14px;
+  margin-top: 14px;
   padding: 16px;
 }
 
 .pagination-btn {
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid rgba($orange, 0.3);
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba($orange, 0.22);
   background: rgba($orange, 0.1);
   color: $orange2;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 1000;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease;
   font-family: $font-family;
 
   &:hover:not(:disabled) {
-    background: rgba($orange, 0.2);
-    border-color: rgba($orange, 0.5);
+    background: rgba($orange, 0.18);
+    border-color: rgba($orange, 0.45);
+    transform: translateY(-1px);
   }
 
   &:disabled {
@@ -1052,38 +1558,40 @@ $bg: #0b0b0f;
 }
 
 .pagination-info {
-  color: $text;
-  font-size: 14px;
-  font-weight: 700;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 13px;
+  font-weight: 900;
 }
 
-/* Modal Styles */
+/* ===== Modals ===== */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.78);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   padding: 20px;
+  animation: fadeIn 0.18s ease;
 }
 
 .modal-content {
   background: $bg;
-  border-radius: 16px;
-  border: 1px solid rgba($orange, 0.3);
-  max-width: 500px;
+  border-radius: 18px;
+  border: 1px solid rgba($orange, 0.28);
+  max-width: 560px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.6);
+  animation: popIn 0.18s ease;
 
   &--confirm {
-    max-width: 400px;
+    max-width: 420px;
   }
 }
 
@@ -1091,8 +1599,8 @@ $bg: #0b0b0f;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid rgba($orange, 0.2);
+  padding: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .modal-title {
@@ -1103,58 +1611,73 @@ $bg: #0b0b0f;
 }
 
 .modal-close {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: none;
-  background: rgba(255, 255, 255, 0.1);
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
   color: $text;
   font-size: 24px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: transform 0.18s ease, background 0.18s ease;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-1px);
   }
 }
 
 .modal-body {
-  padding: 20px;
+  padding: 18px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-field--wide {
+  grid-column: 1 / -1;
 }
 
 .modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  padding: 20px;
-  border-top: 1px solid rgba($orange, 0.2);
+  padding: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .form-field {
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
-
 .form-label {
   display: block;
   margin-bottom: 8px;
-  font-size: 14px;
-  font-weight: 800;
-  color: $text;
+  font-size: 13px;
+  font-weight: 1000;
+  color: rgba(255, 255, 255, 0.86);
 }
-
 .form-input {
   width: 100%;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba($orange, 0.3);
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba($orange, 0.22);
   background: rgba(255, 255, 255, 0.06);
   color: $text;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 900;
   font-family: $font-family;
+  transition: border-color 0.18s ease, background 0.18s ease,
+    box-shadow 0.18s ease;
 
   &::placeholder {
     color: $muted;
@@ -1162,60 +1685,80 @@ $bg: #0b0b0f;
 
   &:focus {
     outline: none;
-    border-color: $orange;
-    box-shadow: 0 0 0 3px rgba($orange, 0.2);
+    border-color: rgba($orange, 0.58);
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 0 0 4px rgba($orange, 0.12);
   }
 
   &--textarea {
     resize: vertical;
-    min-height: 100px;
+    min-height: 110px;
   }
 }
 
+.hint {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* Buttons */
 .btn {
-  padding: 10px 20px;
-  border-radius: 8px;
+  padding: 11px 18px;
+  border-radius: 12px;
   border: none;
   font-size: 14px;
-  font-weight: 900;
+  font-weight: 1000;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease, box-shadow 0.18s ease;
   font-family: $font-family;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.24);
+
+  &:active {
+    transform: scale(0.99);
+  }
 
   &--primary {
-    background: rgba($orange, 0.2);
+    background: rgba($orange, 0.18);
     color: $orange2;
-    border: 1px solid rgba($orange, 0.3);
+    border: 1px solid rgba($orange, 0.28);
 
     &:hover {
-      background: rgba($orange, 0.3);
+      background: rgba($orange, 0.26);
       border-color: rgba($orange, 0.5);
+      transform: translateY(-1px);
     }
 
     &:disabled {
-      opacity: 0.5;
+      opacity: 0.55;
       cursor: not-allowed;
+      transform: none;
     }
   }
 
   &--ghost {
     background: transparent;
-    color: $text;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: none;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.06);
+      transform: translateY(-1px);
     }
   }
 
   &--danger {
-    background: rgba(239, 68, 68, 0.2);
-    color: #ef4444;
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    background: rgba($danger, 0.16);
+    color: rgba($danger, 0.98);
+    border: 1px solid rgba($danger, 0.28);
 
     &:hover {
-      background: rgba(239, 68, 68, 0.3);
-      border-color: rgba(239, 68, 68, 0.5);
+      background: rgba($danger, 0.24);
+      border-color: rgba($danger, 0.5);
+      transform: translateY(-1px);
     }
   }
 }
@@ -1224,12 +1767,49 @@ $bg: #0b0b0f;
   text-align: center;
   color: $text;
   font-size: 14px;
-  font-weight: 800;
-  line-height: 1.6;
+  font-weight: 900;
+  line-height: 1.7;
 
   strong {
     color: $orange2;
     font-weight: 1000;
+  }
+}
+
+/* ===== Animations ===== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes shimmer {
+  0% {
+    background-position: 0% 0%;
+  }
+  100% {
+    background-position: 200% 0%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
   }
 }
 </style>
