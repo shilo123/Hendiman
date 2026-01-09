@@ -13,8 +13,18 @@ const session = require("express-session");
 const { createServer } = require("http");
 const { Server } = require("socket.io");
 const { OpenAI } = require("openai");
+const {
+  generateRegistrationOptions,
+  verifyRegistrationResponse,
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse,
+} = require("@simplewebauthn/server");
 const app = express();
-const URL_CLIENT = "https://handiman-98cc6d1f0a79.herokuapp.com";
+const URL_CLIENT =
+  process.env.CLIENT_URL || "https://handiman-98cc6d1f0a79.herokuapp.com";
+const WEBAUTHN_RP_ID =
+  process.env.WEBAUTHN_RP_ID || "handiman-98cc6d1f0a79.herokuapp.com";
+const { serverLogger, clientLogger } = require("./utils/logger");
 //כן זה הזה שעשיתי
 // Import configurations and services
 const {
@@ -93,7 +103,7 @@ function updateMonthlySubscription(amount) {
     fs.writeFileSync(dryDataPath, JSON.stringify(dryData, null, 2), "utf8");
     return true;
   } catch (error) {
-    console.error("Error updating Monthly-subscriptions:", error);
+    serverLogger.error("Error updating Monthly-subscriptions:", error);
     return false;
   }
 }
@@ -116,7 +126,7 @@ async function geocodeAddress(address) {
   }
 
   if (!process.env.GOOGLE_MAPS_API_KEY) {
-    console.error("❌ [Geocoding] GOOGLE_MAPS_API_KEY not configured");
+    serverLogger.error("❌ [Geocoding] GOOGLE_MAPS_API_KEY not configured");
     return null;
   }
 
@@ -146,7 +156,7 @@ async function geocodeAddress(address) {
       return null;
     }
   } catch (error) {
-    console.error(
+    serverLogger.error(
       "❌ [Geocoding] Error in Google Maps geocoding:",
       error.message
     );
@@ -161,7 +171,9 @@ async function reverseGeocodeCoordinates(lat, lng) {
   }
 
   if (!process.env.GOOGLE_MAPS_API_KEY) {
-    console.error("❌ [Reverse Geocoding] GOOGLE_MAPS_API_KEY not configured");
+    serverLogger.error(
+      "❌ [Reverse Geocoding] GOOGLE_MAPS_API_KEY not configured"
+    );
     return null;
   }
 
@@ -187,7 +199,7 @@ async function reverseGeocodeCoordinates(lat, lng) {
       return null;
     }
   } catch (error) {
-    console.error(
+    serverLogger.error(
       "❌ [Reverse Geocoding] Error in Google Maps reverse geocoding:",
       error.message
     );
@@ -247,7 +259,7 @@ function findAvailablePort(startPort) {
           if (!origin) return callback(null, true);
 
           // Allow same origin
-          if (origin.includes("handiman-98cc6d1f0a79.herokuapp.com")) {
+          if (origin.includes(WEBAUTHN_RP_ID)) {
             return callback(null, true);
           }
 
@@ -311,7 +323,7 @@ function findAvailablePort(startPort) {
       const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
       if (!webhookSecret) {
-        console.error("Stripe webhook secret not configured");
+        serverLogger.error("Stripe webhook secret not configured");
         return res.status(500).json({ error: "Webhook secret not configured" });
       }
 
@@ -320,7 +332,10 @@ function findAvailablePort(startPort) {
       try {
         event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
       } catch (err) {
-        console.error("Webhook signature verification failed:", err.message);
+        serverLogger.error(
+          "Webhook signature verification failed:",
+          err.message
+        );
         return res.status(400).send(`Webhook Error: ${err.message}`);
       }
 
@@ -420,7 +435,7 @@ function findAvailablePort(startPort) {
                   );
                 }
               } catch (receiptError) {
-                console.error(
+                serverLogger.error(
                   "Error creating subscription receipt:",
                   receiptError
                 );
@@ -505,7 +520,7 @@ function findAvailablePort(startPort) {
                   URL_CLIENT
                 );
               } catch (emailError) {
-                console.error(
+                serverLogger.error(
                   "Error sending cancellation email in webhook:",
                   emailError
                 );
@@ -545,7 +560,7 @@ function findAvailablePort(startPort) {
                 }
               }
             } catch (pmError) {
-              console.error("Error retrieving payment method:", pmError);
+              serverLogger.error("Error retrieving payment method:", pmError);
               // Continue with default "****" if we can't get the last 4 digits
             }
 
@@ -553,7 +568,7 @@ function findAvailablePort(startPort) {
             try {
               await sendPaymentMethodUpdateEmail(user, last4Digits);
             } catch (emailError) {
-              console.error(
+              serverLogger.error(
                 "Error sending payment method update email:",
                 emailError
               );
@@ -564,7 +579,7 @@ function findAvailablePort(startPort) {
 
         return res.json({ received: true });
       } catch (error) {
-        console.error("Error processing webhook:", error);
+        serverLogger.error("Error processing webhook:", error);
         return res.status(500).json({ error: "Webhook processing failed" });
       }
     }
@@ -584,6 +599,30 @@ function findAvailablePort(startPort) {
 
   app.options("/health-check", (req, res) => {
     res.status(200).end();
+  });
+
+  // Endpoint to receive logs from client
+  app.post("/api/logs/client", (req, res) => {
+    try {
+      const { level, message, ...metadata } = req.body;
+      const args = [
+        message,
+        ...(metadata && Object.keys(metadata).length > 0 ? [metadata] : []),
+      ];
+
+      if (level === "error") {
+        clientLogger.error(...args);
+      } else if (level === "warn") {
+        clientLogger.warn(...args);
+      } else {
+        clientLogger.log(...args);
+      }
+
+      res.status(200).json({ success: true });
+    } catch (error) {
+      serverLogger.error("Error writing client log:", error);
+      res.status(500).json({ success: false, error: error.message });
+    }
   });
 
   // Log all POST requests for debugging
@@ -734,7 +773,7 @@ function findAvailablePort(startPort) {
     collectionChats = getCollectionChats();
     collectionInquiries = getCollectionInquiries();
   } catch (error) {
-    console.error("Error connecting to database:", error);
+    serverLogger.error("Error connecting to database:", error);
   }
 
   // Cache for handyman specialties (10 minutes TTL) - Optimizes /jobs/filter endpoint
@@ -1351,6 +1390,392 @@ function findAvailablePort(startPort) {
       return res.json({ message: "Error", error: error.message });
     }
   });
+
+  // Helper function to check if request is from mobile
+  function isMobileDevice(req) {
+    const userAgent = req.headers["user-agent"] || "";
+    return /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      userAgent
+    );
+  }
+
+  // WebAuthn Routes - Only for mobile devices
+  // Generate registration options for WebAuthn
+  app.post("/webauthn/register/start", async (req, res) => {
+    try {
+      // Check if request is from mobile
+      if (!isMobileDevice(req)) {
+        return res.status(403).json({
+          success: false,
+          message: "WebAuthn is only available on mobile devices",
+        });
+      }
+
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: "User ID is required",
+        });
+      }
+
+      const user = await collection.findOne({ _id: new ObjectId(userId) });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Get existing credentials for user
+      const existingCredentials = user.webauthnCredentials || [];
+
+      const rpName = "Hendiman";
+      const rpID =
+        process.env.NODE_ENV === "production" ? WEBAUTHN_RP_ID : "localhost";
+
+      const options = await generateRegistrationOptions({
+        rpName,
+        rpID,
+        userID: userId,
+        userName: user.email || user.username,
+        userDisplayName: user.username || user.email,
+        timeout: 60000,
+        attestationType: "none",
+        excludeCredentials: existingCredentials.map((cred) => ({
+          id: Buffer.from(cred.credentialID, "base64url"),
+          type: "public-key",
+        })),
+        authenticatorSelection: {
+          authenticatorAttachment: "platform",
+          userVerification: "preferred",
+        },
+      });
+
+      // Store challenge in user document temporarily
+      await collection.updateOne(
+        { _id: new ObjectId(userId) },
+        { $set: { webauthnChallenge: options.challenge } }
+      );
+
+      return res.json({
+        success: true,
+        options,
+      });
+    } catch (error) {
+      serverLogger.error("Error generating registration options:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error generating registration options",
+        error: error.message,
+      });
+    }
+  });
+
+  // Verify registration response
+  app.post("/webauthn/register/finish", async (req, res) => {
+    try {
+      // Check if request is from mobile
+      if (!isMobileDevice(req)) {
+        return res.status(403).json({
+          success: false,
+          message: "WebAuthn is only available on mobile devices",
+        });
+      }
+
+      const { userId, credential } = req.body;
+      if (!userId || !credential) {
+        return res.status(400).json({
+          success: false,
+          message: "User ID and credential are required",
+        });
+      }
+
+      const user = await collection.findOne({ _id: new ObjectId(userId) });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      if (!user.webauthnChallenge) {
+        return res.status(400).json({
+          success: false,
+          message: "No registration challenge found",
+        });
+      }
+
+      const rpID =
+        process.env.NODE_ENV === "production" ? WEBAUTHN_RP_ID : "localhost";
+      const origin =
+        process.env.NODE_ENV === "production"
+          ? `https://${WEBAUTHN_RP_ID}`
+          : URL_SERVER;
+
+      const verification = await verifyRegistrationResponse({
+        response: credential,
+        expectedChallenge: user.webauthnChallenge,
+        expectedOrigin: origin,
+        expectedRPID: rpID,
+      });
+
+      if (!verification.verified) {
+        return res.status(400).json({
+          success: false,
+          message: "Registration verification failed",
+        });
+      }
+
+      // Save credential to user
+      const newCredential = {
+        credentialID: Buffer.from(
+          verification.registrationInfo.credentialID
+        ).toString("base64url"),
+        publicKey: Buffer.from(
+          verification.registrationInfo.credentialPublicKey
+        ).toString("base64"),
+        counter: verification.registrationInfo.counter,
+        deviceType: credential.response.authenticatorAttachment || "unknown",
+        createdAt: new Date(),
+      };
+
+      await collection.updateOne(
+        { _id: new ObjectId(userId) },
+        {
+          $push: { webauthnCredentials: newCredential },
+          $unset: { webauthnChallenge: "" },
+        }
+      );
+
+      return res.json({
+        success: true,
+        message: "Biometric authentication registered successfully",
+      });
+    } catch (error) {
+      serverLogger.error("Error verifying registration:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error verifying registration",
+        error: error.message,
+      });
+    }
+  });
+
+  // Generate authentication options
+  app.post("/webauthn/authenticate/start", async (req, res) => {
+    try {
+      // Check if request is from mobile
+      if (!isMobileDevice(req)) {
+        return res.status(403).json({
+          success: false,
+          message: "WebAuthn is only available on mobile devices",
+        });
+      }
+
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: "User ID is required",
+        });
+      }
+
+      const user = await collection.findOne({ _id: new ObjectId(userId) });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const credentials = user.webauthnCredentials || [];
+      if (credentials.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No biometric credentials found for this user",
+        });
+      }
+
+      const rpID =
+        process.env.NODE_ENV === "production" ? WEBAUTHN_RP_ID : "localhost";
+
+      const options = await generateAuthenticationOptions({
+        rpID,
+        timeout: 60000,
+        userVerification: "preferred",
+        allowCredentials: credentials.map((cred) => ({
+          id: Buffer.from(cred.credentialID, "base64url"),
+          type: "public-key",
+        })),
+      });
+
+      // Store challenge in user document temporarily
+      await collection.updateOne(
+        { _id: new ObjectId(userId) },
+        { $set: { webauthnChallenge: options.challenge } }
+      );
+
+      return res.json({
+        success: true,
+        options,
+      });
+    } catch (error) {
+      serverLogger.error("Error generating authentication options:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error generating authentication options",
+        error: error.message,
+      });
+    }
+  });
+
+  // Verify authentication response
+  app.post("/webauthn/authenticate/finish", async (req, res) => {
+    try {
+      // Check if request is from mobile
+      if (!isMobileDevice(req)) {
+        return res.status(403).json({
+          success: false,
+          message: "WebAuthn is only available on mobile devices",
+        });
+      }
+
+      const { userId, credential } = req.body;
+      if (!userId || !credential) {
+        return res.status(400).json({
+          success: false,
+          message: "User ID and credential are required",
+        });
+      }
+
+      const user = await collection.findOne({ _id: new ObjectId(userId) });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      if (!user.webauthnChallenge) {
+        return res.status(400).json({
+          success: false,
+          message: "No authentication challenge found",
+        });
+      }
+
+      const credentials = user.webauthnCredentials || [];
+      const userCredential = credentials.find(
+        (cred) =>
+          Buffer.from(cred.credentialID, "base64url").toString("base64url") ===
+          credential.id
+      );
+
+      if (!userCredential) {
+        return res.status(404).json({
+          success: false,
+          message: "Credential not found",
+        });
+      }
+
+      const rpID =
+        process.env.NODE_ENV === "production" ? WEBAUTHN_RP_ID : "localhost";
+      const origin =
+        process.env.NODE_ENV === "production"
+          ? `https://${WEBAUTHN_RP_ID}`
+          : URL_SERVER;
+
+      const verification = await verifyAuthenticationResponse({
+        response: credential,
+        expectedChallenge: user.webauthnChallenge,
+        expectedOrigin: origin,
+        expectedRPID: rpID,
+        authenticator: {
+          credentialID: Buffer.from(userCredential.credentialID, "base64url"),
+          credentialPublicKey: Buffer.from(userCredential.publicKey, "base64"),
+          counter: userCredential.counter,
+        },
+      });
+
+      if (!verification.verified) {
+        return res.status(400).json({
+          success: false,
+          message: "Authentication verification failed",
+        });
+      }
+
+      // Update counter
+      await collection.updateOne(
+        {
+          _id: new ObjectId(userId),
+          "webauthnCredentials.credentialID": userCredential.credentialID,
+        },
+        {
+          $set: {
+            "webauthnCredentials.$.counter":
+              verification.authenticationInfo.newCounter,
+            webauthnChallenge: null,
+          },
+        }
+      );
+
+      // Return user data for login
+      return res.json({
+        success: true,
+        message: "Success",
+        user: {
+          _id: user._id ? user._id.toString() : user._id,
+          username: user.username,
+          email: user.email,
+          isHandyman: user.isHandyman,
+        },
+      });
+    } catch (error) {
+      serverLogger.error("Error verifying authentication:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error verifying authentication",
+        error: error.message,
+      });
+    }
+  });
+
+  // Check if user has biometric credentials
+  app.post("/webauthn/check", async (req, res) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: "User ID is required",
+        });
+      }
+
+      const user = await collection.findOne({ _id: new ObjectId(userId) });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const hasCredentials =
+        user.webauthnCredentials && user.webauthnCredentials.length > 0;
+
+      return res.json({
+        success: true,
+        hasCredentials,
+      });
+    } catch (error) {
+      serverLogger.error("Error checking credentials:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Error checking credentials",
+        error: error.message,
+      });
+    }
+  });
+
   app.post("/register-handyman", async (req, res) => {
     try {
       if (!collection) {
@@ -1779,6 +2204,12 @@ function findAvailablePort(startPort) {
         });
         if (handymenCount < 100) {
           userData.trialExpiresAt = "always"; // Free forever - replaces handimanFree
+          userData.billingStartDate = "FREE"; // Free forever
+        } else {
+          // אם לא חינם, תאריך תחילת חיוב הוא 14 יום אחרי ההרשמה
+          const billingStart = new Date();
+          billingStart.setDate(billingStart.getDate() + 14);
+          userData.billingStartDate = billingStart;
         }
       }
 
@@ -1802,7 +2233,7 @@ function findAvailablePort(startPort) {
                 URL_CLIENT
               );
             } catch (emailError) {
-              console.error("Error sending welcome email:", emailError);
+              serverLogger.error("Error sending welcome email:", emailError);
               // Don't fail registration if email fails
             }
           }
@@ -2563,7 +2994,7 @@ function findAvailablePort(startPort) {
         hasActiveJob: false,
       });
     } catch (error) {
-      console.error("Error in /check-active-job:", error);
+      serverLogger.error("Error in /check-active-job:", error);
       return res.status(500).json({
         success: false,
         message: "Error checking active job",
@@ -2902,7 +3333,7 @@ function findAvailablePort(startPort) {
         );
       } catch (updateError) {
         // Continue even if update fails - not critical
-        console.error("Error updating last-activity:", updateError);
+        serverLogger.error("Error updating last-activity:", updateError);
       }
 
       // Check if trial period has expired (only for handymen)
@@ -3767,34 +4198,67 @@ function findAvailablePort(startPort) {
         });
       }
 
-      // Add handyman ID to handiman-Blocked array (using $addToSet to avoid duplicates)
-      await usersCol.updateOne(
-        { _id: new ObjectId(userId) },
-        {
-          $addToSet: { "handiman-Blocked": new ObjectId(handymanId) },
-        }
-      );
+      const { action } = req.body; // "unblock" or undefined (defaults to block)
+      const isUnblocking = action === "unblock";
 
-      // Update all open jobs created by this client to add the blocked handyman
-      const jobsCol = getCollectionJobs();
-      try {
-        const clientObjectId = new ObjectId(userId);
-        await jobsCol.updateMany(
+      if (isUnblocking) {
+        // Remove handyman ID from handiman-Blocked array
+        await usersCol.updateOne(
+          { _id: new ObjectId(userId) },
           {
-            clientId: clientObjectId,
-            status: "open",
-          },
+            $pull: { "handiman-Blocked": new ObjectId(handymanId) },
+          }
+        );
+
+        // Update all open jobs created by this client to remove the blocked handyman
+        const jobsCol = getCollectionJobs();
+        try {
+          const clientObjectId = new ObjectId(userId);
+          await jobsCol.updateMany(
+            {
+              clientId: clientObjectId,
+              status: "open",
+            },
+            {
+              $pull: { "handiman-Blocked": new ObjectId(handymanId) },
+            }
+          );
+        } catch (jobError) {
+          // Log but don't fail if job update fails
+          console.error("Error updating jobs for unblock:", jobError);
+        }
+      } else {
+        // Add handyman ID to handiman-Blocked array (using $addToSet to avoid duplicates)
+        await usersCol.updateOne(
+          { _id: new ObjectId(userId) },
           {
             $addToSet: { "handiman-Blocked": new ObjectId(handymanId) },
           }
         );
-      } catch (jobsError) {
-        // Continue even if updating jobs fails (log but don't fail the request)
+
+        // Update all open jobs created by this client to add the blocked handyman
+        const jobsCol = getCollectionJobs();
+        try {
+          const clientObjectId = new ObjectId(userId);
+          await jobsCol.updateMany(
+            {
+              clientId: clientObjectId,
+              status: "open",
+            },
+            {
+              $addToSet: { "handiman-Blocked": new ObjectId(handymanId) },
+            }
+          );
+        } catch (jobsError) {
+          // Continue even if updating jobs fails (log but don't fail the request)
+        }
       }
 
       return res.json({
         success: true,
-        message: "Handyman blocked successfully",
+        message: isUnblocking
+          ? "Handyman unblocked successfully"
+          : "Handyman blocked successfully",
       });
     } catch (error) {
       return res.status(500).json({
@@ -4312,7 +4776,7 @@ function findAvailablePort(startPort) {
               }
             } catch (userError) {
               // Log error but don't fail the request
-              console.error(
+              serverLogger.error(
                 "Error saving paymentMethodId to user (background):",
                 userError
               );
@@ -4974,7 +5438,7 @@ function findAvailablePort(startPort) {
       const feePercent = getPlatformFeePercent();
       res.json({ success: true, fee: feePercent });
     } catch (error) {
-      console.error("Error getting platform fee:", error);
+      serverLogger.error("Error getting platform fee:", error);
       res.status(500).json({ success: false, error: error.message });
     }
   });
@@ -5081,7 +5545,7 @@ function findAvailablePort(startPort) {
         paymentIntentId: paymentIntent.id,
       });
     } catch (error) {
-      console.error("Error creating subscription payment intent:", error);
+      serverLogger.error("Error creating subscription payment intent:", error);
       return res.status(500).json({
         success: false,
         message: "שגיאה ביצירת מנוי",
@@ -5171,7 +5635,10 @@ function findAvailablePort(startPort) {
         paymentIntentId: paymentIntent.id,
       });
     } catch (error) {
-      console.error("Error creating subscription for existing user:", error);
+      serverLogger.error(
+        "Error creating subscription for existing user:",
+        error
+      );
       return res.status(500).json({
         success: false,
         message: "שגיאה ביצירת מנוי",
@@ -5299,7 +5766,10 @@ function findAvailablePort(startPort) {
             }
           }
         } catch (dbError) {
-          console.error("Error retrieving registration data from DB:", dbError);
+          serverLogger.error(
+            "Error retrieving registration data from DB:",
+            dbError
+          );
         }
       }
 
@@ -5741,12 +6211,18 @@ function findAvailablePort(startPort) {
         userData.rating = 0;
         userData.jobsDone = 0;
 
-        // Check if this is one of the first 100 handymen
+        // Check if this is one of the first 100 handymen or if registered via Admin (trialExpiresAt: "always")
         const handymenCount = await usersCol.countDocuments({
           isHandyman: true,
         });
-        if (handymenCount < 100) {
+        if (handymenCount < 100 || userData.trialExpiresAt === "always") {
           userData.trialExpiresAt = "always"; // Free forever - replaces handimanFree
+          userData.billingStartDate = "FREE"; // Free forever
+        } else {
+          // אם לא חינם, תאריך תחילת חיוב הוא 14 יום אחרי ההרשמה
+          const billingStart = new Date();
+          billingStart.setDate(billingStart.getDate() + 14);
+          userData.billingStartDate = billingStart;
         }
       }
 
@@ -5837,7 +6313,7 @@ function findAvailablePort(startPort) {
             URL_CLIENT
           );
         } catch (emailError) {
-          console.error("Error sending welcome email:", emailError);
+          serverLogger.error("Error sending welcome email:", emailError);
           // Don't fail registration if email fails
         }
       }
@@ -5984,7 +6460,7 @@ function findAvailablePort(startPort) {
           });
           stripeSubscriptionId = subscription.id;
         } catch (subscriptionError) {
-          console.error("Error creating subscription:", subscriptionError);
+          serverLogger.error("Error creating subscription:", subscriptionError);
           throw subscriptionError;
         }
       }
@@ -6056,7 +6532,10 @@ function findAvailablePort(startPort) {
         message: "המנוי הופעל בהצלחה",
       });
     } catch (error) {
-      console.error("Error completing subscription for existing user:", error);
+      serverLogger.error(
+        "Error completing subscription for existing user:",
+        error
+      );
       return res.status(500).json({
         success: false,
         message: "שגיאה בהשלמת המנוי",
@@ -6106,7 +6585,7 @@ function findAvailablePort(startPort) {
         clientSecret: setupIntent.client_secret,
       });
     } catch (error) {
-      console.error("Error creating setup intent:", error);
+      serverLogger.error("Error creating setup intent:", error);
       return res.status(500).json({
         success: false,
         message: "שגיאה ביצירת כוונת הגדרה",
@@ -6169,7 +6648,7 @@ function findAvailablePort(startPort) {
         message: "פרטי התשלום עודכנו בהצלחה",
       });
     } catch (error) {
-      console.error("Error updating payment method:", error);
+      serverLogger.error("Error updating payment method:", error);
       return res.status(500).json({
         success: false,
         message: "שגיאה בעדכון פרטי התשלום",
@@ -6232,7 +6711,7 @@ function findAvailablePort(startPort) {
         },
       });
     } catch (error) {
-      console.error("Error fetching subscription info:", error);
+      serverLogger.error("Error fetching subscription info:", error);
       return res.status(500).json({
         success: false,
         message: "שגיאה בקבלת פרטי המנוי",
@@ -6258,7 +6737,7 @@ function findAvailablePort(startPort) {
       try {
         user = await usersCol.findOne({ _id: new ObjectId(userId) });
       } catch (objectIdError) {
-        console.error(
+        serverLogger.error(
           "[Cancel Subscription] Invalid userId format:",
           objectIdError
         );
@@ -6287,14 +6766,13 @@ function findAvailablePort(startPort) {
         user.hasActiveSubscription && !user.stripeSubscriptionId;
 
       if (isAnnualSubscription) {
-        // For annual subscriptions, just update the database
-        // The subscription will expire at subscriptionExpiresAt
+        // For annual subscriptions, cancel immediately
         await usersCol.updateOne(
           { _id: user._id },
           {
             $set: {
               subscriptionCancelled: true,
-              // Keep hasActiveSubscription true until expiration
+              hasActiveSubscription: false,
             },
           }
         );
@@ -6306,7 +6784,7 @@ function findAvailablePort(startPort) {
           user.subscriptionExpiresAt,
           URL_CLIENT
         ).catch((emailError) => {
-          console.error(
+          serverLogger.error(
             "[Cancel Subscription] Error sending cancellation email:",
             emailError
           );
@@ -6324,10 +6802,8 @@ function findAvailablePort(startPort) {
           user.stripeSubscriptionId
         );
 
-        // Cancel at period end (don't cancel immediately)
-        await stripe.subscriptions.update(user.stripeSubscriptionId, {
-          cancel_at_period_end: true,
-        });
+        // Cancel immediately (not at period end)
+        await stripe.subscriptions.cancel(user.stripeSubscriptionId);
 
         // Update user in database
         await usersCol.updateOne(
@@ -6335,7 +6811,8 @@ function findAvailablePort(startPort) {
           {
             $set: {
               subscriptionCancelled: true,
-              // Keep hasActiveSubscription true until period end
+              hasActiveSubscription: false,
+              stripeSubscriptionId: null, // Remove subscription ID
             },
           }
         );
@@ -6352,7 +6829,7 @@ function findAvailablePort(startPort) {
           expirationDate,
           URL_CLIENT
         ).catch((emailError) => {
-          console.error(
+          serverLogger.error(
             "[Cancel Subscription] Error sending cancellation email:",
             emailError
           );
@@ -6371,10 +6848,136 @@ function findAvailablePort(startPort) {
         });
       }
     } catch (error) {
-      console.error("[Cancel Subscription] Unexpected error:", error);
+      serverLogger.error("[Cancel Subscription] Unexpected error:", error);
       return res.status(500).json({
         success: false,
         message: "שגיאה בביטול המנוי",
+        error: error.message,
+      });
+    }
+  });
+
+  // Check subscription status endpoint (for dashboard mounted)
+  app.get("/api/subscription/status", async (req, res) => {
+    try {
+      const { userId } = req.query;
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: "userId required",
+        });
+      }
+
+      const usersCol = getCollection();
+      let user;
+      try {
+        user = await usersCol.findOne({ _id: new ObjectId(userId) });
+      } catch (objectIdError) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid userId format",
+        });
+      }
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      if (!user.isHandyman) {
+        return res.json({
+          success: true,
+          isHandyman: false,
+          message: "User is not a handyman",
+        });
+      }
+
+      // Check subscription status
+      const now = new Date();
+      let subscriptionStatus = {
+        isFree: false,
+        isTrial: false,
+        needsBilling: false,
+        billingStartDate: null,
+        trialExpiresAt: null,
+        hasActiveSubscription: user.hasActiveSubscription || false,
+        stripeSubscriptionId: user.stripeSubscriptionId || null,
+        subscriptionCancelled: user.subscriptionCancelled || false,
+      };
+
+      // Check if user is free forever
+      if (
+        user.trialExpiresAt === "always" ||
+        user.billingStartDate === "FREE"
+      ) {
+        subscriptionStatus.isFree = true;
+        subscriptionStatus.billingStartDate = "FREE";
+        return res.json({
+          success: true,
+          ...subscriptionStatus,
+        });
+      }
+
+      // Check billingStartDate
+      if (user.billingStartDate) {
+        if (user.billingStartDate === "FREE") {
+          subscriptionStatus.isFree = true;
+          subscriptionStatus.billingStartDate = "FREE";
+          return res.json({
+            success: true,
+            ...subscriptionStatus,
+          });
+        }
+
+        // If billingStartDate is a date
+        const billingStart = new Date(user.billingStartDate);
+        subscriptionStatus.billingStartDate = billingStart;
+
+        // Check if we're before billing start (trial period)
+        if (now < billingStart) {
+          subscriptionStatus.isTrial = true;
+          subscriptionStatus.needsBilling = false;
+        } else {
+          // After billing start - check if has active subscription
+          if (!user.hasActiveSubscription || user.subscriptionCancelled) {
+            subscriptionStatus.needsBilling = true;
+          }
+        }
+      } else {
+        // Legacy: check trialExpiresAt
+        if (user.trialExpiresAt && user.trialExpiresAt !== "always") {
+          const trialExpires = new Date(user.trialExpiresAt);
+          subscriptionStatus.trialExpiresAt = trialExpires;
+
+          if (now < trialExpires) {
+            subscriptionStatus.isTrial = true;
+            subscriptionStatus.needsBilling = false;
+          } else {
+            // Trial expired - check if has active subscription
+            if (!user.hasActiveSubscription || user.subscriptionCancelled) {
+              subscriptionStatus.needsBilling = true;
+            }
+          }
+        } else {
+          // No trial info - check if has active subscription
+          if (!user.hasActiveSubscription || user.subscriptionCancelled) {
+            subscriptionStatus.needsBilling = true;
+          }
+        }
+      }
+
+      return res.json({
+        success: true,
+        ...subscriptionStatus,
+      });
+    } catch (error) {
+      serverLogger.error("[Subscription Status] Unexpected error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה בבדיקת סטטוס המנוי",
         error: error.message,
       });
     }
@@ -7355,7 +7958,7 @@ function findAvailablePort(startPort) {
               updateData.paymentStatus = "cancelled";
             } catch (cancelError) {
               // Log error but continue with job cancellation
-              console.error(
+              serverLogger.error(
                 `Error cancelling payment intent ${job.paymentIntentId}:`,
                 cancelError
               );
@@ -7363,7 +7966,7 @@ function findAvailablePort(startPort) {
           }
         } catch (paymentError) {
           // Log error but continue with job cancellation
-          console.error("Error checking payment status:", paymentError);
+          serverLogger.error("Error checking payment status:", paymentError);
         }
       }
 
@@ -7530,7 +8133,7 @@ function findAvailablePort(startPort) {
               );
             } catch (cancelError) {
               // Log error but continue with job deletion
-              console.error(
+              serverLogger.error(
                 `Error cancelling payment intent ${job.paymentIntentId}:`,
                 cancelError
               );
@@ -7538,7 +8141,7 @@ function findAvailablePort(startPort) {
           }
         } catch (paymentError) {
           // Log error but continue with job deletion
-          console.error("Error checking payment status:", paymentError);
+          serverLogger.error("Error checking payment status:", paymentError);
         }
       }
 
@@ -8768,7 +9371,7 @@ function findAvailablePort(startPort) {
                               "Payment method cannot be reused. Please add a new payment method.",
                           });
                         } catch (updateError) {
-                          console.error(
+                          serverLogger.error(
                             `[jobs/approve] ❌ Error updating Payment Intent: ${updateError.message}`
                           );
                           // Return error with original clientSecret
@@ -9188,12 +9791,15 @@ function findAvailablePort(startPort) {
                 );
               }
             } catch (receiptError) {
-              console.error(
+              serverLogger.error(
                 "❌ [RECEIPTS] Error creating receipts for Connect payment:",
                 receiptError
               );
-              console.error("❌ [RECEIPTS] Error stack:", receiptError.stack);
-              console.error("❌ [RECEIPTS] Error details:", {
+              serverLogger.error(
+                "❌ [RECEIPTS] Error stack:",
+                receiptError.stack
+              );
+              serverLogger.error("❌ [RECEIPTS] Error details:", {
                 message: receiptError.message,
                 name: receiptError.name,
                 jobId: jobId,
@@ -9204,10 +9810,14 @@ function findAvailablePort(startPort) {
           } else {
             // Legacy payment flow (no Connect) - manual calculation
             const commissionRate = getPlatformFeePercent() / 100; // Read from dry-data.json
+            // ה-urgentFee משולם על ידי הלקוח, לא מופחת מההנדימן
+            // העמלה מחושבת על המחיר הכולל (כולל urgentFee) כי הלקוח שילם את כולו
             const commission =
               Math.round(totalAmount * commissionRate * 100) / 100;
-            const systemRevenue = commission + urgentFee;
-            const handymanRevenue = totalAmount - commission - urgentFee;
+            // המערכת מקבלת רק את העמלה, ה-urgentFee נשאר ללקוח (לא מופחת מההנדימן)
+            const systemRevenue = commission;
+            // הנדימן מקבל: המחיר הכולל פחות עמלה (ה-urgentFee לא מופחת כי הלקוח שילם אותו)
+            const handymanRevenue = totalAmount - commission;
 
             const paymentData = {
               jobId: new ObjectId(jobId),
@@ -9293,12 +9903,15 @@ function findAvailablePort(startPort) {
                 );
               }
             } catch (receiptError) {
-              console.error(
+              serverLogger.error(
                 "❌ [RECEIPTS] Error creating receipts for Legacy payment:",
                 receiptError
               );
-              console.error("❌ [RECEIPTS] Error stack:", receiptError.stack);
-              console.error("❌ [RECEIPTS] Error details:", {
+              serverLogger.error(
+                "❌ [RECEIPTS] Error stack:",
+                receiptError.stack
+              );
+              serverLogger.error("❌ [RECEIPTS] Error details:", {
                 message: receiptError.message,
                 name: receiptError.name,
                 jobId: jobId,
@@ -9426,7 +10039,7 @@ function findAvailablePort(startPort) {
                       }
                     }
                   } catch (stripeError) {
-                    console.error(
+                    serverLogger.error(
                       "[jobs/approve] Error checking Stripe account status:",
                       stripeError
                     );
@@ -9461,7 +10074,7 @@ function findAvailablePort(startPort) {
                             refreshUrl
                           );
                         } catch (linkError) {
-                          console.error(
+                          serverLogger.error(
                             "[jobs/approve] Error creating onboarding link:",
                             linkError
                           );
@@ -9469,7 +10082,7 @@ function findAvailablePort(startPort) {
                       }
                     }
                   } catch (accountError) {
-                    console.error(
+                    serverLogger.error(
                       "[jobs/approve] Error creating Stripe account:",
                       accountError
                     );
@@ -9523,7 +10136,7 @@ function findAvailablePort(startPort) {
                 }
               }
             } catch (pushError) {
-              console.error(
+              serverLogger.error(
                 "Error sending notification to handyman:",
                 pushError
               );
@@ -9538,11 +10151,11 @@ function findAvailablePort(startPort) {
             paymentReleased: true,
           });
         } catch (paymentError) {
-          console.error(
+          serverLogger.error(
             "❌ [JOBS/APPROVE] Payment Error - Failed to process payment:",
             paymentError
           );
-          console.error(
+          serverLogger.error(
             "❌ [JOBS/APPROVE] Payment Error stack:",
             paymentError.stack
           );
@@ -9767,7 +10380,7 @@ function findAvailablePort(startPort) {
             amount: newAmount,
           });
         } catch (stripeError) {
-          console.error(
+          serverLogger.error(
             "❌ [Hours] Error updating payment intent:",
             stripeError
           );
@@ -9919,7 +10532,7 @@ function findAvailablePort(startPort) {
                 paymentIntent.transfer_data?.destination;
 
               if (!handymanAccountId) {
-                console.error(
+                serverLogger.error(
                   `Cannot recreate payment intent: no handyman account ID found`
                 );
                 // Fallback: just update DB
@@ -9955,7 +10568,7 @@ function findAvailablePort(startPort) {
                 try {
                   await cancelEscrow(oldPaymentIntentId);
                 } catch (cancelError) {
-                  console.error(
+                  serverLogger.error(
                     `Error cancelling old payment intent:`,
                     cancelError.message
                   );
@@ -10076,7 +10689,7 @@ function findAvailablePort(startPort) {
                         );
                       }
                     } catch (confirmError) {
-                      console.error(
+                      serverLogger.error(
                         `Error confirming new payment intent:`,
                         confirmError.message
                       );
@@ -10084,7 +10697,7 @@ function findAvailablePort(startPort) {
                     }
                   }
                 } catch (createError) {
-                  console.error(
+                  serverLogger.error(
                     `Error creating new payment intent:`,
                     createError.message
                   );
@@ -10103,7 +10716,7 @@ function findAvailablePort(startPort) {
                 }
               }
             } else {
-              console.warn(
+              serverLogger.warn(
                 `Cannot update payment intent ${job.paymentIntentId}: status is ${paymentIntent.status}. Only updating DB.`
               );
 
@@ -10121,7 +10734,7 @@ function findAvailablePort(startPort) {
               );
             }
           } catch (stripeError) {
-            console.error(
+            serverLogger.error(
               "Error updating payment intent:",
               stripeError.message
             );
@@ -10268,7 +10881,15 @@ function findAvailablePort(startPort) {
   app.post("/jobs/:jobId/messages", async (req, res) => {
     try {
       const { jobId } = req.params;
-      const { text, imageUrl, location, senderId, isHandyman } = req.body;
+      const {
+        text,
+        imageUrl,
+        audioUrl,
+        audioDuration,
+        location,
+        senderId,
+        isHandyman,
+      } = req.body;
 
       if (!jobId || !senderId) {
         return res.status(400).json({
@@ -10277,10 +10898,10 @@ function findAvailablePort(startPort) {
         });
       }
 
-      if (!text && !imageUrl && !location) {
+      if (!text && !imageUrl && !audioUrl && !location) {
         return res.status(400).json({
           success: false,
-          message: "Either text, imageUrl, or location is required",
+          message: "Either text, imageUrl, audioUrl, or location is required",
         });
       }
 
@@ -10331,10 +10952,18 @@ function findAvailablePort(startPort) {
       if (senderIsHandyman) {
         if (text) messageObj.handyman = text;
         if (imageUrl) messageObj.handymanImage = imageUrl;
+        if (audioUrl) {
+          messageObj.handymanAudio = audioUrl;
+          if (audioDuration) messageObj.handymanAudioDuration = audioDuration;
+        }
         if (location) messageObj.handymanLocation = location;
       } else {
         if (text) messageObj.customer = text;
         if (imageUrl) messageObj.customerImage = imageUrl;
+        if (audioUrl) {
+          messageObj.customerAudio = audioUrl;
+          if (audioDuration) messageObj.customerAudioDuration = audioDuration;
+        }
         if (location) messageObj.customerLocation = location;
       }
 
@@ -10363,7 +10992,7 @@ function findAvailablePort(startPort) {
           });
         }
       } else {
-        console.error("[Server] WebSocket io not available");
+        serverLogger.error("[Server] WebSocket io not available");
       }
 
       // Return response IMMEDIATELY after WebSocket emit for instant feedback
@@ -10411,7 +11040,7 @@ function findAvailablePort(startPort) {
             }
           }
         } catch (dbError) {
-          console.error("Error saving message to database:", dbError);
+          serverLogger.error("Error saving message to database:", dbError);
           // Don't fail the request if DB save fails - message already sent via WebSocket
         }
       })();
@@ -10611,17 +11240,26 @@ function findAvailablePort(startPort) {
       const chatsCol = getCollectionChats();
       const chat = await chatsCol.findOne({ jobId: new ObjectId(jobId) });
 
-      // Extract image URLs from chat messages and delete them from S3
+      // Extract image and audio URLs from chat messages and delete them from S3
       // Chat images use the same bucket as /upload-image endpoint (hendiman123 or AWS_BUCKET_NAME)
+      // Chat audio files use voice-chat123 bucket
       const bucketName = process.env.AWS_BUCKET_NAME || "hendiman123";
+      const audioBucketName = "voice-chat123";
       if (chat && chat.content && Array.isArray(chat.content)) {
         const imageUrls = [];
+        const audioUrls = [];
         chat.content.forEach((message) => {
           if (message.handymanImage) {
             imageUrls.push(message.handymanImage);
           }
           if (message.customerImage) {
             imageUrls.push(message.customerImage);
+          }
+          if (message.handymanAudio) {
+            audioUrls.push(message.handymanAudio);
+          }
+          if (message.customerAudio) {
+            audioUrls.push(message.customerAudio);
           }
         });
 
@@ -10633,6 +11271,19 @@ function findAvailablePort(startPort) {
             }
           } catch (deleteError) {
             // Continue deleting other images even if one fails
+            // Don't log or throw - just continue
+          }
+        }
+
+        // Delete all audio files from S3 (don't fail if deletion fails)
+        const { deleteAudioFromS3 } = require("./services/uploadService");
+        for (const audioUrl of audioUrls) {
+          try {
+            if (audioUrl && audioUrl.includes(audioBucketName)) {
+              await deleteAudioFromS3(audioUrl, audioBucketName);
+            }
+          } catch (deleteError) {
+            // Continue deleting other audio files even if one fails
             // Don't log or throw - just continue
           }
         }
@@ -10652,7 +11303,7 @@ function findAvailablePort(startPort) {
         // Chat deleted successfully (even if deletedCount is 0, it means no chat existed)
       } catch (deleteError) {
         // Log error but don't fail the rating submission
-        console.error("Error deleting chat after rating:", deleteError);
+        serverLogger.error("Error deleting chat after rating:", deleteError);
       }
 
       // Emit WebSocket event to handyman that rating was submitted
@@ -10693,7 +11344,7 @@ function findAvailablePort(startPort) {
         }
       } catch (pushError) {
         // Don't fail the request if push notification fails
-        console.error(
+        serverLogger.error(
           "Error sending push notification for rating:",
           pushError.message
         );
@@ -10752,7 +11403,7 @@ function findAvailablePort(startPort) {
                 });
 
               if (!transferResponse.data.success) {
-                console.error(
+                serverLogger.error(
                   "Error transferring payment:",
                   transferResponse.data.message
                 );
@@ -10760,7 +11411,7 @@ function findAvailablePort(startPort) {
               }
             }
           } catch (paymentCheckError) {
-            console.error(
+            serverLogger.error(
               "Error checking payment status before transfer:",
               paymentCheckError.message
             );
@@ -10816,7 +11467,7 @@ function findAvailablePort(startPort) {
                 .find({ handymanId: finalHandymanId })
                 .toArray();
             } catch (fallbackError) {
-              console.error(
+              serverLogger.error(
                 "Error finding ratings on final retry:",
                 fallbackError.message
               );
@@ -10845,7 +11496,7 @@ function findAvailablePort(startPort) {
         }
       } catch (ratingError) {
         // Don't fail the request if rating calculation fails
-        console.error(ratingError.message);
+        serverLogger.error(ratingError.message);
       }
 
       return res.json({ success: true });
@@ -11057,7 +11708,7 @@ function findAvailablePort(startPort) {
         jobDone: jobDone,
       });
     } catch (error) {
-      console.error(
+      serverLogger.error(
         `[Error] Failed to fetch handyman ratings for handymanId: ${req.params.handymanId}:`,
         {
           error: error.message,
@@ -12552,7 +13203,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
             } else {
             }
           } catch (error) {
-            console.error(
+            serverLogger.error(
               "❌ [create-call-v2] Error in reverse geocoding:",
               error.message
             );
@@ -12591,7 +13242,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
               return null;
             }
           } catch (error) {
-            console.error(
+            serverLogger.error(
               "❌ [create-call-v2 searchAddress] Error geocoding:",
               error.message
             );
@@ -12741,7 +13392,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           }
         });
       } catch (error) {
-        console.error("❌ שגיאה בבדיקת כל ההנדימנים:", error);
+        serverLogger.error("❌ שגיאה בבדיקת כל ההנדימנים:", error);
       }
       try {
         const etanPerez = await collection.findOne({
@@ -12823,7 +13474,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           }
         }
       } catch (error) {
-        console.error("❌ שגיאה בחיפוש איתן פרץ:", error);
+        serverLogger.error("❌ שגיאה בחיפוש איתן פרץ:", error);
       }
       allHandymenInArea.forEach((handyman, index) => {
         // Show all fields that might contain category info
@@ -13292,7 +13943,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
             );
           } catch (error) {
             // Silent fail - Ordered update is not critical
-            console.error("Error updating Ordered count:", error);
+            serverLogger.error("Error updating Ordered count:", error);
           }
         }
 
@@ -13610,7 +14261,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
             handyman = await collection.findOne({ _id: handymanObjectId });
           }
         } catch (error) {
-          console.error(error.message);
+          serverLogger.error(error.message);
           continue;
         }
 
@@ -14250,7 +14901,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         paymentIntent.status !== "requires_capture" &&
         paymentIntent.status !== "succeeded"
       ) {
-        console.error(
+        serverLogger.error(
           `[Stripe Error] Invalid Payment Intent status: ${paymentIntent.status} for Payment Intent ${job.paymentIntentId}, jobId: ${jobId}`
         );
         return res.status(400).json({
@@ -14281,11 +14932,13 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       const urgentFee = job.urgent ? 10 : 0;
       const commissionRate = getPlatformFeePercent() / 100; // Read from dry-data.json
       // העמלה מחושבת על המחיר בלי מע"מ (כי המע"מ נגבה מהלקוח)
+      // ה-urgentFee משולם על ידי הלקוח, לא מופחת מההנדימן
       const commission =
         Math.round(amountWithoutVAT * commissionRate * 100) / 100;
-      const systemRevenue = commission + urgentFee; // System gets commission + urgent fee
-      // הנדימן מקבל: המחיר בלי מע"מ פחות עמלה פחות קריאה דחופה
-      const handymanRevenue = amountWithoutVAT - commission - urgentFee;
+      // המערכת מקבלת רק את העמלה, ה-urgentFee נשאר ללקוח (לא מופחת מההנדימן)
+      const systemRevenue = commission;
+      // הנדימן מקבל: המחיר בלי מע"מ פחות עמלה (ה-urgentFee לא מופחת כי הלקוח שילם אותו)
+      const handymanRevenue = amountWithoutVAT - commission;
 
       // Get handyman ID
       const handymanId = job.handymanId?.toString() || job.handymanId;
@@ -14363,7 +15016,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         payment: paymentData,
       });
     } catch (error) {
-      console.error(
+      serverLogger.error(
         `[Payment Transfer Error] Failed to transfer payment for jobId: ${req.body.jobId}:`,
         {
           error: error.message,
@@ -14403,7 +15056,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         payment: payment,
       });
     } catch (error) {
-      console.error(
+      serverLogger.error(
         `[Error] Failed to fetch payment for jobId: ${req.params.jobId}:`,
         {
           error: error.message,
@@ -15186,7 +15839,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       );
       res.send(pdfBuffer);
     } catch (error) {
-      console.error("Error generating PDF:", error);
+      serverLogger.error("Error generating PDF:", error);
       return res.status(500).json({
         success: false,
         message: "שגיאה ביצירת הדוח",
@@ -15295,7 +15948,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           : null, // Return amount in ILS
       });
     } catch (error) {
-      console.error("Error capturing payment (admin):", error);
+      serverLogger.error("Error capturing payment (admin):", error);
       return res.status(500).json({
         success: false,
         message: "שגיאה בשחרור התשלום",
@@ -15504,7 +16157,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         clientSecret: setupIntent.client_secret,
       });
     } catch (error) {
-      console.error("Error creating trial setup intent:", error);
+      serverLogger.error("Error creating trial setup intent:", error);
       return res.status(500).json({
         success: false,
         message: "Error creating setup intent",
@@ -15558,7 +16211,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         const { sendTrialExpiredEmail } = require("./services/receiptService");
         await sendTrialExpiredEmail(user, URL_CLIENT);
       } catch (emailError) {
-        console.error("Error sending trial expired email:", emailError);
+        serverLogger.error("Error sending trial expired email:", emailError);
         // Continue even if email fails
       }
 
@@ -15567,7 +16220,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         message: "Payment method updated successfully",
       });
     } catch (error) {
-      console.error("Error completing trial payment:", error);
+      serverLogger.error("Error completing trial payment:", error);
       return res.status(500).json({
         success: false,
         message: "Error completing trial payment",
@@ -15611,7 +16264,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         const { sendTrialExpiredEmail } = require("./services/receiptService");
         await sendTrialExpiredEmail(user, URL_CLIENT);
       } catch (emailError) {
-        console.error("Error sending trial expired email:", emailError);
+        serverLogger.error("Error sending trial expired email:", emailError);
         // Continue even if email fails
       }
 
@@ -15620,7 +16273,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         message: "Trial expiration confirmed",
       });
     } catch (error) {
-      console.error("Error confirming trial expiration:", error);
+      serverLogger.error("Error confirming trial expiration:", error);
       return res.status(500).json({
         success: false,
         message: "Error confirming trial expiration",
@@ -15694,7 +16347,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         user: userWithDetails,
       });
     } catch (error) {
-      console.error("Error fetching user details:", error);
+      serverLogger.error("Error fetching user details:", error);
       return res.status(500).json({
         success: false,
         message: "Error fetching user details",
@@ -15959,7 +16612,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         job,
       });
     } catch (error) {
-      console.error("❌ [Admin Job Details] Error:", error);
+      serverLogger.error("❌ [Admin Job Details] Error:", error);
       return res.status(500).json({
         success: false,
         message: "Error fetching job details",
@@ -15987,7 +16640,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         receipt,
       });
     } catch (error) {
-      console.error("❌ [Admin Receipt] Error:", error);
+      serverLogger.error("❌ [Admin Receipt] Error:", error);
       return res.status(500).json({
         success: false,
         message: "Error fetching receipt",
@@ -16047,7 +16700,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         jobs: jobsWithTotalPrice,
       });
     } catch (error) {
-      console.error("❌ [Admin Jobs] Error:", error);
+      serverLogger.error("❌ [Admin Jobs] Error:", error);
       return res.status(500).json({
         success: false,
         message: "Error fetching jobs",
@@ -16822,7 +17475,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         },
       });
     } catch (error) {
-      console.error("Error fetching cancellations:", error);
+      serverLogger.error("Error fetching cancellations:", error);
       return res.status(500).json({
         success: false,
         message: "Error fetching cancellations",
@@ -17071,17 +17724,17 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
             finePaymentIntent.id
           );
         } catch (confirmError) {
-          console.error("Error confirming payment intent:", confirmError);
+          serverLogger.error("Error confirming payment intent:", confirmError);
           // If confirmation fails, try to cancel the payment intent
           try {
             await stripe.paymentIntents.cancel(finePaymentIntent.id);
           } catch (cancelError) {
-            console.error("Error cancelling payment intent:", cancelError);
+            serverLogger.error("Error cancelling payment intent:", cancelError);
           }
           throw confirmError;
         }
       } catch (chargeError) {
-        console.error("Stripe charge error for fine:", chargeError);
+        serverLogger.error("Stripe charge error for fine:", chargeError);
         return res.status(500).json({
           success: false,
           message:
@@ -17280,6 +17933,21 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
       socket.leave(`job-${jobId}`);
     });
 
+    // Handle typing indicator
+    socket.on("typing", (data) => {
+      const { jobId, isTyping } = data;
+      if (jobId) {
+        // Get userId from socket (should be stored when joining)
+        const userId = socket.userId || socket.handshake.query.userId;
+        // Broadcast typing status to other users in the job room (except sender)
+        socket.to(`job-${jobId}`).emit("user-typing", {
+          jobId,
+          userId,
+          isTyping,
+        });
+      }
+    });
+
     // Handle payment method details request
     socket.on("get-payment-method-details", async (data) => {
       try {
@@ -17315,7 +17983,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           });
         }
       } catch (error) {
-        console.error("Error fetching payment method details:", error);
+        serverLogger.error("Error fetching payment method details:", error);
         socket.emit("payment-method-details", {
           success: false,
           message: error.message || "Error fetching payment method details",
@@ -17369,7 +18037,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
             });
           }
         } catch (error) {
-          console.error("Error requesting handyman location:", error);
+          serverLogger.error("Error requesting handyman location:", error);
         }
       }
     });
@@ -17496,7 +18164,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
         io.to(`job-${jobId}`).emit("price-change-request", priceChangeData);
       } catch (error) {
-        console.error("Error handling price change request:", error);
+        serverLogger.error("Error handling price change request:", error);
         socket.emit("error", { message: "שגיאה בעיבוד בקשת שינוי המחיר" });
       }
     });
@@ -17619,7 +18287,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                   paymentIntent.transfer_data?.destination;
 
                 if (!handymanAccountId) {
-                  console.error(
+                  serverLogger.error(
                     `Cannot recreate payment intent: no handyman account ID found`
                   );
                   // Fallback: just update DB
@@ -17639,7 +18307,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                   try {
                     await cancelEscrow(oldPaymentIntentId);
                   } catch (cancelError) {
-                    console.error(
+                    serverLogger.error(
                       `Error cancelling old payment intent:`,
                       cancelError.message
                     );
@@ -17745,7 +18413,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                           );
                         }
                       } catch (confirmError) {
-                        console.error(
+                        serverLogger.error(
                           `Error confirming new payment intent:`,
                           confirmError.message
                         );
@@ -17753,7 +18421,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                       }
                     }
                   } catch (createError) {
-                    console.error(
+                    serverLogger.error(
                       `Error creating new payment intent:`,
                       createError.message
                     );
@@ -17772,7 +18440,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                   }
                 }
               } else {
-                console.warn(
+                serverLogger.warn(
                   `Cannot update payment intent ${job.paymentIntentId}: status is ${paymentIntent.status}. Only updating DB.`
                 );
 
@@ -17790,7 +18458,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                 );
               }
             } catch (stripeError) {
-              console.error("Error updating payment intent:", stripeError);
+              serverLogger.error("Error updating payment intent:", stripeError);
               // Continue even if payment intent update fails
             }
           }
@@ -17814,7 +18482,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           });
         }
       } catch (error) {
-        console.error("Error handling price change response:", error);
+        serverLogger.error("Error handling price change response:", error);
         socket.emit("error", { message: "שגיאה בעדכון המחיר" });
       }
     });
@@ -18021,7 +18689,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         totalPages,
       });
     } catch (error) {
-      console.error("Error fetching receipts:", error);
+      serverLogger.error("Error fetching receipts:", error);
       res.status(500).json({
         success: false,
         message: "שגיאה בטעינת הקבלות",
@@ -18058,7 +18726,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         message: "Receipt deleted successfully",
       });
     } catch (error) {
-      console.error("Error deleting receipt:", error);
+      serverLogger.error("Error deleting receipt:", error);
       res.status(500).json({
         success: false,
         message: "Error deleting receipt",
@@ -18102,7 +18770,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
       res.json({ success: true, users: sanitizedUsers });
     } catch (error) {
-      console.error("Error searching users:", error);
+      serverLogger.error("Error searching users:", error);
       res.status(500).json({ success: false, message: "שגיאה בחיפוש משתמשים" });
     }
   });
@@ -18194,7 +18862,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         });
       }
     } catch (error) {
-      console.error("Error creating inquiry:", error);
+      serverLogger.error("Error creating inquiry:", error);
       res.status(500).json({ success: false, message: "שגיאה ביצירת הפנייה" });
     }
   });
@@ -18253,7 +18921,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
       res.json({ success: true, inquiries: populatedInquiries });
     } catch (error) {
-      console.error("Error fetching inquiries:", error);
+      serverLogger.error("Error fetching inquiries:", error);
       res.status(500).json({ success: false, message: "שגיאה בטעינת הפניות" });
     }
   });
@@ -18271,7 +18939,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
       res.json({ success: true, message: "הפנייה נמחקה" });
     } catch (error) {
-      console.error("Error deleting inquiry:", error);
+      serverLogger.error("Error deleting inquiry:", error);
       res.status(500).json({ success: false, message: "שגיאה במחיקת הפנייה" });
     }
   });
@@ -18306,12 +18974,12 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           inquiryId: inquiryId,
         });
       } catch (pushError) {
-        console.error("Error sending push notification:", pushError);
+        serverLogger.error("Error sending push notification:", pushError);
       }
 
       res.json({ success: true, message: "ההודעה נשלחה" });
     } catch (error) {
-      console.error("Error sending push for inquiry:", error);
+      serverLogger.error("Error sending push for inquiry:", error);
       res.status(500).json({ success: false, message: "שגיאה בשליחת ההודעה" });
     }
   });
@@ -18329,7 +18997,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         message: "שליחת מייל תתמוך בקרוב",
       });
     } catch (error) {
-      console.error("Error sending email for inquiry:", error);
+      serverLogger.error("Error sending email for inquiry:", error);
       res.status(500).json({ success: false, message: "שגיאה בשליחת המייל" });
     }
   });
@@ -18352,7 +19020,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
 
       res.json({ success: true, message: "הסטטוס עודכן" });
     } catch (error) {
-      console.error("Error updating inquiry status:", error);
+      serverLogger.error("Error updating inquiry status:", error);
       res.status(500).json({ success: false, message: "שגיאה בעדכון הסטטוס" });
     }
   });
@@ -18398,7 +19066,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         message: "גישה חינם ניתנה בהצלחה",
       });
     } catch (error) {
-      console.error("Error giving test access:", error);
+      serverLogger.error("Error giving test access:", error);
       res.status(500).json({
         success: false,
         message: "שגיאה במתן גישה חינם",
@@ -18408,8 +19076,23 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
   });
 
   // Start server
+  // In development, listen on all interfaces (0.0.0.0) to allow access via IP
+  const hostname =
+    process.env.NODE_ENV !== "production" ? "0.0.0.0" : undefined;
   httpServer
-    .listen(PORT, () => {})
+    .listen(PORT, hostname, () => {
+      const address = httpServer.address();
+      if (address) {
+        if (hostname === "0.0.0.0") {
+          serverLogger.log(
+            `Server is running on http://0.0.0.0:${PORT} (accessible via localhost and IP)`
+          );
+        } else {
+          serverLogger.log(`Server is running on port ${PORT}`);
+        }
+      }
+    })
+
     .on("error", (err) => {
       if (err.code === "EADDRINUSE") {
         process.exit(1);

@@ -112,6 +112,24 @@
             <button type="submit" class="btn btn--primary">התחבר</button>
           </form>
 
+          <!-- Biometric Authentication - Only on Mobile -->
+          <div
+            v-if="isMobile && hasBiometricCredentials"
+            class="biometric-auth"
+          >
+            <button
+              type="button"
+              class="btn btn--biometric"
+              @click="handleBiometricLogin"
+              :disabled="biometricLoading"
+            >
+              <font-awesome-icon :icon="['fas', 'fingerprint']" />
+              <span>{{
+                biometricLoading ? "מתחבר..." : "התחבר עם טביעת אצבע"
+              }}</span>
+            </button>
+          </div>
+
           <!-- forgot password as <a> -->
           <a href="#" class="forgotLink" @click.prevent="handleForgotPassword">
             שכחתי סיסמה
@@ -153,6 +171,10 @@
 import axios from "axios";
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
+import {
+  startRegistration,
+  startAuthentication,
+} from "@simplewebauthn/browser";
 
 export default {
   name: "logIn",
@@ -167,10 +189,15 @@ export default {
       googleId: null,
       isBlocked: false,
       useVideo: false, // שנה ל-true אם יש לך קובץ וידאו
+      isMobile: false,
+      hasBiometricCredentials: false,
+      biometricLoading: false,
+      currentUserId: null,
     };
   },
-  created() {
+  async created() {
     this.toast = useToast();
+    this.checkIfMobile();
     this.handleGoogleCallback();
     // בדוק אם המשתמש הועבר לכאן כי הוא חסום
     if (this.$route.query.blocked === "true") {
@@ -191,6 +218,109 @@ export default {
     },
   },
   methods: {
+    checkIfMobile() {
+      const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+      this.isMobile =
+        /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+          userAgent
+        );
+    },
+
+    async checkBiometricCredentials() {
+      if (!this.isMobile || !this.currentUserId) {
+        this.hasBiometricCredentials = false;
+        return;
+      }
+
+      try {
+        const { data } = await axios.post(`${URL}/webauthn/check`, {
+          userId: this.currentUserId,
+        });
+        this.hasBiometricCredentials = data.success && data.hasCredentials;
+      } catch (error) {
+        this.hasBiometricCredentials = false;
+      }
+    },
+
+    async handleBiometricLogin() {
+      if (!this.currentUserId) {
+        // First, try to find user by username/email
+        try {
+          const { data } = await axios.post(`${URL}/login-user`, {
+            username: this.username,
+            password: this.password,
+          });
+
+          if (data.message === "Success" && data.user && data.user._id) {
+            this.currentUserId = data.user._id;
+          } else {
+            this.toast?.showError("אנא הזן שם משתמש וסיסמה תחילה");
+            return;
+          }
+        } catch (error) {
+          this.toast?.showError("אנא הזן שם משתמש וסיסמה תחילה");
+          return;
+        }
+      }
+
+      if (!this.currentUserId) {
+        this.toast?.showError("לא ניתן לזהות משתמש");
+        return;
+      }
+
+      this.biometricLoading = true;
+
+      try {
+        // Step 1: Get authentication options
+        const { data: optionsData } = await axios.post(
+          `${URL}/webauthn/authenticate/start`,
+          { userId: this.currentUserId }
+        );
+
+        if (!optionsData.success) {
+          throw new Error(
+            optionsData.message || "Failed to get authentication options"
+          );
+        }
+
+        // Step 2: Start authentication
+        const credential = await startAuthentication(optionsData.options);
+
+        // Step 3: Verify authentication
+        const { data: verifyData } = await axios.post(
+          `${URL}/webauthn/authenticate/finish`,
+          {
+            userId: this.currentUserId,
+            credential,
+          }
+        );
+
+        if (verifyData.success && verifyData.user) {
+          this.toast.showSuccess("התחברות עם טביעת אצבע בוצעה בהצלחה");
+          this.$router.push({
+            name: "Dashboard",
+            params: { id: verifyData.user._id },
+          });
+        } else {
+          throw new Error(verifyData.message || "Authentication failed");
+        }
+      } catch (error) {
+        if (error.name === "NotAllowedError") {
+          this.toast?.showError("האימות בוטל או נכשל");
+        } else if (error.name === "InvalidStateError") {
+          this.toast?.showError("טביעת האצבע לא רשומה במכשיר זה");
+        } else {
+          const errorMessage =
+            error.response?.data?.message ||
+            error.message ||
+            "שגיאה באימות טביעת אצבע";
+          this.toast?.showError(errorMessage);
+        }
+      } finally {
+        this.biometricLoading = false;
+      }
+    },
+
     async handleGoogleCallback() {
       if (!this.toast) this.toast = useToast();
 
@@ -237,6 +367,11 @@ export default {
           }
 
           if (data.user && data.user._id) {
+            this.currentUserId = data.user._id;
+            // Check if user has biometric credentials
+            if (this.isMobile) {
+              await this.checkBiometricCredentials();
+            }
             this.$router.push({
               name: "Dashboard",
               params: { id: data.user._id },
@@ -580,6 +715,49 @@ $orange2: #ff8a2b;
 }
 .btn--primary:active {
   transform: scale(0.99);
+}
+
+.biometric-auth {
+  margin: 16px 0;
+}
+
+.btn--biometric {
+  width: 100%;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 106, 0, 0.15) 0%,
+    rgba(255, 106, 0, 0.25) 100%
+  );
+  color: $orange;
+  border: 2px solid rgba(255, 106, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.3s ease;
+}
+
+.btn--biometric:hover:not(:disabled) {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 106, 0, 0.25) 0%,
+    rgba(255, 106, 0, 0.35) 100%
+  );
+  border-color: rgba(255, 106, 0, 0.7);
+  box-shadow: 0 8px 20px rgba(255, 106, 0, 0.2);
+}
+
+.btn--biometric:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn--biometric:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn--biometric svg {
+  font-size: 20px;
 }
 
 .forgotLink {
