@@ -2,70 +2,107 @@
   <div class="create-call-page" dir="rtl">
     <!-- Loading Screen -->
     <div v-if="isLoading && !foundHandymen.length" class="loading-screen">
-      <div class="loadingspinner">
-        <div id="square1"></div>
-        <div id="square2"></div>
-        <div id="square3"></div>
-        <div id="square4"></div>
-        <div id="square5"></div>
-      </div>
-      <p class="loading-text">מחפש הנדימנים בעזרת AI</p>
-
-      <!-- Patience Message -->
-      <Transition name="patience-message">
-        <div v-if="showPatienceMessage" class="patience-message">
-          <div class="patience-message__content">
-            <span class="patience-message__icon">⏳</span>
-            <span class="patience-message__text">{{
-              patienceMessageText
-            }}</span>
-          </div>
+      <div class="loading-screen__inner">
+        <div class="loadingspinner">
+          <div id="square1"></div>
+          <div id="square2"></div>
+          <div id="square3"></div>
+          <div id="square4"></div>
+          <div id="square5"></div>
         </div>
-      </Transition>
+
+        <div class="loading-screen__copy">
+          <p class="loading-text">מחפש הנדימנים בעזרת AI</p>
+          <p class="loading-subtext">ממפה תחומים, מסנן לפי איכות וזמינות…</p>
+        </div>
+
+        <!-- Patience Message -->
+        <Transition name="patience-message">
+          <div v-if="showPatienceMessage" class="patience-message">
+            <div class="patience-message__content">
+              <span class="patience-message__icon">⏳</span>
+              <span class="patience-message__text">{{
+                patienceMessageText
+              }}</span>
+            </div>
+          </div>
+        </Transition>
+
+        <div class="loading-screen__hint">
+          <span class="hint-pill">טיפ: תמונות חדות = התאמה טובה יותר</span>
+        </div>
+      </div>
     </div>
 
     <!-- Handymen Results Screen -->
     <div v-if="foundHandymen.length > 0" class="handymen-results-screen">
-      <div class="handymen-results-header">
-        <button
-          class="handymen-results-back"
-          type="button"
-          @click="goBackToDashboard"
-        >
-          ← חזור לדשבורד
-        </button>
-        <h2>נמצאו {{ foundHandymen.length }} הנדימנים שמתאימים לכל התחומים</h2>
-        <p class="handymen-results-subtitle">
-          הקריאה נוצרה ומחכה לאישור של הנדימן
-        </p>
-      </div>
-      <div class="handymen-list">
-        <div
-          v-for="(handyman, index) in foundHandymen"
-          :key="handyman._id"
-          class="handyman-card"
-          :style="{ animationDelay: `${index * 0.15}s` }"
-        >
-          <div class="handyman-card__image">
-            <img
-              :src="handyman.imageUrl || 'https://via.placeholder.com/80'"
-              :alt="handyman.username"
-            />
+      <div class="handymen-results-shell">
+        <div class="handymen-results-header">
+          <button
+            class="handymen-results-back"
+            type="button"
+            @click="goBackToDashboard"
+          >
+            <span class="handymen-results-back__icon">←</span>
+            <span>חזור לדשבורד</span>
+          </button>
+
+          <div class="handymen-results-hero">
+            <div class="hero-badge">הצלחה</div>
+            <h2 class="hero-title">
+              נמצאו {{ foundHandymen.length }} הנדימנים שמתאימים לכל התחומים
+            </h2>
+            <p class="hero-subtitle">הקריאה נוצרה ומחכה לאישור של הנדימן</p>
           </div>
-          <div class="handyman-card__content">
-            <h3 class="handyman-card__name">{{ handyman.username }}</h3>
-            <div class="handyman-card__info">
-              <span v-if="handyman.city" class="handyman-card__city">
-                📍 {{ handyman.city }}
-              </span>
-              <div class="handyman-card__rating" v-if="handyman.rating">
-                <span>⭐</span>
-                <span>{{ handyman.rating.toFixed(1) }}</span>
-                <span v-if="handyman.jobDone"
-                  >({{ handyman.jobDone }} עבודות)</span
-                >
+        </div>
+
+        <div class="handymen-list">
+          <div
+            v-for="(handyman, index) in foundHandymen"
+            :key="handyman._id"
+            class="handyman-card"
+            :style="{ animationDelay: `${index * 0.12}s` }"
+          >
+            <div class="handyman-card__image">
+              <img
+                :src="handyman.imageUrl || 'https://via.placeholder.com/80'"
+                :alt="handyman.username"
+              />
+              <div class="handyman-card__ring"></div>
+            </div>
+
+            <div class="handyman-card__content">
+              <div class="handyman-card__top">
+                <h3 class="handyman-card__name">{{ handyman.username }}</h3>
+                <span class="handyman-card__chip" v-if="handyman.city">
+                  📍 {{ handyman.city }}
+                </span>
+              </div>
+
+              <div class="handyman-card__meta">
+                <div class="handyman-card__rating" v-if="handyman.rating">
+                  <span class="star">⭐</span>
+                  <span class="val">{{ handyman.rating.toFixed(1) }}</span>
+                  <span v-if="handyman.jobDone" class="count">
+                    ({{ handyman.jobDone }} עבודות)
+                  </span>
+                </div>
+
+                <div class="handyman-card__cta">
+                  <span class="cta-dot"></span>
+                  <span>מוכן להצטרף לקריאה</span>
+                </div>
               </div>
             </div>
+
+            <div class="handyman-card__chev">›</div>
+          </div>
+        </div>
+
+        <div class="handymen-results-footer">
+          <div class="footer-note">
+            <span class="footer-note__icon">🔒</span>
+            <span>התשלום נשמר בטוח עד לסיום העבודה</span>
           </div>
         </div>
       </div>
@@ -75,10 +112,21 @@
     <div v-else class="shell">
       <!-- Top bar -->
       <header class="topbar">
-        <button class="topbar__back" type="button" @click="goBack">←</button>
+        <button
+          class="topbar__back"
+          type="button"
+          @click="goBack"
+          aria-label="חזור"
+        >
+          ←
+        </button>
+
         <div class="topbar__center">
           <div class="topbar__title">צור קריאה</div>
+          <div class="topbar__subtitle">תהליך קצר • 4 שלבים • אישור מהיר</div>
         </div>
+
+        <div class="topbar__glow"></div>
       </header>
 
       <!-- Step Indicator -->
@@ -91,6 +139,7 @@
           <div class="step-label">תיאור</div>
         </div>
         <div class="step-line" :class="{ active: currentStep > 1 }"></div>
+
         <div
           class="step-item"
           :class="{ active: currentStep >= 2, completed: currentStep > 2 }"
@@ -99,6 +148,7 @@
           <div class="step-label">פרטים</div>
         </div>
         <div class="step-line" :class="{ active: currentStep > 2 }"></div>
+
         <div
           class="step-item"
           :class="{ active: currentStep >= 3, completed: currentStep > 3 }"
@@ -107,6 +157,7 @@
           <div class="step-label">תמונות</div>
         </div>
         <div class="step-line" :class="{ active: currentStep > 3 }"></div>
+
         <div
           class="step-item"
           :class="{ active: currentStep >= 4, completed: currentStep > 4 }"
@@ -118,7 +169,7 @@
 
       <!-- Content -->
       <main class="content">
-        <!-- STEP 1: Describe what needs to be done -->
+        <!-- STEP 1 -->
         <div
           v-if="currentStep === 1"
           class="step-content step-content--animated"
@@ -127,6 +178,7 @@
             <section class="block block--requests">
               <div class="block__head">
                 <div class="block__label">תאר בקצרה מה צריך שנעשה?</div>
+
                 <button
                   type="button"
                   class="manual-select-btn"
@@ -136,77 +188,89 @@
                 </button>
               </div>
 
-              <input
-                class="input-small"
-                type="text"
-                v-model="call.requests[0]"
-                @input="clearError('requests')"
-                placeholder="למשל: תליית מדף"
-              />
+              <div class="field-stack">
+                <div class="field-stack__input">
+                  <input
+                    class="input-small"
+                    type="text"
+                    v-model="call.requests[0]"
+                    @input="clearError('requests')"
+                    placeholder="למשל: תליית מדף"
+                  />
+                </div>
 
-              <div v-if="errors.requests" class="msg msg--err">
-                {{ errors.requests }}
-              </div>
+                <div v-if="errors.requests" class="msg msg--err">
+                  {{ errors.requests }}
+                </div>
 
-              <!-- Additional Requests -->
-              <div
-                v-for="(request, index) in call.requests.slice(1)"
-                :key="index"
-                class="additional-request"
-              >
-                <input
-                  class="input-small"
-                  type="text"
-                  v-model="call.requests[index + 1]"
-                  :placeholder="`בקשה ${index + 2}`"
-                />
+                <div class="lux-divider">
+                  <span class="lux-divider__line"></span>
+                  <span class="lux-divider__txt">אפשר להוסיף עוד</span>
+                  <span class="lux-divider__line"></span>
+                </div>
+
+                <!-- Additional Requests -->
+                <div
+                  v-for="(request, index) in call.requests.slice(1)"
+                  :key="index"
+                  class="additional-request"
+                >
+                  <input
+                    class="input-small"
+                    type="text"
+                    v-model="call.requests[index + 1]"
+                    :placeholder="`בקשה ${index + 2}`"
+                  />
+                  <button
+                    type="button"
+                    class="remove-request-btn"
+                    @click="removeRequest(index + 1)"
+                    aria-label="הסר בקשה"
+                  >
+                    ✕
+                  </button>
+                </div>
+
                 <button
                   type="button"
-                  class="remove-request-btn"
-                  @click="removeRequest(index + 1)"
+                  class="add-request-btn"
+                  @click="addRequest"
                 >
-                  ✕
+                  <span class="add-request-btn__icon">➕</span>
+                  <span>הוסף בקשה נוספת</span>
                 </button>
-              </div>
 
-              <button type="button" class="add-request-btn" @click="addRequest">
-                ➕ הוסף בקשה נוספת
-              </button>
+                <div class="mini-trust">
+                  <span class="mini-trust__dot"></span>
+                  <span>נשמור את זה ברור כדי שה־AI יתאים לך הנדימן מדויק</span>
+                </div>
+              </div>
             </section>
           </div>
 
           <button
             v-if="!isLoadingLocation"
-            class="next-btn-animated"
+            class="next-step-btn"
             type="button"
             @click="nextStep"
           >
-            <svg
-              viewBox="0 0 320 512"
-              height="1em"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M310.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-192 192c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L242.7 256 73.4 86.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l192 192z"
-              ></path>
-            </svg>
             <span>שלב הבא</span>
           </button>
         </div>
 
-        <!-- STEP 2: Expand details + Location -->
+        <!-- STEP 2 -->
         <div
           v-if="currentStep === 2"
           class="step-content step-content--animated"
         >
           <div class="step-container">
-            <!-- Loading Categories Card -->
+            <!-- Loading Categories -->
             <section
               v-if="isLoadingCategories"
               class="block block--loading-categories"
             >
               <div class="loading-categories">
-                <div class="loading-categories__spinner">
+                <div class="loading-categories__spinner" aria-hidden="true">
                   <div class="spinner-dot"></div>
                   <div class="spinner-dot"></div>
                   <div class="spinner-dot"></div>
@@ -214,12 +278,15 @@
                 <p class="loading-categories__text">
                   מחפש את התחומים הדרושים לך באמצעות AI
                 </p>
+                <p class="loading-categories__subtext">
+                  תוך רגע זה ננעל כמו כפפה
+                </p>
               </div>
             </section>
 
-            <!-- Found Categories Card -->
+            <!-- Found Categories - Always show if there are categories -->
             <section
-              v-else-if="foundCategories.length > 0"
+              v-if="foundCategories.length > 0"
               class="block block--found-categories"
             >
               <div class="block__head">
@@ -232,24 +299,40 @@
                   זה לא נכון? נסה לדייק יותר
                 </button>
               </div>
+
               <div class="categories-list">
                 <div
                   v-for="(category, index) in foundCategories"
                   :key="index"
                   class="category-card"
+                  :class="{
+                    'category-card--quoted': category.price === 'bid',
+                  }"
                 >
                   <div class="category-card__header">
                     <span class="category-card__name">
                       {{
+                        category.originalText ||
                         category.subcategory ||
                         category.category ||
                         `תחום ${index + 1}`
                       }}
                     </span>
-                    <span v-if="category.price" class="category-card__price">
+
+                    <span
+                      v-if="category.price && category.price !== 'bid'"
+                      class="category-card__price"
+                    >
                       {{ category.price }} ₪
                     </span>
+                    <span
+                      v-else-if="category.price === 'bid'"
+                      class="category-card__price category-card__price--bid"
+                    >
+                      הצעת מחיר
+                    </span>
                   </div>
+
                   <div class="category-card__details">
                     <span
                       v-if="category.category"
@@ -264,6 +347,58 @@
                       סוג: {{ category.workType }}
                     </span>
                   </div>
+
+                  <!-- Button to open for quotation on each work card -->
+                  <div class="category-card__actions">
+                    <button
+                      type="button"
+                      class="category-card__quote-btn"
+                      @click="openWorkForQuotation(index)"
+                      v-if="category.price !== 'bid'"
+                    >
+                      פתח להצעת מחיר
+                    </button>
+                  </div>
+
+                  <!-- Recommendation message for low confidence (0.6-0.7) -->
+                  <div
+                    v-if="category.needsRecommendation"
+                    class="category-card__recommendation"
+                  >
+                    <div class="category-card__recommendation-content">
+                      <p class="category-card__recommendation-text">
+                        לגבי העבודה
+                        <strong>"{{ category.originalText }}"</strong>, ייתכן
+                        שהיא לא מתאימה בדיוק למה שמצאנו במערכת. כדי לוודא
+                        שהעבודה תטופל נכון – אפשר לפתוח את הקריאה להצעת מחיר.
+                      </p>
+                      <div class="category-card__recommendation-actions">
+                        <button
+                          type="button"
+                          class="category-card__recommendation-btn category-card__recommendation-btn--primary"
+                          @click="openWorkForQuotation(index)"
+                        >
+                          פתח להצעת מחיר
+                        </button>
+                        <button
+                          type="button"
+                          class="category-card__recommendation-btn category-card__recommendation-btn--secondary"
+                          @click="dismissRecommendation(index)"
+                        >
+                          המשך עם העבודה שמצאנו
+                        </button>
+                        <button
+                          type="button"
+                          class="category-card__recommendation-btn category-card__recommendation-btn--remove"
+                          @click="removeWorkByIndex(index)"
+                        >
+                          הסר עבודה זו
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="category-card__shine" aria-hidden="true"></div>
                 </div>
               </div>
             </section>
@@ -271,6 +406,7 @@
             <section class="block">
               <div class="block__head">
                 <div class="block__label">הרחב להנדימן על התקלות</div>
+                <div class="block__req">מומלץ</div>
               </div>
 
               <textarea
@@ -280,6 +416,11 @@
                 rows="6"
                 placeholder="תאר בפירוט את הבעיה, מה צריך לתקן, וכל מידע רלוונטי..."
               ></textarea>
+
+              <div class="textarea-hint">
+                <span class="textarea-hint__dot"></span>
+                <span>מפרט טוב = הצעת מחיר מדויקת יותר</span>
+              </div>
 
               <div v-if="errors.desc" class="msg msg--err">
                 {{ errors.desc }}
@@ -293,7 +434,7 @@
               </div>
 
               <div class="location-content">
-                <!-- Loading indicator when searching for location -->
+                <!-- Loading indicator -->
                 <div v-if="isLoadingLocation" class="location-loading">
                   <div class="location-loading__spinner">
                     <div class="spinner"></div>
@@ -304,7 +445,7 @@
                   </p>
                 </div>
 
-                <!-- AddressAutocomplete - hidden when loading or when location is detected -->
+                <!-- Autocomplete -->
                 <div
                   v-if="
                     !selectedMapLocation &&
@@ -313,6 +454,13 @@
                   "
                   class="location-input-wrapper"
                 >
+                  <div class="location-headline">
+                    <span class="location-headline__icon">📌</span>
+                    <span class="location-headline__txt"
+                      >בחר ישוב או השתמש במיקום</span
+                    >
+                  </div>
+
                   <AddressAutocomplete
                     v-model="call.location"
                     input-id="call-location"
@@ -326,7 +474,7 @@
                   />
                 </div>
 
-                <!-- House number input - hidden when loading or when location is detected -->
+                <!-- House number -->
                 <div
                   v-if="
                     call.location &&
@@ -340,7 +488,7 @@
                   <input
                     type="text"
                     v-model="call.houseNumber"
-                    placeholder="מספר בית\בלוק"
+                    placeholder="מספר בית\\בלוק"
                     class="input-small"
                     :class="{ 'input-small--error': errors.houseNumber }"
                   />
@@ -349,8 +497,13 @@
                   </div>
                 </div>
 
+                <!-- Selected from map -->
                 <div v-if="selectedMapLocation" class="selected-location">
-                  <span class="selected-location__text"> מיקום נבחר במפה </span>
+                  <div class="selected-location__content">
+                    <span class="selected-location__text">מיקום נבחר במפה</span>
+                    <span class="selected-location__badge">MAP</span>
+                  </div>
+
                   <button
                     type="button"
                     class="selected-location__change"
@@ -363,6 +516,7 @@
                   </button>
                 </div>
 
+                <!-- Detected location -->
                 <div
                   v-if="detectedLocation && usingMyLocation"
                   class="selected-location"
@@ -371,20 +525,23 @@
                     <span class="selected-location__text">{{
                       detectedLocation
                     }}</span>
-                    <button
-                      type="button"
-                      class="selected-location__change"
-                      @click="
-                        detectedLocation = null;
-                        usingMyLocation = false;
-                        call.location = 'המיקום שלי';
-                        call.coordinates = {};
-                        geoCoordinates = null;
-                      "
-                    >
-                      שנה
-                    </button>
+                    <span class="selected-location__badge">GPS</span>
                   </div>
+
+                  <button
+                    type="button"
+                    class="selected-location__change"
+                    @click="
+                      detectedLocation = null;
+                      usingMyLocation = false;
+                      call.location = 'המיקום שלי';
+                      call.coordinates = {};
+                      geoCoordinates = null;
+                    "
+                  >
+                    שנה
+                  </button>
+
                   <button
                     v-if="!isImprovingLocation"
                     type="button"
@@ -392,10 +549,11 @@
                     @click="improveLocation"
                   >
                     <span class="improve-location-btn__icon">🎯</span>
-                    <span class="improve-location-btn__text"
-                      >מיקום לא נכון? תן לנו למצוא את המיקום המדוייק</span
-                    >
+                    <span class="improve-location-btn__text">
+                      מיקום לא נכון? תן לנו למצוא את המיקום המדוייק
+                    </span>
                   </button>
+
                   <div v-if="isImprovingLocation" class="location-loading">
                     <div class="location-loading__spinner">
                       <div class="spinner"></div>
@@ -407,6 +565,7 @@
                   </div>
                 </div>
 
+                <!-- Actions -->
                 <div
                   v-if="
                     !selectedMapLocation &&
@@ -423,6 +582,7 @@
                     <span class="location-btn__icon">🗺️</span>
                     <span class="location-btn__text">דקור במפה</span>
                   </button>
+
                   <button
                     class="location-btn location-btn--gps"
                     type="button"
@@ -452,22 +612,14 @@
             <button class="back-btn" type="button" @click="prevStep">
               חזרה
             </button>
-            <button class="next-btn-animated" type="button" @click="nextStep">
-              <svg
-                viewBox="0 0 320 512"
-                height="1em"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M310.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-192 192c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L242.7 256 73.4 86.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l192 192z"
-                ></path>
-              </svg>
+
+            <button class="next-step-btn" type="button" @click="nextStep">
               <span>שלב הבא</span>
             </button>
           </div>
         </div>
 
-        <!-- STEP 3: Image + Urgent + Work Type + When + Cancel Note + Submit -->
+        <!-- STEP 3 -->
         <div
           v-if="currentStep === 3"
           class="step-content step-content--animated"
@@ -505,6 +657,7 @@
                     class="uploadBtn__spinner"
                   ></span>
                   <span v-else class="uploadBtn__icon">📷</span>
+
                   <span class="uploadBtn__txt">
                     {{
                       isUploadingImage
@@ -521,7 +674,6 @@
 
               <div class="upload-hint">אפשר להעלות עד 4 תמונות</div>
 
-              <!-- Images Grid -->
               <div
                 v-if="
                   call.imageUrls.length > 0 || call.imagePreviews.length > 0
@@ -547,6 +699,7 @@
                   >
                     ✕
                   </button>
+                  <div class="image-item__shade" aria-hidden="true"></div>
                 </div>
               </div>
 
@@ -570,8 +723,14 @@
                   +10 ₪ <span class="chev">›</span>
                 </span>
               </button>
+
               <div v-if="call.urgent" class="urgent-note">
                 הקריאות שלך יהיו מוצגות מעל קריאות אחרות
+              </div>
+
+              <div class="urgent-trust" v-if="call.urgent">
+                <span class="urgent-trust__dot"></span>
+                <span>נותן עדיפות אצל הנדימנים הזמינים כרגע</span>
               </div>
             </section>
 
@@ -583,16 +742,21 @@
                   <option value="מורכבת">מורכבת</option>
                   <option value="קשה">קשה</option>
                 </select>
+
+                <div class="field-hint">
+                  <span class="field-hint__dot"></span>
+                  <span>זה עוזר לנו לתמחר נכון ולהתאים איש מקצוע מתאים</span>
+                </div>
               </div>
             </section>
 
             <section class="block block--last">
               <div class="note note--warn">
                 <span class="note__icon">⚠️</span>
-                <span
-                  >קנס על ביטול אחרי שקבלו את העבודה יכול להגיע עד:
-                  <b>200</b> שקלות</span
-                >
+                <span>
+                  קנס על ביטול אחרי שקבלו את העבודה יכול להגיע עד:
+                  <b>200</b> שקלות
+                </span>
               </div>
             </section>
           </div>
@@ -601,28 +765,20 @@
             <button class="back-btn" type="button" @click="prevStep">
               חזרה
             </button>
-            <button class="next-btn-animated" type="button" @click="nextStep">
-              <svg
-                viewBox="0 0 320 512"
-                height="1em"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M310.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-192 192c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L242.7 256 73.4 86.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l192 192z"
-                ></path>
-              </svg>
+
+            <button class="next-step-btn" type="button" @click="nextStep">
               <span>שלב הבא</span>
             </button>
           </div>
         </div>
 
-        <!-- STEP 4: Credit Card Details -->
+        <!-- STEP 4 -->
         <div
           v-if="currentStep === 4"
           class="step-content step-content--animated"
         >
           <div class="step-container">
-            <!-- Show loading state when fetching payment method details -->
+            <!-- Loading payment method -->
             <div
               v-if="isLoadingPaymentMethod && paymentMethodId"
               class="saved-payment-method-wrapper"
@@ -633,17 +789,26 @@
               </div>
             </div>
 
-            <!-- Show saved payment method option if exists -->
+            <!-- Saved payment method -->
             <div
               v-else-if="savedPaymentMethod && !showChangePaymentMethod"
               class="saved-payment-method-wrapper"
             >
+              <div class="pay-hero">
+                <div class="pay-hero__badge">תשלום מאובטח</div>
+                <div class="pay-hero__title">כמעט סיימנו</div>
+                <div class="pay-hero__sub">
+                  הכרטיס השמור מוכן — תשלום יתבצע רק אחרי שליחת הקריאה
+                </div>
+              </div>
+
               <div class="flip-card">
                 <div class="flip-card-inner">
                   <div class="flip-card-front">
                     <p class="heading_8264">
                       {{ getCardBrandName(savedPaymentMethod.card?.brand) }}
                     </p>
+
                     <svg
                       class="logo"
                       xmlns="http://www.w3.org/2000/svg"
@@ -666,6 +831,7 @@
                         d="M18,24c0,4.755,2.376,8.95,6,11.48c3.624-2.53,6-6.725,6-11.48s-2.376-8.95-6-11.48 C20.376,15.05,18,19.245,18,24z"
                       ></path>
                     </svg>
+
                     <svg
                       version="1.1"
                       class="chip"
@@ -688,6 +854,7 @@
                         href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAMAAAAp4XiDAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAB6VBMVEUAAACNcTiVeUKVeUOYfEaafEeUeUSYfEWZfEaykleyklaXe0SWekSZZjOYfEWYe0WXfUWXe0WcgEicfkiXe0SVekSXekSWekKYe0a9nF67m12ZfUWUeEaXfESVekOdgEmVeUWWekSniU+VeUKVeUOrjFKYfEWliE6WeESZe0GSe0WYfES7ml2Xe0WXeESUeEOWfEWcf0eWfESXe0SXfEWYekSVeUKXfEWxklawkVaZfEWWekOUekOWekSYfESZe0eXekWYfEWZe0WZe0eVeUSWeETAnmDCoWLJpmbxy4P1zoXwyoLIpWbjvXjivnjgu3bfu3beunWvkFWxkle/nmDivXiWekTnwXvkwHrCoWOuj1SXe0TEo2TDo2PlwHratnKZfEbQrWvPrWuafUfbt3PJp2agg0v0zYX0zYSfgkvKp2frxX7mwHrlv3rsxn/yzIPgvHfduXWXe0XuyIDzzISsjVO1lVm0lFitjVPzzIPqxX7duna0lVncuHTLqGjvyIHeuXXxyYGZfUayk1iyk1e2lln1zYTEomO2llrbtnOafkjFpGSbfkfZtXLhvHfkv3nqxH3mwXujhU3KqWizlFilh06khk2fgkqsjlPHpWXJp2erjVOhg0yWe0SliE+XekShhEvAn2D///+gx8TWAAAARnRSTlMACVCTtsRl7Pv7+vxkBab7pZv5+ZlL/UnU/f3SJCVe+Fx39naA9/75XSMh0/3SSkia+pil/KRj7Pr662JPkrbP7OLQ0JFOijI1MwAAAAFiS0dEorDd34wAAAAJcEhZcwAACxMAAAsTAQCanBgAAAAHdElNRQfnAg0IDx2lsiuJAAACLElEQVRIx2NkGAXkAUYmZhZWPICFmYkRVQcbOwenmzse4MbFzc6DpIGXj8PD04sA8PbhF+CFaxEU8iWkAQT8hEVgOkTF/InR4eUVICYO1SIhCRMLDAoKDvFDVhUaEhwUFAjjSUlDdMiEhcOEItzdI6OiYxA6YqODIt3dI2DcuDBZsBY5eVTr4xMSYcyk5BRUOXkFsBZFJTQnp6alQxgZmVloUkrKYC0qqmji2WE5EEZuWB6alKoKdi35YQUQRkFYPpFaCouKIYzi6EDitJSUlsGY5RWVRGjJLyxNy4ZxqtIqqvOxaVELQwZFZdkIJVU1RSiSalAt6rUwUBdWG1CP6pT6gNqwOrgCdQyHNYR5YQFhDXj8MiK1IAeyN6aORiyBjByVTc0FqBoKWpqwRCVSgilOaY2OaUPw29qjOzqLvTAchpos47u6EZyYnngUSRwpuTe6D+6qaFQdOPNLRzOM1dzhRZyW+CZouHk3dWLXglFcFIflQhj9YWjJGlZcaKAVSvjyPrRQ0oQVKDAQHlYFYUwIm4gqExGmBSkutaVQJeomwViTJqPK6OhCy2Q9sQBk8cY0DxjTJw0lAQWK6cOKfgNhpKK7ZMpUeF3jPa28BCETamiEqJKM+X1gxvWXpoUjVIVPnwErw71nmpgiqiQGBjNzbgs3j1nus+fMndc+Cwm0T52/oNR9lsdCS24ra7Tq1cbWjpXV3sHRCb1idXZ0sGdltXNxRateRwHRAACYHutzk/2I5QAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAyMy0wMi0xM1QwODoxNToyOSswMDowMEUnN7UAAAAldEVYdGRhdGU6bW9kaWZ5ADIwMjMtMDItMTNUMDg6MTU6MjkrMDA6MDA0eo8JAAAAKHRFWHRkYXRlOnRpbWVzdGFtcAAyMDIzLTAyLTEzVDA4OjE1OjI5KzAwOjAwY2+u1gAAAABJRU5ErkJggg=="
                       ></image>
                     </svg>
+
                     <svg
                       version="1.1"
                       class="contactless"
@@ -710,10 +877,12 @@
                         href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAQAAAC0NkA6AAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAAmJLR0QA/4ePzL8AAAAJcEhZcwAACxMAAAsTAQCanBgAAAAHdElNRQfnAg0IEzgIwaKTAAADDklEQVRYw+1XS0iUURQ+f5qPyjQflGRFEEFK76koKGxRbWyVVLSOgsCgwjZBJJYuKogSIoOonUK4q3U0WVBWFPZYiIE6kuArG3VGzK/FfPeMM/MLt99/NuHdfPd888/57jn3nvsQWWj/VcMlvMMd5KRTogqx9iCdIjUUmcGR9ImUYowyP3xNGQJoRLVaZ2DaZf8kyjEJALhI28ELioyiwC+Rc3QZwRYyO/DH51hQgWm6DMIh10KmD4u9O16K49itVoPOAmcGAWWOepXIRScAoJZ2Frro8oN+EyTT6lWkkg6msZfMSR35QTJmjU0g15tIGSJ08ZZMJkJkHpNZgSkyXosS13TkJpZ62mPIJvOSzC1bp8vRhhCakEk7G9/o4gmZdbpsTcKu0m63FbnBP9Qrc15zbkbemfgNDtEOI8NO5L5O9VYyRYgmJayZ9nPaxZrSjW4+F6Uw9yQqIiIZwhp2huQTf6OIvCZyGM6gDJBZbyXifJXr7FZjGXsdxADxI7HUJFB6iWvsIhFpkoiIiGTJfjJfiCuJg2ZEspq9EHGVpYgzKqwJqSAOEwuJQ/pxPvE3cYltJCLdxBLiSKKIE5HxJKcTRNeadxfhDiuYw44zVs1dxKwRk/uCxIiQkxKBsSctRVAge9g1E15EHE6yRUaJecRxcWlukdRIbGFOSZCMWQA/iWauIP3slREHXPyliqBcrrD71AmzZ+rD1Mt2Yr8TZc/UR4/YtFnbijnHi3UrN9vKQ9rPaJf867ZiaqDB+czeKYmd3pNa6fuI75MiC0uXXSR5aEMf7s7a6r/PudVXkjFb/SsrCRfROk0Fx6+H1i9kkTGn/E1vEmt1m089fh+RKdQ5O+xNJPUicUIjO0Dm7HwvErEr0YxeibL1StSh37STafE4I7zcBdRq1DiOkdmlTJVnkQTBTS7X1FYyvfO4piaInKbDCDaT2anLudYXCRFsQBgAcIF2/Okwgvz5+Z4tsw118dzruvIvjhTB+HOuWy8UvovEH6beitBKxDyxm9MmISKCWrzB7bSlaqGlsf0FC0gMjzTg6GgAAAAldEVYdGRhdGU6Y3JlYXRlADIwMjMtMDItMTNUMDg6MTk6NTYrMDA6MDCjlq7LAAAAJXRFWHRkYXRlOm1vZGlmeQAyMDIzLTAyLTEzVDA4OjE5OjU2KzAwOjAw0ssWdwAAACh0RVh0ZGF0ZTp0aW1lc3RhbXAAMjAyMy0wMi0xM1QwODoxOTo1NiswMDowMIXeN6gAAAAASUVORK5CYII="
                       ></image>
                     </svg>
+
                     <p class="number">
-                      {{ savedPaymentMethod.card?.last4 || "****" }}
-                      **** **** ****
+                      {{ savedPaymentMethod.card?.last4 || "****" }} **** ****
+                      ****
                     </p>
+
                     <p class="valid_thru">VALID THRU</p>
                     <p class="date_8264">
                       {{
@@ -723,10 +892,14 @@
                         )
                       }}
                     </p>
+
                     <p class="name">
                       {{ store?.user?.username?.toUpperCase() || "CARDHOLDER" }}
                     </p>
+
+                    <div class="card-shine" aria-hidden="true"></div>
                   </div>
+
                   <div class="flip-card-back">
                     <div class="strip"></div>
                     <div class="mstrip"></div>
@@ -736,6 +909,7 @@
                   </div>
                 </div>
               </div>
+
               <div class="payment-method-actions">
                 <button
                   class="btn btn--secondary"
@@ -747,7 +921,7 @@
               </div>
             </div>
 
-            <!-- Show credit card form if no saved payment method or user wants to change -->
+            <!-- Credit Card Form -->
             <CreditCardForm
               v-if="!savedPaymentMethod || showChangePaymentMethod"
               ref="creditCardForm"
@@ -765,6 +939,7 @@
             <button class="back-btn" type="button" @click="prevStep">
               חזרה
             </button>
+
             <button
               class="submit-btn"
               type="button"
@@ -786,9 +961,17 @@
       <div class="map-modal__content">
         <div class="map-modal__header">
           <h3>בחר מיקום במפה</h3>
-          <button class="map-modal__close" @click="closeMapPicker">×</button>
+          <button
+            class="map-modal__close"
+            @click="closeMapPicker"
+            aria-label="סגור"
+          >
+            ×
+          </button>
         </div>
+
         <div class="map-modal__map" id="mapPicker"></div>
+
         <div class="map-modal__footer">
           <button
             class="map-modal__btn map-modal__btn--cancel"
@@ -815,14 +998,20 @@
       <div class="modal-content">
         <div class="modal-header">
           <h3>אין הנדימן אחד שמתמחה במה שאמרת</h3>
-          <button class="modal-close" @click="showSplitCallModal = false">
+          <button
+            class="modal-close"
+            @click="showSplitCallModal = false"
+            aria-label="סגור"
+          >
             ×
           </button>
         </div>
+
         <div class="modal-body">
           <p>אין הנדימן אחד שמתמחה במה שאמרת.</p>
           <p>תרצה לפצל את העבודה?</p>
         </div>
+
         <div class="modal-footer">
           <button class="btn btn--secondary" @click="handleCancelSplit">
             אני אוותר
@@ -846,10 +1035,12 @@
           <button
             class="modal-close"
             @click="showManualCategorySelector = false"
+            aria-label="סגור"
           >
             ×
           </button>
         </div>
+
         <div class="modal-body modal-body--scrollable">
           <div
             v-for="category in allCategories"
@@ -857,6 +1048,7 @@
             class="category-section"
           >
             <h4 class="category-section__title">{{ category.name }}</h4>
+
             <div class="subcategories-grid">
               <label
                 v-for="subcategory in category.subcategories || []"
@@ -871,16 +1063,22 @@
                   "
                   @change="toggleSubcategory(category.name, subcategory)"
                 />
+
                 <div class="subcategory-info">
                   <span class="subcategory-name">{{ subcategory.name }}</span>
                   <span v-if="subcategory.price" class="subcategory-price">
                     {{ subcategory.price }} ₪
                   </span>
                 </div>
+
+                <span class="subcat-pill" v-if="subcategory.workType">
+                  {{ subcategory.workType }}
+                </span>
               </label>
             </div>
           </div>
         </div>
+
         <div class="modal-footer">
           <button
             class="btn btn--secondary"
@@ -904,12 +1102,18 @@
       <div class="modal-content">
         <div class="modal-header">
           <h3>לא מצאנו בשבילך הנדימן אחד לתחומים שרצית נסה שוב מאוחר יותר</h3>
-          <button class="modal-close" @click="showPartialMatchModal = false">
+          <button
+            class="modal-close"
+            @click="showPartialMatchModal = false"
+            aria-label="סגור"
+          >
             ×
           </button>
         </div>
+
         <div class="modal-body">
           <p style="margin-bottom: 16px">יש הנדימנים אך לא לתחומים שביקשת</p>
+
           <div class="matched-subcategories-list">
             <p
               v-for="(subcat, index) in partialMatchData.matchedSubcategories"
@@ -918,15 +1122,18 @@
             >
               <span v-if="index === 0">מצאנו הנדימן לתחום: </span>
               <span v-else>והנדימן לתחום: </span>
-              <strong class="subcategory-name-badge">{{
-                getSubcategoryName(subcat)
-              }}</strong>
+
+              <strong class="subcategory-name-badge">
+                {{ getSubcategoryName(subcat) }}
+              </strong>
             </p>
           </div>
+
           <p style="margin-top: 20px; font-weight: 600">
             האם תרצה לפצל את הקריאה?
           </p>
         </div>
+
         <div class="modal-footer">
           <button
             class="btn btn--secondary"
@@ -953,6 +1160,7 @@ import { useMainStore } from "@/store/index";
 import { getCurrentLocation } from "@/utils/geolocation";
 import citiesData from "@/APIS/AdressFromIsrael.json";
 import { loadCategories } from "@/utils/categoriesLoader";
+import logger from "@/utils/logger";
 import { loadStripe as loadStripeElements } from "@stripe/stripe-js";
 import { io } from "socket.io-client";
 
@@ -1018,6 +1226,8 @@ export default {
       showManualCategorySelector: false,
       allCategories: [],
       manuallySelectedSubcategories: [],
+      aiMatchResult: null, // Store AI matching result with confidence
+      showQuotationChoiceModal: false, // Modal for choosing between fixed price and quotation
       creditCard: {
         cardNumber: "",
         cardName: "",
@@ -1038,11 +1248,20 @@ export default {
   computed: {
     totalPrice() {
       // Calculate total price from all subcategories
+      // If any subcategory has price="bid", return 0 (no payment needed for quoted jobs)
       let total = 0;
       if (
         this.subcategoryInfoArray &&
         Array.isArray(this.subcategoryInfoArray)
       ) {
+        // Check if any subcategory is quoted
+        const hasQuotedSubcategory = this.subcategoryInfoArray.some(
+          (subcat) => subcat.price === "bid" || subcat.price === "quoted"
+        );
+        if (hasQuotedSubcategory) {
+          return 0; // No payment for quoted jobs
+        }
+
         total = this.subcategoryInfoArray.reduce((sum, subcat) => {
           const price = subcat?.price || 0;
           return (
@@ -1694,13 +1913,13 @@ export default {
             this.clearError("location"); // Clear any validation errors
           }
         } catch (geocodeError) {
-          console.error("Error in reverse geocoding:", geocodeError);
+          logger.error("Error in reverse geocoding:", geocodeError);
           this.detectedLocation = "מיקום שנמצא";
           this.call.location = "מיקום שנמצא";
           this.clearError("location"); // Clear any validation errors
         }
       } catch (error) {
-        console.error("Error getting location:", error);
+        logger.error("Error getting location:", error);
         this.toast?.showError(
           "לא הצלחנו לקבל את המיקום המדויק. אנא נסה שוב או בחר מיקום ידנית."
         );
@@ -1782,14 +2001,14 @@ export default {
             this.toast?.showSuccess("מיקום עודכן בהצלחה!");
           }
         } catch (geocodeError) {
-          console.error("Error in reverse geocoding:", geocodeError);
+          logger.error("Error in reverse geocoding:", geocodeError);
           this.detectedLocation = "מיקום שנמצא";
           this.call.location = "מיקום שנמצא";
           this.clearError("location");
           this.toast?.showSuccess("מיקום עודכן בהצלחה!");
         }
       } catch (error) {
-        console.error("Error improving location:", error);
+        logger.error("Error improving location:", error);
         this.toast?.showError("לא הצלחנו לשפר את המיקום. אנא נסה שוב.");
       } finally {
         this.isImprovingLocation = false;
@@ -2250,6 +2469,79 @@ export default {
           delete callData.coordinates;
         }
 
+        // Check if this is a quoted job (any subcategory has price="bid")
+        const hasQuotedSubcategory = this.subcategoryInfoArray.some(
+          (subcat) => subcat.price === "bid" || subcat.price === "quoted"
+        );
+
+        // If quoted job, use create-call-quoted endpoint
+        if (hasQuotedSubcategory) {
+          // Find the quoted subcategory (or first one if multiple)
+          const quotedSub =
+            this.subcategoryInfoArray.find(
+              (sub) => sub.price === "bid" || sub.price === "quoted"
+            ) || this.subcategoryInfoArray[0];
+
+          const quotedCallData = {
+            userId: this.$route.params.id || null,
+            subcategory: quotedSub.subcategory,
+            category: quotedSub.category || "כללי",
+            desc: this.call.desc || "",
+            location: finalLocation,
+            imageUrl: callData.imageUrls,
+            imageUrls: callData.imageUrls,
+            when: this.call.when || "asap",
+            urgent: this.call.urgent || false,
+            coordinates: callData.coordinates,
+            usingMyLocation: this.usingMyLocation,
+            locationEnglishName: this.locationEnglishName || null,
+            selectedCity: this.selectedCity || null,
+          };
+
+          // Start patience message interval
+          this.requestStartTime = Date.now();
+          this.startPatienceMessageInterval();
+
+          try {
+            const response = await axios.post(
+              `${URL}/create-call-quoted`,
+              quotedCallData,
+              {
+                headers: { "Content-Type": "application/json" },
+              }
+            );
+
+            this.stopPatienceMessageInterval();
+
+            if (response.data.success) {
+              this.isLoading = false;
+              this.toast?.showSuccess(
+                "עבודה נוצרה במצב הצעת מחיר! ההנדימנים יוכלו להציע מחירים."
+              );
+              // Redirect to dashboard after short delay
+              setTimeout(() => {
+                this.$router.push(`/Dashboard/${this.$route.params.id}`);
+              }, 2000);
+            } else {
+              this.isLoading = false;
+              this.toast?.showError(
+                response.data.message || "שגיאה ביצירת עבודה"
+              );
+            }
+          } catch (error) {
+            this.stopPatienceMessageInterval();
+            this.isLoading = false;
+            const errorMessage =
+              error.response?.data?.message ||
+              error.message ||
+              "לא הצלחנו ליצור עבודה. נסה שוב מאוחר יותר.";
+            this.toast?.showError(errorMessage);
+          }
+
+          return; // Exit early for quoted jobs
+        }
+
+        // Regular job creation - continue with existing flow
         // Add subcategoryInfo array to callData
         callData.subcategoryInfo = this.subcategoryInfoArray;
 
@@ -2816,29 +3108,157 @@ export default {
       // isLoadingCategories is already set in nextStep()
       this.foundCategories = [];
       this.subcategoryInfoArray = [];
+      this.aiMatchResult = null; // Reset AI match result
 
       try {
+        // Get all valid requests (filter out empty ones)
         const validRequests = this.call.requests.filter(
           (r) => r && r.trim().length > 0
         );
 
-        const response = await axios.post(
-          `${URL}/Get-categor-ofOpenAI`,
-          { requests: validRequests },
-          {
-            headers: { "Content-Type": "application/json" },
-          }
+        console.log(
+          "[CreateCall] fetchCategoriesFromAI - מספר בקשות:",
+          validRequests.length,
+          "בקשות:",
+          validRequests
         );
 
-        if (response.data.success && response.data.subcategories) {
-          this.subcategoryInfoArray = response.data.subcategories;
-          this.foundCategories = response.data.subcategories;
-        } else {
-          this.toast?.showError(
-            response.data.message || "לא מצאנו בשבילך תחומים מתאימים"
-          );
+        if (validRequests.length === 0) {
+          this.toast?.showError("יש למלא לפחות בקשה אחת");
+          this.isLoadingCategories = false;
+          return;
         }
+
+        // Call new AI matching endpoint for EACH request separately
+        const matchPromises = validRequests.map(async (request) => {
+          const trimmedRequest = request.trim();
+          console.log("[CreateCall] שולח בקשה ל-AI matching:", trimmedRequest);
+
+          try {
+            const response = await axios.post(
+              `${URL}/api/ai/match-subcategory`,
+              { shortText: trimmedRequest },
+              {
+                headers: { "Content-Type": "application/json" },
+              }
+            );
+            return {
+              originalRequest: trimmedRequest,
+              success: response.data.success,
+              matchResult: response.data,
+            };
+          } catch (error) {
+            console.error(
+              "[CreateCall] שגיאה בקריאה ל-AI matching עבור:",
+              trimmedRequest,
+              error
+            );
+            return {
+              originalRequest: trimmedRequest,
+              success: false,
+              error: error.message,
+            };
+          }
+        });
+
+        const results = await Promise.all(matchPromises);
+        console.log(
+          "[CreateCall] תוצאות AI matching:",
+          results.map((r) => ({
+            request: r.originalRequest,
+            matched: r.matchResult?.matched,
+            confidence: r.matchResult?.confidence,
+          }))
+        );
+
+        // Process results and build subcategoryInfoArray
+        const processedCategories = [];
+        let firstLowConfidenceMatch = null; // For recommendation (Case B)
+        let lowConfidenceIndex = -1; // Index of the work with low confidence
+
+        results.forEach((result, index) => {
+          if (!result.success || !result.matchResult) {
+            console.warn("[CreateCall] בקשה נכשלה:", result.originalRequest);
+            return;
+          }
+
+          const matchResult = result.matchResult;
+
+          // Case A: High confidence (>= 0.7) - Fixed price
+          if (matchResult.matched && matchResult.confidence >= 0.7) {
+            processedCategories.push({
+              category: matchResult.category,
+              subcategory: matchResult.subcategory,
+              price: matchResult.price, // Keep original price from AI
+              workType: matchResult.workType || "קבלנות",
+              originalText: result.originalRequest, // Keep original text for display
+              confidence: matchResult.confidence, // Store confidence for UI
+              needsRecommendation: false, // No recommendation needed
+            });
+          }
+          // Case B: Medium confidence (0.6-0.69) - Show recommendation on card, but still display with original price
+          else if (
+            matchResult.matched &&
+            matchResult.confidence >= 0.6 &&
+            matchResult.confidence < 0.7
+          ) {
+            // Store first low confidence match for tracking
+            if (!firstLowConfidenceMatch) {
+              firstLowConfidenceMatch = {
+                matched: true,
+                confidence: matchResult.confidence,
+                category: matchResult.category,
+                subcategory: matchResult.subcategory,
+                price: matchResult.price,
+                workType: matchResult.workType || "קבלנות",
+                originalText: result.originalRequest,
+              };
+            }
+            // Add to categories for display with original price (not "bid") but with recommendation flag
+            processedCategories.push({
+              category: matchResult.category,
+              subcategory: matchResult.subcategory,
+              price: matchResult.price, // Keep original price from AI
+              workType: matchResult.workType || "קבלנות",
+              originalText: result.originalRequest, // Keep original text for display
+              confidence: matchResult.confidence, // Store confidence for UI
+              needsRecommendation: true, // Show recommendation message on this card
+            });
+          }
+          // Case C: Low confidence/no match (< 0.6) - Quoted
+          else {
+            processedCategories.push({
+              category: matchResult.category || "כללי",
+              subcategory: matchResult.subcategory, // Original text
+              price: "bid",
+              workType: "קבלנות",
+              originalText: result.originalRequest, // Keep original text for display
+              confidence: matchResult.confidence || 0, // Store confidence for UI
+              needsRecommendation: false, // No recommendation, goes directly to quoted
+            });
+          }
+        });
+
+        // Set the results
+        this.subcategoryInfoArray = processedCategories;
+        // Always show categories now - recommendation will be shown on specific card
+        this.foundCategories = processedCategories;
+        // Clear aiMatchResult - we don't need it anymore as recommendation is on card
+        this.aiMatchResult = null;
+
+        console.log(
+          "[CreateCall] סיכום עיבוד:",
+          `נמצאו ${processedCategories.length} קטגוריות`,
+          firstLowConfidenceMatch
+            ? `המלצה: ${firstLowConfidenceMatch.originalText} (confidence: ${firstLowConfidenceMatch.confidence})`
+            : "אין המלצות"
+        );
       } catch (error) {
+        console.error(
+          "[CreateCall] שגיאה כללית ב-fetchCategoriesFromAI:",
+          error
+        );
+        logger.error("Error in fetchCategoriesFromAI:", error);
         this.toast?.showError("לא הצלחנו לחפש את התחומים. נסה שוב מאוחר יותר.");
       } finally {
         this.isLoadingCategories = false;
@@ -2849,8 +3269,46 @@ export default {
       this.foundCategories = [];
       this.subcategoryInfoArray = [];
       this.isLoadingCategories = false;
+      this.aiMatchResult = null;
       this.currentStep = 1;
       // Keep the requests as they were (they're already in call.requests)
+    },
+    openWorkForQuotation(index) {
+      // User clicked "פתח להצעת מחיר" button on a specific work card
+      if (this.subcategoryInfoArray[index]) {
+        // Update only the specific work to have price="bid" and dismiss recommendation
+        this.subcategoryInfoArray[index] = {
+          ...this.subcategoryInfoArray[index],
+          price: "bid",
+          needsRecommendation: false, // Remove recommendation after choosing quotation
+        };
+        // Update foundCategories as well
+        this.foundCategories[index] = {
+          ...this.foundCategories[index],
+          price: "bid",
+          needsRecommendation: false, // Remove recommendation after choosing quotation
+        };
+      }
+    },
+    dismissRecommendation(index) {
+      // User clicked "המשך עם העבודה שמצאנו" - dismiss the recommendation
+      if (this.foundCategories[index]) {
+        this.foundCategories[index] = {
+          ...this.foundCategories[index],
+          needsRecommendation: false,
+        };
+      }
+      if (this.subcategoryInfoArray[index]) {
+        this.subcategoryInfoArray[index] = {
+          ...this.subcategoryInfoArray[index],
+          needsRecommendation: false,
+        };
+      }
+    },
+    removeWorkByIndex(index) {
+      // User clicked "הסר עבודה זו" - remove the work from both arrays
+      this.subcategoryInfoArray.splice(index, 1);
+      this.foundCategories = [...this.subcategoryInfoArray];
     },
   },
   beforeUnmount() {
@@ -2878,126 +3336,1881 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-$bg: #0b0b0f;
-$bg2: #0f1016;
-$stroke: rgba(255, 255, 255, 0.1);
+/* =========
+     Luxury Orange / Black / Gray Theme
+     ========= */
+$bg: #07070b;
+$bg2: #0b0c12;
+$card: rgba(255, 255, 255, 0.04);
+$card2: rgba(255, 255, 255, 0.06);
+$stroke: rgba(255, 255, 255, 0.12);
+$stroke2: rgba(255, 255, 255, 0.18);
 $text: rgba(255, 255, 255, 0.92);
 $muted: rgba(255, 255, 255, 0.62);
+$muted2: rgba(255, 255, 255, 0.44);
+
 $orange: #ff6a00;
 $orange2: #ff8a2b;
 $orange3: #ffb36b;
 $danger: #ff3b3b;
+$ok: #19d27c;
+
+$shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+$shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
 
 .create-call-page {
   min-height: 100vh;
-  background: linear-gradient(180deg, $bg, $bg2);
+  background: radial-gradient(
+      800px 500px at 20% 0%,
+      rgba($orange, 0.14),
+      transparent 60%
+    ),
+    radial-gradient(
+      700px 450px at 90% 12%,
+      rgba($orange2, 0.1),
+      transparent 65%
+    ),
+    linear-gradient(180deg, $bg, $bg2);
+  color: $text;
 }
 
+/* =========
+     Shell
+     ========= */
 .shell {
-  max-width: 400px;
+  max-width: 420px;
   width: 100%;
   margin: 0 auto;
   padding: 14px 14px calc(96px + env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
 
-/* Loading Screen */
-.loading-screen {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(15, 16, 22, 0.95);
+/* =========
+     Topbar
+     ========= */
+.topbar {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0 14px;
+
+  &__back {
+    width: 46px;
+    height: 46px;
+    border-radius: 16px;
+    border: 1px solid rgba($orange, 0.25);
+    background: rgba($orange, 0.08);
+    color: $text;
+    font-weight: 1100;
+    cursor: pointer;
+    transition: transform 0.18s ease, background 0.18s ease,
+      border-color 0.18s ease, box-shadow 0.18s ease;
+
+    &:hover {
+      transform: translateY(-1px);
+      border-color: rgba($orange, 0.45);
+      background: rgba($orange, 0.12);
+      box-shadow: 0 10px 24px rgba($orange, 0.15);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+
+  &__center {
+    min-width: 0;
+  }
+
+  &__title {
+    font-size: 20px;
+    font-weight: 1200;
+    letter-spacing: 0.2px;
+    line-height: 1.2;
+    color: $text;
+  }
+
+  &__subtitle {
+    margin-top: 4px;
+    font-size: 12px;
+    font-weight: 900;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  &__glow {
+    position: absolute;
+    inset: -6px -8px auto -8px;
+    height: 66px;
+    pointer-events: none;
+    background: radial-gradient(
+      300px 120px at 40% 50%,
+      rgba($orange, 0.18),
+      transparent 70%
+    );
+    filter: blur(10px);
+    opacity: 0.85;
+  }
+}
+
+/* =========
+     Step Indicator
+     ========= */
+.step-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px 0 14px;
+  margin-bottom: 12px;
+}
+
+.step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.step-number {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 1200;
+  font-size: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  color: $muted;
+  transition: all 0.28s ease;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.25);
+}
+
+.step-item.active .step-number {
+  border-color: rgba($orange, 0.7);
+  background: rgba($orange, 0.18);
+  color: $orange3;
+  box-shadow: 0 12px 28px rgba($orange, 0.18);
+}
+
+.step-item.completed .step-number {
+  border-color: rgba($orange, 0.85);
+  background: linear-gradient(135deg, $orange, $orange2);
+  color: #101015;
+  box-shadow: 0 16px 36px rgba($orange, 0.22);
+}
+
+.step-label {
+  font-size: 12px;
+  font-weight: 1000;
+  color: rgba(255, 255, 255, 0.58);
+  transition: color 0.25s ease;
+}
+
+.step-item.active .step-label {
+  color: $text;
+}
+
+.step-line {
+  flex: 1;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 10px;
+  border-radius: 999px;
+  position: relative;
+  overflow: hidden;
+}
+
+.step-line.active {
+  background: linear-gradient(90deg, $orange, $orange2);
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.22),
+      transparent
+    );
+    transform: translateX(-60%);
+    animation: shimmer 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-60%);
+  }
+  100% {
+    transform: translateX(60%);
+  }
+}
+
+/* =========
+     Content / Steps
+     ========= */
+.content {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+}
+
+.step-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.step-content--animated {
+  animation: stepIn 0.42s ease-out;
+}
+
+@keyframes stepIn {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+    filter: blur(0);
+  }
+}
+
+/* Scroll card container */
+.step-container {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.045),
+    rgba(255, 255, 255, 0.03)
+  );
+  box-shadow: $shadow;
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+  max-height: calc(100vh - 250px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
   backdrop-filter: blur(10px);
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba($orange, 0.55);
+    border-radius: 10px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgba($orange, 0.75);
+  }
+}
+
+/* =========
+     Blocks / Cards
+     ========= */
+.block {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 12px;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    pointer-events: none;
+    background: radial-gradient(
+      480px 220px at 10% 0%,
+      rgba($orange, 0.14),
+      transparent 55%
+    );
+    opacity: 0.35;
+  }
+
+  &--last {
+    padding-bottom: 14px;
+  }
+}
+
+.block__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 2;
+}
+
+.block--requests .block__head {
+  align-items: flex-start;
+}
+
+.block__label {
+  font-size: 13px;
+  font-weight: 1200;
+  color: $text;
+}
+
+.block__req {
+  font-size: 11px;
+  font-weight: 1100;
+  color: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba($orange, 0.28);
+  background: rgba($orange, 0.12);
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+.block__refine-btn {
+  font-size: 11px;
+  font-weight: 1000;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 7px 10px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+
+  &:hover {
+    color: $orange3;
+    border-color: rgba($orange, 0.28);
+    background: rgba($orange, 0.1);
+    transform: translateY(-1px);
+  }
+}
+
+/* =========
+     Inputs
+     ========= */
+.input-small,
+.textarea,
+.select {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+  color: $text;
+  padding: 14px 12px;
+  font-weight: 900;
+  font-size: 16px;
+  position: relative;
+  z-index: 2;
+  transition: border-color 0.18s ease, background 0.18s ease,
+    box-shadow 0.18s ease;
+
+  &:focus {
+    outline: none;
+    border-color: rgba($orange, 0.6);
+    background: rgba(0, 0, 0, 0.28);
+    box-shadow: 0 0 0 4px rgba($orange, 0.14);
+  }
+}
+
+.textarea {
+  min-height: 120px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.select {
+  min-height: 48px;
+}
+
+.input-small--error,
+.is-err,
+.input-error {
+  border-color: rgba($danger, 0.65) !important;
+  background: rgba($danger, 0.08) !important;
+  box-shadow: 0 0 0 4px rgba($danger, 0.12) !important;
+}
+
+/* Messages */
+.msg {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  position: relative;
+  z-index: 2;
+
+  &--err {
+    color: rgba(255, 80, 90, 0.95);
+  }
+  &--hint {
+    color: rgba(255, 255, 255, 0.55);
+  }
+}
+
+/* Tiny hints */
+.textarea-hint,
+.field-hint,
+.mini-trust,
+.urgent-trust {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-weight: 900;
+  position: relative;
+  z-index: 2;
+
+  &__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba($orange, 0.9);
+    box-shadow: 0 0 0 4px rgba($orange, 0.14);
+    flex-shrink: 0;
+  }
+}
+
+/* =========
+     Requests extras
+     ========= */
+.field-stack {
+  position: relative;
+  z-index: 2;
+}
+
+.lux-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 8px;
+
+  &__line {
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  &__txt {
+    font-size: 11px;
+    font-weight: 1000;
+    color: rgba(255, 255, 255, 0.55);
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.16);
+  }
+}
+
+.additional-request {
+  position: relative;
+  margin-top: 12px;
+}
+
+.remove-request-btn {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba($danger, 0.35);
+  background: rgba($danger, 0.12);
+  color: $danger;
+  font-size: 16px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  z-index: 3;
+  transition: transform 0.16s ease, background 0.16s ease,
+    border-color 0.16s ease;
+
+  &:hover {
+    transform: scale(1.05);
+    background: rgba($danger, 0.2);
+    border-color: rgba($danger, 0.55);
+  }
+}
+
+.add-request-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.03);
+  color: $text;
+  font-weight: 1100;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  position: relative;
+  z-index: 2;
+
+  &:hover {
+    border-color: rgba($orange, 0.4);
+    background: rgba($orange, 0.08);
+    transform: translateY(-1px);
+  }
+
+  &__icon {
+    filter: drop-shadow(0 6px 16px rgba($orange, 0.22));
+  }
+}
+
+/* Manual Select Button */
+.manual-select-btn {
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba($orange, 0.4);
+  background: rgba($orange, 0.12);
+  color: $orange3;
+  font-weight: 1000;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &:hover {
+    border-color: rgba($orange, 0.6);
+    background: rgba($orange, 0.18);
+    transform: translateY(-1px);
+  }
+}
+
+/* =========
+     Loading Categories
+     ========= */
+.block--loading-categories {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+
+  &::before {
+    opacity: 0.5;
+  }
+}
+
+.loading-categories {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  z-index: 2;
+
+  &__spinner {
+    display: flex;
+    gap: 8px;
+  }
+
+  &__text {
+    color: $text;
+    font-weight: 1200;
+    font-size: 15px;
+    text-align: center;
+  }
+
+  &__subtext {
+    margin-top: -8px;
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 900;
+    font-size: 12px;
+    text-align: center;
+  }
+}
+
+.spinner-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: $orange;
+  animation: dotPulse 1.35s ease-in-out infinite;
+
+  &:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+  &:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+}
+
+@keyframes dotPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+/* =========
+     Found Categories
+     ========= */
+.block--found-categories {
+  background: linear-gradient(
+    180deg,
+    rgba($orange, 0.12),
+    rgba(255, 255, 255, 0.03)
+  );
+  border-color: rgba($orange, 0.25);
+
+  &::before {
+    opacity: 0.65;
+  }
+}
+
+.categories-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  position: relative;
+  z-index: 2;
+}
+
+/* AI Recommendation Block */
+.block--ai-recommendation {
+  margin-bottom: 20px;
+}
+
+.ai-recommendation {
+  display: flex;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 16px;
+  background: rgba(255, 106, 0, 0.12);
+  border: 1px solid rgba(255, 106, 0, 0.3);
+}
+
+.ai-recommendation__icon {
+  font-size: 28px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.ai-recommendation__content {
+  flex: 1;
+}
+
+.ai-recommendation__title {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 1000;
+  color: $orange2;
+}
+
+.ai-recommendation__text {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.5;
+
+  strong {
+    color: $orange2;
+    font-weight: 1000;
+  }
+}
+
+.ai-recommendation__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ai-recommendation__btn {
+  flex: 1;
+  min-width: 140px;
+  padding: 12px 18px;
+  border-radius: 12px;
+  border: none;
+  font-size: 14px;
+  font-weight: 1000;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+
+  &--primary {
+    background: linear-gradient(135deg, $orange, $orange2);
+    color: #111;
+    box-shadow: 0 8px 20px rgba($orange, 0.25);
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba($orange, 0.35);
+    }
+  }
+
+  &--secondary {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: rgba(255, 255, 255, 0.9);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba($orange, 0.3);
+    }
+  }
+
+  &--remove {
+    background: rgba(255, 59, 59, 0.1);
+    border: 1px solid rgba(255, 59, 59, 0.3);
+    color: rgba(255, 59, 59, 0.9);
+
+    &:hover {
+      background: rgba(255, 59, 59, 0.16);
+      border-color: rgba(255, 59, 59, 0.45);
+    }
+  }
+}
+
+.category-card {
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: transform 0.18s ease, border-color 0.18s ease,
+    background 0.18s ease;
+  position: relative;
+  overflow: hidden;
+
+  &:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba($orange, 0.38);
+  }
+
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  &__name {
+    color: $text;
+    font-weight: 1200;
+    font-size: 15px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__price {
+    color: $orange3;
+    font-weight: 1200;
+    font-size: 15px;
+    background: rgba($orange, 0.14);
+    border: 1px solid rgba($orange, 0.26);
+    padding: 5px 10px;
+    border-radius: 10px;
+    white-space: nowrap;
+
+    &--bid {
+      background: rgba(255, 106, 0, 0.2);
+      border-color: rgba(255, 106, 0, 0.4);
+      color: $orange2;
+      font-weight: 1000;
+    }
+  }
+
+  &__details {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+  }
+
+  &__category,
+  &__work-type {
+    color: rgba(255, 255, 255, 0.75);
+    font-weight: 900;
+  }
+
+  &__actions {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  &__quote-btn {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 106, 0, 0.3);
+    background: rgba(255, 106, 0, 0.1);
+    color: $orange2;
+    font-size: 13px;
+    font-weight: 1000;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+
+    &:hover {
+      background: rgba(255, 106, 0, 0.16);
+      border-color: rgba(255, 106, 0, 0.45);
+      transform: translateY(-1px);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+
+  &__shine {
+    content: "";
+    position: absolute;
+    top: -20%;
+    left: -60%;
+    width: 60%;
+    height: 160%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.18),
+      transparent
+    );
+    transform: rotate(18deg);
+    opacity: 0.25;
+    pointer-events: none;
+  }
+
+  &:hover &__shine {
+    animation: cardShine 1.2s ease-in-out;
+  }
+
+  &--quoted {
+    border-color: rgba($orange, 0.4);
+    background: linear-gradient(
+      180deg,
+      rgba($orange, 0.15),
+      rgba($orange, 0.08)
+    );
+    box-shadow: 0 4px 16px rgba($orange, 0.2);
+  }
+
+  @media (max-width: 420px) {
+    padding: 12px;
+    gap: 10px;
+
+    &__header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    &__name {
+      font-size: 14px;
+    }
+
+    &__price {
+      font-size: 14px;
+      padding: 4px 8px;
+    }
+
+    &__details {
+      font-size: 12px;
+      gap: 5px;
+    }
+
+    &__quote-btn {
+      padding: 9px 12px;
+      font-size: 12px;
+    }
+  }
+
+  @media (max-width: 420px) and (orientation: landscape) {
+    &__quote-btn {
+      padding: 8px 10px;
+      font-size: 11px;
+    }
+  }
+
+  &__recommendation {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 106, 0, 0.2);
+    background: rgba(255, 106, 0, 0.08);
+    border-radius: 10px;
+    padding: 12px;
+    position: relative;
+    z-index: 2;
+  }
+
+  &__recommendation-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  &__recommendation-text {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.85);
+    line-height: 1.5;
+
+    strong {
+      color: $orange2;
+      font-weight: 1000;
+    }
+  }
+
+  &__recommendation-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  &__recommendation-btn {
+    flex: 1;
+    min-width: 100px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: none;
+    font-size: 12px;
+    font-weight: 1000;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+
+    &--primary {
+      background: linear-gradient(135deg, $orange, $orange2);
+      color: #111;
+      box-shadow: 0 4px 12px rgba($orange, 0.25);
+
+      &:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba($orange, 0.35);
+      }
+    }
+
+    &--secondary {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: rgba(255, 255, 255, 0.9);
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba($orange, 0.3);
+      }
+    }
+
+    &--remove {
+      background: rgba(255, 59, 59, 0.1);
+      border: 1px solid rgba(255, 59, 59, 0.3);
+      color: rgba(255, 59, 59, 0.9);
+
+      &:hover {
+        background: rgba(255, 59, 59, 0.16);
+        border-color: rgba(255, 59, 59, 0.45);
+      }
+    }
+
+    @media (max-width: 420px) {
+      font-size: 11px;
+      padding: 8px 10px;
+      min-width: 80px;
+    }
+  }
+}
+
+.no-match-info {
+  padding: 20px;
+  border-radius: 14px;
+  background: rgba($orange, 0.1);
+  border: 1px solid rgba($orange, 0.3);
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+
+  &__icon {
+    font-size: 32px;
+    flex-shrink: 0;
+  }
+
+  &__content {
+    flex: 1;
+  }
+
+  &__title {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 1000;
+    color: $orange2;
+  }
+
+  &__text {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: $text;
+    line-height: 1.5;
+  }
+
+  @media (max-width: 420px) {
+    padding: 16px;
+    gap: 12px;
+
+    &__icon {
+      font-size: 28px;
+    }
+
+    &__title {
+      font-size: 15px;
+    }
+
+    &__text {
+      font-size: 13px;
+    }
+  }
+}
+
+@keyframes cardShine {
+  0% {
+    left: -70%;
+    opacity: 0.1;
+  }
+  55% {
+    opacity: 0.35;
+  }
+  100% {
+    left: 130%;
+    opacity: 0.1;
+  }
+}
+
+/* =========
+     Upload
+     ========= */
+.uploadRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 2;
+}
+
+.file-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.uploadBtn {
+  flex: 1 1 auto;
+  min-width: 190px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba($orange, 0.26);
+  background: linear-gradient(180deg, rgba($orange, 0.14), rgba($orange, 0.08));
+  color: $text;
+  cursor: pointer;
+  font-weight: 1100;
+  transition: transform 0.18s ease, box-shadow 0.18s ease,
+    border-color 0.18s ease, background 0.18s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: rgba($orange, 0.42);
+    box-shadow: 0 14px 32px rgba($orange, 0.14);
+  }
+
+  &__txt {
+    font-weight: 1100;
+  }
+
+  &__icon {
+    filter: drop-shadow(0 10px 18px rgba($orange, 0.2));
+  }
+
+  &__spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.28);
+    border-top-color: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  &--done {
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.82);
+  }
+
+  &--err {
+    border-color: rgba($danger, 0.6);
+    background: rgba($danger, 0.12);
+  }
+
+  &--disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    pointer-events: none;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
+  &--loading {
+    cursor: wait;
+  }
+}
+
+.upload-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.62);
+  font-weight: 900;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+}
+
+.images-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  position: relative;
+  z-index: 2;
+}
+
+.image-item {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.25);
+  aspect-ratio: 1;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: rgba($orange, 0.3);
+  }
+
+  &__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transform: scale(1.02);
+  }
+
+  &__shade {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(
+      220px 220px at 20% 0%,
+      rgba($orange, 0.14),
+      transparent 60%
+    );
+    opacity: 0.6;
+  }
+
+  &__remove {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1px solid rgba($danger, 0.35);
+    background: rgba($danger, 0.22);
+    color: $danger;
+    font-size: 16px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    z-index: 3;
+    transition: transform 0.16s ease, background 0.16s ease,
+      border-color 0.16s ease;
+
+    &:hover {
+      transform: scale(1.06);
+      background: rgba($danger, 0.35);
+      border-color: rgba($danger, 0.6);
+    }
+  }
+}
+
+/* =========
+     Location
+     ========= */
+.block--location {
+  min-height: 200px;
+}
+
+.location-content {
+  display: grid;
+  gap: 12px;
+  position: relative;
+  z-index: 2;
+}
+
+.location-headline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: rgba(255, 255, 255, 0.72);
+  font-weight: 1000;
+  font-size: 12px;
+
+  &__icon {
+    filter: drop-shadow(0 10px 18px rgba($orange, 0.18));
+  }
+}
+
+.location-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 34px 18px;
+  min-height: 200px;
+  gap: 14px;
+}
+
+.location-loading__spinner {
+  width: 62px;
+  height: 62px;
+  position: relative;
+
+  .spinner {
+    width: 100%;
+    height: 100%;
+    border: 4px solid rgba($orange, 0.18);
+    border-top-color: $orange;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+}
+
+.location-loading__text {
+  font-size: 16px;
+  font-weight: 1200;
+  color: $text;
+  margin: 0;
+  text-align: center;
+}
+
+.location-loading__subtext {
+  font-size: 13px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.62);
+  margin: 0;
+  text-align: center;
+}
+
+.house-number-input .input-small {
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.selected-location {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba($orange, 0.1);
+  border: 1px solid rgba($orange, 0.26);
+}
+
+.selected-location__content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.selected-location__text {
+  color: $text;
+  font-weight: 1000;
+  font-size: 15px;
+  flex: 1;
+  min-width: 0;
+}
+
+.selected-location__badge {
+  font-size: 10px;
+  font-weight: 1200;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba($orange, 0.16);
+  color: $orange3;
+}
+
+.selected-location__change {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: $text;
+  padding: 7px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba($orange, 0.25);
+  }
+}
+
+.improve-location-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba($orange, 0.36);
+  background: rgba($orange, 0.14);
+  color: $orange2;
+  font-weight: 1000;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    background: rgba($orange, 0.2);
+    border-color: rgba($orange, 0.52);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.location-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.location-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  font-weight: 1100;
+  font-size: 15px;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease;
+  border: none;
+  min-height: 52px;
+
+  &__icon,
+  &__spinner {
+    font-size: 18px;
+  }
+
+  &__spinner {
+    animation: spin 1s linear infinite;
+  }
+
+  &__text {
+    white-space: nowrap;
+  }
+
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+}
+
+.location-btn--map {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+
+  &:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba($orange, 0.22);
+    box-shadow: 0 16px 30px rgba(0, 0, 0, 0.25);
+  }
+}
+
+.location-btn--gps {
+  background: linear-gradient(135deg, $orange, $orange2);
+  color: #111;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 34px rgba($orange, 0.22);
+  }
+}
+
+/* =========
+     Urgent Row
+     ========= */
+.urgentRow {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.18);
+  padding: 12px 12px;
+  color: $text;
+  font-weight: 1100;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  position: relative;
+  z-index: 2;
+  transition: transform 0.18s ease, border-color 0.18s ease,
+    background 0.18s ease, box-shadow 0.18s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: rgba($orange, 0.25);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.25);
+  }
+}
+
+.urgentRow__left {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toggleDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid rgba($orange, 0.7);
+  background: transparent;
+}
+
+.urgentRow--on {
+  border-color: rgba($danger, 0.5);
+  background: rgba($danger, 0.12);
+  box-shadow: 0 18px 34px rgba($danger, 0.1);
+
+  .toggleDot {
+    background: $orange;
+    box-shadow: 0 0 0 4px rgba($orange, 0.18);
+    border-color: rgba($orange, 0.85);
+  }
+}
+
+.urgentRow__right {
+  color: rgba(255, 255, 255, 0.82);
+  font-weight: 1100;
+  white-space: nowrap;
+}
+
+.chev {
+  opacity: 0.7;
+  margin-right: 6px;
+}
+
+/* Notes */
+.note {
+  margin-top: 10px;
+  border-radius: 14px;
+  padding: 12px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.18);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.86);
+  font-weight: 1000;
+  position: relative;
+  z-index: 2;
+
+  &--warn {
+    border-color: rgba($danger, 0.3);
+    background: rgba($danger, 0.1);
+  }
+}
+
+.note__icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* =========
+     Step Actions Buttons
+     ========= */
+.step-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+/* Next Step Button — elegant, less "in your face" */
+.next-step-btn {
+  /* sizing */
+  flex: 1;
+  width: 100%;
+  min-height: 52px;
+  padding: 14px 16px;
+  border-radius: 14px;
+
+  /* calmer orange */
+  background: linear-gradient(
+    180deg,
+    rgba(255, 106, 0, 0.22),
+    rgba(255, 106, 0, 0.12)
+  );
+  border: 1px solid rgba(255, 106, 0, 0.32);
+
+  /* typography */
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 1050;
+  font-size: 16px;
+  letter-spacing: 0.2px;
+
+  /* feel */
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease,
+    border-color 0.16s ease, color 0.16s ease;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+  outline: none;
+
+  /* layout */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  /* subtle highlight (not spotlight) */
+  position: relative;
+  overflow: hidden;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    background: radial-gradient(
+      420px 140px at 30% 0%,
+      rgba(255, 255, 255, 0.12),
+      transparent 60%
+    );
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
+  &:hover {
+    transform: translateY(-1px);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 106, 0, 0.26),
+      rgba(255, 106, 0, 0.14)
+    );
+    border-color: rgba(255, 106, 0, 0.42);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.42);
+    color: rgba(255, 255, 255, 0.94);
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.38);
+  }
+
+  /* Focus — minimal, classy (not a big glowing ring) */
+  &:focus-visible {
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.42),
+      0 0 0 3px rgba(255, 106, 0, 0.14);
+    border-color: rgba(255, 106, 0, 0.5);
+  }
+
+  /* Disabled */
+  &:disabled,
+  &.is-disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.6);
+
+    &::after {
+      opacity: 0.12;
+    }
+  }
+
+  /* optional small icon */
+  .icon {
+    font-size: 18px;
+    opacity: 0.9;
+    transform: translateY(0.5px);
+  }
+}
+
+/* If you want it NOT full-width sometimes */
+.next-step-btn--fit {
+  width: auto;
+  min-width: 180px;
+}
+
+/* If you want it to be even calmer on screens with a lot of orange */
+.next-step-btn--soft {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 106, 0, 0.16),
+    rgba(255, 106, 0, 0.08)
+  );
+  border-color: rgba(255, 106, 0, 0.26);
+
+  &:hover {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 106, 0, 0.2),
+      rgba(255, 106, 0, 0.1)
+    );
+    border-color: rgba(255, 106, 0, 0.34);
+  }
+}
+
+.back-btn,
+.submit-btn {
+  flex: 1;
+  padding: 16px 24px;
+  border-radius: 14px;
+  font-weight: 1100;
+  font-size: 16px;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.submit-btn {
+  background: linear-gradient(135deg, $orange, $orange2);
+  color: #111;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 20px 34px rgba($orange, 0.22);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+.back-btn {
+  background: rgba(255, 255, 255, 0.06);
+  color: $text;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+
+  &:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba($orange, 0.2);
+  }
+}
+
+/* =========
+     Loading Screen (AI search)
+     ========= */
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 11, 16, 0.94);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   z-index: 10000;
+  padding: 20px;
+
+  &__inner {
+    width: 100%;
+    max-width: 420px;
+    border-radius: 22px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.06),
+      rgba(255, 255, 255, 0.03)
+    );
+    box-shadow: $shadow, $shadowOrange;
+    padding: 22px 18px;
+    display: grid;
+    gap: 18px;
+    place-items: center;
+    position: relative;
+    overflow: hidden;
+
+    &::before {
+      content: "";
+      position: absolute;
+      inset: -2px;
+      background: radial-gradient(
+        520px 220px at 20% 0%,
+        rgba($orange, 0.22),
+        transparent 60%
+      );
+      opacity: 0.6;
+      pointer-events: none;
+    }
+  }
+
+  &__copy {
+    text-align: center;
+    position: relative;
+    z-index: 2;
+  }
+
+  &__hint {
+    position: relative;
+    z-index: 2;
+  }
 }
 
 .loading-text {
   color: $text;
   font-size: 18px;
-  font-weight: 1100;
-  margin-top: 20px;
+  font-weight: 1200;
+  margin: 0;
+}
+
+.loading-subtext {
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.hint-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba($orange, 0.25);
+  background: rgba($orange, 0.1);
+  color: $orange3;
+  font-size: 12px;
+  font-weight: 1000;
 }
 
 /* Patience Message */
 .patience-message {
-  margin-top: 30px;
   display: flex;
   justify-content: center;
   align-items: center;
+  position: relative;
+  z-index: 2;
 }
 
 .patience-message__content {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 24px;
-  background: linear-gradient(135deg, rgba($orange, 0.15), rgba($orange2, 0.1));
+  padding: 12px 18px;
+  background: linear-gradient(135deg, rgba($orange, 0.16), rgba($orange2, 0.1));
   border: 1px solid rgba($orange, 0.3);
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgba($orange, 0.2);
-  backdrop-filter: blur(8px);
+  border-radius: 14px;
+  box-shadow: 0 14px 34px rgba($orange, 0.16);
 }
 
 .patience-message__icon {
   font-size: 20px;
-  animation: pulse 1.5s ease-in-out infinite;
+  animation: pulseIcon 1.5s ease-in-out infinite;
 }
 
 .patience-message__text {
   color: $orange3;
-  font-size: 15px;
-  font-weight: 900;
-  letter-spacing: 0.3px;
+  font-size: 14px;
+  font-weight: 1100;
+  letter-spacing: 0.2px;
 }
 
-@keyframes pulse {
+@keyframes pulseIcon {
   0%,
   100% {
     transform: scale(1);
     opacity: 1;
   }
   50% {
-    transform: scale(1.1);
+    transform: scale(1.08);
     opacity: 0.8;
   }
 }
 
-/* Patience Message Transitions */
 .patience-message-enter-active {
-  animation: slideInUp 0.4s ease-out;
+  animation: slideInUp 0.35s ease-out;
 }
-
 .patience-message-leave-active {
-  animation: slideOutDown 0.4s ease-in;
+  animation: slideOutDown 0.35s ease-in;
 }
-
-.patience-message-enter-from {
-  opacity: 0;
-  transform: translateY(20px);
-}
-
-.patience-message-leave-to {
-  opacity: 0;
-  transform: translateY(20px);
-}
-
 @keyframes slideInUp {
   from {
     opacity: 0;
-    transform: translateY(20px) scale(0.95);
+    transform: translateY(18px) scale(0.98);
   }
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
 }
-
 @keyframes slideOutDown {
   from {
     opacity: 1;
@@ -3005,11 +5218,11 @@ $danger: #ff3b3b;
   }
   to {
     opacity: 0;
-    transform: translateY(20px) scale(0.95);
+    transform: translateY(18px) scale(0.98);
   }
 }
 
-/* Loading Spinner */
+/* Loading Spinner (squares) */
 .loadingspinner {
   --square: 26px;
   --offset: 30px;
@@ -3021,26 +5234,19 @@ $danger: #ff3b3b;
   --in-timing-function: ease-out;
   width: calc(3 * var(--offset) + var(--square));
   height: calc(2 * var(--offset) + var(--square));
-  padding: 0px;
-  margin-left: auto;
-  margin-right: auto;
-  margin-top: 10px;
-  margin-bottom: 30px;
   position: relative;
+  margin: 6px auto 10px;
+  z-index: 2;
 }
 
 .loadingspinner div {
   display: inline-block;
-  background: darkorange;
+  background: $orange;
   border: none;
-  border-radius: 2px;
+  border-radius: 4px;
   width: var(--square);
   height: var(--square);
   position: absolute;
-  padding: 0px;
-  margin: 0px;
-  font-size: 6pt;
-  color: black;
 }
 
 .loadingspinner #square1 {
@@ -3116,7 +5322,7 @@ $danger: #ff3b3b;
     left: calc(1 * var(--offset));
     top: calc(2 * var(--offset));
   }
-  25.00% {
+  25% {
     left: calc(1 * var(--offset));
     top: calc(1 * var(--offset));
   }
@@ -3144,7 +5350,7 @@ $danger: #ff3b3b;
     left: calc(1 * var(--offset));
     top: calc(1 * var(--offset));
   }
-  25.00% {
+  25% {
     left: calc(1 * var(--offset));
     top: calc(0 * var(--offset));
   }
@@ -3160,7 +5366,7 @@ $danger: #ff3b3b;
     left: calc(2 * var(--offset));
     top: calc(1 * var(--offset));
   }
-  75.00% {
+  75% {
     left: calc(2 * var(--offset));
     top: calc(2 * var(--offset));
   }
@@ -3187,7 +5393,7 @@ $danger: #ff3b3b;
     left: calc(2 * var(--offset));
     top: calc(2 * var(--offset));
   }
-  50.00% {
+  50% {
     left: calc(3 * var(--offset));
     top: calc(2 * var(--offset));
   }
@@ -3206,7 +5412,7 @@ $danger: #ff3b3b;
     left: calc(3 * var(--offset));
     top: calc(1 * var(--offset));
   }
-  50.00% {
+  50% {
     left: calc(3 * var(--offset));
     top: calc(1 * var(--offset));
   }
@@ -3218,7 +5424,7 @@ $danger: #ff3b3b;
     left: calc(2 * var(--offset));
     top: calc(0 * var(--offset));
   }
-  75.00% {
+  75% {
     left: calc(2 * var(--offset));
     top: calc(1 * var(--offset));
   }
@@ -3239,25 +5445,36 @@ $danger: #ff3b3b;
   }
 }
 
-/* Handymen Results Screen */
+/* =========
+     Handymen Results Screen
+     ========= */
 .handymen-results-screen {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: $bg;
+  inset: 0;
+  background: radial-gradient(
+      800px 500px at 20% 0%,
+      rgba($orange, 0.14),
+      transparent 60%
+    ),
+    linear-gradient(180deg, $bg, $bg2);
   z-index: 10000;
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 18px;
   overflow-y: auto;
+}
+
+.handymen-results-shell {
+  max-width: 440px;
+  width: 100%;
+  margin: 0 auto;
+  padding-bottom: 30px;
 }
 
 .handymen-results-header {
   text-align: center;
-  margin-bottom: 24px;
-  padding-top: 40px;
+  margin-bottom: 18px;
+  padding-top: 44px;
   position: relative;
 }
 
@@ -3265,69 +5482,210 @@ $danger: #ff3b3b;
   position: absolute;
   top: 0;
   right: 0;
-  background: transparent;
-  border: none;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   color: $text;
-  font-size: 16px;
+  font-size: 14px;
   cursor: pointer;
-  padding: 8px 16px;
-  border-radius: 8px;
-  transition: background 0.2s;
-  display: flex;
+  padding: 10px 12px;
+  border-radius: 14px;
+  transition: transform 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+
+  &__icon {
+    color: $orange3;
+    font-weight: 1200;
+  }
+
+  &:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba($orange, 0.22);
+  }
 }
 
-.handymen-results-back:hover {
-  background: rgba(255, 255, 255, 0.1);
+.handymen-results-hero {
+  display: grid;
+  gap: 10px;
+  padding: 14px 12px 6px;
 }
 
-.handymen-results-header h2 {
-  font-size: 24px;
-  font-weight: 700;
+.hero-badge {
+  justify-self: center;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba($ok, 0.35);
+  background: rgba($ok, 0.12);
+  color: rgba(210, 255, 232, 0.95);
+  font-weight: 1200;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+}
+
+.hero-title {
+  font-size: 22px;
+  font-weight: 1200;
   color: $text;
-  margin: 0 0 8px 0;
+  margin: 0;
 }
 
-.handymen-results-subtitle {
-  font-size: 16px;
+.hero-subtitle {
+  font-size: 14px;
   color: rgba(255, 255, 255, 0.7);
   margin: 0;
+  font-weight: 900;
 }
 
 .handymen-list {
   display: grid;
-  gap: 16px;
-  max-width: 400px;
+  gap: 12px;
   width: 100%;
   margin: 0 auto;
-  padding-bottom: 40px;
+  padding: 10px 0 18px;
 }
 
 .handyman-card {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
-  padding: 16px;
-  display: flex;
+  border-radius: 18px;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   opacity: 0;
-  transform: translateY(20px);
-  animation: slideUpFadeIn 0.5s ease-out forwards;
-  transition: all 0.2s;
-}
+  transform: translateY(18px);
+  animation: slideUpFadeIn 0.48s ease-out forwards;
+  transition: transform 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
 
-.handyman-card:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 159, 28, 0.3);
-  transform: translateY(-2px);
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba($orange, 0.28);
+    transform: translateY(-2px);
+  }
+
+  &__image {
+    width: 62px;
+    height: 62px;
+    border-radius: 16px;
+    overflow: hidden;
+    flex-shrink: 0;
+    border: 2px solid rgba($orange, 0.28);
+    position: relative;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transform: scale(1.03);
+    }
+  }
+
+  &__ring {
+    position: absolute;
+    inset: -10px;
+    border-radius: 22px;
+    border: 2px solid rgba($orange, 0.18);
+    filter: blur(0.2px);
+    opacity: 0.7;
+    pointer-events: none;
+  }
+
+  &__content {
+    min-width: 0;
+  }
+
+  &__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  &__name {
+    font-size: 16px;
+    font-weight: 1200;
+    color: $text;
+    margin: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__chip {
+    font-size: 11px;
+    font-weight: 1000;
+    color: rgba(255, 255, 255, 0.78);
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(0, 0, 0, 0.18);
+    white-space: nowrap;
+  }
+
+  &__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__rating {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.84);
+    font-weight: 1000;
+
+    .star {
+      font-size: 15px;
+    }
+    .val {
+      color: $orange3;
+      font-weight: 1200;
+    }
+    .count {
+      color: rgba(255, 255, 255, 0.62);
+      font-weight: 900;
+    }
+  }
+
+  &__cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 12px;
+    font-weight: 1000;
+
+    .cta-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba($orange, 0.9);
+      box-shadow: 0 0 0 4px rgba($orange, 0.14);
+    }
+  }
+
+  &__chev {
+    font-size: 26px;
+    color: rgba(255, 255, 255, 0.45);
+    padding-left: 6px;
+  }
 }
 
 @keyframes slideUpFadeIn {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(18px);
   }
   to {
     opacity: 1;
@@ -3335,646 +5693,93 @@ $danger: #ff3b3b;
   }
 }
 
-.handyman-card__image {
-  width: 60px;
-  height: 60px;
-  border-radius: 12px;
-  overflow: hidden;
-  flex-shrink: 0;
-  border: 2px solid rgba(255, 159, 28, 0.3);
+.handymen-results-footer {
+  margin-top: 6px;
 }
 
-.handyman-card__image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.handyman-card__content {
-  flex: 1;
-  min-width: 0;
-}
-
-.handyman-card__name {
-  font-size: 18px;
-  font-weight: 700;
-  color: $text;
-  margin: 0 0 8px 0;
-}
-
-.handyman-card__info {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.handyman-card__city {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
-  font-weight: 500;
-}
-
-.handyman-card__rating {
+.footer-note {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.8);
-  font-weight: 600;
-}
-
-.handyman-card__rating span:first-child {
-  font-size: 16px;
-}
-
-/* Topbar */
-.topbar {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
+  justify-content: center;
   gap: 10px;
-  padding: 10px 0 12px;
-}
-
-.topbar__back {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  border: 1px solid $stroke;
-  background: rgba(255, 255, 255, 0.04);
-  color: $text;
-  font-weight: 1000;
-  cursor: pointer;
-}
-
-.topbar__center {
-  min-width: 0;
-}
-
-.topbar__title {
-  font-size: 20px;
-  font-weight: 1100;
-  color: $text;
-  line-height: 1.2;
-}
-
-/* Step Indicator */
-.step-indicator {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 20px 0;
-  margin-bottom: 20px;
-}
-
-.step-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.step-number {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 1100;
-  font-size: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.05);
-  color: $muted;
-  transition: all 0.3s;
-}
-
-.step-item.active .step-number {
-  border-color: $orange;
-  background: rgba($orange, 0.2);
-  color: $orange;
-}
-
-.step-item.completed .step-number {
-  border-color: $orange;
-  background: linear-gradient(135deg, $orange, $orange2);
-  color: #111;
-}
-
-.step-label {
-  font-size: 12px;
-  font-weight: 900;
-  color: $muted;
-  transition: all 0.3s;
-}
-
-.step-item.active .step-label {
-  color: $text;
-}
-
-.step-line {
-  flex: 1;
-  height: 2px;
-  background: rgba(255, 255, 255, 0.1);
-  margin: 0 10px;
-  transition: all 0.3s;
-}
-
-.step-line.active {
-  background: linear-gradient(90deg, $orange, $orange2);
-}
-
-/* Content */
-.content {
-  display: grid;
-  gap: 12px;
-  min-height: 0; /* Allow flex children to shrink */
-}
-
-.step-content {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  animation: slideIn 0.4s ease-out;
-  min-height: 0; /* Allow flex children to shrink */
-}
-
-.step-content--animated {
-  animation: slideIn 0.4s ease-out;
-}
-
-/* Step Container - wraps all sections in a scrollable card */
-.step-container {
-  border: 1px solid $stroke;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.03);
-  padding: 12px;
-  display: grid;
-  gap: 12px;
-  max-height: calc(100vh - 250px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  box-sizing: border-box;
-}
-
-/* Custom scrollbar for step container */
-.step-container::-webkit-scrollbar {
-  width: 6px;
-}
-
-.step-container::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 10px;
-}
-
-.step-container::-webkit-scrollbar-thumb {
-  background: rgba($orange, 0.5);
-  border-radius: 10px;
-}
-
-.step-container::-webkit-scrollbar-thumb:hover {
-  background: rgba($orange, 0.7);
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-/* Loading Categories */
-.block--loading-categories {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-}
-
-.loading-categories {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-}
-
-.loading-categories__spinner {
-  display: flex;
-  gap: 8px;
-}
-
-.spinner-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: $orange;
-  animation: pulse 1.4s ease-in-out infinite;
-}
-
-.spinner-dot:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.spinner-dot:nth-child(3) {
-  animation-delay: 0.4s;
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 0.3;
-    transform: scale(0.8);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.2);
-  }
-}
-
-.loading-categories__text {
-  color: $text;
+  border: 1px solid rgba($orange, 0.2);
+  background: rgba($orange, 0.08);
+  padding: 12px 12px;
+  color: rgba(255, 255, 255, 0.78);
   font-weight: 1000;
-  font-size: 15px;
+  font-size: 13px;
+
+  &__icon {
+    filter: drop-shadow(0 10px 18px rgba($orange, 0.16));
+  }
+}
+
+/* =========
+     Credit Card - nice header
+     ========= */
+.pay-hero {
   text-align: center;
-}
-
-/* Found Categories */
-.block--found-categories {
-  background: rgba($orange, 0.1);
-  border-color: rgba($orange, 0.3);
-}
-
-.categories-list {
   display: grid;
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.category-card {
-  padding: 14px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  transition: all 0.2s;
-}
-
-.category-card:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba($orange, 0.4);
-}
-
-.category-card__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.category-card__name {
-  color: $text;
-  font-weight: 1100;
-  font-size: 15px;
-  flex: 1;
-}
-
-.category-card__price {
-  color: $orange;
-  font-weight: 1200;
-  font-size: 16px;
-  background: rgba($orange, 0.15);
-  padding: 4px 10px;
-  border-radius: 8px;
-}
-
-.category-card__details {
-  display: flex;
-  flex-direction: column;
   gap: 6px;
-  font-size: 13px;
+  margin-bottom: 8px;
+
+  &__badge {
+    justify-self: center;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba($orange, 0.28);
+    background: rgba($orange, 0.12);
+    color: $orange3;
+    font-weight: 1200;
+    font-size: 12px;
+  }
+
+  &__title {
+    font-size: 18px;
+    font-weight: 1200;
+    color: $text;
+  }
+
+  &__sub {
+    font-size: 12px;
+    font-weight: 900;
+    color: rgba(255, 255, 255, 0.62);
+  }
 }
 
-.category-card__category,
-.category-card__work-type {
-  color: rgba(255, 255, 255, 0.7);
-  font-weight: 900;
-}
-
-.block {
-  border: 1px solid $stroke;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.03);
-  padding: 12px;
-  min-height: 120px; /* Consistent minimum height for all blocks */
+/* Payment method wrapper */
+.saved-payment-method-wrapper {
   display: flex;
   flex-direction: column;
-}
-
-.block--last {
-  padding-bottom: 14px;
-}
-
-.block__head {
-  display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-  position: relative;
+  gap: 18px;
+  margin-bottom: 24px;
+  padding: 18px 0;
 }
 
-.block--requests .block__head {
-  align-items: flex-start;
-}
+.payment-method-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 40px 20px;
+  min-height: 200px;
 
-.block__label {
-  font-size: 13px;
-  font-weight: 1100;
-  color: $text;
-}
-
-.block__refine-btn {
-  font-size: 11px;
-  font-weight: 900;
-  color: rgba(255, 255, 255, 0.7);
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  padding: 6px 10px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-  margin-top: 4px;
-
-  &:hover {
-    color: $orange3;
-    border-color: rgba($orange, 0.3);
-    background: rgba($orange, 0.1);
-  }
-
-  @media (max-width: 450px) {
-    font-size: 10px;
-    padding: 5px 8px;
+  p {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 16px;
+    font-weight: 900;
+    margin: 0;
   }
 }
 
-.block__req {
-  font-size: 11px;
-  font-weight: 1000;
-  color: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba($orange, 0.25);
-  background: rgba($orange, 0.1);
-  padding: 3px 8px;
-  border-radius: 999px;
-}
-
-/* Additional Requests */
-.additional-request {
-  position: relative;
-  margin-top: 12px;
-}
-
-.remove-request-btn {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 1px solid rgba($danger, 0.3);
-  background: rgba($danger, 0.1);
-  color: $danger;
-  font-size: 16px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1;
-}
-
-.add-request-btn {
-  width: 100%;
-  margin-top: 12px;
-  padding: 12px;
-  border-radius: 14px;
-  border: 1px dashed rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.03);
-  color: $text;
-  font-weight: 1100;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.add-request-btn:hover {
-  border-color: rgba($orange, 0.4);
-  background: rgba($orange, 0.1);
-}
-
-/* Manual Select Button */
-.manual-select-btn {
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba($orange, 0.4);
-  background: rgba($orange, 0.1);
-  color: $orange3;
-  font-weight: 900;
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-  flex-shrink: 0;
-  line-height: 1.2;
-}
-
-.manual-select-btn:hover {
-  border-color: rgba($orange, 0.6);
-  background: rgba($orange, 0.2);
-  transform: translateY(-1px);
-}
-
-/* Inputs */
-.input-small {
-  width: 100%;
-  box-sizing: border-box;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.22);
-  color: $text;
-  padding: 14px 12px;
-  font-weight: 900;
-  font-size: 16px;
-  min-height: 48px;
-}
-
-.textarea,
-.select {
-  width: 100%;
-  box-sizing: border-box;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.22);
-  color: $text;
-  padding: 14px 12px;
-  font-weight: 900;
-  font-size: 16px;
-}
-
-.textarea {
-  min-height: 120px;
-  resize: vertical;
-  line-height: 1.5;
-}
-
-.select {
-  min-height: 48px;
-}
-
-.is-err,
-.input-error {
-  border-color: rgba($danger, 0.55) !important;
-  background: rgba($danger, 0.08) !important;
-}
-
-/* Messages */
-.msg {
-  margin-top: 8px;
-  font-size: 12px;
-  font-weight: 900;
-}
-.msg--err {
-  color: rgba(220, 53, 69, 0.95);
-}
-.msg--hint {
-  color: rgba(255, 255, 255, 0.55);
-}
-
-/* Upload */
-.uploadRow {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.file-input {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-  overflow: hidden;
-}
-
-.uploadBtn {
-  flex: 1 1 auto;
-  min-width: 180px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba($orange, 0.22);
-  background: rgba($orange, 0.1);
-  color: $text;
-  cursor: pointer;
-  font-weight: 1100;
-}
-
-.uploadBtn--done {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.82);
-}
-
-.uploadBtn--err {
-  border-color: rgba($danger, 0.55);
-  background: rgba($danger, 0.1);
-}
-
-.miniGhost {
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.18);
-  color: rgba(255, 255, 255, 0.88);
-  padding: 12px 12px;
-  font-weight: 1000;
-  cursor: pointer;
-}
-
-.images-grid {
-  margin-top: 12px;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-}
-
-.image-item {
-  position: relative;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.25);
-  aspect-ratio: 1;
-}
-
-.image-item__img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.image-item__remove {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 1px solid rgba($danger, 0.3);
-  background: rgba($danger, 0.2);
-  color: $danger;
-  font-size: 16px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  transition: all 0.2s;
-}
-
-.image-item__remove:hover {
-  background: rgba($danger, 0.4);
-  border-color: rgba($danger, 0.5);
-  transform: scale(1.1);
-}
-
-.uploadBtn--disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-.uploadBtn--loading {
-  cursor: wait;
-  position: relative;
-}
-
-.uploadBtn--loading .uploadBtn__icon {
-  display: none;
-}
-
-.uploadBtn__spinner {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: rgba(255, 255, 255, 0.9);
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba($orange, 0.18);
+  border-top-color: $orange;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -3985,474 +5790,232 @@ $danger: #ff3b3b;
   }
 }
 
-.upload-hint {
-  margin-top: 8px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
-  font-weight: 900;
-  text-align: center;
+/* =========
+     Flip Card (your existing structure, styled)
+     ========= */
+.flip-card {
+  background-color: transparent;
+  width: 100%;
+  max-width: 320px;
+  height: 200px;
+  perspective: 1000px;
+  color: white;
 }
 
-/* Location Block */
-.block--location {
-  min-height: 200px; /* Same height as other blocks */
-}
-
-.location-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  min-height: 200px;
-  gap: 16px;
-}
-
-.location-loading__spinner {
-  width: 60px;
-  height: 60px;
+.flip-card-inner {
   position: relative;
-}
-
-.location-loading__spinner .spinner {
   width: 100%;
   height: 100%;
-  border: 4px solid rgba(255, 106, 0, 0.2);
-  border-top-color: $orange;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.location-loading__text {
-  font-size: 16px;
-  font-weight: 1000;
-  color: $text;
-  margin: 0;
   text-align: center;
+  transition: transform 0.8s;
+  transform-style: preserve-3d;
 }
 
-.location-loading__subtext {
-  font-size: 13px;
-  font-weight: 800;
-  color: rgba(255, 255, 255, 0.6);
-  margin: 0;
-  text-align: center;
+.flip-card:hover .flip-card-inner {
+  transform: rotateY(180deg);
 }
 
-.location-content {
-  display: grid;
-  gap: 12px;
-}
-
-.location-input-wrapper {
-  width: 100%;
-}
-
-.house-number-input {
-  width: 100%;
-}
-
-.house-number-input .input-small {
-  width: 100%;
-  padding: 12px 16px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: $text;
-  font-size: 15px;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.house-number-input .input-small:focus {
-  outline: none;
-  border-color: $orange;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.selected-location {
+.flip-card-front,
+.flip-card-back {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: rgba(255, 159, 28, 0.1);
-  border: 1px solid rgba(255, 159, 28, 0.3);
-}
-
-.selected-location__content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.selected-location__text {
-  color: $text;
-  font-weight: 600;
-  font-size: 15px;
-  flex: 1;
-}
-
-.selected-location__change {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: $text;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-}
-
-.selected-location__change:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.improve-location-btn {
-  width: 100%;
-  display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border-radius: 10px;
-  border: 1px solid rgba($orange, 0.4);
-  background: rgba($orange, 0.15);
-  color: $orange2;
-  font-weight: 900;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  border-radius: 18px;
+  backface-visibility: hidden;
+  overflow: hidden;
 }
 
-.improve-location-btn:hover:not(:disabled) {
-  background: rgba($orange, 0.25);
-  border-color: rgba($orange, 0.55);
-  transform: translateY(-1px);
-}
-
-.improve-location-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.improve-location-btn__icon {
-  font-size: 16px;
-  line-height: 1;
-}
-
-.improve-location-btn__text {
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.location-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.location-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border-radius: 12px;
-  border: 1px solid rgba($orange, 0.3);
-  background: rgba($orange, 0.1);
-  color: $text;
-  font-weight: 900;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover:not(:disabled) {
-    background: rgba($orange, 0.2);
-    border-color: rgba($orange, 0.5);
-    transform: translateY(-1px);
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    pointer-events: none;
-  }
-
-  &__icon,
-  &__spinner {
-    font-size: 18px;
-  }
-
-  &__spinner {
-    animation: spin 1s linear infinite;
-  }
-
-  &__text {
-    white-space: nowrap;
-  }
-  margin-top: 8px;
-}
-
-.location-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  font-weight: 1100;
-  font-size: 15px;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-  min-height: 50px;
-}
-
-.location-btn--map {
-  background: rgba(255, 255, 255, 0.06);
+.flip-card-front {
+  background: linear-gradient(145deg, #14141a, #0f0f14);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55), 0 18px 44px rgba($orange, 0.14);
 }
 
-.location-btn--map:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+.flip-card-back {
+  background: linear-gradient(145deg, #14141a, #0f0f14);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transform: rotateY(180deg);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
 }
 
-.location-btn--gps {
-  background: linear-gradient(135deg, $orange, $orange2);
-  color: #111;
-}
-
-.location-btn--gps:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba($orange, 0.4);
-}
-
-.location-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
+.card-shine {
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    420px 220px at 30% 30%,
+    rgba($orange, 0.22),
+    transparent 60%
+  );
+  opacity: 0.55;
   pointer-events: none;
 }
 
-.location-btn__icon {
-  font-size: 18px;
+.heading_8264 {
+  position: absolute;
+  letter-spacing: 0.2em;
+  font-size: 0.9em;
+  top: 2em;
+  left: 18.6em;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: $orange;
 }
 
-.location-btn__spinner {
-  font-size: 18px;
-  animation: spin 1s linear infinite;
+.logo {
+  position: absolute;
+  top: 6.8em;
+  left: 11.7em;
 }
 
-.location-btn__text {
-  font-weight: 1100;
+.chip {
+  position: absolute;
+  top: 2.3em;
+  left: 1.5em;
 }
 
-/* Two columns selects */
-.twoCols {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-@media (max-width: 450px) {
-  .twoCols {
-    grid-template-columns: 1fr;
-  }
-}
-.field__label {
-  font-size: 12px;
-  font-weight: 1100;
-  color: rgba(255, 255, 255, 0.78);
-  margin-bottom: 8px;
+.contactless {
+  position: absolute;
+  top: 3.5em;
+  left: 12.4em;
 }
 
-/* Urgent row */
-.urgentRow {
-  width: 100%;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.18);
-  padding: 12px 12px;
-  color: $text;
-  font-weight: 1100;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+.number {
+  position: absolute;
+  font-weight: bold;
+  font-size: 1em;
+  top: 8.3em;
+  left: 1.6em;
+  letter-spacing: 0.1em;
+  font-family: "Courier New", monospace;
+  color: $orange;
 }
 
-.urgentRow__left {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
+.valid_thru {
+  position: absolute;
+  font-weight: bold;
+  top: 12.5em;
+  font-size: 0.5em;
+  left: 3.2em;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.7);
 }
 
-.toggleDot {
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  border: 2px solid rgba($orange, 0.7);
-  background: transparent;
+.date_8264 {
+  position: absolute;
+  font-weight: bold;
+  font-size: 0.8em;
+  top: 13.6em;
+  left: 3.2em;
+  font-family: "Courier New", monospace;
+  color: $orange;
 }
 
-.urgentRow--on {
-  border-color: rgba($danger, 0.55);
-  background: rgba($danger, 0.12);
-}
-.urgentRow--on .toggleDot {
-  background: $orange;
-  box-shadow: 0 0 0 4px rgba($orange, 0.18);
-  border-color: rgba($orange, 0.8);
-}
-
-.urgentRow__right {
-  color: rgba(255, 255, 255, 0.82);
-  font-weight: 1100;
-  white-space: nowrap;
-}
-.chev {
-  opacity: 0.7;
-  margin-right: 4px;
+.name {
+  position: absolute;
+  font-weight: bold;
+  font-size: 0.8em;
+  top: 16.1em;
+  left: 2em;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $orange;
 }
 
-/* Notes */
-.note {
-  margin-top: 10px;
-  border-radius: 14px;
-  padding: 12px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.18);
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  color: rgba(255, 255, 255, 0.86);
-  font-weight: 1000;
-}
-.note--warn {
-  border-color: rgba($danger, 0.3);
-  background: rgba($danger, 0.1);
-}
-.note__icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+.strip {
+  position: absolute;
+  width: 15em;
+  height: 1.5em;
+  top: 2.4em;
+  background: repeating-linear-gradient(
+    45deg,
+    #303030,
+    #303030 10px,
+    #202020 10px,
+    #202020 20px
+  );
 }
 
-/* Step Actions */
-.step-actions {
+.mstrip {
+  position: absolute;
+  background-color: rgb(255, 255, 255);
+  width: 8em;
+  height: 0.8em;
+  top: 5em;
+  left: 0.8em;
+  border-radius: 2.5px;
+}
+
+.sstrip {
+  position: absolute;
+  background-color: rgb(255, 255, 255);
+  width: 4.1em;
+  height: 0.8em;
+  top: 5em;
+  left: 10em;
+  border-radius: 2.5px;
+}
+
+.code {
+  font-weight: bold;
+  text-align: center;
+  margin: 0.2em;
+  color: black;
+  font-size: 0.8em;
+}
+
+.payment-method-actions {
   display: flex;
   gap: 12px;
-  margin-top: 20px;
+
+  .btn {
+    flex: 1;
+    padding: 14px 24px;
+    border-radius: 12px;
+    font-weight: 1000;
+    font-size: 16px;
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease,
+      background 0.18s ease, border-color 0.18s ease;
+    border: none;
+
+    &--primary {
+      background: linear-gradient(135deg, $orange, $orange2);
+      color: #000;
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 18px 34px rgba($orange, 0.22);
+      }
+    }
+
+    &--secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+
+      &:hover {
+        transform: translateY(-1px);
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba($orange, 0.18);
+      }
+    }
+  }
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+  }
 }
 
-.next-btn-animated {
-  --color: 255, 106, 0; /* Orange color */
-  flex: 1;
-  border-radius: 14px;
-  transition: 0.3s;
-  background-color: rgba(var(--color), 0.2);
-  color: rgb(var(--color));
-  fill: rgb(var(--color));
-  font-weight: 1100;
-  font-size: 16px;
-  cursor: pointer;
-  border: 2px solid rgb(var(--color));
-  box-shadow: 0 0 10px rgba(var(--color), 0.4);
-  outline: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px 24px;
-  gap: 8px;
-}
-
-.next-btn-animated:hover {
-  box-shadow: 0 0 0 5px rgba(var(--color), 0.5);
-}
-
-.next-btn-animated span {
-  transform: scale(0.8);
-  transition: 0.3s;
-}
-
-.next-btn-animated:hover span {
-  transform: scale(1);
-}
-
-.next-btn-animated svg {
-  font-size: 0;
-  transform: scale(0.5) translateX(0%) rotate(180deg);
-  transition: 0.3s;
-  width: 1em;
-  height: 1em;
-}
-
-.next-btn-animated:hover svg {
-  font-size: 20px;
-  transform: scale(1) translateX(-20%) rotate(0deg);
-}
-
-.next-btn-animated:active {
-  transition: 0s;
-  box-shadow: 0 0 0 5px rgb(var(--color));
-}
-
-.back-btn,
-.submit-btn {
-  flex: 1;
-  padding: 16px 24px;
-  border-radius: 14px;
-  font-weight: 1100;
-  font-size: 16px;
-  cursor: pointer;
-  border: none;
-  transition: all 0.2s;
-}
-
-.submit-btn {
-  background: linear-gradient(135deg, $orange, $orange2);
-  color: #111;
-}
-
-.submit-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba($orange, 0.4);
-}
-
-.back-btn {
-  background: rgba(255, 255, 255, 0.06);
-  color: $text;
-  border: 1px solid $stroke;
-}
-
-.back-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-/* Map Picker Modal */
+/* =========
+     Modals
+     ========= */
 .map-modal {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(8px);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.86);
+  backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4464,12 +6027,17 @@ $danger: #ff3b3b;
   width: 100%;
   max-width: 600px;
   max-height: 90vh;
-  background: $bg2;
-  border-radius: 20px;
-  border: 1px solid $stroke;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.07),
+    rgba(255, 255, 255, 0.04)
+  );
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-shadow: $shadow, $shadowOrange;
 }
 
 .map-modal__header {
@@ -4477,34 +6045,36 @@ $danger: #ff3b3b;
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid $stroke;
-}
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 
-.map-modal__header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 1100;
-  color: $text;
+  h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 1200;
+    color: $text;
+  }
 }
 
 .map-modal__close {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  border: 1px solid $stroke;
-  background: rgba(255, 255, 255, 0.04);
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
   color: $text;
   font-size: 24px;
   line-height: 1;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
+  display: grid;
+  place-items: center;
+  transition: transform 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease;
 
-.map-modal__close:hover {
-  background: rgba(255, 255, 255, 0.08);
+  &:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba($orange, 0.18);
+  }
 }
 
 .map-modal__map {
@@ -4513,13 +6083,14 @@ $danger: #ff3b3b;
   min-height: 300px;
   flex: 1;
   position: relative;
+  background: rgba(0, 0, 0, 0.25);
 }
 
 .map-modal__footer {
   display: flex;
   gap: 12px;
   padding: 16px 20px;
-  border-top: 1px solid $stroke;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .map-modal__btn {
@@ -4529,31 +6100,340 @@ $danger: #ff3b3b;
   font-weight: 1100;
   font-size: 15px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
   border: none;
+
+  &--cancel {
+    background: rgba(255, 255, 255, 0.07);
+    color: $text;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+
+    &:hover {
+      transform: translateY(-1px);
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba($orange, 0.18);
+    }
+  }
+
+  &--confirm {
+    background: linear-gradient(135deg, $orange, $orange2);
+    color: #111;
+
+    &:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 18px 34px rgba($orange, 0.22);
+    }
+  }
 }
 
-.map-modal__btn--cancel {
+/* Modal overlay (Split/Partial/Manual) */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.86);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100001;
+  padding: 20px;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-content {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.085),
+    rgba(255, 255, 255, 0.055)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 22px;
+  box-shadow: $shadow, $shadowOrange;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease;
+  direction: rtl;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(26px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+
+  h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 1200;
+    color: $orange3;
+    line-height: 1.3;
+    flex: 1;
+  }
+}
+
+.modal-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease;
+  flex-shrink: 0;
+  margin-right: 10px;
+
+  &:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba($orange, 0.18);
+    color: $orange3;
+  }
+}
+
+.modal-body {
+  padding: 18px 20px;
+  flex: 1;
+  overflow-y: auto;
+
+  p {
+    margin: 0 0 14px 0;
+    font-size: 14px;
+    font-weight: 900;
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.55;
+
+    &:last-of-type {
+      margin-bottom: 0;
+    }
+  }
+
+  .matched-subcategories-list {
+    margin: 12px 0 0;
+
+    .subcategory-item {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      font-weight: 900;
+      color: rgba(255, 255, 255, 0.9);
+
+      .subcategory-name-badge {
+        display: inline-block;
+        padding: 7px 10px;
+        background: rgba($orange, 0.12);
+        border: 1px solid rgba($orange, 0.22);
+        border-radius: 10px;
+        color: $orange3;
+        font-weight: 1100;
+        margin-right: 6px;
+      }
+    }
+  }
+}
+
+.modal-footer {
+  display: flex;
+  gap: 12px;
+  padding: 18px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+
+  @media (max-width: 768px) {
+    flex-direction: column-reverse;
+  }
+}
+
+.btn {
+  flex: 1;
+  padding: 14px 20px;
+  border-radius: 14px;
+  font-weight: 1100;
+  font-size: 15px;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &--primary {
+    background: linear-gradient(135deg, $orange, $orange2);
+    color: #111;
+    box-shadow: 0 14px 28px rgba($orange, 0.18);
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 18px 34px rgba($orange, 0.22);
+    }
+  }
+
+  &--secondary {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: rgba(255, 255, 255, 0.92);
+
+    &:hover {
+      transform: translateY(-1px);
+      background: rgba(255, 255, 255, 0.11);
+      border-color: rgba($orange, 0.18);
+    }
+  }
+}
+
+/* Manual Category Selector */
+.modal-content--large {
+  max-width: 640px;
+  max-height: 85vh;
+}
+
+.modal-body--scrollable {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 18px 20px;
+}
+
+.category-section {
+  margin-bottom: 22px;
+}
+
+.category-section__title {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  font-weight: 1200;
+  color: $orange3;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba($orange, 0.25);
+}
+
+.subcategories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+
+  @media (max-width: 600px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.subcategory-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease,
+    border-color 0.18s ease;
+  position: relative;
+
+  &:hover {
+    transform: translateY(-1px);
+    background: rgba($orange, 0.08);
+    border-color: rgba($orange, 0.24);
+  }
+}
+
+.subcategory-checkbox {
+  width: 20px;
+  height: 20px;
+  border: 2px solid $orange;
+  border-radius: 6px;
+  background-color: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  appearance: none;
+  position: relative;
+
+  &:hover {
+    border-color: $orange2;
+    box-shadow: 0 0 10px rgba($orange, 0.3);
+  }
+
+  &:checked {
+    border-color: $orange2;
+    background-color: rgba($orange, 0.2);
+    box-shadow: 0 0 14px rgba($orange, 0.35);
+
+    &::before {
+      content: "✓";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: $orange3;
+      font-weight: 1200;
+      font-size: 14px;
+    }
+  }
+}
+
+.subcategory-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.subcategory-name {
+  font-size: 14px;
+  font-weight: 1100;
   color: $text;
-  border: 1px solid $stroke;
 }
 
-.map-modal__btn--cancel:hover {
-  background: rgba(255, 255, 255, 0.1);
+.subcategory-price {
+  font-size: 12px;
+  font-weight: 900;
+  color: $orange3;
 }
 
-.map-modal__btn--confirm {
-  background: linear-gradient(135deg, $orange, $orange2);
-  color: #111;
+.subcat-pill {
+  font-size: 10px;
+  font-weight: 1100;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.16);
+  color: rgba(255, 255, 255, 0.78);
+  white-space: nowrap;
 }
 
-.map-modal__btn--confirm:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba($orange, 0.3);
-}
-
-/* Responsive adjustments */
+/* =========
+     Responsive
+     ========= */
 @media (max-width: 450px) {
   .shell {
     max-width: 100%;
@@ -4561,12 +6441,12 @@ $danger: #ff3b3b;
   }
 
   .step-container {
-    max-height: calc(100vh - 200px);
+    max-height: calc(100vh - 210px);
     padding: 10px;
   }
 
   .step-indicator {
-    padding: 15px 0;
+    padding: 14px 0 10px;
     gap: 6px;
   }
 
@@ -4582,10 +6462,6 @@ $danger: #ff3b3b;
 
   .block {
     padding: 10px;
-  }
-
-  .topbar {
-    padding: 8px 0 10px;
   }
 
   .topbar__title {
@@ -4608,866 +6484,43 @@ $danger: #ff3b3b;
     height: 50vh;
   }
 }
-
-/* Modals (Split Call & Partial Match) */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100001;
-  padding: 20px;
-  animation: fadeIn 0.3s ease;
-
-  @media (max-width: 768px) {
-    padding: 10px;
-  }
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.modal-content {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.085),
-    rgba(255, 255, 255, 0.06)
-  );
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 20px;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55),
-    0 18px 44px rgba(255, 106, 0, 0.18);
-  width: 100%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  animation: slideUp 0.3s ease;
-  direction: rtl;
-
-  @media (max-width: 768px) {
-    max-width: 100%;
-    border-radius: 16px;
-    max-height: 95vh;
-  }
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-
-  @media (max-width: 768px) {
-    padding: 16px 18px;
-  }
-
-  h3 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 1100;
-    color: $orange3;
-    line-height: 1.3;
-    flex: 1;
-
-    @media (max-width: 768px) {
-      font-size: 16px;
-    }
-  }
-}
-
-.modal-close {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-  margin-right: 12px;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba($orange, 0.3);
-    color: $orange3;
-  }
-
-  @media (max-width: 768px) {
-    width: 28px;
-    height: 28px;
-    font-size: 18px;
-    margin-right: 8px;
-  }
-}
-
-.modal-body {
-  padding: 20px 24px;
-  flex: 1;
-  overflow-y: auto;
-
-  @media (max-width: 768px) {
-    padding: 16px 18px;
-  }
-
-  p {
-    margin: 0 0 16px 0;
-    font-size: 14px;
-    font-weight: 900;
-    color: rgba(255, 255, 255, 0.9);
-    line-height: 1.5;
-
-    @media (max-width: 768px) {
-      font-size: 13px;
-      margin-bottom: 12px;
-    }
-
-    &:last-of-type {
-      margin-bottom: 0;
-    }
-  }
-
-  ul {
-    margin: 12px 0 16px 0;
-    padding-right: 20px;
-    list-style: none;
-
-    @media (max-width: 768px) {
-      margin: 10px 0 12px 0;
-      padding-right: 16px;
-    }
-
-    li {
-      padding: 10px 12px;
-      margin-bottom: 8px;
-      background: rgba($orange, 0.1);
-      border: 1px solid rgba($orange, 0.2);
-      border-radius: 10px;
-      font-size: 13px;
-      font-weight: 1000;
-      color: $orange3;
-      position: relative;
-      padding-right: 32px;
-
-      @media (max-width: 768px) {
-        padding: 8px 10px;
-        padding-right: 28px;
-        font-size: 12px;
-        margin-bottom: 6px;
-      }
-
-      &::before {
-        content: "✓";
-        position: absolute;
-        right: 10px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: $orange;
-        font-weight: 1200;
-        font-size: 14px;
-
-        @media (max-width: 768px) {
-          right: 8px;
-          font-size: 12px;
-        }
-      }
-
-      &:last-child {
-        margin-bottom: 0;
-      }
-    }
-  }
-
-  .matched-subcategories-list {
-    margin: 12px 0 16px 0;
-    padding-right: 0;
-
-    .subcategory-item {
-      margin: 0 0 12px 0;
-      padding: 0;
-      background: transparent;
-      border: none;
-      font-size: 14px;
-      font-weight: 900;
-      color: rgba(255, 255, 255, 0.9);
-      line-height: 1.5;
-
-      @media (max-width: 768px) {
-        font-size: 13px;
-        margin-bottom: 10px;
-      }
-
-      span {
-        color: rgba(255, 255, 255, 0.9);
-      }
-
-      .subcategory-name-badge {
-        display: inline-block;
-        padding: 8px 12px;
-        background: rgba($orange, 0.1);
-        border: 1px solid rgba($orange, 0.2);
-        border-radius: 8px;
-        color: $orange3;
-        font-weight: 1100;
-        margin-right: 6px;
-
-        @media (max-width: 768px) {
-          padding: 6px 10px;
-          font-size: 13px;
-          margin-right: 4px;
-        }
-      }
-
-      &:last-child {
-        margin-bottom: 0;
-      }
-    }
-  }
-}
-
-/* Credit Card Form */
-.block--credit {
-  min-height: auto;
-
-  @media (max-width: 768px) {
-    .credit-form {
-      max-width: 370px;
-      margin: 0 auto;
-    }
-  }
-}
-
-/* Stripe Elements Card Element */
-.stripe-card-element {
-  padding: 14px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.22);
-  min-height: 48px;
-  transition: all 0.2s;
-}
-
-.stripe-card-element:focus {
-  outline: none;
-  border-color: $orange;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.stripe-card-element--invalid {
-  border-color: rgba($danger, 0.55);
-  background: rgba($danger, 0.08);
-}
-
-.credit-info {
-  margin-bottom: 20px;
-  padding: 14px;
-  border-radius: 12px;
-  background: rgba($orange, 0.1);
-  border: 1px solid rgba($orange, 0.3);
-}
-
-.credit-info__text {
-  margin: 0;
-  color: $orange3;
-  font-weight: 1100;
-  font-size: 14px;
-  text-align: center;
-}
-
-.credit-form {
-  display: grid;
-  gap: 16px;
-}
-
-.saved-payment-method-wrapper {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-  margin-bottom: 24px;
-  padding: 20px 0;
-}
-
-.payment-method-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 40px 20px;
-  min-height: 200px;
-
-  p {
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 16px;
-    font-weight: 800;
-    margin: 0;
-  }
-}
-
-.loading-spinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid rgba(255, 106, 0, 0.2);
-  border-top-color: #ff6a00;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.flip-card {
-  background-color: transparent;
-  width: 100%;
-  max-width: 320px;
-  height: 200px;
-  perspective: 1000px;
-  color: white;
-
-  @media (max-width: 768px) {
-    max-width: 280px;
-    height: 175px;
-  }
-}
-
-.heading_8264 {
-  position: absolute;
-  letter-spacing: 0.2em;
-  font-size: 0.9em;
-  top: 2em;
-  left: 18.6em;
-  font-weight: 900;
-  text-transform: uppercase;
-  color: $orange;
-
-  @media (max-width: 768px) {
-    font-size: 0.8em;
-    top: 1.8em;
-    left: 16em;
-  }
-}
-
-.logo {
-  position: absolute;
-  top: 6.8em;
-  left: 11.7em;
-
-  @media (max-width: 768px) {
-    width: 30px;
-    height: 30px;
-    top: 6em;
-    left: 10em;
-  }
-}
-
-.chip {
-  position: absolute;
-  top: 2.3em;
-  left: 1.5em;
-
-  @media (max-width: 768px) {
-    width: 25px;
-    height: 25px;
-    top: 2em;
-    left: 1.2em;
-  }
-}
-
-.contactless {
-  position: absolute;
-  top: 3.5em;
-  left: 12.4em;
-
-  @media (max-width: 768px) {
-    width: 18px;
-    height: 18px;
-    top: 3.2em;
-    left: 11em;
-  }
-}
-
-.number {
-  position: absolute;
-  font-weight: bold;
-  font-size: 1em;
-  top: 8.3em;
-  left: 1.6em;
-  letter-spacing: 0.1em;
-  font-family: "Courier New", monospace;
-  color: $orange;
-
-  @media (max-width: 768px) {
-    font-size: 0.9em;
-    top: 7.5em;
-    left: 1.4em;
-  }
-}
-
-.valid_thru {
-  position: absolute;
-  font-weight: bold;
-  top: 12.5em;
-  font-size: 0.5em;
-  left: 3.2em;
-  letter-spacing: 0.05em;
-  color: rgba(255, 255, 255, 0.7);
-
-  @media (max-width: 768px) {
-    font-size: 0.45em;
-    top: 11.5em;
-    left: 2.8em;
-  }
-}
-
-.date_8264 {
-  position: absolute;
-  font-weight: bold;
-  font-size: 0.8em;
-  top: 13.6em;
-  left: 3.2em;
-  font-family: "Courier New", monospace;
-  color: $orange;
-
-  @media (max-width: 768px) {
-    font-size: 0.7em;
-    top: 12.5em;
-    left: 2.8em;
-  }
-}
-
-.name {
-  position: absolute;
-  font-weight: bold;
-  font-size: 0.8em;
-  top: 16.1em;
-  left: 2em;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: $orange;
-
-  @media (max-width: 768px) {
-    font-size: 0.7em;
-    top: 15em;
-    left: 1.8em;
-  }
-}
-
-.strip {
-  position: absolute;
-  background-color: black;
-  width: 15em;
-  height: 1.5em;
-  top: 2.4em;
-  background: repeating-linear-gradient(
-    45deg,
-    #303030,
-    #303030 10px,
-    #202020 10px,
-    #202020 20px
-  );
-
-  @media (max-width: 768px) {
-    width: 13em;
-    height: 1.3em;
-    top: 2.2em;
-  }
-}
-
-.mstrip {
-  position: absolute;
-  background-color: rgb(255, 255, 255);
-  width: 8em;
-  height: 0.8em;
-  top: 5em;
-  left: 0.8em;
-  border-radius: 2.5px;
-
-  @media (max-width: 768px) {
-    width: 7em;
-    height: 0.7em;
-    top: 4.5em;
-    left: 0.7em;
-  }
-}
-
-.sstrip {
-  position: absolute;
-  background-color: rgb(255, 255, 255);
-  width: 4.1em;
-  height: 0.8em;
-  top: 5em;
-  left: 10em;
-  border-radius: 2.5px;
-
-  @media (max-width: 768px) {
-    width: 3.6em;
-    height: 0.7em;
-    top: 4.5em;
-    left: 9em;
-  }
-}
-
-.code {
-  font-weight: bold;
-  text-align: center;
-  margin: 0.2em;
-  color: black;
-  font-size: 0.8em;
-}
-
-.flip-card-inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  text-align: center;
-  transition: transform 0.8s;
-  transform-style: preserve-3d;
-}
-
-.flip-card:hover .flip-card-inner {
-  transform: rotateY(180deg);
-}
-
-.flip-card-front,
-.flip-card-back {
-  box-shadow: 0 8px 14px 0 rgba(0, 0, 0, 0.2);
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-  border-radius: 1rem;
-}
-
-.flip-card-front {
-  box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 2px,
-    rgba(0, 0, 0, 0.3) 0px 7px 13px -3px, rgba(0, 0, 0, 0.2) 0px -1px 0px inset;
-  background-color: #171717;
-}
-
-.flip-card-back {
-  box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 2px,
-    rgba(0, 0, 0, 0.3) 0px 7px 13px -3px, rgba(0, 0, 0, 0.2) 0px -1px 0px inset;
-  background-color: #171717;
-  transform: rotateY(180deg);
-}
-
-.payment-method-actions {
-  display: flex;
-  gap: 12px;
-
-  .btn {
-    flex: 1;
-    padding: 14px 24px;
-    border-radius: 12px;
-    font-weight: 700;
-    font-size: 16px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    border: none;
-
-    &--primary {
-      background: $orange;
-      color: #000;
-
-      &:hover {
-        background: $orange2;
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba($orange, 0.4);
-      }
-    }
-
-    &--secondary {
-      background: rgba(255, 255, 255, 0.1);
-      color: rgba(255, 255, 255, 0.9);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-
-      &:hover {
-        background: rgba(255, 255, 255, 0.15);
-        border-color: rgba(255, 255, 255, 0.3);
-      }
-    }
-  }
-
-  @media (max-width: 768px) {
-    flex-direction: column;
-  }
-}
-
-/* Stripe Elements Card Element */
-.stripe-card-element {
-  padding: 14px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.22);
-  min-height: 48px;
-  transition: all 0.2s;
-}
-
-.stripe-card-element:focus {
-  outline: none;
-  border-color: $orange;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.stripe-card-element--invalid {
-  border-color: rgba($danger, 0.55);
-  background: rgba($danger, 0.08);
-}
-
-/* Manual Category Selector Modal */
-.modal-content--large {
-  max-width: 600px;
-  max-height: 85vh;
-
-  @media (max-width: 768px) {
-    max-width: 100%;
-    max-height: 95vh;
-  }
-}
-
-.modal-body--scrollable {
-  max-height: 60vh;
-  overflow-y: auto;
-  padding: 20px 24px;
-
-  @media (max-width: 768px) {
-    max-height: 65vh;
-    padding: 16px 18px;
-  }
-}
-
-.category-section {
-  margin-bottom: 24px;
-
-  &:last-child {
-    margin-bottom: 0;
-  }
-}
-
-.category-section__title {
-  margin: 0 0 12px 0;
-  font-size: 18px;
-  font-weight: 1100;
-  color: $orange3;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba($orange, 0.3);
-
-  @media (max-width: 768px) {
-    font-size: 16px;
-  }
-}
-
-.subcategories-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 10px;
-
-  @media (max-width: 600px) {
-    grid-template-columns: 1fr;
-  }
-}
-
-.subcategory-checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: rgba($orange, 0.1);
-    border-color: rgba($orange, 0.3);
-  }
-
-  @media (max-width: 768px) {
-    padding: 10px;
-  }
-}
-
-.subcategory-checkbox {
-  width: 20px;
-  height: 20px;
-  border: 2px solid $orange;
-  border-radius: 5px;
-  background-color: transparent;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  flex-shrink: 0;
-  appearance: none;
-  position: relative;
-
-  &:hover {
-    border-color: $orange2;
-    box-shadow: 0 0 8px rgba($orange, 0.4);
-  }
-
-  &:checked {
-    border-color: $orange2;
-    background-color: rgba($orange, 0.2);
-    box-shadow: 0 0 12px rgba($orange, 0.5);
-
-    &::before {
-      content: "✓";
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: $orange;
-      font-weight: bold;
-      font-size: 14px;
-    }
-  }
-}
-
-.subcategory-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
-  min-width: 0;
-}
-
-.subcategory-name {
-  font-size: 14px;
-  font-weight: 1100;
-  color: $text;
-
-  @media (max-width: 768px) {
-    font-size: 13px;
-  }
-}
-
-.subcategory-price {
-  font-size: 12px;
-  font-weight: 900;
-  color: $orange3;
-}
-
-.subcategory-checkbox-label:has(.subcategory-checkbox:checked) {
-  background: rgba($orange, 0.15);
-  border-color: rgba($orange, 0.4);
-  box-shadow: 0 0 8px rgba($orange, 0.3);
-}
-
-.modal-footer {
-  display: flex;
-  gap: 12px;
-  padding: 20px 24px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-
-  @media (max-width: 768px) {
-    padding: 16px 18px;
-    gap: 10px;
-    flex-direction: column-reverse;
-  }
-}
-
-.btn {
-  flex: 1;
-  padding: 14px 20px;
-  border-radius: 14px;
-  font-weight: 1100;
-  font-size: 15px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  @media (max-width: 768px) {
-    padding: 12px 16px;
-    font-size: 14px;
-  }
-
-  &--primary {
-    background: linear-gradient(135deg, $orange, $orange2);
-    color: #111;
-    box-shadow: 0 6px 20px rgba(255, 106, 0, 0.3);
-
-    &:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(255, 106, 0, 0.4);
-    }
-
-    &:active {
-      transform: translateY(0);
-    }
-  }
-
-  &--secondary {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: rgba(255, 255, 255, 0.9);
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: rgba(255, 255, 255, 0.2);
-    }
-  }
-}
-
-.urgent-note {
-  margin-top: 10px;
-  padding: 10px 14px;
-  background: rgba(255, 159, 28, 0.1);
-  border: 1px solid rgba(255, 159, 28, 0.3);
-  border-radius: 10px;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 13px;
-  font-weight: 600;
-  text-align: right;
-  line-height: 1.4;
-}
-
-@media (max-width: 768px) {
-  .urgent-note {
-    font-size: 12px;
-    padding: 8px 12px;
-  }
+</style>
+
+<style>
+/* Global CSS to hide Stripe developer/test buttons and iframes everywhere */
+iframe[name*="__privateStripeFrame"],
+iframe[name*="privateStripeFrame"],
+iframe[src*="stripe.com"][src*="elements-inner"],
+iframe[src*="stripe.com"][src*="easel"],
+iframe[title*="מסגרת כלים למפתחי פס"],
+iframe[title*="Stripe developer tools frame"],
+iframe[src*="js.stripe.com"][name*="Stripe"],
+iframe[role="presentation"][src*="stripe.com"],
+.stripe-test-mode-badge,
+[class*="__PrivateStripeElement"],
+[class*="privateStripe"],
+[id*="__privateStripe"],
+[id*="privateStripe"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: 0 !important;
+  max-height: 0 !important;
+  position: absolute !important;
+  left: -9999px !important;
+  top: -9999px !important;
+  right: -9999px !important;
+  bottom: -9999px !important;
+  z-index: -99999 !important;
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: scale(0) !important;
+  overflow: hidden !important;
 }
 </style>

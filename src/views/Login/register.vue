@@ -74,6 +74,16 @@
             >
               הנדימן
             </button>
+            <!-- כפתור דמו - רק בפיתוח -->
+            <button
+              v-if="isDevelopment"
+              type="button"
+              class="tab tab--demo"
+              @click="fillDemoData"
+              title="מלא פרטי דמו"
+            >
+              🧪 דמו
+            </button>
           </div>
 
           <!-- Blocked User Message -->
@@ -625,6 +635,11 @@ export default {
       },
     };
   },
+  computed: {
+    isDevelopment() {
+      return process.env.NODE_ENV === "development";
+    },
+  },
   created() {
     this.toast = useToast();
     this.handleGoogleCallback();
@@ -1113,6 +1128,40 @@ export default {
         this.handymenCount = 100;
       }
     },
+    fillDemoData() {
+      // Generate random suffix for unique emails
+      const randomSuffix = Math.floor(Math.random() * 10000);
+      
+      if (this.activeTab === "client") {
+        // Fill client form with demo data
+        this.clientForm.firstName = "יוסי";
+        this.clientForm.lastName = "כהן";
+        this.clientForm.email = `demo.client.${randomSuffix}@example.com`;
+        this.clientForm.password = "demo123456";
+        this.clientForm.phone = "0501234567";
+        this.clientForm.city = "תל אביב";
+        this.clientForm.address = "תל אביב";
+        this.clientForm.howDidYouHear = "חבר המליץ";
+        this.toast?.showSuccess("פרטי דמו מולאו לטופס לקוח");
+      } else {
+        // Fill handyman form with demo data
+        this.handymanForm.firstName = "דוד";
+        this.handymanForm.lastName = "לוי";
+        this.handymanForm.email = `demo.handyman.${randomSuffix}@example.com`;
+        this.handymanForm.password = "demo123456";
+        this.handymanForm.phone = "0507654321";
+        this.handymanForm.city = "ירושלים";
+        this.handymanForm.address = "ירושלים";
+        this.handymanForm.addressEnglish = "Jerusalem";
+        this.handymanForm.howDidYouHear = "אינסטגרם";
+        // Add some demo specialties
+        this.handymanForm.specialties = [
+          { name: "אינסטלציה", isFullCategory: true, type: "category" },
+          { name: "חשמל", isFullCategory: true, type: "category" },
+        ];
+        this.toast?.showSuccess("פרטי דמו מולאו לטופס הנדימן");
+      }
+    },
   },
 };
 </script>
@@ -1327,6 +1376,26 @@ export default {
 
   &.active:active {
     transform: translateY(-1px);
+  }
+}
+
+.tab--demo {
+  flex: 0 0 auto;
+  min-width: 60px;
+  padding: 14px 12px;
+  font-size: 14px;
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: #8b5cf6;
+  
+  &:hover {
+    background: rgba(139, 92, 246, 0.25);
+    border-color: rgba(139, 92, 246, 0.5);
+    color: #a78bfa;
+  }
+  
+  &:active {
+    transform: scale(0.95);
   }
 }
 

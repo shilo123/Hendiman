@@ -278,6 +278,7 @@
 <script>
 import axios from "axios";
 import { useToast } from "@/composables/useToast";
+import logger from "@/utils/logger";
 
 export default {
   name: "ReceiptsTab",
@@ -328,7 +329,7 @@ export default {
         }
       } catch (error) {
         this.toast?.showError("לא הצלחנו לטעון את הקבלות");
-        console.error("Error loading receipts:", error);
+        logger.error("Error loading receipts:", error);
       } finally {
         this.isLoadingReceipts = false;
       }
@@ -372,7 +373,7 @@ export default {
         }
       } catch (error) {
         this.toast?.showError("לא הצלחנו למחוק את הקבלה");
-        console.error("Error deleting receipt:", error);
+        logger.error("Error deleting receipt:", error);
       } finally {
         this.isDeletingReceipt = null;
       }

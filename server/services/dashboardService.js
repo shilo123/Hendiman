@@ -1,5 +1,6 @@
 const { ObjectId } = require("mongodb");
 const axios = require("axios");
+const { serverLogger } = require("../utils/logger");
 
 /**
  * Calculate travel times for handymen using Mapbox API
@@ -176,7 +177,7 @@ async function fetchJobs(user, collectionJobs) {
     return [];
   }
 
-  console.log("    📋 [FETCH-JOBS] Building aggregation pipeline...");
+  serverLogger.log("    📋 [FETCH-JOBS] Building aggregation pipeline...");
   const pipelineStart = Date.now();
 
   // Build aggregation pipeline to do ALL filtering in MongoDB (much faster than JS)
@@ -423,22 +424,22 @@ async function fetchJobs(user, collectionJobs) {
   });
 
   const pipelineBuildTime = ((Date.now() - pipelineStart) / 1000).toFixed(3);
-  console.log(
+  serverLogger.log(
     `    ✅ [FETCH-JOBS] Pipeline built: ${pipelineBuildTime}s, ${pipeline.length} stages`
   );
 
   // Execute aggregation
-  console.log("    🚀 [FETCH-JOBS] Executing aggregation...");
+  serverLogger.log("    🚀 [FETCH-JOBS] Executing aggregation...");
   const dbQueryStart = Date.now();
   let jobs = await collectionJobs.aggregate(pipeline).toArray();
 
   const dbQueryTime = ((Date.now() - dbQueryStart) / 1000).toFixed(3);
-  console.log(
+  serverLogger.log(
     `    ✅ [FETCH-JOBS] Aggregation completed: ${dbQueryTime}s, found ${jobs.length} jobs`
   );
 
   const totalTime = ((Date.now() - fetchJobsStart) / 1000).toFixed(3);
-  console.log(`    🎉 [FETCH-JOBS] Total time: ${totalTime}s`);
+  serverLogger.log(`    🎉 [FETCH-JOBS] Total time: ${totalTime}s`);
 
   return jobs;
 }
@@ -448,7 +449,7 @@ async function fetchJobs(user, collectionJobs) {
  */
 async function fetchHandimands(user, lng, lat, collection) {
   const fetchHandimandsStart = Date.now();
-  console.log(
+  serverLogger.log(
     `    👷 [FETCH-HANDIMANDS] Starting (lng: ${lng}, lat: ${lat})...`
   );
 
@@ -464,7 +465,7 @@ async function fetchHandimands(user, lng, lat, collection) {
 
     if (!isNaN(userLng) && !isNaN(userLat)) {
       try {
-        console.log("    📍 [FETCH-HANDIMANDS] Querying with geoNear...");
+        serverLogger.log("    📍 [FETCH-HANDIMANDS] Querying with geoNear...");
         const geoQueryStart = Date.now();
         handimands = await collection
           .find({
@@ -481,22 +482,24 @@ async function fetchHandimands(user, lng, lat, collection) {
           })
           .toArray();
         const geoQueryTime = ((Date.now() - geoQueryStart) / 1000).toFixed(3);
-        console.log(
+        serverLogger.log(
           `    ✅ [FETCH-HANDIMANDS] Geo query completed: ${geoQueryTime}s, found ${handimands.length} handimands`
         );
 
-        console.log("    🗺️  [FETCH-HANDIMANDS] Calculating travel times...");
+        serverLogger.log(
+          "    🗺️  [FETCH-HANDIMANDS] Calculating travel times..."
+        );
         const travelTimesStart = Date.now();
         handimands = await calculateTravelTimes(userLng, userLat, handimands);
         const travelTimesTime = (
           (Date.now() - travelTimesStart) /
           1000
         ).toFixed(3);
-        console.log(
+        serverLogger.log(
           `    ✅ [FETCH-HANDIMANDS] Travel times calculated: ${travelTimesTime}s`
         );
       } catch (geoError) {
-        console.log(
+        serverLogger.log(
           "    ⚠️  [FETCH-HANDIMANDS] Geo query failed, using fallback:",
           geoError.message
         );
@@ -504,12 +507,12 @@ async function fetchHandimands(user, lng, lat, collection) {
         const fallbackStart = Date.now();
         handimands = await collection.find({ isHandyman: true }).toArray();
         const fallbackTime = ((Date.now() - fallbackStart) / 1000).toFixed(3);
-        console.log(
+        serverLogger.log(
           `    ✅ [FETCH-HANDIMANDS] Fallback query completed: ${fallbackTime}s, found ${handimands.length} handimands`
         );
 
         if (!isNaN(userLng) && !isNaN(userLat)) {
-          console.log(
+          serverLogger.log(
             "    🗺️  [FETCH-HANDIMANDS] Calculating travel times (fallback)..."
           );
           const travelTimesStart = Date.now();
@@ -518,30 +521,30 @@ async function fetchHandimands(user, lng, lat, collection) {
             (Date.now() - travelTimesStart) /
             1000
           ).toFixed(3);
-          console.log(
+          serverLogger.log(
             `    ✅ [FETCH-HANDIMANDS] Travel times calculated: ${travelTimesTime}s`
           );
         }
       }
     } else {
-      console.log(
+      serverLogger.log(
         "    📋 [FETCH-HANDIMANDS] No coords, fetching all handimands..."
       );
       const allStart = Date.now();
       handimands = await collection.find({ isHandyman: true }).toArray();
       const allTime = ((Date.now() - allStart) / 1000).toFixed(3);
-      console.log(
+      serverLogger.log(
         `    ✅ [FETCH-HANDIMANDS] Query completed: ${allTime}s, found ${handimands.length} handimands`
       );
     }
   } else {
-    console.log(
+    serverLogger.log(
       "    📋 [FETCH-HANDIMANDS] No coords, fetching all handimands..."
     );
     const allStart = Date.now();
     handimands = await collection.find({ isHandyman: true }).toArray();
     const allTime = ((Date.now() - allStart) / 1000).toFixed(3);
-    console.log(
+    serverLogger.log(
       `    ✅ [FETCH-HANDIMANDS] Query completed: ${allTime}s, found ${handimands.length} handimands`
     );
   }
@@ -566,7 +569,7 @@ async function fetchHandimands(user, lng, lat, collection) {
   }
 
   const totalTime = ((Date.now() - fetchHandimandsStart) / 1000).toFixed(3);
-  console.log(`    🎉 [FETCH-HANDIMANDS] Total time: ${totalTime}s`);
+  serverLogger.log(`    🎉 [FETCH-HANDIMANDS] Total time: ${totalTime}s`);
 
   return handimands;
 }
@@ -615,13 +618,13 @@ async function fetchDashboardData(
     const now = Date.now();
     const elapsed = ((now - lastCheckpoint) / 1000).toFixed(3);
     const total = ((now - startTime) / 1000).toFixed(3);
-    console.log(
+    serverLogger.log(
       `  ✅ [DASHBOARD-SERVICE] ${name}: +${elapsed}s (total: ${total}s)`
     );
     lastCheckpoint = now;
   };
 
-  console.log("🔄 [DASHBOARD-SERVICE] Starting fetchDashboardData...");
+  serverLogger.log("🔄 [DASHBOARD-SERVICE] Starting fetchDashboardData...");
 
   // Validate collections
   if (!collection) {
@@ -629,45 +632,45 @@ async function fetchDashboardData(
   }
 
   // Fetch user first (needed for other queries)
-  console.log("👤 [DASHBOARD-SERVICE] Fetching user...");
+  serverLogger.log("👤 [DASHBOARD-SERVICE] Fetching user...");
   const user = await fetchUser(userId, collection);
   logCheckpoint("Fetch user");
-  console.log(
+  serverLogger.log(
     "  ✅ [DASHBOARD-SERVICE] User found:",
     user.isHandyman ? "Handyman" : "Client"
   );
 
   // Fetch all data in parallel
-  console.log("🔄 [DASHBOARD-SERVICE] Starting parallel fetches...");
+  serverLogger.log("🔄 [DASHBOARD-SERVICE] Starting parallel fetches...");
   const parallelStart = Date.now();
 
   const [jobs, handimands, stats] = await Promise.all([
     (async () => {
-      console.log("  📋 [DASHBOARD-SERVICE] Starting fetchJobs...");
+      serverLogger.log("  📋 [DASHBOARD-SERVICE] Starting fetchJobs...");
       const jobsStart = Date.now();
       const result = await fetchJobs(user, collectionJobs);
       const jobsTime = ((Date.now() - jobsStart) / 1000).toFixed(3);
-      console.log(
+      serverLogger.log(
         `  ✅ [DASHBOARD-SERVICE] fetchJobs completed: ${jobsTime}s, found ${result.length} jobs`
       );
       return result;
     })(),
     (async () => {
-      console.log("  👷 [DASHBOARD-SERVICE] Starting fetchHandimands...");
+      serverLogger.log("  👷 [DASHBOARD-SERVICE] Starting fetchHandimands...");
       const handimandsStart = Date.now();
       const result = await fetchHandimands(user, lng, lat, collection);
       const handimandsTime = ((Date.now() - handimandsStart) / 1000).toFixed(3);
-      console.log(
+      serverLogger.log(
         `  ✅ [DASHBOARD-SERVICE] fetchHandimands completed: ${handimandsTime}s, found ${result.length} handimands`
       );
       return result;
     })(),
     (async () => {
-      console.log("  📊 [DASHBOARD-SERVICE] Starting fetchStats...");
+      serverLogger.log("  📊 [DASHBOARD-SERVICE] Starting fetchStats...");
       const statsStart = Date.now();
       const result = await fetchStats(collection);
       const statsTime = ((Date.now() - statsStart) / 1000).toFixed(3);
-      console.log(
+      serverLogger.log(
         `  ✅ [DASHBOARD-SERVICE] fetchStats completed: ${statsTime}s`
       );
       return result;
@@ -675,13 +678,13 @@ async function fetchDashboardData(
   ]);
 
   const parallelTime = ((Date.now() - parallelStart) / 1000).toFixed(3);
-  console.log(
+  serverLogger.log(
     `✅ [DASHBOARD-SERVICE] All parallel fetches completed: ${parallelTime}s`
   );
   logCheckpoint("Parallel fetches");
 
   const totalTime = ((Date.now() - startTime) / 1000).toFixed(3);
-  console.log(
+  serverLogger.log(
     `🎉 [DASHBOARD-SERVICE] fetchDashboardData complete: ${totalTime}s total`
   );
 

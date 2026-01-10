@@ -59,6 +59,14 @@
           >
             {{ isHendiman ? "הנדימן" : "לקוח" }}
           </span>
+          <!-- Subscription Type Badge (only for handyman) -->
+          <span
+            v-if="isHendiman && subscriptionTypeLabel"
+            class="subscription-type-badge"
+            :class="subscriptionTypeClass"
+          >
+            {{ subscriptionTypeLabel }}
+          </span>
         </div>
       </div>
 
@@ -152,6 +160,43 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener("resize", this.handleResize);
+  },
+  computed: {
+    subscriptionTypeLabel() {
+      if (!this.isHendiman) return null;
+
+      // Check if FREE
+      if (
+        this.me?.subscriptionPlanType === "FREE" ||
+        this.me?.subscriptionExpiresAt === "FREE" ||
+        this.me?.trialExpiresAt === "always" ||
+        this.me?.billingStartDate === "FREE"
+      ) {
+        return "לתמיד";
+      }
+
+      // Check subscription plan type
+      if (this.me?.subscriptionPlanType === "annual") {
+        return "שנתי";
+      } else if (this.me?.subscriptionPlanType === "monthly") {
+        return "חודשי";
+      }
+
+      return null;
+    },
+    subscriptionTypeClass() {
+      if (!this.subscriptionTypeLabel) return "";
+
+      if (this.subscriptionTypeLabel === "לתמיד") {
+        return "subscription-type-badge--free";
+      } else if (this.subscriptionTypeLabel === "שנתי") {
+        return "subscription-type-badge--annual";
+      } else if (this.subscriptionTypeLabel === "חודשי") {
+        return "subscription-type-badge--monthly";
+      }
+
+      return "";
+    },
   },
   methods: {
     handleResize() {
@@ -508,6 +553,43 @@ $shadowO: 0 18px 55px rgba(255, 106, 0, 0.2);
       font-size: 9px;
       padding: 3px 8px;
       border-radius: 12px;
+    }
+  }
+
+  .subscription-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 1000;
+    border: 1px solid;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+
+    &--free {
+      border-color: rgba(16, 185, 129, 0.4);
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+    }
+
+    &--annual {
+      border-color: rgba($orange, 0.4);
+      background: rgba($orange, 0.15);
+      color: $orange2;
+    }
+
+    &--monthly {
+      border-color: rgba(59, 130, 246, 0.4);
+      background: rgba(59, 130, 246, 0.15);
+      color: #3b82f6;
+    }
+
+    @media (max-width: 768px) {
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 10px;
     }
   }
 

@@ -30,8 +30,27 @@
           <!-- Stripe Payment Element -->
           <div class="form-field">
             <label class="form-label">פרטי תשלום חדשים</label>
-            <div id="card-element" class="stripe-element-container">
-              <!-- Stripe Payment Element will mount here -->
+            <div class="stripe-element-wrapper">
+              <div
+                id="card-element"
+                class="stripe-element-container"
+                :style="{
+                  display: isLoadingStripeElement ? 'none' : 'block',
+                }"
+              >
+                <!-- Stripe Payment Element will mount here -->
+              </div>
+              
+              <!-- Loading indicator -->
+              <div
+                v-if="isLoadingStripeElement"
+                class="stripe-element-loading"
+              >
+                <div class="stripe-element-loading__spinner"></div>
+                <div class="stripe-element-loading__text">
+                  טוען שדות תשלום...
+                </div>
+              </div>
             </div>
             <div id="card-errors" class="form-error" role="alert"></div>
           </div>
@@ -48,9 +67,10 @@
           <button
             type="submit"
             class="payment-submit-btn"
-            :disabled="isProcessing || !isStripeReady"
+            :disabled="isProcessing || !isStripeReady || isLoadingStripeElement"
           >
             <span v-if="isProcessing">מעדכן פרטי תשלום...</span>
+            <span v-else-if="isLoadingStripeElement">טוען שדות תשלום...</span>
             <span v-else>עדכן פרטי תשלום</span>
           </button>
 
@@ -68,6 +88,7 @@
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
 import { loadStripe } from "@stripe/stripe-js";
+import logger from "@/utils/logger";
 
 export default {
   name: "SubscriptionPaymentSettings",
@@ -88,6 +109,7 @@ export default {
       isProcessing: false,
       submitError: "",
       isStripeReady: false,
+      isLoadingStripeElement: true, // Loading state for Stripe element
       setupIntentClientSecret: null,
       subscriptionInfo: null,
     };
@@ -134,11 +156,14 @@ export default {
           this.subscriptionInfo = data.subscription;
         }
       } catch (error) {
-        console.error("Error fetching subscription info:", error);
+        logger.error("Error fetching subscription info:", error);
       }
     },
     async initializePaymentElement() {
       if (!this.stripe) return;
+
+      this.isLoadingStripeElement = true;
+      this.submitError = "";
 
       try {
         // Step 1: Create Setup Intent for updating payment method
@@ -159,6 +184,7 @@ export default {
         if (!setupIntentData.success || !setupIntentData.clientSecret) {
           this.submitError =
             setupIntentData.message || "שגיאה ביצירת כוונת הגדרה. אנא נסה שוב.";
+          this.isLoadingStripeElement = false;
           return;
         }
         this.setupIntentClientSecret = setupIntentData.clientSecret;
@@ -209,22 +235,67 @@ export default {
         // Step 4: Mount Payment Element
         const paymentElementContainer = document.getElementById("card-element");
         if (paymentElementContainer) {
+          // Mount the element
           this.paymentElement.mount("#card-element");
-          this.isStripeReady = true;
+          
+          // Wait for the element to be ready before setting isStripeReady
+          this.paymentElement.on("ready", () => {
+            // Element is fully loaded and ready
+            this.isStripeReady = true;
+            this.isLoadingStripeElement = false;
+            logger.info("Stripe Payment Element loaded successfully");
+          });
 
           // Handle real-time validation errors
           this.paymentElement.on("change", (event) => {
             const displayError = document.getElementById("card-errors");
-            if (event.error) {
-              displayError.textContent = event.error.message;
-            } else {
-              displayError.textContent = "";
+            if (displayError) {
+              if (event.error) {
+                displayError.textContent = event.error.message;
+              } else {
+                displayError.textContent = "";
+              }
             }
           });
+
+          // Handle load event as well (alternative to ready)
+          this.paymentElement.on("load", () => {
+            if (!this.isStripeReady) {
+              this.isStripeReady = true;
+              this.isLoadingStripeElement = false;
+            }
+          });
+
+          // Fallback: if ready/load events don't fire, set ready after a delay
+          // This ensures the loading state doesn't hang forever
+          setTimeout(() => {
+            if (this.isLoadingStripeElement && this.paymentElement) {
+              // Check if element is actually mounted by checking if container has content
+              const container = document.getElementById("card-element");
+              if (container && container.children.length > 0) {
+                this.isStripeReady = true;
+                this.isLoadingStripeElement = false;
+                logger.warn(
+                  "Stripe Payment Element ready state set via timeout fallback"
+                );
+              } else {
+                // Element not mounted, show error
+                this.submitError =
+                  "שגיאה בטעינת שדות התשלום. אנא רענן את הדף.";
+                this.isLoadingStripeElement = false;
+                logger.error("Stripe Payment Element failed to mount");
+              }
+            }
+          }, 3000); // 3 seconds fallback
+        } else {
+          this.submitError = "שגיאה בטעינת שדות התשלום. אנא רענן את הדף.";
+          this.isLoadingStripeElement = false;
+          logger.error("Payment element container not found");
         }
       } catch (error) {
         this.submitError = "שגיאה באתחול מערכת התשלומים. אנא נסה שוב.";
-        console.error("Error initializing Payment Element:", error);
+        this.isLoadingStripeElement = false;
+        logger.error("Error initializing Payment Element:", error);
       }
     },
     formatCurrency(amount) {
@@ -261,6 +332,7 @@ export default {
         if (submitError) {
           this.submitError =
             submitError.message || "שגיאה באימות פרטי התשלום. אנא נסה שוב.";
+          this.isProcessing = false;
           return;
         }
 
@@ -274,10 +346,32 @@ export default {
         if (error) {
           this.submitError =
             error.message || "שגיאה באישור פרטי התשלום. אנא נסה שוב.";
+          this.isProcessing = false;
           return;
         }
 
         if (setupIntent && setupIntent.status === "succeeded") {
+          // Verify we have a payment method from the setup intent
+          // payment_method can be a string (ID) or an object with id property
+          let newPaymentMethodId = null;
+          if (typeof setupIntent.payment_method === "string") {
+            newPaymentMethodId = setupIntent.payment_method;
+          } else if (
+            setupIntent.payment_method &&
+            typeof setupIntent.payment_method === "object"
+          ) {
+            newPaymentMethodId =
+              setupIntent.payment_method.id || setupIntent.payment_method;
+          }
+
+          if (!newPaymentMethodId) {
+            this.submitError =
+              "לא התקבל payment method מההגדרה. אנא נסה שוב.";
+            logger.error("No payment method in setup intent:", setupIntent);
+            this.isProcessing = false;
+            return;
+          }
+
           // Step 3: Update subscription payment method on server
           const updateResponse = await fetch(
             `${URL}/api/subscription/update-payment-method`,
@@ -288,19 +382,37 @@ export default {
               },
               body: JSON.stringify({
                 userId: this.userId,
-                paymentMethodId: setupIntent.payment_method,
+                paymentMethodId: newPaymentMethodId,
               }),
             }
           );
 
+          if (!updateResponse.ok) {
+            const errorData = await updateResponse.json().catch(() => ({}));
+            this.submitError =
+              errorData.message ||
+              `שגיאה בעדכון פרטי התשלום (${updateResponse.status}). אנא נסה שוב.`;
+            logger.error(
+              "Error updating payment method - HTTP error:",
+              updateResponse.status,
+              errorData
+            );
+            this.isProcessing = false;
+            return;
+          }
+
           const updateData = await updateResponse.json();
 
-          if (updateData.success) {
+          if (updateData.success && updateData.subscriptionId) {
             this.toast?.showSuccess(
               "פרטי התשלום עודכנו בהצלחה! התשלום הבא יתבצע עם הכרטיס החדש."
             );
 
-            // Refresh subscription info
+            logger.info(
+              `Payment method updated successfully for user ${this.userId}, subscription ${updateData.subscriptionId}, payment method ${newPaymentMethodId}`
+            );
+
+            // Refresh subscription info to get updated payment method details
             await this.fetchSubscriptionInfo();
 
             // Redirect to dashboard after a short delay
@@ -311,13 +423,21 @@ export default {
             this.submitError =
               updateData.message ||
               "פרטי התשלום אושרו אך יש בעיה בעדכון השרת. אנא פנה לתמיכה.";
+            logger.error(
+              "Error updating payment method on server:",
+              updateData
+            );
+            this.isProcessing = false;
           }
         } else {
           this.submitError = "מצב הגדרה לא צפוי. אנא פנה לתמיכה.";
+          logger.error("Unexpected setup intent status:", setupIntent?.status);
+          this.isProcessing = false;
         }
       } catch (error) {
-        this.submitError = error.message || "שגיאה בחיבור לשרת. אנא נסה שוב.";
-      } finally {
+        this.submitError =
+          error.message || "שגיאה בחיבור לשרת. אנא נסה שוב.";
+        logger.error("Error in handleUpdatePayment:", error);
         this.isProcessing = false;
       }
     },
@@ -445,18 +565,61 @@ $font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
   color: $text;
 }
 
+.stripe-element-wrapper {
+  position: relative;
+  min-height: 60px;
+}
+
 .stripe-element-container {
   padding: 12px 14px;
   border-radius: 10px;
   border: 1px solid rgba($orange, 0.3);
   background: rgba(255, 255, 255, 0.06);
   transition: all 0.2s ease;
+  min-height: 60px;
 
   &:focus-within {
     border-color: $orange;
     box-shadow: 0 0 0 3px rgba($orange, 0.2);
     background: rgba(255, 255, 255, 0.08);
   }
+}
+
+.stripe-element-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px;
+  border-radius: 10px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+  min-height: 60px;
+}
+
+.stripe-element-loading__spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba($orange, 0.2);
+  border-top-color: $orange;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.stripe-element-loading__text {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
 }
 
 .form-error {

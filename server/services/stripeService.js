@@ -5,6 +5,7 @@
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const fs = require("fs");
 const path = require("path");
+const { serverLogger } = require("../utils/logger");
 
 // Platform fee percentage - read from dry-data.json
 function getPlatformFeePercent() {
@@ -13,7 +14,7 @@ function getPlatformFeePercent() {
     const dryData = JSON.parse(fs.readFileSync(dryDataPath, "utf8"));
     return parseFloat(dryData.FEE) || 10; // Default to 10% if not found
   } catch (error) {
-    console.error("[stripeService] Error reading dry-data.json:", error);
+    serverLogger.error("[stripeService] Error reading dry-data.json:", error);
     return parseFloat(process.env.PLATFORM_FEE_PERCENT) || 10; // Fallback to env or default
   }
 }
@@ -40,7 +41,7 @@ function updatePlatformFeePercent(newFee) {
     // No cache - always reads fresh from file
     return true;
   } catch (error) {
-    console.error("[stripeService] Error updating dry-data.json:", error);
+    serverLogger.error("[stripeService] Error updating dry-data.json:", error);
     return false;
   }
 }
@@ -159,13 +160,13 @@ async function createEscrowPaymentIntent({
       const error = new Error(
         `Invalid handymanAccountId: ${handymanAccountId}`
       );
-      console.error(`[stripeService] ❌ ${error.message}`);
+      serverLogger.error(`[stripeService] ❌ ${error.message}`);
       throw error;
     }
 
     if (!amountAgorot || amountAgorot <= 0) {
       const error = new Error(`Invalid amountAgorot: ${amountAgorot}`);
-      console.error(`[stripeService] ❌ ${error.message}`);
+      serverLogger.error(`[stripeService] ❌ ${error.message}`);
       throw error;
     }
 
@@ -202,7 +203,7 @@ async function createEscrowPaymentIntent({
       status: paymentIntent.status,
     };
   } catch (error) {
-    console.error(`[stripeService] ❌ Error creating Payment Intent:`, {
+    serverLogger.error(`[stripeService] ❌ Error creating Payment Intent:`, {
       message: error.message,
       type: error.type,
       code: error.code,

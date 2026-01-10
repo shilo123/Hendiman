@@ -110,17 +110,7 @@
                     -{{ formatMoney(commission) }} ₪
                   </div>
                 </div>
-                <div v-if="urgentFee > 0" class="financialItem">
-                  <div class="financialItem__label">
-                    <span class="financialItem__icon">⚡</span>
-                    קריאה דחופה
-                  </div>
-                  <div
-                    class="financialItem__value financialItem__value--negative"
-                  >
-                    -{{ formatMoney(urgentFee) }} ₪
-                  </div>
-                </div>
+                <!-- ה-urgentFee משולם על ידי הלקוח, לא מופחת מההנדימן -->
                 <div class="financialDivider"></div>
                 <div class="financialItem financialItem--total">
                   <div class="financialItem__label">
@@ -247,6 +237,7 @@ import { URL } from "@/Url/url";
 import { useMainStore } from "@/store/index";
 import { io } from "socket.io-client";
 import ProblemReportModal from "@/components/Dashboard/ProblemReportModal.vue";
+import logger from "@/utils/logger";
 
 export default {
   name: "JobSummary",
@@ -307,7 +298,8 @@ export default {
         return this.paymentInfo.spacious_H;
       }
       const price = this.jobInfo?.price || 0;
-      return price - this.commission - this.urgentFee;
+      // ה-urgentFee משולם על ידי הלקוח, לא מופחת מההנדימן
+      return price - this.commission;
     },
   },
   async mounted() {
@@ -338,13 +330,13 @@ export default {
         if (response.data.success && response.data.fee !== undefined) {
           this.platformFeePercent = response.data.fee;
         } else {
-          console.error(
+          logger.error(
             "Failed to load platform fee: Invalid response",
             response.data
           );
         }
       } catch (error) {
-        console.error("Error loading platform fee from API:", error);
+        logger.error("Error loading platform fee from API:", error);
         // Try to reload after a delay
         setTimeout(() => this.loadPlatformFee(), 2000);
       }

@@ -33,12 +33,15 @@
         </div>
 
         <div class="ps__headerRight">
-          <!-- Cancel Subscription Button -->
+          <!-- Cancel Subscription Button (hide for FREE users) -->
           <button
             v-if="
               isHandyman &&
               hasActiveSubscription &&
-              user?.trialExpiresAt !== 'always'
+              user?.trialExpiresAt !== 'always' &&
+              user?.subscriptionPlanType !== 'FREE' &&
+              user?.subscriptionExpiresAt !== 'FREE' &&
+              user?.billingStartDate !== 'FREE'
             "
             class="ps__cancelSubscriptionBtn"
             type="button"
@@ -397,6 +400,7 @@ import CategoryCheckboxSelector from "@/components/Global/CategoryCheckboxSelect
 import axios from "axios";
 import { useToast } from "@/composables/useToast";
 import { URL } from "@/Url/url";
+import logger from "@/utils/logger";
 
 export default {
   name: "ProfileSheetV2",
@@ -618,14 +622,14 @@ export default {
           this.hasActiveSubscription = false;
         } else {
           const errorMessage = response.data?.message || "שגיאה בביטול המנוי";
-          console.error(
+          logger.error(
             "[ProfileSheet] Cancel subscription failed:",
             errorMessage
           );
           this.toast?.showError(errorMessage);
         }
       } catch (error) {
-        console.error("[ProfileSheet] Error cancelling subscription:", error);
+        logger.error("[ProfileSheet] Error cancelling subscription:", error);
         let errorMessage = "שגיאה בביטול המנוי";
 
         if (error.response) {

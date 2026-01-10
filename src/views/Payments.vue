@@ -75,11 +75,8 @@
         </div>
       </div>
 
-      <!-- Trial Notice (for monthly subscription) -->
-      <div
-        v-if="isSubscription && selectedPlan === 'monthly'"
-        class="trial-notice"
-      >
+      <!-- Trial Notice (for monthly subscription - only if showTrialNotice is true) -->
+      <div v-if="showTrialNotice" class="trial-notice">
         <div class="trial-notice__icon">🎁</div>
         <div class="trial-notice__content">
           <div class="trial-notice__title">14 יום חינם!</div>
@@ -89,9 +86,9 @@
         </div>
       </div>
 
-      <!-- Subscription Notice (for monthly) -->
+      <!-- Subscription Notice (for monthly - only if not showing trial notice) -->
       <div
-        v-if="isSubscription && selectedPlan === 'monthly'"
+        v-if="isSubscription && selectedPlan === 'monthly' && !showTrialNotice"
         class="subscription-notice"
       >
         <div class="subscription-notice__icon">📅</div>
@@ -150,15 +147,22 @@
               {{ isSubscription ? "מעבד הרשמה..." : "מעבד תשלום..." }}
             </span>
             <span v-else>
-              {{ isSubscription ? "הרשם למנוי" : "שלם" }}
               {{
-                currentAmount || amount
+                isSubscription && showTrialNotice
+                  ? "הירשם ל14 יום חינם"
+                  : isSubscription
+                  ? "שלם"
+                  : "שלם"
+              }}
+              {{
+                !isSubscription && (currentAmount || amount)
+                  ? ` ${formatCurrency(currentAmount || amount)}`
+                  : isSubscription &&
+                    !showTrialNotice &&
+                    (currentAmount || amount)
                   ? ` ${formatCurrency(currentAmount || amount)}`
                   : ""
               }}
-              <span v-if="isSubscription && (currentAmount || amount)">
-                {{ selectedPlan === "annual" ? "/שנה" : "/חודש" }}
-              </span>
             </span>
           </button>
 
@@ -176,6 +180,7 @@
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
 import { loadStripe } from "@stripe/stripe-js";
+import logger from "@/utils/logger";
 
 export default {
   name: "Payments",
@@ -213,7 +218,45 @@ export default {
       monthlyPrice: 49.9,
       annualPrice: 499.9,
       showPlans: false, // Control visibility of subscription plans
+      subscriptionStatus: null, // Store subscription status from API
     };
+  },
+  computed: {
+    showTrialNotice() {
+      // Don't show trial notice if:
+      // 1. URL has ?afterFree=true
+      // 2. subscriptionExpiresAt has passed
+      // 3. User is not in trial period
+      if (this.$route.query.afterFree === "true") {
+        return false;
+      }
+
+      if (this.subscriptionStatus) {
+        // If subscriptionExpiresAt exists and has passed, don't show trial notice
+        if (this.subscriptionStatus.subscriptionExpiresAt) {
+          const expiresAt = new Date(
+            this.subscriptionStatus.subscriptionExpiresAt
+          );
+          const now = new Date();
+          if (now >= expiresAt) {
+            return false; // Expired - no trial
+          }
+        }
+
+        // If needsBilling is true, don't show trial notice
+        if (this.subscriptionStatus.needsBilling) {
+          return false;
+        }
+
+        // If not in trial, don't show trial notice
+        if (!this.subscriptionStatus.isTrial) {
+          return false;
+        }
+      }
+
+      // Default: show trial notice for monthly subscriptions
+      return this.isSubscription && this.selectedPlan === "monthly";
+    },
   },
   async created() {
     this.toast = useToast();
@@ -223,6 +266,24 @@ export default {
     const hasPendingRegistration = this.getPendingRegistrationData() !== null;
     this.isSubscription =
       this.$route.query.subscription === "true" || hasPendingRegistration;
+
+    // If we have userId, check subscription status from DB
+    if (this.userId && this.isSubscription) {
+      try {
+        const response = await fetch(
+          `${URL}/api/subscription/status?userId=${this.userId}`
+        );
+        const data = await response.json();
+        if (data.success) {
+          this.subscriptionStatus = data;
+        }
+      } catch (error) {
+        logger.error(
+          "Error fetching subscription status in Payments.vue:",
+          error
+        );
+      }
+    }
 
     // If we have pending registration but no subscription query param, update the route
     if (hasPendingRegistration && !this.$route.query.subscription) {
@@ -477,7 +538,7 @@ export default {
         }
       } catch (error) {
         this.submitError = "שגיאה באתחול מערכת התשלומים. אנא נסה שוב.";
-        console.error("Error initializing Payment Element:", error);
+        logger.error("Error initializing Payment Element:", error);
       }
     },
     formatCurrency(amount) {
@@ -568,20 +629,20 @@ export default {
               }
             }, 2000);
           } else {
-            console.error("[PAYMENTS] Complete failed:", completeData);
+            logger.error("[PAYMENTS] Complete failed:", completeData);
             this.submitError =
               completeData.message ||
               "המנוי אושר אך יש בעיה בעדכון השרת. אנא פנה לתמיכה.";
           }
         } catch (fetchError) {
-          console.error(
+          logger.error(
             "[PAYMENTS] Error calling /api/subscription/complete:",
             fetchError
           );
           this.submitError = "שגיאה בחיבור לשרת. אנא פנה לתמיכה או נסה שוב.";
         }
       } else {
-        console.error(
+        logger.error(
           "[PAYMENTS] PaymentIntent status not succeeded:",
           paymentIntent?.status
         );

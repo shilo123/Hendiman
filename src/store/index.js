@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import axios from "axios";
 import { URL } from "@/Url/url";
 import { loadCategories, getCategories } from "@/utils/categoriesLoader";
+import logger from "@/utils/logger";
 
 // Load categories from server
 let categoriesData = { categories: [] };
@@ -236,7 +237,18 @@ export const useMainStore = defineStore("main", {
         list = list.filter((h) => h.jobsDone >= filters.minJobs);
       }
 
-      return list;
+      // מיין: הנדימנים החסומים יופיעו אחרונים
+      const sorted = [...list].sort((a, b) => {
+        const aBlocked = a.isBlocked === true;
+        const bBlocked = b.isBlocked === true;
+        // אם אחד חסום והשני לא - החסום יופיע אחרון
+        if (aBlocked && !bBlocked) return 1;
+        if (!aBlocked && bBlocked) return -1;
+        // אם שניהם באותו מצב, שמור על הסדר המקורי
+        return 0;
+      });
+
+      return sorted;
     },
   },
   actions: {
@@ -248,7 +260,7 @@ export const useMainStore = defineStore("main", {
         }
         return { success: false, hasActiveJob: false };
       } catch (error) {
-        console.error("Error checking active job:", error);
+        logger.error("Error checking active job:", error);
         return { success: false, hasActiveJob: false };
       }
     },

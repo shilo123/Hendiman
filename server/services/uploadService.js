@@ -168,6 +168,51 @@ async function uploadImageFromUrl(imageUrl, bucketName) {
   }
 }
 
+async function uploadAudioToS3(file, bucketName) {
+  const fileExtension = file.originalname
+    ? file.originalname.split(".").pop()
+    : "webm";
+  const fileName = `audio-${Date.now()}-${Math.round(Math.random() * 1e9)}.${
+    fileExtension || "webm"
+  }`;
+
+  const uploadParams = {
+    Bucket: bucketName,
+    Key: fileName,
+    Body: file.buffer,
+    ContentType: file.mimetype || "audio/webm",
+  };
+
+  try {
+    await s3.send(new PutObjectCommand(uploadParams));
+    const audioUrl = `https://${bucketName}.s3.amazonaws.com/${fileName}`;
+    return { success: true, audioUrl, fileName };
+  } catch (error) {
+    const errorMessage = error.message || "Unknown S3 error";
+    const errorCode = error.Code || error.name || "UnknownError";
+
+    const isCredentialsIssue =
+      !process.env.AWS_ACCESS_KEY_ID ||
+      !process.env.AWS_SECRET_ACCESS_KEY ||
+      errorMessage.includes("credentials") ||
+      errorMessage.includes("Credential") ||
+      errorMessage.includes("InvalidAccessKeyId") ||
+      errorMessage.includes("SignatureDoesNotMatch") ||
+      errorCode === "CredentialsNotConfigured";
+
+    return {
+      success: false,
+      error: errorMessage,
+      code: errorCode,
+      isAccessDenied:
+        error.name === "AccessDenied" ||
+        error.Code === "AccessDenied" ||
+        isCredentialsIssue,
+      isCredentialsIssue: isCredentialsIssue,
+    };
+  }
+}
+
 async function deleteImageFromS3(imageUrl, bucketName) {
   try {
     // Extract the key (file name) from the S3 URL
@@ -194,9 +239,37 @@ async function deleteImageFromS3(imageUrl, bucketName) {
   }
 }
 
+async function deleteAudioFromS3(audioUrl, bucketName) {
+  try {
+    // Extract the key (file name) from the S3 URL
+    // URL format: https://bucket-name.s3.amazonaws.com/file-name
+    const urlParts = audioUrl.split(`${bucketName}.s3.amazonaws.com/`);
+    if (urlParts.length < 2) {
+      return { success: false, error: "Invalid S3 URL format" };
+    }
+    const key = urlParts[1].split("?")[0]; // Remove query parameters if any
+
+    const deleteParams = {
+      Bucket: bucketName,
+      Key: key,
+    };
+
+    await s3.send(new DeleteObjectCommand(deleteParams));
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message || "Unknown S3 delete error",
+      code: error.Code || error.name || "UnknownError",
+    };
+  }
+}
+
 module.exports = {
   uploadImageToS3,
   uploadLogoToS3,
   uploadImageFromUrl,
+  uploadAudioToS3,
   deleteImageFromS3,
+  deleteAudioFromS3,
 };

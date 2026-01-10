@@ -1,88 +1,144 @@
 <template>
-  <section class="chat" dir="rtl">
+  <section class="chat" dir="rtl" role="application" aria-label="צ'אט עבודה">
     <!-- Header -->
-    <header class="chat__header">
+    <header class="chat__header" role="banner">
       <button
         class="chat__iconBtn"
         type="button"
         @click="$emit('minimize')"
         aria-label="חזור"
       >
-        ←
+        <span class="chat__icon">←</span>
       </button>
 
       <div class="chat__headInfo">
-        <div class="chat__title">
+        <div
+          class="chat__title"
+          :title="isHandyman ? clientName : getHandymanName()"
+        >
           {{ isHandyman ? clientName : getHandymanName() }}
         </div>
-        <div class="chat__subtitle">
+        <div class="chat__subtitle" :title="getJobDisplayName(jobInfo)">
           {{ getJobDisplayName(jobInfo) }}
         </div>
       </div>
 
       <div class="chat__headRight">
-        <span class="chat__status" :class="'status--' + chipTone">{{
-          statusLabel
-        }}</span>
+        <span class="chat__status" :class="'status--' + chipTone">
+          <span
+            class="chat__statusDot"
+            :class="'dot--' + chipTone"
+            aria-hidden="true"
+          ></span>
+          {{ statusLabel }}
+        </span>
 
         <button
-          class="chat__iconBtn"
-          type="button"
-          @click="showMenu = !showMenu"
-          aria-label="תפריט"
-        >
-          ⋯
-        </button>
-      </div>
-
-      <!-- Menu -->
-      <div v-if="showMenu" class="chat__menu" @click.self="showMenu = false">
-        <button
-          class="chat__menuItem chat__menuItem--danger"
+          class="chat__cancelBtn"
           type="button"
           @click="openCancel()"
+          aria-label="ביטול עבודה"
         >
           ביטול עבודה
-        </button>
-        <button class="chat__menuItem" type="button" @click="showMenu = false">
-          סגור
         </button>
       </div>
     </header>
 
-    <!-- Tabs (if multiple jobs) -->
-    <div v-if="jobs && jobs.length > 1" class="chat__tabs">
+    <!-- Tabs -->
+    <div
+      v-if="jobs && jobs.length > 1"
+      class="chat__tabs"
+      role="tablist"
+      aria-label="בחירת עבודה"
+    >
       <button
         v-for="(jobItem, index) in jobs"
         :key="jobItem._id || jobItem.id || index"
         class="chat__tab"
         :class="{ 'chat__tab--active': currentJobIndex === index }"
         type="button"
+        role="tab"
+        :aria-selected="currentJobIndex === index ? 'true' : 'false'"
         @click="switchToJob(index)"
       >
         <span class="chat__tabName">
           {{ isHandyman ? jobItem.clientName : getHandymanNameForJob(jobItem) }}
         </span>
-        <span v-if="getUnreadCount(jobItem) > 0" class="chat__tabBadge">
+        <span
+          v-if="getUnreadCount(jobItem) > 0"
+          class="chat__tabBadge"
+          aria-label="הודעות שלא נקראו"
+        >
           {{ getUnreadCount(jobItem) }}
         </span>
       </button>
     </div>
 
-    <!-- Action bar (one line, scrollable) -->
-    <div v-if="showActionBar" class="chat__actions">
-      <!-- Handyman: navigation button -->
-      <button
-        v-if="isHandyman && jobLocation"
-        class="chip chip--ghost"
-        type="button"
-        @click.stop="showNavModal = true"
-      >
-        🗺️ ניווט
-      </button>
+    <!-- Action bar -->
+    <div
+      v-if="showActionBar || (isHandyman && nextStatus)"
+      class="chat__actions"
+      role="region"
+      aria-label="פעולות מהירות"
+    >
+      <!-- First row: Three buttons (Navigation, Price Update, Job Images) -->
+      <div v-if="showActionBar" class="chat__actionsRow">
+        <button
+          v-if="isHandyman && jobLocation"
+          class="chip chip--ghost"
+          type="button"
+          @click.stop="showNavModal = true"
+        >
+          <span class="chip__icon" aria-hidden="true">🗺️</span>
+          <span class="chip__text">ניווט</span>
+        </button>
 
-      <!-- Handyman: one smart status button instead of 3 blocks -->
-      <div v-if="isHandyman && nextStatus" class="status-update-wrapper">
+        <button
+          v-if="isHandyman && showPriceUpdateButton"
+          class="chip chip--ghost"
+          type="button"
+          @click.stop="showPriceUpdateModal = true"
+        >
+          <span class="chip__icon" aria-hidden="true">💰</span>
+          <span class="chip__text">עדכן מחיר</span>
+        </button>
+
+        <!-- כפתור תמונות העבודה - גם ללקוח וגם להנדימן -->
+        <button
+          v-if="jobImages.length > 0"
+          class="chip chip--ghost chip--icon-only"
+          type="button"
+          @click.stop="showJobImagesModal = true"
+          aria-label="תמונות העבודה"
+          :title="`תמונות (${jobImages.length})`"
+        >
+          📷
+        </button>
+
+        <template v-if="!isHandyman && showStatusButtons">
+          <button
+            class="chip chip--primary"
+            type="button"
+            @click="sendLocation"
+          >
+            <span class="chip__icon" aria-hidden="true">📍</span>
+            <span class="chip__text">שלח מיקום</span>
+          </button>
+
+          <button
+            v-if="jobStatus === 'on_the_way' || jobStatus === 'in_progress'"
+            class="chip chip--ghost"
+            type="button"
+            @click.stop="openHandymanRealtimeLocation"
+          >
+            <span class="chip__icon" aria-hidden="true">🗺️</span>
+            <span class="chip__text">הנדימן בזמן אמת</span>
+          </button>
+        </template>
+      </div>
+
+      <!-- Second row: Status update button (only for handyman, 40% width, right-aligned) -->
+      <div v-if="isHandyman && nextStatus" class="chat__statusUpdateRow">
         <button
           class="chip status-update-btn"
           :class="getStatusButtonClass(nextStatus)"
@@ -90,50 +146,13 @@
           @click="updateStatus(nextStatus)"
         >
           <span class="status-update-label-inline">עדכון סטטוס ללקוח:</span>
-          {{ nextStatusLabel }}
+          <span class="status-update-value">{{ nextStatusLabel }}</span>
         </button>
       </div>
-
-      <!-- Handyman: price update button -->
-      <button
-        v-if="isHandyman && showPriceUpdateButton"
-        class="chip chip--ghost"
-        type="button"
-        @click.stop="showPriceUpdateModal = true"
-      >
-        💰 עדכן מחיר
-      </button>
-
-      <!-- Client: location buttons -->
-      <template v-if="!isHandyman && showStatusButtons">
-        <button class="chip chip--primary" type="button" @click="sendLocation">
-          📍 שלח מיקום
-        </button>
-        <!-- Show "Handyman in real-time" only when handyman is on the way or in progress -->
-        <button
-          v-if="jobStatus === 'on_the_way' || jobStatus === 'in_progress'"
-          class="chip chip--ghost"
-          type="button"
-          @click.stop="openHandymanRealtimeLocation"
-        >
-          🗺️ הנדימן בזמן אמת
-        </button>
-      </template>
-
-      <!-- Job Images button (for both handyman and client) -->
-      <button
-        v-if="jobImages.length > 0"
-        class="chip chip--ghost chip--icon-only"
-        type="button"
-        @click.stop="showJobImagesModal = true"
-        aria-label="תמונות העבודה"
-      >
-        📷
-      </button>
     </div>
 
-    <!-- Compact stepper - hidden on mobile -->
-    <div class="chat__stepper chat__stepper--desktop">
+    <!-- Desktop stepper -->
+    <div class="chat__stepper chat__stepper--desktop" aria-label="שלבי עבודה">
       <div
         v-for="(step, i) in jobSteps"
         :key="step.status"
@@ -143,7 +162,7 @@
           'is-done': isStepCompleted(step.status),
         }"
       >
-        <div class="step__dot">
+        <div class="step__dot" aria-hidden="true">
           <span v-if="isStepCompleted(step.status)">✓</span>
           <span v-else>{{ i + 1 }}</span>
         </div>
@@ -155,10 +174,12 @@
     <div
       v-if="!isHandyman && jobStatus === 'done' && !ratingSubmitted"
       class="chat__rating"
+      role="region"
+      aria-label="דירוג הנדימן"
     >
       <div class="chat__ratingTitle">דרג את ההנדימן</div>
 
-      <div class="chat__stars">
+      <div class="chat__stars" role="radiogroup" aria-label="בחירת דירוג">
         <template v-for="s in 5" :key="s">
           <input
             :value="s"
@@ -181,6 +202,7 @@
                   (hoverRating > 0 && s <= hoverRating) ||
                   (hoverRating === 0 && rating >= s),
               }"
+              aria-hidden="true"
               >★</span
             >
           </label>
@@ -199,7 +221,12 @@
     </div>
 
     <!-- Messages -->
-    <div class="chat__messages" ref="messagesContainer">
+    <div
+      class="chat__messages"
+      ref="messagesContainer"
+      role="log"
+      aria-live="polite"
+    >
       <div v-if="!messages.length" class="chat__empty">
         עדיין אין הודעות. תתחילו 🙂
       </div>
@@ -213,59 +240,132 @@
           'is-system': m.sender === 'system' || m.isSystem,
         }"
       >
-        <div
-          class="bubble"
-          :class="{
-            'bubble--me': m.sender === 'me',
-            'bubble--system': m.sender === 'system' || m.isSystem,
-          }"
-        >
-          <button
-            v-if="m.image"
-            type="button"
-            class="bubble__imgBtn"
-            @click="openImage(m.image)"
+        <div class="bubbleWrap">
+          <div
+            class="bubble"
+            :class="{
+              'bubble--me': m.sender === 'me',
+              'bubble--system': m.sender === 'system' || m.isSystem,
+              'bubble--other':
+                m.sender !== 'me' && !(m.sender === 'system' || m.isSystem),
+              'bubble--uploading': m.uploading,
+            }"
           >
-            <img :src="m.image" class="bubble__img" alt="תמונה" />
-          </button>
+            <div class="bubble__content">
+              <button
+                v-if="m.image"
+                type="button"
+                class="bubble__imgBtn"
+                @click="openImage(m.image)"
+                :aria-label="m.text ? 'פתח תמונה עם כיתוב' : 'פתח תמונה'"
+              >
+                <img :src="m.image" class="bubble__img" alt="תמונה" />
+                <span class="bubble__imgGlow" aria-hidden="true"></span>
+              </button>
 
-          <button
-            v-if="m.location"
-            type="button"
-            class="bubble__loc"
-            @click.stop="openLocationModal(m.location)"
-          >
-            <img
-              :src="getLocationMapImage(m.location)"
-              class="bubble__locMap"
-              alt="מיקום"
-              @error="onMapImageError"
-            />
-            <div class="bubble__locOverlay">📍 מיקום</div>
-          </button>
+              <button
+                v-if="m.location"
+                type="button"
+                class="bubble__loc"
+                @click.stop="openLocationModal(m.location)"
+                aria-label="פתח מיקום"
+              >
+                <img
+                  :src="getLocationMapImage(m.location)"
+                  class="bubble__locMap"
+                  alt="מיקום"
+                  @error="onMapImageError"
+                />
+                <div class="bubble__locOverlay">
+                  <span aria-hidden="true">📍</span> מיקום
+                </div>
+              </button>
 
-          <div v-if="m.text" class="bubble__text">{{ m.text }}</div>
+              <div v-if="m.audio" class="bubble__audio">
+                <audio
+                  :ref="`audio-${i}`"
+                  :src="m.audio"
+                  preload="metadata"
+                  @loadedmetadata="updateAudioDuration(i, $event)"
+                ></audio>
 
-          <div class="bubble__meta">
-            <span class="bubble__time">{{ m.time }}</span>
-            <span v-if="m.sender === 'me'" class="bubble__tick">✓✓</span>
+                <button
+                  class="bubble__audioBtn"
+                  type="button"
+                  @click="toggleAudioPlayback(i)"
+                  :aria-label="m.isPlaying ? 'עצור הקלטה' : 'נגן הקלטה'"
+                >
+                  <span class="bubble__audioIcon" aria-hidden="true">
+                    {{ m.isPlaying ? "⏸" : "▶" }}
+                  </span>
+                  <div class="bubble__audioWave">
+                    <span
+                      v-for="(bar, idx) in getWaveformBars(i)"
+                      :key="idx"
+                      class="bubble__audioWaveBar"
+                      :style="{ height: bar + '%' }"
+                    ></span>
+                  </div>
+                  <span class="bubble__audioTime">{{
+                    m.audioDuration || "0:00"
+                  }}</span>
+                </button>
+              </div>
+
+              <div v-if="m.text" class="bubble__text">{{ m.text }}</div>
+            </div>
+
+            <div class="bubble__meta">
+              <span class="bubble__time">{{ m.time }}</span>
+              <span
+                v-if="m.sender === 'me'"
+                class="bubble__tick"
+                aria-label="נשלח"
+                >✓✓</span
+              >
+            </div>
+
+            <div
+              v-if="m.uploading"
+              class="bubble__uploading"
+              aria-label="נשלח..."
+            >
+              שולח…
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Typing indicator -->
+      <div v-if="isOtherTyping" class="bubble bubble--other">
+        <div class="bubble__content">
+          <div class="typing-indicator">
+            <span></span>
+            <span></span>
+            <span></span>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Composer -->
-    <div class="composer">
+    <div class="composer" role="region" aria-label="שליחת הודעה">
       <button
         class="composer__plus"
         type="button"
         @click="toggleTools"
         aria-label="כלים"
+        :aria-expanded="showTools ? 'true' : 'false'"
       >
         ＋
       </button>
 
-      <div v-if="imagePreview" class="composer__preview">
+      <div
+        v-if="imagePreview"
+        class="composer__preview"
+        role="group"
+        aria-label="תצוגה מקדימה לתמונה"
+      >
         <div class="composer__previewTop">
           <img :src="imagePreview" class="composer__previewImg" alt="תמונה" />
           <button
@@ -277,6 +377,7 @@
             ✕
           </button>
         </div>
+
         <input
           ref="imagePreviewTextInput"
           v-model="imagePreviewText"
@@ -287,6 +388,37 @@
         />
       </div>
 
+      <div
+        v-else-if="audioPreview"
+        class="composer__preview"
+        role="group"
+        aria-label="תצוגה מקדימה להקלטה"
+      >
+        <div class="composer__previewTop">
+          <div class="composer__audioPreview">
+            <button
+              class="composer__audioPlay"
+              type="button"
+              @click="playAudioPreview"
+              aria-label="נגן"
+            >
+              ▶
+            </button>
+            <span class="composer__audioTime">{{
+              formatRecordingTime(recordingTime)
+            }}</span>
+          </div>
+          <button
+            class="composer__previewClose"
+            type="button"
+            @click="cancelAudioPreview"
+            aria-label="ביטול"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+
       <input
         v-else
         v-model="newMessage"
@@ -294,13 +426,42 @@
         type="text"
         placeholder="הקלד הודעה…"
         @keyup.enter="sendMessage"
+        @input="handleTyping"
+        aria-label="הקלד הודעה"
       />
+
+      <button
+        v-if="!isRecording && !audioPreview"
+        class="composer__record"
+        type="button"
+        @click="startRecording"
+        aria-label="הקלט"
+        :disabled="imagePreview"
+      >
+        🎤
+      </button>
+
+      <button
+        v-else-if="isRecording"
+        class="composer__record composer__record--recording"
+        type="button"
+        @click="stopRecording"
+        aria-label="הפסק הקלטה"
+      >
+        ⏹
+      </button>
 
       <button
         class="composer__send"
         type="button"
-        @click="imagePreview ? sendImageWithText() : sendMessage()"
-        :disabled="!imagePreview && !newMessage.trim()"
+        @click="
+          audioPreview
+            ? sendAudio()
+            : imagePreview
+            ? sendImageWithText()
+            : sendMessage()
+        "
+        :disabled="!audioPreview && !imagePreview && !newMessage.trim()"
       >
         שלח
       </button>
@@ -315,28 +476,44 @@
     </div>
 
     <!-- Tools bottom sheet -->
-    <div v-if="showTools" class="toolsSheet" @click.self="showTools = false">
+    <div
+      v-if="showTools"
+      class="toolsSheet"
+      @click.self="showTools = false"
+      role="dialog"
+      aria-label="כלים"
+    >
       <div class="toolsSheet__card">
+        <div class="toolsSheet__title">כלים</div>
+
         <button class="toolsSheet__item" type="button" @click="triggerFile">
-          📷 תמונה
+          <span class="toolsSheet__emoji">📷</span>
+          <span class="toolsSheet__txt">תמונה</span>
         </button>
+
         <button class="toolsSheet__item" type="button" @click="sendLocation">
-          📍 מיקום
+          <span class="toolsSheet__emoji">📍</span>
+          <span class="toolsSheet__txt">מיקום</span>
         </button>
+
         <button
           class="toolsSheet__item"
           type="button"
           @click="sendQuick('אני בדרך')"
         >
-          🚗 אני בדרך
+          <span class="toolsSheet__emoji">🚗</span>
+          <span class="toolsSheet__txt">אני בדרך</span>
         </button>
+
         <button
           class="toolsSheet__item"
           type="button"
           @click="sendQuick('הגעתי')"
         >
-          ✅ הגעתי
+          <span class="toolsSheet__emoji">✅</span>
+          <span class="toolsSheet__txt">הגעתי</span>
         </button>
+
         <button
           class="toolsSheet__close"
           type="button"
@@ -347,10 +524,21 @@
       </div>
     </div>
 
-    <!-- Image modal -->
-    <div v-if="imageModal" class="modal" @click.self="imageModal = null">
+    <!-- Image modal - z-index גבוה יותר כדי שיהיה מעל הפופאפ של תמונות העבודה -->
+    <div
+      v-if="imageModal"
+      class="modal modal--image"
+      @click.self="imageModal = null"
+      role="dialog"
+      aria-label="תמונה"
+    >
       <div class="modal__card">
-        <button class="modal__close" type="button" @click="imageModal = null">
+        <button
+          class="modal__close"
+          type="button"
+          @click="imageModal = null"
+          aria-label="סגור"
+        >
           ✕
         </button>
         <img :src="imageModal" class="modal__img" alt="preview" />
@@ -363,6 +551,8 @@
       class="modal"
       dir="rtl"
       @click.self="showNavModal = false"
+      role="dialog"
+      aria-label="פתיחת ניווט"
     >
       <div class="navModal">
         <div class="navModal__title">איפה לפתוח את המיקום?</div>
@@ -404,9 +594,12 @@
       class="modal"
       dir="rtl"
       @click.self="showCancelReasonModal = false"
+      role="dialog"
+      aria-label="ביטול עבודה"
     >
       <div class="cancelReasonModal">
         <div class="cancelReasonModal__title">ביטול עבודה</div>
+
         <div class="cancelReasonModal__form">
           <div class="cancelReasonModal__field">
             <label class="cancelReasonModal__label">סיבת הביטול</label>
@@ -417,12 +610,16 @@
               rows="4"
             ></textarea>
           </div>
+
           <div class="cancelReasonModal__warning">
-            <span class="cancelReasonModal__warningIcon">⚠️</span>
+            <span class="cancelReasonModal__warningIcon" aria-hidden="true"
+              >⚠️</span
+            >
             <span class="cancelReasonModal__warningText">
               שים לב: ביטול לא מוצדק יוביל לקנס של עד 200 ₪
             </span>
           </div>
+
           <div class="cancelReasonModal__options">
             <button
               class="cancelReasonModal__option"
@@ -434,7 +631,9 @@
               @click="cancelAction = 'cancel-handyman'"
               :disabled="!cancelReasonText.trim()"
             >
-              <span class="cancelReasonModal__optionIcon">👤</span>
+              <span class="cancelReasonModal__optionIcon" aria-hidden="true"
+                >👤</span
+              >
               <span class="cancelReasonModal__optionText"
                 >בטל עבור הנדימן הזה</span
               >
@@ -443,9 +642,11 @@
                   cancelAction === 'cancel-handyman' && cancelReasonText.trim()
                 "
                 class="cancelReasonModal__checkIcon"
+                aria-hidden="true"
                 >✓</span
               >
             </button>
+
             <button
               class="cancelReasonModal__option"
               :class="{
@@ -456,16 +657,20 @@
               @click="cancelAction = 'cancel-complete'"
               :disabled="!cancelReasonText.trim()"
             >
-              <span class="cancelReasonModal__optionIcon">🚫</span>
+              <span class="cancelReasonModal__optionIcon" aria-hidden="true"
+                >🚫</span
+              >
               <span class="cancelReasonModal__optionText">בטל עבודה לגמרי</span>
               <span
                 v-if="
                   cancelAction === 'cancel-complete' && cancelReasonText.trim()
                 "
                 class="cancelReasonModal__checkIcon"
+                aria-hidden="true"
                 >✓</span
               >
             </button>
+
             <button
               v-if="!isHandyman"
               class="cancelReasonModal__option cancelReasonModal__option--delete"
@@ -477,16 +682,20 @@
               @click="cancelAction = 'delete'"
               :disabled="!cancelReasonText.trim()"
             >
-              <span class="cancelReasonModal__optionIcon">🗑️</span>
+              <span class="cancelReasonModal__optionIcon" aria-hidden="true"
+                >🗑️</span
+              >
               <span class="cancelReasonModal__optionText">מחק עבודה</span>
               <span
                 v-if="cancelAction === 'delete' && cancelReasonText.trim()"
                 class="cancelReasonModal__checkIcon"
+                aria-hidden="true"
                 >✓</span
               >
             </button>
           </div>
         </div>
+
         <div class="cancelReasonModal__actions">
           <button
             class="cancelReasonModal__btn cancelReasonModal__btn--cancel"
@@ -508,12 +717,19 @@
     </div>
 
     <!-- Location modal -->
-    <div v-if="locationModal" class="modal" @click.self="locationModal = null">
+    <div
+      v-if="locationModal"
+      class="modal"
+      @click.self="locationModal = null"
+      role="dialog"
+      aria-label="מיקום"
+    >
       <div class="locCard">
         <button
           class="locCard__close"
           type="button"
           @click="locationModal = null"
+          aria-label="סגור"
         >
           ✕
         </button>
@@ -553,6 +769,8 @@
       class="modal"
       dir="rtl"
       @click.self="showPriceUpdateModal = false"
+      role="dialog"
+      aria-label="עדכון מחיר"
     >
       <div class="priceUpdateModal">
         <div class="priceUpdateModal__header">
@@ -561,19 +779,23 @@
             class="priceUpdateModal__close"
             type="button"
             @click="showPriceUpdateModal = false"
+            aria-label="סגור"
           >
             ✕
           </button>
         </div>
+
         <div class="priceUpdateModal__body">
           <div class="priceUpdateModal__currentPrice">
             <span class="priceUpdateModal__label">מחיר נוכחי:</span>
             <span class="priceUpdateModal__value">{{ currentJobPrice }} ₪</span>
           </div>
+
           <div class="priceUpdateModal__change">
-            <label class="priceUpdateModal__label" for="priceChangePercent"
-              >שינוי באחוזים (עד 20%):</label
-            >
+            <label class="priceUpdateModal__label" for="priceChangePercent">
+              שינוי באחוזים (עד 20%):
+            </label>
+
             <div class="priceUpdateModal__inputGroup">
               <input
                 id="priceChangePercent"
@@ -588,12 +810,16 @@
               />
               <span class="priceUpdateModal__percent">%</span>
             </div>
+
             <div class="priceUpdateModal__newPrice">
               <span class="priceUpdateModal__label">מחיר חדש:</span>
-              <span class="priceUpdateModal__value priceUpdateModal__value--new"
-                >{{ newPrice }} ₪</span
+              <span
+                class="priceUpdateModal__value priceUpdateModal__value--new"
               >
+                {{ newPrice }} ₪
+              </span>
             </div>
+
             <div
               v-if="priceChangePercent !== 0"
               class="priceUpdateModal__changeAmount"
@@ -616,6 +842,7 @@
             </div>
           </div>
         </div>
+
         <div class="priceUpdateModal__footer">
           <button
             class="priceUpdateModal__btn priceUpdateModal__btn--cancel"
@@ -642,11 +869,14 @@
       class="modal"
       dir="rtl"
       @click.self="showPriceApprovalModal = false"
+      role="dialog"
+      aria-label="אישור שינוי מחיר"
     >
       <div class="priceApprovalModal">
         <div class="priceApprovalModal__header">
           <h3 class="priceApprovalModal__title">בקשת שינוי מחיר</h3>
         </div>
+
         <div class="priceApprovalModal__body">
           <div class="priceApprovalModal__message">
             ההנדימן ביקש
@@ -664,6 +894,7 @@
             </span>
             מהמחיר. האם אתה מאשר?
           </div>
+
           <div class="priceApprovalModal__details">
             <div class="priceApprovalModal__detailRow">
               <span class="priceApprovalModal__detailLabel">מחיר נוכחי:</span>
@@ -675,8 +906,9 @@
               <span class="priceApprovalModal__detailLabel">מחיר חדש:</span>
               <span
                 class="priceApprovalModal__detailValue priceApprovalModal__detailValue--new"
-                >{{ pendingPriceChange.newPrice }} ₪</span
               >
+                {{ pendingPriceChange.newPrice }} ₪
+              </span>
             </div>
             <div class="priceApprovalModal__detailRow">
               <span class="priceApprovalModal__detailLabel">שינוי:</span>
@@ -699,6 +931,7 @@
             </div>
           </div>
         </div>
+
         <div class="priceApprovalModal__footer">
           <button
             class="priceApprovalModal__btn priceApprovalModal__btn--reject"
@@ -726,6 +959,8 @@
       class="modal"
       dir="rtl"
       @click.self="showJobImagesModal = false"
+      role="dialog"
+      aria-label="תמונות העבודה"
     >
       <div class="jobImagesModal">
         <div class="jobImagesModal__header">
@@ -734,10 +969,12 @@
             class="jobImagesModal__close"
             type="button"
             @click="showJobImagesModal = false"
+            aria-label="סגור"
           >
             ✕
           </button>
         </div>
+
         <div class="jobImagesModal__body">
           <div v-if="jobImages.length === 0" class="jobImagesModal__empty">
             אין תמונות לעבודה זו
@@ -748,7 +985,7 @@
               :key="index"
               class="jobImagesModal__imageBtn"
               type="button"
-              @click="openImage(image)"
+              @click="openImageFromModal(image)"
             >
               <img
                 :src="image"
@@ -761,12 +998,14 @@
       </div>
     </div>
 
-    <!-- Hours Worked Modal (for handyman when workType is hourly) -->
+    <!-- Hours Worked Modal -->
     <div
       v-if="showHoursWorkedModal"
       class="modal"
       dir="rtl"
       @click.self="showHoursWorkedModal = false"
+      role="dialog"
+      aria-label="שעות עבודה"
     >
       <div class="hoursWorkedModal">
         <div class="hoursWorkedModal__header">
@@ -775,12 +1014,15 @@
             class="hoursWorkedModal__close"
             type="button"
             @click="showHoursWorkedModal = false"
+            aria-label="סגור"
           >
             ✕
           </button>
         </div>
+
         <div class="hoursWorkedModal__body">
           <div class="hoursWorkedModal__message">כמה שעות עבדת על העבודה?</div>
+
           <div class="hoursWorkedModal__field">
             <label class="hoursWorkedModal__label" for="hoursWorked"
               >שעות</label
@@ -794,12 +1036,13 @@
               class="hoursWorkedModal__input"
             />
           </div>
+
           <div class="hoursWorkedModal__priceInfo">
             <div class="hoursWorkedModal__priceRow">
               <span class="hoursWorkedModal__priceLabel">מחיר לשעה:</span>
-              <span class="hoursWorkedModal__priceValue">
-                {{ hourlyPrice.toFixed(2) }} ₪
-              </span>
+              <span class="hoursWorkedModal__priceValue"
+                >{{ hourlyPrice.toFixed(2) }} ₪</span
+              >
             </div>
             <div
               class="hoursWorkedModal__priceRow hoursWorkedModal__priceRow--total"
@@ -813,6 +1056,7 @@
             </div>
           </div>
         </div>
+
         <div class="hoursWorkedModal__footer">
           <button
             class="hoursWorkedModal__btn hoursWorkedModal__btn--cancel"
@@ -833,11 +1077,13 @@
       </div>
     </div>
 
-    <!-- Handyman Route Modal (for client) -->
+    <!-- Handyman Route Modal -->
     <div
       v-if="showHandymanRouteModal"
       class="modal route-modal"
       @click.self="closeHandymanRouteModal"
+      role="dialog"
+      aria-label="מיקום ההנדימן"
     >
       <div class="routeCard">
         <div class="routeCard__header">
@@ -846,6 +1092,7 @@
             class="routeCard__close"
             type="button"
             @click="closeHandymanRouteModal"
+            aria-label="סגור"
           >
             ✕
           </button>
@@ -854,16 +1101,19 @@
         <div class="routeCard__mapWrapper">
           <div ref="routeMapContainer" class="routeCard__map"></div>
           <div v-if="routeLoading" class="routeCard__loading">טוען מפה...</div>
+
           <div class="routeCard__legend">
             <div class="routeCard__legendItem">
               <span
                 class="routeCard__legendDot routeCard__legendDot--start"
+                aria-hidden="true"
               ></span>
               <span class="routeCard__legendText">מיקום ההנדימן</span>
             </div>
             <div class="routeCard__legendItem">
               <span
                 class="routeCard__legendDot routeCard__legendDot--end"
+                aria-hidden="true"
               ></span>
               <span class="routeCard__legendText">מיקום העבודה</span>
             </div>
@@ -874,18 +1124,22 @@
           <div class="routeCard__info">
             <div class="routeCard__infoRow">
               <span class="routeCard__infoLabel">מיקום ההנדימן:</span>
-              <span class="routeCard__infoValue">{{
-                formatLocation(
-                  cachedLastHandymanLocation || lastHandymanLocation
-                )
-              }}</span>
+              <span class="routeCard__infoValue">
+                {{
+                  formatLocation(
+                    cachedLastHandymanLocation || lastHandymanLocation
+                  )
+                }}
+              </span>
             </div>
+
             <div class="routeCard__infoRow">
               <span class="routeCard__infoLabel">מיקום העבודה:</span>
               <span class="routeCard__infoValue">{{
                 formatLocation(jobLocation)
               }}</span>
             </div>
+
             <div
               v-if="travelTimeMinutes !== null"
               class="routeCard__infoRow routeCard__infoRow--highlight"
@@ -931,6 +1185,7 @@ import { useToast } from "@/composables/useToast";
 import { useMainStore } from "@/store/index";
 import mapboxgl from "mapbox-gl";
 import { getCurrentLocation } from "@/utils/geolocation";
+import logger from "@/utils/logger";
 
 export default {
   name: "JobChatMobileV2",
@@ -1017,6 +1272,22 @@ export default {
       showHoursWorkedModal: false,
       hoursWorked: 1,
       isSubmittingHours: false,
+
+      // Audio recording state
+      isRecording: false,
+      recordingTime: 0,
+      recordingInterval: null,
+      mediaRecorder: null,
+      audioBlob: null,
+      audioPreview: null,
+      audioChunks: [],
+      audioUrlsToDelete: [], // Track audio URLs for cleanup
+
+      // Typing indicator state
+      isTyping: false,
+      isOtherTyping: false,
+      typingTimeout: null,
+      typingEmitTimeout: null,
     };
   },
   computed: {
@@ -1035,12 +1306,13 @@ export default {
     },
     showActionBar() {
       // show chips only when there is something useful
+      // Status update row is always shown separately for handyman if nextStatus exists
       return (
         (this.isHandyman && this.jobLocation) ||
-        (this.isHandyman && !!this.nextStatus) ||
         (this.isHandyman && this.showPriceUpdateButton) ||
         (!this.isHandyman && this.showStatusButtons) ||
-        true
+        this.jobImages.length > 0 || // תמונות העבודה - גם ללקוח וגם להנדימן
+        (this.isHandyman && !!this.nextStatus) // Status update is in separate row but still needs action bar container
       );
     },
     showPriceUpdateButton() {
@@ -1306,26 +1578,26 @@ export default {
     },
   },
   created() {
-    console.log("[JobChatMobile] ========== CREATED ==========");
-    console.log("[JobChatMobile] created() - isHandyman:", this.isHandyman);
-    console.log("[JobChatMobile] created() - jobs:", this.jobs);
-    console.log("[JobChatMobile] created() - job:", this.job);
+    logger.log("[JobChatMobile] ========== CREATED ==========");
+    logger.log("[JobChatMobile] created() - isHandyman:", this.isHandyman);
+    logger.log("[JobChatMobile] created() - jobs:", this.jobs);
+    logger.log("[JobChatMobile] created() - job:", this.job);
 
     this.toast = useToast();
     const job = this.currentJob;
-    console.log("[JobChatMobile] created() - currentJob:", job);
+    logger.log("[JobChatMobile] created() - currentJob:", job);
     this.localJobStatus = job?.status || null;
-    console.log(
+    logger.log(
       "[JobChatMobile] created() - localJobStatus:",
       this.localJobStatus
     );
   },
   async mounted() {
-    console.log("[JobChatMobile] ========== MOUNTED START ==========");
-    console.log("[JobChatMobile] isHandyman:", this.isHandyman);
-    console.log("[JobChatMobile] jobs prop:", this.jobs);
-    console.log("[JobChatMobile] job prop:", this.job);
-    console.log("[JobChatMobile] currentJobIndex:", this.currentJobIndex);
+    logger.log("[JobChatMobile] ========== MOUNTED START ==========");
+    logger.log("[JobChatMobile] isHandyman:", this.isHandyman);
+    logger.log("[JobChatMobile] jobs prop:", this.jobs);
+    logger.log("[JobChatMobile] job prop:", this.job);
+    logger.log("[JobChatMobile] currentJobIndex:", this.currentJobIndex);
 
     window.addEventListener("click", this.onOutsideTools);
     window.addEventListener("visibilitychange", this.handleVisibilityChange);
@@ -1333,24 +1605,24 @@ export default {
 
     // Load messages from sessionStorage first if available for fast display
     const job = this.currentJob;
-    console.log("[JobChatMobile] currentJob computed:", job);
+    logger.log("[JobChatMobile] currentJob computed:", job);
 
     if (!job) {
-      console.error(
+      logger.error(
         "[JobChatMobile] ❌ No current job in mounted, waiting and retrying..."
       );
-      console.error("[JobChatMobile] jobs array:", this.jobs);
-      console.error("[JobChatMobile] job prop:", this.job);
-      console.error("[JobChatMobile] currentJobIndex:", this.currentJobIndex);
+      logger.error("[JobChatMobile] jobs array:", this.jobs);
+      logger.error("[JobChatMobile] job prop:", this.job);
+      logger.error("[JobChatMobile] currentJobIndex:", this.currentJobIndex);
 
       // Wait a bit and try again - maybe job is loaded asynchronously
       await new Promise((resolve) => setTimeout(resolve, 500));
       const retryJob = this.currentJob;
       if (!retryJob) {
-        console.error("[JobChatMobile] ❌ Still no job after retry");
+        logger.error("[JobChatMobile] ❌ Still no job after retry");
         // Don't return - try to continue anyway
       } else {
-        console.log("[JobChatMobile] ✅ Got job after retry:", retryJob);
+        logger.log("[JobChatMobile] ✅ Got job after retry:", retryJob);
         // Use retryJob
         const retryJobId = retryJob?.id || retryJob?._id;
         if (retryJobId) {
@@ -1387,7 +1659,7 @@ export default {
                 });
               })
               .catch((error) => {
-                console.error("[JobChatMobile] Error loading messages:", error);
+                logger.error("[JobChatMobile] Error loading messages:", error);
                 if (this.messages.length === 0) {
                   this.toast?.showError("שגיאה בטעינת הודעות");
                 }
@@ -1395,7 +1667,7 @@ export default {
           } else {
             setTimeout(() => {
               this.loadMessages().catch((error) => {
-                console.warn("[JobChatMobile] Background sync failed:", error);
+                logger.warn("[JobChatMobile] Background sync failed:", error);
               });
             }, 100);
           }
@@ -1405,23 +1677,23 @@ export default {
     }
 
     const jobId = job?.id || job?._id;
-    console.log("[JobChatMobile] jobId extracted:", jobId);
+    logger.log("[JobChatMobile] jobId extracted:", jobId);
 
     if (!jobId) {
-      console.error(
+      logger.error(
         "[JobChatMobile] ❌ No jobId in mounted, waiting and retrying..."
       );
-      console.error("[JobChatMobile] job object:", job);
+      logger.error("[JobChatMobile] job object:", job);
 
       // Wait a bit and try again
       await new Promise((resolve) => setTimeout(resolve, 500));
       const retryJob = this.currentJob;
       const retryJobId = retryJob?.id || retryJob?._id;
       if (!retryJobId) {
-        console.error("[JobChatMobile] ❌ Still no jobId after retry");
+        logger.error("[JobChatMobile] ❌ Still no jobId after retry");
         // Don't return - try to continue anyway with empty messages
       } else {
-        console.log("[JobChatMobile] ✅ Got jobId after retry:", retryJobId);
+        logger.log("[JobChatMobile] ✅ Got jobId after retry:", retryJobId);
         const jobIdStr = String(retryJobId);
         let hasCachedMessages = false;
 
@@ -1454,7 +1726,7 @@ export default {
               });
             })
             .catch((error) => {
-              console.error("[JobChatMobile] Error loading messages:", error);
+              logger.error("[JobChatMobile] Error loading messages:", error);
               if (this.messages.length === 0) {
                 this.toast?.showError("שגיאה בטעינת הודעות");
               }
@@ -1462,7 +1734,7 @@ export default {
         } else {
           setTimeout(() => {
             this.loadMessages().catch((error) => {
-              console.warn("[JobChatMobile] Background sync failed:", error);
+              logger.warn("[JobChatMobile] Background sync failed:", error);
             });
           }, 100);
         }
@@ -1509,7 +1781,7 @@ export default {
         })
         .catch((error) => {
           // Log error for debugging
-          console.error("[JobChatMobile] Error loading messages:", error);
+          logger.error("[JobChatMobile] Error loading messages:", error);
           // Show error only if we have no messages at all
           if (this.messages.length === 0) {
             this.toast?.showError("שגיאה בטעינת הודעות");
@@ -1521,7 +1793,7 @@ export default {
       setTimeout(() => {
         this.loadMessages().catch((error) => {
           // Silent fail - we already have messages from cache
-          console.warn("[JobChatMobile] Background sync failed:", error);
+          logger.warn("[JobChatMobile] Background sync failed:", error);
         });
       }, 100);
     }
@@ -1545,8 +1817,21 @@ export default {
     // Stop connection quality check
     this.stopConnectionQualityCheck();
 
+    // Stop recording if active
+    if (this.isRecording) {
+      this.stopRecording();
+    }
+
+    // Clean up preview audio if exists
+    if (this.audioPreview) {
+      window.URL.revokeObjectURL(this.audioPreview);
+    }
+
     // Save messages before unmount
     this.saveMessagesBeforeUnload();
+
+    // Clean up chat files (images and audio) from S3
+    this.cleanupChatFiles();
   },
   watch: {
     async showHandymanRouteModal(newVal) {
@@ -1852,6 +2137,11 @@ export default {
       // Handle connection success
       this.socket.on("connect", () => {
         this.socket.emit("join-job", jobIdString);
+        // Store userId in socket for typing indicator
+        const userId = this.store?.user?._id || this.me?._id;
+        if (userId) {
+          this.socket.userId = String(userId);
+        }
       });
 
       // Handle connection errors
@@ -1990,6 +2280,32 @@ export default {
         }
       });
 
+      // Listen for typing indicator
+      this.socket.on("user-typing", (data) => {
+        const receivedJobId = String(data.jobId || "");
+        const currentJobId = String(jobId || "");
+        if (receivedJobId === currentJobId) {
+          // Check if the typing user is the other user (not me)
+          const userId = this.store?.user?._id || this.me?._id;
+          const typingUserId = String(data.userId || "");
+          const currentUserId = String(userId || "");
+
+          if (typingUserId !== currentUserId) {
+            this.isOtherTyping = data.isTyping;
+
+            // Auto-hide typing indicator after 5 seconds
+            if (this.typingTimeout) {
+              clearTimeout(this.typingTimeout);
+            }
+            if (data.isTyping) {
+              this.typingTimeout = setTimeout(() => {
+                this.isOtherTyping = false;
+              }, 5000);
+            }
+          }
+        }
+      });
+
       // Listen for price change requests (for client)
       this.socket.on("price-change-request", (data) => {
         const receivedJobId = String(data.jobId || "");
@@ -2075,10 +2391,27 @@ export default {
     },
 
     disconnectWebSocket() {
+      if (this.typingTimeout) {
+        clearTimeout(this.typingTimeout);
+        this.typingTimeout = null;
+      }
+      if (this.typingEmitTimeout) {
+        clearTimeout(this.typingEmitTimeout);
+        this.typingEmitTimeout = null;
+      }
+      this.isOtherTyping = false;
+
       if (this.socket) {
         const job = this.currentJob;
         const jobId = job?.id || job?._id;
-        if (jobId) this.socket.emit("leave-job", jobId);
+        if (jobId) {
+          this.socket.emit("leave-job", jobId);
+          // Stop typing indicator
+          this.socket.emit("typing", {
+            jobId: String(jobId),
+            isTyping: false,
+          });
+        }
         this.socket.removeAllListeners();
         this.socket.disconnect();
         this.socket = null;
@@ -2086,26 +2419,26 @@ export default {
     },
 
     async loadMessages() {
-      console.log("[JobChatMobile] loadMessages() called");
+      logger.log("[JobChatMobile] loadMessages() called");
       try {
         const job = this.currentJob;
-        console.log("[JobChatMobile] loadMessages - currentJob:", job);
+        logger.log("[JobChatMobile] loadMessages - currentJob:", job);
 
         if (!job) {
-          console.warn("[JobChatMobile] No current job found in loadMessages");
+          logger.warn("[JobChatMobile] No current job found in loadMessages");
           return;
         }
 
         const jobId = job?.id || job?._id;
-        console.log("[JobChatMobile] loadMessages - jobId:", jobId);
+        logger.log("[JobChatMobile] loadMessages - jobId:", jobId);
 
         if (!jobId) {
-          console.warn("[JobChatMobile] No jobId found in current job:", job);
+          logger.warn("[JobChatMobile] No jobId found in current job:", job);
           return;
         }
 
         const jobIdStr = String(jobId);
-        console.log(
+        logger.log(
           "[JobChatMobile] loadMessages - fetching from:",
           `${URL}/jobs/${jobId}/messages`
         );
@@ -2147,7 +2480,11 @@ export default {
         if (data && data.success && Array.isArray(data.messages)) {
           const loadedMessages = data.messages.map((msg) => {
             const isFromHandyman =
-              !!msg.handyman || !!msg.handymanImage || !!msg.handymanLocation;
+              !!msg.handyman ||
+              !!msg.handymanImage ||
+              !!msg.handymanLocation ||
+              !!msg.handymanAudio ||
+              (!!msg.customerAudio && !msg.handyman);
             const sender = this.isHandyman
               ? isFromHandyman
                 ? "me"
@@ -2157,17 +2494,32 @@ export default {
               : "me";
             const text = msg.handyman || msg.customer || "";
             const image = msg.handymanImage || msg.customerImage || null;
+            const audio = msg.handymanAudio || msg.customerAudio || null;
+            const audioDurationRaw =
+              msg.handymanAudioDuration || msg.customerAudioDuration || null;
+            const audioDuration = audioDurationRaw
+              ? this.formatRecordingTime(audioDurationRaw)
+              : null;
             const location =
               msg.handymanLocation || msg.customerLocation || null;
             const createdAt = msg.createdAt
               ? new Date(msg.createdAt)
               : new Date();
 
+            // Track audio URLs for cleanup
+            if (audio && audio.includes("voice-chat123")) {
+              this.audioUrlsToDelete.push(audio);
+            }
+
             return {
               sender,
               text,
               image,
+              audio,
               location,
+              isPlaying: false,
+              audioDuration,
+              audioDurationRaw, // Keep raw seconds for waveform
               time: createdAt.toLocaleTimeString("he-IL", {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -2218,7 +2570,7 @@ export default {
         }
       } catch (e) {
         // Log error for debugging
-        console.error("[JobChatMobile] Error in loadMessages:", e);
+        logger.error("[JobChatMobile] Error in loadMessages:", e);
 
         // On error, don't clear messages - keep what we have
         // Only show error if we don't have any messages at all
@@ -2253,7 +2605,8 @@ export default {
       const isFromHandyman =
         !!messageObj.handyman ||
         !!messageObj.handymanImage ||
-        !!messageObj.handymanLocation;
+        !!messageObj.handymanLocation ||
+        !!messageObj.handymanAudio;
       const sender = this.isHandyman
         ? isFromHandyman
           ? "me"
@@ -2264,11 +2617,25 @@ export default {
       const text = messageObj.handyman || messageObj.customer || "";
       const image =
         messageObj.handymanImage || messageObj.customerImage || null;
+      const audio =
+        messageObj.handymanAudio || messageObj.customerAudio || null;
+      const audioDurationRaw =
+        messageObj.handymanAudioDuration ||
+        messageObj.customerAudioDuration ||
+        null;
+      const audioDuration = audioDurationRaw
+        ? this.formatRecordingTime(audioDurationRaw)
+        : null;
       const location =
         messageObj.handymanLocation || messageObj.customerLocation || null;
       const createdAt = messageObj.createdAt
         ? new Date(messageObj.createdAt)
         : new Date();
+
+      // Track audio URLs for cleanup
+      if (audio && audio.includes("voice-chat123")) {
+        this.audioUrlsToDelete.push(audio);
+      }
 
       // Check if this is an update to an optimistic message (same sender, same content, recent time)
       if (sender === "me") {
@@ -2330,6 +2697,21 @@ export default {
               );
               return latMatch && lngMatch && timeDiff < 5000;
             }
+            // For audio messages - match by tempId
+            if (audio && m.audio) {
+              if (m.tempId && m.tempId.startsWith("temp-audio-")) {
+                // This is a temp audio message, allow WebSocket to update it
+                const timeDiff = Math.abs(
+                  createdAt.getTime() - (m.createdAt?.getTime() || 0)
+                );
+                return timeDiff < 10000; // Allow 10 seconds window
+              }
+              // Otherwise match by audio URL and time
+              const timeDiff = Math.abs(
+                createdAt.getTime() - (m.createdAt?.getTime() || 0)
+              );
+              return m.audio === audio && timeDiff < 5000;
+            }
           }
           return false;
         });
@@ -2340,7 +2722,11 @@ export default {
             sender,
             text,
             image,
+            audio,
             location,
+            isPlaying: false,
+            audioDuration,
+            audioDurationRaw,
             time: createdAt.toLocaleTimeString("he-IL", {
               hour: "2-digit",
               minute: "2-digit",
@@ -2415,7 +2801,11 @@ export default {
           sender,
           text,
           image,
+          audio,
           location,
+          isPlaying: false,
+          audioDuration,
+          audioDurationRaw,
           time: createdAt.toLocaleTimeString("he-IL", {
             hour: "2-digit",
             minute: "2-digit",
@@ -2751,7 +3141,7 @@ export default {
 
           if (!routeResponse.data.success) {
             // If route fails, still show map without route
-            console.warn(
+            logger.warn(
               "Failed to fetch route, showing map without route line"
             );
             this.routeData = null;
@@ -3237,6 +3627,11 @@ export default {
 
     openImage(src) {
       this.imageModal = src;
+    },
+    openImageFromModal(src) {
+      // פתח את התמונה ב-modal נפרד בלי לסגור את הפופאפ של תמונות העבודה
+      this.imageModal = src;
+      // אל תסגור את showJobImagesModal - הפופאפ יישאר פתוח
     },
 
     async updateStatus(newStatus) {
@@ -3781,890 +4176,1705 @@ export default {
         this.isRespondingToPriceChange = false;
       }
     },
+
+    // Audio recording methods
+    async startRecording() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        this.audioChunks = [];
+        this.mediaRecorder = new MediaRecorder(stream, {
+          mimeType: "audio/webm;codecs=opus",
+        });
+
+        this.mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            this.audioChunks.push(event.data);
+          }
+        };
+
+        this.mediaRecorder.onstop = () => {
+          this.audioBlob = new Blob(this.audioChunks, { type: "audio/webm" });
+          this.audioPreview = window.URL.createObjectURL(this.audioBlob);
+          stream.getTracks().forEach((track) => track.stop());
+        };
+
+        this.mediaRecorder.start();
+        this.isRecording = true;
+        this.recordingTime = 0;
+
+        this.recordingInterval = setInterval(() => {
+          this.recordingTime++;
+        }, 1000);
+      } catch (error) {
+        this.toast?.showError("לא ניתן לגשת למיקרופון. אנא בדוק את ההרשאות.");
+      }
+    },
+
+    stopRecording() {
+      if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
+        this.mediaRecorder.stop();
+      }
+      if (this.recordingInterval) {
+        clearInterval(this.recordingInterval);
+        this.recordingInterval = null;
+      }
+      this.isRecording = false;
+    },
+
+    cancelAudioPreview() {
+      if (this.audioPreview) {
+        window.URL.revokeObjectURL(this.audioPreview);
+        this.audioPreview = null;
+      }
+      this.audioBlob = null;
+      this.audioChunks = [];
+      this.recordingTime = 0;
+    },
+
+    playAudioPreview() {
+      if (this.audioPreview) {
+        const audio = new Audio(this.audioPreview);
+        audio.play();
+      }
+    },
+
+    formatRecordingTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}:${secs.toString().padStart(2, "0")}`;
+    },
+
+    async sendAudio() {
+      if (!this.audioBlob) return;
+
+      const job = this.currentJob;
+      const jobId = job?.id || job?._id;
+      if (!jobId) return;
+
+      const userId = this.store?.user?._id;
+      if (!userId) {
+        this.toast?.showError("לא ניתן לזהות את המשתמש");
+        return;
+      }
+
+      try {
+        // Upload audio to S3
+        const formData = new FormData();
+        formData.append(
+          "audio",
+          this.audioBlob,
+          `recording-${Date.now()}.webm`
+        );
+
+        const { data } = await axios.post(`${URL}/upload-audio`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+
+        if (!data.audioUrl) {
+          this.toast?.showError("שגיאה בהעלאת ההקלטה");
+          return;
+        }
+
+        // Track audio URL for cleanup
+        this.audioUrlsToDelete.push(data.audioUrl);
+
+        // Add optimistic message immediately
+        const audioDurationFormatted = this.formatRecordingTime(
+          this.recordingTime
+        );
+        const optimisticMessage = {
+          sender: "me",
+          text: "",
+          image: null,
+          audio: data.audioUrl,
+          location: null,
+          isPlaying: false,
+          audioDuration: audioDurationFormatted,
+          audioDurationRaw: this.recordingTime,
+          time: new Date().toLocaleTimeString("he-IL", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          createdAt: new Date(),
+          tempId: `temp-audio-${Date.now()}`,
+          uploading: true,
+        };
+        this.messages.push(optimisticMessage);
+        this.scrollToBottom();
+
+        // Send audio message with duration
+        await axios.post(`${URL}/jobs/${jobId}/messages`, {
+          audioUrl: data.audioUrl,
+          audioDuration: this.recordingTime, // Send duration in seconds
+          senderId: userId,
+          isHandyman: this.isHandyman,
+        });
+
+        // Remove uploading flag
+        const optimisticIndex = this.messages.findIndex(
+          (m) => m.tempId === optimisticMessage.tempId
+        );
+        if (optimisticIndex !== -1) {
+          this.messages[optimisticIndex].uploading = false;
+          delete this.messages[optimisticIndex].tempId;
+        }
+
+        // Clean up preview
+        this.cancelAudioPreview();
+      } catch (error) {
+        this.toast?.showError("שגיאה בשליחת ההקלטה");
+      }
+    },
+
+    toggleAudioPlayback(messageIndex) {
+      const message = this.messages[messageIndex];
+      if (!message || !message.audio) return;
+
+      const audioElement =
+        this.$refs[`audio-${messageIndex}`]?.[0] ||
+        this.$refs[`audio-${messageIndex}`];
+      if (!audioElement) return;
+
+      if (message.isPlaying) {
+        audioElement.pause();
+        message.isPlaying = false;
+      } else {
+        // Pause all other audio
+        this.messages.forEach((msg, idx) => {
+          if (idx !== messageIndex && msg.isPlaying) {
+            const otherAudio =
+              this.$refs[`audio-${idx}`]?.[0] || this.$refs[`audio-${idx}`];
+            if (otherAudio) {
+              otherAudio.pause();
+              msg.isPlaying = false;
+            }
+          }
+        });
+        audioElement.play();
+        message.isPlaying = true;
+
+        audioElement.onended = () => {
+          message.isPlaying = false;
+        };
+      }
+    },
+
+    updateAudioDuration(messageIndex, event) {
+      const audioElement = event.target;
+      const duration = Math.floor(audioElement.duration);
+      const message = this.messages[messageIndex];
+      if (message) {
+        message.audioDuration = this.formatRecordingTime(duration);
+        message.audioDurationRaw = duration;
+      }
+    },
+
+    getWaveformBars(messageIndex) {
+      const message = this.messages[messageIndex];
+      if (!message || !message.audioDurationRaw) {
+        // Default waveform if no duration
+        return Array(40)
+          .fill(0)
+          .map(() => Math.random() * 30 + 10);
+      }
+      // Generate waveform bars based on duration
+      const barCount = 40;
+      const bars = [];
+      for (let i = 0; i < barCount; i++) {
+        // Create a more realistic waveform pattern
+        const height = Math.random() * 40 + 20 + Math.sin(i * 0.5) * 15;
+        bars.push(Math.max(10, Math.min(80, height)));
+      }
+      return bars;
+    },
+
+    handleTyping() {
+      if (!this.socket || !this.socket.connected) return;
+
+      const job = this.currentJob;
+      const jobId = job?.id || job?._id;
+      if (!jobId) return;
+
+      // Clear existing timeout
+      if (this.typingEmitTimeout) {
+        clearTimeout(this.typingEmitTimeout);
+      }
+
+      // Emit typing event (don't set local isTyping, only emit to others)
+      this.socket.emit("typing", {
+        jobId: String(jobId),
+        isTyping: true,
+      });
+
+      // Stop typing after 3 seconds of inactivity
+      this.typingEmitTimeout = setTimeout(() => {
+        if (this.socket && this.socket.connected) {
+          this.socket.emit("typing", {
+            jobId: String(jobId),
+            isTyping: false,
+          });
+        }
+      }, 3000);
+    },
+
+    async cleanupChatFiles() {
+      // Clean up audio files from S3
+      const audioBucketName = "voice-chat123";
+      const imageBucketName = "hendiman123"; // Default bucket name
+
+      // Collect all image URLs from messages
+      const imageUrls = [];
+      this.messages.forEach((msg) => {
+        if (
+          msg.image &&
+          (msg.image.includes(imageBucketName) ||
+            msg.image.includes("s3.amazonaws.com"))
+        ) {
+          imageUrls.push(msg.image);
+        }
+      });
+
+      // Delete all audio files
+      for (const audioUrl of this.audioUrlsToDelete) {
+        try {
+          if (audioUrl && audioUrl.includes(audioBucketName)) {
+            await axios.post(`${URL}/delete-audio`, {
+              audioUrl,
+              bucketName: audioBucketName,
+            });
+          }
+        } catch (error) {
+          // Silent fail - continue deleting other files
+        }
+      }
+
+      // Delete all image files
+      for (const imageUrl of imageUrls) {
+        try {
+          // Extract bucket name from URL
+          const urlMatch = imageUrl.match(
+            /https:\/\/([^.]+)\.s3\.amazonaws\.com\//
+          );
+          const bucketNameFromUrl = urlMatch ? urlMatch[1] : imageBucketName;
+
+          if (imageUrl && imageUrl.includes("s3.amazonaws.com")) {
+            await axios.post(`${URL}/delete-image`, {
+              imageUrl,
+              bucketName: bucketNameFromUrl,
+            });
+          }
+        } catch (error) {
+          // Silent fail - continue deleting other files
+        }
+      }
+
+      // Clear arrays
+      this.audioUrlsToDelete = [];
+    },
   },
 };
 </script>
 
-<style scoped lang="scss">
-$bg: #0b0b0f;
-$text: rgba(255, 255, 255, 0.92);
-$muted: rgba(255, 255, 255, 0.6);
-$orange: #ff6a00;
-$orange2: #ff8a2b;
+<style lang="scss" scoped>
+/* JobChatMobileV2 - Premium dark/orange UI
+   Notes:
+   - No logic changes, only styles.
+   - Theme: black / orange / gray
+*/
 
 .chat {
+  /* Theme tokens */
+  --bg: #0b0d10;
+  --bg2: #0f1217;
+  --panel: rgba(18, 22, 28, 0.92);
+  --panel2: rgba(22, 26, 33, 0.92);
+  --stroke: rgba(255, 255, 255, 0.08);
+  --stroke2: rgba(255, 255, 255, 0.12);
+  --text: rgba(255, 255, 255, 0.92);
+  --muted: rgba(255, 255, 255, 0.62);
+  --muted2: rgba(255, 255, 255, 0.42);
+  --orange: #ff6a00;
+  --orange2: #ff8a3a;
+  --green: #22c55e;
+  --red: #ef4444;
+  --yellow: #fbbf24;
+
+  --r-xl: 22px;
+  --r-lg: 18px;
+  --r-md: 14px;
+  --r-sm: 12px;
+
+  --shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  --shadow2: 0 10px 22px rgba(0, 0, 0, 0.35);
+
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100vh;
+  width: 100vw;
   display: flex;
   flex-direction: column;
-  background: $bg;
-  z-index: 100002;
+  background: radial-gradient(
+      1200px 600px at 85% -10%,
+      rgba(255, 106, 0, 0.18),
+      transparent 55%
+    ),
+    radial-gradient(
+      800px 500px at 10% 110%,
+      rgba(255, 106, 0, 0.12),
+      transparent 55%
+    ),
+    linear-gradient(180deg, var(--bg), var(--bg2));
+  color: var(--text);
   overflow: hidden;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue",
+    Arial;
+  z-index: 1000;
+
+  * {
+    box-sizing: border-box;
+  }
+
+  /* subtle animated grain */
+  &::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E");
+    opacity: 0.05;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+  }
 }
 
-/* Header */
+/* HEADER */
 .chat__header {
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 30;
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 10px;
-  padding: 12px 10px;
-  background: rgba(255, 255, 255, 0.06);
-  border-bottom: 1px solid rgba($orange, 0.14);
-  flex-shrink: 0;
-}
-
-/* Tabs */
-.chat__tabs {
-  display: flex;
-  gap: 0;
-  background: rgba(0, 0, 0, 0.2);
-  border-bottom: 1px solid rgba($orange, 0.14);
-  flex-shrink: 0;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.chat__tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.chat__tab {
-  flex: 1;
-  min-width: 0;
-  padding: 10px 8px;
-  border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 13px;
-  font-weight: 900;
-  text-align: center;
-  border-bottom: 2px solid transparent;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-
-.chat__tab:hover {
-  color: rgba(255, 255, 255, 0.8);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.chat__tab--active {
-  color: $orange2;
-  border-bottom-color: $orange;
-  background: rgba($orange, 0.08);
-}
-
-.chat__tabName {
-  white-space: nowrap;
+  padding: 14px 14px;
+  background: linear-gradient(
+    180deg,
+    rgba(10, 12, 15, 0.92),
+    rgba(10, 12, 15, 0.65)
+  );
+  backdrop-filter: blur(12px);
+  border-bottom: 2px solid var(--stroke);
+  flex-wrap: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-.chat__tabBadge {
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: $orange;
-  color: #0b0c10;
-  font-size: 10px;
-  font-weight: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .chat__iconBtn {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.22);
-  color: $text;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: var(--stroke2);
+    transform: translateY(-1px);
+  }
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.chat__icon {
   font-size: 18px;
-  display: grid;
-  place-items: center;
+  line-height: 1;
+}
+
+.chat__cancelBtn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--red);
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--red);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+
+  &:hover {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: rgba(239, 68, 68, 0.8);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
+    background: rgba(239, 68, 68, 0.2);
+  }
 }
 
 .chat__headInfo {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
 }
 
 .chat__title {
-  font-size: 16px;
-  font-weight: 1000;
-  color: $text;
+  font-weight: 750;
+  font-size: 15px;
+  letter-spacing: 0.1px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
 .chat__subtitle {
-  margin-top: 2px;
-  font-size: 11px;
-  font-weight: 800;
-  color: $muted;
+  font-size: 12px;
+  color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+
+  &::before {
+    content: "•";
+    margin-left: 6px;
+    margin-right: 6px;
+    color: var(--muted2);
+  }
 }
 
 .chat__headRight {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .chat__status {
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 1000;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.2);
-  color: $text;
-  white-space: nowrap;
-}
-
-.chat__status.status--new {
-  border-color: rgba($orange, 0.3);
-  color: $orange;
-}
-.chat__status.status--move {
-  border-color: rgba($orange2, 0.38);
-  color: $orange2;
-}
-.chat__status.status--work {
-  border-color: rgba(59, 130, 246, 0.45);
-  color: #3b82f6;
-}
-.chat__status.status--done {
-  border-color: rgba(16, 185, 129, 0.5);
-  color: #10b981;
-}
-
-/* Menu */
-.chat__menu {
-  position: absolute;
-  top: 58px;
-  left: 10px;
-  right: 10px;
-  padding: 10px;
-  border-radius: 14px;
-  background: rgba(15, 16, 20, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.55);
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
-  z-index: 50;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+}
+
+.chat__statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--orange);
+  box-shadow: 0 0 0 4px rgba(255, 106, 0, 0.15);
+}
+
+.status--new .chat__statusDot,
+.dot--new {
+  background: var(--orange);
+  box-shadow: 0 0 0 4px rgba(255, 106, 0, 0.14);
+}
+.status--move .chat__statusDot,
+.dot--move {
+  background: var(--yellow);
+  box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.14);
+}
+.status--work .chat__statusDot,
+.dot--work {
+  background: #60a5fa;
+  box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.14);
+}
+.status--done .chat__statusDot,
+.dot--done {
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.14);
+}
+
+/* MENU (overlay) */
+.chat__menu {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  padding: 70px 14px 14px 14px;
+}
+
+.chat__menuCard {
+  width: min(320px, 92vw);
+  background: linear-gradient(
+    180deg,
+    rgba(20, 24, 31, 0.95),
+    rgba(16, 20, 26, 0.95)
+  );
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
 }
 
 .chat__menuItem {
   width: 100%;
-  padding: 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: $text;
-  font-weight: 900;
-  text-align: center;
+  padding: 14px 14px;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  text-align: right;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  & + & {
+    border-top: 1px solid var(--stroke);
+  }
+
+  &--danger {
+    color: rgba(255, 255, 255, 0.95);
+    background: linear-gradient(
+      180deg,
+      rgba(239, 68, 68, 0.12),
+      rgba(239, 68, 68, 0.06)
+    );
+  }
 }
 
-.chat__menuItem--danger {
-  border-color: rgba(239, 68, 68, 0.35);
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.12);
-}
-
-/* Action chips */
-.status-update-wrapper {
+/* TABS */
+.chat__tabs {
   display: flex;
-  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--stroke);
+  background: rgba(10, 12, 15, 0.35);
+  backdrop-filter: blur(10px);
+
+  &::-webkit-scrollbar {
+    height: 8px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+  }
 }
 
-.status-update-btn {
-  display: flex;
+.chat__tab {
+  flex: 0 0 auto;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateY(-1px);
+    border-color: var(--stroke2);
+  }
+
+  &--active {
+    border-color: rgba(255, 106, 0, 0.55);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 106, 0, 0.18),
+      rgba(255, 255, 255, 0.03)
+    );
+    box-shadow: 0 10px 22px rgba(255, 106, 0, 0.12);
+  }
+}
+
+.chat__tabName {
+  max-width: 170px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.chat__tabBadge {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(255, 106, 0, 0.18);
+  border: 1px solid rgba(255, 106, 0, 0.35);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ACTION BAR */
+.chat__actions {
+  padding: 0;
+  background: rgba(10, 12, 15, 0.5);
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  border-bottom: 2px solid var(--stroke);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.chat__actionsRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: nowrap;
+  align-items: center;
+  padding: 10px 12px;
+}
+
+.chat__statusUpdateRow {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--stroke);
+}
+
+.chat__statusUpdateRow .status-update-btn {
+  width: 40%;
+  min-width: 200px;
+  max-width: 280px;
+  justify-content: space-between;
+  margin-right: 0;
+  margin-left: auto !important;
+}
+
+/* CHIP */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+  transition: transform 0.15s ease, background 0.15s ease,
+    border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: var(--stroke2);
+    transform: translateY(-1px);
+  }
+  &:active {
+    transform: translateY(0px);
+  }
+
+  &--primary {
+    border-color: rgba(255, 106, 0, 0.55);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 106, 0, 0.2),
+      rgba(255, 255, 255, 0.03)
+    );
+    box-shadow: 0 12px 24px rgba(255, 106, 0, 0.12);
+  }
+
+  &--ghost {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  &--icon-only {
+    width: 42px;
+    height: 42px;
+    justify-content: center;
+    padding: 0;
+    font-size: 18px;
+  }
+}
+
+.chip__icon {
+  font-size: 16px;
+  line-height: 1;
+}
+.chip__text {
+  line-height: 1;
+}
+
+/* Status update button */
+.status-update-btn {
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .status-update-label-inline {
-  font-size: 11px;
-  opacity: 0.85;
-  font-weight: 500;
-}
-
-.chat__actions {
-  display: flex;
-  gap: 8px;
-  padding: 10px 10px 8px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  flex-shrink: 0;
-}
-
-.chat__actions::-webkit-scrollbar {
-  display: none;
-}
-
-.chip {
-  flex: 0 0 auto;
-  padding: 10px 12px;
-  border-radius: 999px;
   font-size: 12px;
-  font-weight: 1000;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.22);
-  color: $text;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  transition: all 0.2s ease;
-
-  &:active {
-    transform: scale(0.95);
-    opacity: 0.8;
-  }
+  color: var(--muted);
+  font-weight: 600;
 }
 
-.chip--primary {
-  border-color: rgba($orange, 0.5);
-  background: linear-gradient(
-    135deg,
-    rgba($orange, 0.95),
-    rgba($orange2, 0.92)
-  );
-  color: #0b0c10;
+.status-update-value {
+  font-weight: 800;
 }
 
-.chip--ghost {
-  border-color: rgba($orange, 0.18);
-}
-
-.chip--icon-only {
-  padding: 10px;
-  min-width: 40px;
-  justify-content: center;
-  font-size: 18px;
-}
-
-/* Active status button styles */
+/* Fancy active statuses (optional classes from your method) */
 .chip--status-active {
-  animation: pulse 0.5s ease-in-out;
-  transform: scale(1.02);
+  box-shadow: 0 14px 28px rgba(255, 106, 0, 0.16);
 }
-
 .chip--status-on-the-way {
-  border-color: rgba($orange2, 0.7);
-  background: linear-gradient(
-    135deg,
-    rgba($orange2, 0.98),
-    rgba(255, 180, 107, 0.95)
-  );
-  box-shadow: 0 0 20px rgba($orange2, 0.4);
+  border-color: rgba(251, 191, 36, 0.5);
 }
-
 .chip--status-in-progress {
-  border-color: rgba(59, 130, 246, 0.7);
-  background: linear-gradient(
-    135deg,
-    rgba(59, 130, 246, 0.98),
-    rgba(96, 165, 250, 0.95)
-  );
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+  border-color: rgba(96, 165, 250, 0.55);
 }
-
 .chip--status-done {
-  border-color: rgba(16, 185, 129, 0.7);
-  background: linear-gradient(
-    135deg,
-    rgba(16, 185, 129, 0.98),
-    rgba(52, 211, 153, 0.95)
-  );
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+  border-color: rgba(34, 197, 94, 0.55);
 }
 
-@keyframes pulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
-}
-
-/* Stepper */
+/* STEPPER */
 .chat__stepper {
-  display: flex;
-  gap: 10px;
-  padding: 10px;
-  overflow-x: auto;
-  border-bottom: 1px solid rgba($orange, 0.1);
-  background: rgba(0, 0, 0, 0.18);
-  flex-shrink: 0;
+  padding: 8px 12px 12px;
 }
-
 .chat__stepper--desktop {
-  @media (max-width: 480px) {
-    display: none;
-  }
-}
-.chat__stepper::-webkit-scrollbar {
   display: none;
+  @media (min-width: 860px) {
+    display: flex;
+  }
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
 }
 
 .step {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-  color: $text;
-  flex: 0 0 auto;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.03);
+
+  &__dot {
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--stroke2);
+    background: rgba(255, 255, 255, 0.04);
+    font-weight: 800;
+    font-size: 12px;
+  }
+
+  &__label {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 650;
+  }
+
+  &.is-active {
+    border-color: rgba(255, 106, 0, 0.55);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 106, 0, 0.12),
+      rgba(255, 255, 255, 0.02)
+    );
+
+    .step__dot {
+      border-color: rgba(255, 106, 0, 0.55);
+      background: rgba(255, 106, 0, 0.18);
+    }
+    .step__label {
+      color: rgba(255, 255, 255, 0.85);
+    }
+  }
+
+  &.is-done {
+    border-color: rgba(34, 197, 94, 0.45);
+
+    .step__dot {
+      border-color: rgba(34, 197, 94, 0.45);
+      background: rgba(34, 197, 94, 0.14);
+    }
+  }
 }
 
-.step__dot {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  font-weight: 1000;
-  border: 2px solid rgba($orange, 0.22);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.65);
-}
-
-.step.is-active .step__dot {
-  border-color: rgba($orange, 0.8);
-  background: rgba($orange, 0.16);
-  color: $orange2;
-}
-
-.step.is-done .step__dot {
-  border-color: rgba(34, 197, 94, 0.5);
-  background: rgba(34, 197, 94, 0.16);
-  color: #22c55e;
-}
-
-.step__label {
-  font-size: 12px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-/* Rating */
+/* RATING */
 .chat__rating {
-  padding: 12px 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border-bottom: 1px solid rgba($orange, 0.14);
-  flex-shrink: 0;
+  margin: 10px 12px 0;
+  padding: 14px;
+  border-radius: var(--r-xl);
+  border: 1px solid var(--stroke);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.04),
+    rgba(255, 255, 255, 0.02)
+  );
+  box-shadow: var(--shadow2);
 }
 
 .chat__ratingTitle {
-  color: $orange2;
-  font-weight: 1000;
-  margin-bottom: 8px;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 10px;
 }
 
 .chat__stars {
   display: flex;
-  flex-direction: row-reverse;
-  justify-content: center;
-  gap: 4px;
-  margin-bottom: 8px;
-}
-.chat__stars input {
-  display: none;
-}
-.star {
-  font-size: 22px;
-  opacity: 0.25;
-  color: $orange2;
-}
-.star.is-on {
-  opacity: 1;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+
+  input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  label {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .star {
+    font-size: 22px;
+    color: rgba(255, 255, 255, 0.18);
+    filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.35));
+    transition: transform 0.12s ease, color 0.12s ease;
+
+    &.is-on {
+      color: var(--orange);
+      transform: translateY(-1px);
+    }
+  }
 }
 
 .chat__review {
   width: 100%;
+  resize: none;
   border-radius: 14px;
-  border: 1px solid rgba($orange, 0.18);
-  background: rgba(0, 0, 0, 0.16);
-  color: $text;
-  padding: 10px;
-  font-weight: 800;
-  font-size: 14px;
+  border: 1px solid var(--stroke);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  padding: 10px 12px;
   outline: none;
-  resize: vertical;
   margin-bottom: 10px;
-  font-family: inherit;
+
+  &:focus {
+    border-color: rgba(255, 106, 0, 0.55);
+    box-shadow: 0 0 0 4px rgba(255, 106, 0, 0.14);
+  }
 }
 
 .chat__rateBtn {
   width: 100%;
-  padding: 12px;
+  border: 1px solid rgba(255, 106, 0, 0.55);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 106, 0, 0.22),
+    rgba(255, 255, 255, 0.03)
+  );
+  color: var(--text);
   border-radius: 14px;
-  border: 1px solid rgba($orange, 0.55);
-  background: linear-gradient(135deg, $orange, $orange2);
-  color: #0b0c10;
-  font-weight: 1100;
+  padding: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 106, 0, 0.28),
+      rgba(255, 255, 255, 0.04)
+    );
+  }
+  &:active {
+    transform: translateY(0);
+  }
 }
 
-/* Messages */
+/* MESSAGES */
 .chat__messages {
   flex: 1;
+  padding: 14px 12px 12px;
   overflow-y: auto;
-  padding: 12px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+
+  &::-webkit-scrollbar {
+    width: 10px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
 }
 
 .chat__empty {
-  margin: auto;
-  color: rgba(255, 255, 255, 0.55);
-  font-weight: 900;
-  font-size: 14px;
+  text-align: center;
+  color: var(--muted);
+  padding: 26px 10px;
+  border-radius: var(--r-xl);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .msg {
   display: flex;
-}
-.msg.is-me {
-  justify-content: flex-end;
+  margin: 10px 0;
+
+  &.is-me {
+    justify-content: flex-start; /* RTL: "me" on left or right? choose right feel */
+    /* In RTL, many apps place "me" on left. If you want "me" on right, swap:
+       justify-content: flex-end;
+    */
+    justify-content: flex-end;
+  }
+
+  &.is-system {
+    justify-content: center;
+  }
 }
 
-.msg.is-system {
-  justify-content: center;
-  margin: 12px 0;
+.bubbleWrap {
+  max-width: min(560px, 92%);
+  width: fit-content;
 }
 
 .bubble {
-  max-width: 86%;
-  padding: 10px 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.06);
-  color: $text;
+  position: relative;
+  border-radius: 18px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+
+  &--me {
+    border-color: rgba(255, 106, 0, 0.45);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 106, 0, 0.16),
+      rgba(255, 255, 255, 0.03)
+    );
+  }
+
+  &--other {
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  &--system {
+    border-style: dashed;
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.02);
+    box-shadow: none;
+  }
+
+  &--uploading {
+    opacity: 0.9;
+  }
 }
 
-.bubble--me {
-  background: linear-gradient(
-    135deg,
-    rgba($orange, 0.95),
-    rgba($orange2, 0.92)
-  );
-  border-color: rgba($orange, 0.55);
-  color: #0b0c10;
-}
-
-.bubble--system {
-  background: rgba(255, 106, 0, 0.15);
-  border-color: rgba(255, 106, 0, 0.3);
-  color: rgba(255, 106, 0, 0.9);
-  font-size: 12px;
-  padding: 8px 12px;
-  max-width: 70%;
-  text-align: center;
+.bubble__content {
+  padding: 10px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .bubble__text {
   font-size: 14px;
-  font-weight: 750;
   line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
+
 .bubble__meta {
-  margin-top: 6px;
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  gap: 6px;
-  opacity: 0.75;
+  gap: 8px;
+  padding: 0 12px 10px;
+  color: var(--muted2);
+  font-size: 11px;
 }
-.bubble__time,
+
 .bubble__tick {
-  font-size: 9px;
-  font-weight: 1000;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 800;
 }
 
+.bubble__uploading {
+  position: absolute;
+  bottom: 8px;
+  left: 10px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* IMAGE */
 .bubble__imgBtn {
+  padding: 0;
   border: 0;
   background: transparent;
-  padding: 0;
-  margin-bottom: 8px;
-  width: 100%;
-}
-.bubble__img {
-  width: 100%;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  display: block;
+  cursor: pointer;
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
 }
 
-.bubble__loc {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  margin-bottom: 8px;
-  border-radius: 12px;
-  overflow: hidden;
-  position: relative;
-}
-.bubble__locMap {
-  width: 100%;
-  height: 140px;
+.bubble__img {
+  width: min(320px, 76vw);
+  max-height: 280px;
   object-fit: cover;
   display: block;
-  border: 1px solid rgba($orange, 0.18);
-  border-radius: 12px;
-}
-.bubble__locOverlay {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 10px;
-  font-weight: 1000;
-  font-size: 12px;
-  color: white;
-  background: linear-gradient(
-    to top,
-    rgba(0, 0, 0, 0.75),
-    rgba(0, 0, 0, 0.25),
-    transparent
-  );
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Composer */
+.bubble__imgGlow {
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  pointer-events: none;
+  background: radial-gradient(
+    220px 160px at 70% 20%,
+    rgba(255, 106, 0, 0.2),
+    transparent 60%
+  );
+  opacity: 0.9;
+}
+
+/* LOCATION CARD in bubble */
+.bubble__loc {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.bubble__locMap {
+  width: min(320px, 76vw);
+  height: 180px;
+  object-fit: cover;
+  display: block;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.bubble__locOverlay {
+  position: absolute;
+  inset: auto 10px 10px 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* AUDIO */
+.bubble__audioBtn {
+  width: 100%;
+  min-width: 200px;
+  max-width: 280px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.32);
+    transform: translateY(-1px);
+  }
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.bubble__audioIcon {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 106, 0, 0.14);
+  border: 1px solid rgba(255, 106, 0, 0.3);
+}
+
+.bubble__audioTime {
+  font-weight: 800;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.bubble__audioWave {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  padding: 0 4px;
+}
+
+.bubble__audioWaveBar {
+  flex: 1;
+  min-width: 2px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 106, 0, 0.9),
+    rgba(255, 106, 0, 0.5)
+  );
+  border-radius: 2px;
+  transition: height 0.1s ease;
+  animation: wavePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes wavePulse {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* TYPING INDICATOR */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+}
+
+.typing-indicator span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  animation: typingBounce 1.4s infinite ease-in-out;
+}
+
+.typing-indicator span:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typingBounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-8px);
+    opacity: 1;
+  }
+}
+
+/* COMPOSER */
 .composer {
   position: sticky;
   bottom: 0;
+  z-index: 25;
+  padding: 12px 12px 14px;
+  background: linear-gradient(
+    180deg,
+    rgba(10, 12, 15, 0.25),
+    rgba(10, 12, 15, 0.88)
+  );
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--stroke);
   display: flex;
-  gap: 8px;
-  align-items: flex-end;
-  padding: 10px;
-  padding-bottom: calc(10px + env(safe-area-inset-bottom));
-  border-top: 1px solid rgba($orange, 0.14);
-  background: rgba(0, 0, 0, 0.35);
-  flex-shrink: 0;
+  gap: 10px;
+  align-items: center;
 }
 
-.composer__plus {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  border: 1px solid rgba($orange, 0.22);
-  background: rgba(255, 255, 255, 0.06);
-  color: $text;
-  font-size: 20px;
+.composer__plus,
+.composer__record,
+.composer__send {
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  cursor: pointer;
   display: grid;
   place-items: center;
+  transition: transform 0.15s ease, background 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: var(--stroke2);
+    transform: translateY(-1px);
+  }
+  &:active {
+    transform: translateY(0);
+  }
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+  }
+}
+
+.composer__send {
+  width: 64px;
+  font-size: 13px;
+  font-weight: 800;
+  border-color: rgba(255, 106, 0, 0.45);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 106, 0, 0.22),
+    rgba(255, 255, 255, 0.03)
+  );
+
+  &:hover {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 106, 0, 0.28),
+      rgba(255, 255, 255, 0.04)
+    );
+  }
+  &:disabled {
+    border-color: var(--stroke);
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+
+.composer__record--recording {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: linear-gradient(
+    180deg,
+    rgba(239, 68, 68, 0.18),
+    rgba(255, 255, 255, 0.02)
+  );
 }
 
 .composer__input {
   flex: 1;
-  height: 42px;
-  border-radius: 999px;
-  border: 1px solid rgba($orange, 0.18);
-  background: rgba(255, 255, 255, 0.06);
-  color: $text;
-  padding: 0 14px;
-  font-weight: 900;
+  height: 44px;
+  border-radius: 16px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  padding: 0 12px;
   outline: none;
-  font-size: 16px;
-  font-family: inherit;
+  font-size: 14px;
+
+  &:focus {
+    border-color: rgba(255, 106, 0, 0.55);
+    box-shadow: 0 0 0 4px rgba(255, 106, 0, 0.14);
+  }
 }
 
-.composer__send {
-  height: 42px;
-  padding: 0 16px;
-  border-radius: 999px;
-  border: 1px solid rgba($orange, 0.55);
-  background: linear-gradient(135deg, $orange, $orange2);
-  color: #0b0c10;
-  font-weight: 1100;
-  font-size: 13px;
-}
-
-.composer__send:disabled {
-  opacity: 0.55;
-}
-
+/* preview blocks inside composer */
 .composer__preview {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-width: 0; // Allow flex shrinking
-}
-.composer__previewTop {
-  position: relative;
-  width: 100%;
-  max-width: 220px;
-  border-radius: 14px;
-  overflow: hidden;
-  border: 1px solid rgba($orange, 0.2);
-  flex-shrink: 0; // Don't shrink the image
-}
-.composer__previewImg {
-  width: 100%;
-  display: block;
-  max-height: 200px;
-  object-fit: cover;
-}
-.composer__previewClose {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
-  font-weight: 1000;
-}
-
-// Ensure the input inside preview is at least the same size as regular input, but taller
-.composer__preview .composer__input {
-  flex: 1;
-  min-width: 0; // Allow flex shrinking
-  width: 100%; // Take full width of parent
-  height: 50px; // Taller than regular input (42px)
-  min-height: 50px; // Ensure minimum height
-}
-
-/* Tools sheet */
-.toolsSheet {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  z-index: 10050;
-  display: flex;
-  align-items: flex-end;
-}
-
-.toolsSheet__card {
-  width: 100%;
-  border-radius: 18px 18px 0 0;
-  background: rgba(15, 16, 20, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
   gap: 10px;
 }
 
-.toolsSheet__item,
-.toolsSheet__close {
-  width: 100%;
-  padding: 14px;
-  border-radius: 14px;
-  border: 1px solid rgba($orange, 0.16);
-  background: rgba(255, 255, 255, 0.06);
-  color: $text;
-  font-weight: 1000;
-  text-align: center;
-}
-.toolsSheet__close {
-  border-color: rgba(255, 255, 255, 0.12);
+.composer__previewTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-/* Modals */
+.composer__previewImg {
+  width: 86px;
+  height: 56px;
+  border-radius: 14px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.composer__previewClose {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 0.15s ease, transform 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+    transform: translateY(-1px);
+  }
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.composer__audioPreview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.25);
+  flex: 1;
+}
+
+.composer__audioPlay {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 106, 0, 0.3);
+  background: rgba(255, 106, 0, 0.14);
+  color: var(--text);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.composer__audioTime {
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* TOOLS SHEET */
+.toolsSheet {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 12px;
+}
+
+.toolsSheet__card {
+  width: min(520px, 96vw);
+  border-radius: 26px;
+  border: 1px solid var(--stroke);
+  background: linear-gradient(
+    180deg,
+    rgba(22, 26, 33, 0.95),
+    rgba(16, 20, 26, 0.95)
+  );
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+
+.toolsSheet__title {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.toolsSheet__item {
+  width: 100%;
+  border-radius: 18px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  padding: 12px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 750;
+  transition: transform 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateY(-1px);
+  }
+
+  & + & {
+    margin-top: 10px;
+  }
+}
+
+.toolsSheet__emoji {
+  width: 34px;
+  height: 34px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 106, 0, 0.12);
+  border: 1px solid rgba(255, 106, 0, 0.26);
+}
+
+.toolsSheet__txt {
+  font-size: 14px;
+}
+
+.toolsSheet__close {
+  width: 100%;
+  margin-top: 12px;
+  border-radius: 18px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  padding: 12px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+/* MODAL (base) */
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.85);
-  z-index: 10100;
+  z-index: 95;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: 14px;
 }
 
-.modal__card {
-  position: relative;
-  width: 100%;
-  max-width: 520px;
-  border-radius: 16px;
-  overflow: hidden;
+/* Image modal - z-index גבוה יותר כדי שיהיה מעל הפופאפ של תמונות העבודה */
+.modal--image {
+  z-index: 96;
 }
+
+/* Image modal */
+.modal__card {
+  width: min(720px, 96vw);
+  border-radius: 26px;
+  border: 1px solid var(--stroke);
+  background: rgba(14, 16, 20, 0.95);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  position: relative;
+}
+
 .modal__close {
   position: absolute;
   top: 12px;
   right: 12px;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.7);
-  color: #fff;
-  font-weight: 1000;
-  z-index: 2;
+  width: 42px;
+  height: 42px;
+  border-radius: 16px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
 }
+
 .modal__img {
   width: 100%;
+  max-height: 78vh;
+  object-fit: contain;
   display: block;
 }
 
-/* Confirm */
-.confirm {
-  width: 100%;
-  max-width: 420px;
-  border-radius: 18px;
-  background: rgba(15, 16, 20, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 18px;
-  text-align: center;
+/* NAV MODAL */
+.navModal {
+  width: min(420px, 96vw);
+  border-radius: 26px;
+  border: 1px solid var(--stroke);
+  background: linear-gradient(
+    180deg,
+    rgba(22, 26, 33, 0.95),
+    rgba(16, 20, 26, 0.95)
+  );
+  box-shadow: var(--shadow);
+  padding: 16px;
 }
-.confirm__title {
-  color: #fff;
-  font-weight: 1000;
-  font-size: 18px;
-  margin-bottom: 10px;
+
+.navModal__title {
+  font-weight: 900;
+  font-size: 15px;
+  margin-bottom: 12px;
 }
-.confirm__text {
-  color: rgba(255, 255, 255, 0.75);
-  font-weight: 800;
-  font-size: 14px;
-  margin-bottom: 14px;
-}
-.confirm__actions {
+
+.navModal__actions {
   display: flex;
+  flex-direction: column;
   gap: 10px;
-  justify-content: center;
 }
 
-.confirm__actions--vertical {
-  flex-direction: column;
-}
-
-.confirm__btn--cancel-handyman {
-  background: rgba(59, 130, 246, 0.15);
-  border-color: rgba(59, 130, 246, 0.4);
-  color: #3b82f6;
-}
-
-.confirm__btn--cancel-complete {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #ef4444;
-}
-.confirm__btn {
-  padding: 12px 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: $text;
-  font-weight: 1000;
-}
-.confirm__btn--danger {
-  border-color: rgba(239, 68, 68, 0.35);
-  background: rgba(239, 68, 68, 0.14);
-  color: #ef4444;
-}
-
-/* Cancel Reason Modal */
-.cancelReasonModal {
-  width: 100%;
-  max-width: 450px;
-  border-radius: 18px;
-  background: rgba(15, 16, 20, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 20px;
+.navModal__btn {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  max-height: 80vh;
-  overflow-y: auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px;
+  border-radius: 18px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 800;
+  transition: transform 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateY(-1px);
+  }
+
+  &--waze {
+    border-color: rgba(255, 106, 0, 0.4);
+    background: rgba(255, 106, 0, 0.1);
+  }
+
+  &--google {
+    border-color: rgba(96, 165, 250, 0.4);
+    background: rgba(96, 165, 250, 0.1);
+  }
+}
+
+.navModal__btnIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.navModal__cancel {
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+/* CANCEL REASON MODAL */
+.cancelReasonModal {
+  width: min(560px, 96vw);
+  border-radius: 26px;
+  border: 1px solid var(--stroke);
+  background: linear-gradient(
+    180deg,
+    rgba(22, 26, 33, 0.95),
+    rgba(16, 20, 26, 0.95)
+  );
+  box-shadow: var(--shadow);
+  padding: 16px;
 }
 
 .cancelReasonModal__title {
-  color: #fff;
-  font-weight: 1000;
-  font-size: 18px;
-  text-align: center;
-  margin: 0 0 16px 0;
-}
-
-.cancelReasonModal__form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.cancelReasonModal__field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  font-weight: 950;
+  font-size: 16px;
+  margin-bottom: 10px;
 }
 
 .cancelReasonModal__label {
-  font-size: 14px;
-  font-weight: 900;
-  color: rgba(255, 255, 255, 0.9);
-  text-align: right;
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 8px;
+  font-weight: 700;
 }
 
 .cancelReasonModal__textarea {
   width: 100%;
-  padding: 12px;
-  border-radius: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.9);
-  font-weight: 800;
-  font-size: 14px;
-  font-family: "Heebo", sans-serif;
-  resize: vertical;
-  min-height: 100px;
-  text-align: right;
-  direction: rtl;
-  transition: all 0.2s ease;
-}
-
-.cancelReasonModal__textarea:focus {
+  resize: none;
+  border-radius: 18px;
+  border: 1px solid var(--stroke);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  padding: 12px 12px;
   outline: none;
-  border-color: rgba(255, 106, 0, 0.4);
-  background: rgba(255, 255, 255, 0.08);
+
+  &:focus {
+    border-color: rgba(255, 106, 0, 0.55);
+    box-shadow: 0 0 0 4px rgba(255, 106, 0, 0.14);
+  }
 }
 
-.cancelReasonModal__textarea::placeholder {
-  color: rgba(255, 255, 255, 0.4);
+.cancelReasonModal__warning {
+  margin: 12px 0;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  background: rgba(251, 191, 36, 0.1);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.cancelReasonModal__warningIcon {
+  font-size: 18px;
+}
+.cancelReasonModal__warningText {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 700;
+  font-size: 13px;
 }
 
 .cancelReasonModal__options {
@@ -4674,1087 +5884,664 @@ $orange2: #ff8a2b;
 }
 
 .cancelReasonModal__option {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.9);
-  font-weight: 800;
-  font-size: 14px;
+  width: 100%;
+  border-radius: 20px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  padding: 12px 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: right;
-  position: relative;
-}
+  display: grid;
+  grid-template-columns: 36px 1fr 24px;
+  align-items: center;
+  gap: 10px;
+  transition: transform 0.15s ease, background 0.15s ease,
+    border-color 0.15s ease;
 
-.cancelReasonModal__option:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-  transform: translateX(-2px);
-}
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateY(-1px);
+  }
 
-.cancelReasonModal__option:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+  }
 
-.cancelReasonModal__option--selected {
-  background: rgba(255, 106, 0, 0.25);
-  border-color: #ff6a00;
-  border-width: 3px;
-  color: #ff6a00;
-  box-shadow: 0 0 0 2px rgba(255, 106, 0, 0.2),
-    0 4px 12px rgba(255, 106, 0, 0.3);
-  transform: scale(1.02);
-  font-weight: 900;
-}
+  &--selected {
+    border-color: rgba(255, 106, 0, 0.55);
+    background: rgba(255, 106, 0, 0.12);
+  }
 
-.cancelReasonModal__option--delete {
-  border-color: rgba(239, 68, 68, 0.3);
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-}
-
-.cancelReasonModal__option--delete:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.5);
-}
-
-.cancelReasonModal__option--delete.cancelReasonModal__option--selected {
-  background: rgba(239, 68, 68, 0.3);
-  border-color: #ef4444;
-  border-width: 3px;
-  color: #ef4444;
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2),
-    0 4px 12px rgba(239, 68, 68, 0.4);
-  transform: scale(1.02);
-  font-weight: 900;
+  &--delete {
+    border-color: rgba(239, 68, 68, 0.35);
+    background: rgba(239, 68, 68, 0.08);
+  }
 }
 
 .cancelReasonModal__optionIcon {
-  font-size: 20px;
-  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .cancelReasonModal__optionText {
-  flex: 1;
-  text-align: right;
+  font-weight: 850;
+  font-size: 14px;
 }
 
 .cancelReasonModal__checkIcon {
-  font-size: 18px;
-  font-weight: 900;
-  color: inherit;
-  margin-right: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.cancelReasonModal__warning {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  background: rgba(255, 193, 7, 0.15);
-  border: 2px solid rgba(255, 193, 7, 0.4);
-  border-radius: 12px;
-  margin-bottom: 8px;
-}
-
-.cancelReasonModal__warningIcon {
-  font-size: 20px;
-  flex-shrink: 0;
-}
-
-.cancelReasonModal__warningText {
-  font-size: 13px;
-  font-weight: 800;
-  color: #ffc107;
-  text-align: right;
-  flex: 1;
-  line-height: 1.4;
+  font-weight: 950;
+  color: var(--orange);
+  text-align: left;
 }
 
 .cancelReasonModal__actions {
-  display: flex;
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin-top: 8px;
 }
 
 .cancelReasonModal__btn {
-  flex: 1;
-  padding: 14px 20px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  font-weight: 900;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.cancelReasonModal__btn--cancel {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.9);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.cancelReasonModal__btn--cancel:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-.cancelReasonModal__btn--submit {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  color: #fff;
-  border-color: rgba(239, 68, 68, 0.5);
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-}
-
-.cancelReasonModal__btn--submit:hover:not(:disabled) {
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
-  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
-  transform: translateY(-1px);
-}
-
-.cancelReasonModal__btn--submit:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Navigation Modal */
-.navModal {
-  background: rgba(15, 16, 20, 0.98);
-  border-radius: 20px;
-  padding: 24px;
-  max-width: 90%;
-  width: 320px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.navModal__title {
-  font-size: 18px;
-  font-weight: 1000;
-  color: $text;
-  text-align: center;
-  margin-bottom: 20px;
-}
-
-.navModal__actions {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.navModal__btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 16px 20px;
-  border-radius: 14px;
-  border: 1px solid;
-  font-size: 16px;
-  font-weight: 900;
-  text-decoration: none;
-  transition: all 0.2s ease;
-  text-align: center;
-}
-
-.navModal__btn--waze {
-  background: rgba(118, 186, 153, 0.15);
-  border-color: rgba(118, 186, 153, 0.4);
-  color: #76ba99;
-}
-
-.navModal__btn--waze:active {
-  background: rgba(118, 186, 153, 0.25);
-  transform: scale(0.98);
-}
-
-.navModal__btn--google {
-  background: rgba(66, 133, 244, 0.15);
-  border-color: rgba(66, 133, 244, 0.4);
-  color: #4285f4;
-}
-
-.navModal__btn--google:active {
-  background: rgba(66, 133, 244, 0.25);
-  transform: scale(0.98);
-}
-
-.navModal__btnIcon {
-  font-size: 20px;
-}
-
-.navModal__btnText {
-  font-weight: 900;
-}
-
-.navModal__cancel {
-  margin-top: 8px;
-  padding: 14px 20px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 14px;
-  font-weight: 900;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.navModal__cancel:active {
-  background: rgba(255, 255, 255, 0.1);
-  transform: scale(0.98);
-}
-
-/* Location card */
-.locCard {
-  width: 100%;
-  max-width: 420px;
+  padding: 12px;
   border-radius: 18px;
-  overflow: hidden;
-  background: $bg;
-  position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 900;
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  &--submit {
+    border-color: rgba(255, 106, 0, 0.55);
+    background: rgba(255, 106, 0, 0.14);
+  }
+
+  &--cancel {
+    background: rgba(255, 255, 255, 0.03);
+  }
 }
+
+/* LOCATION MODAL CARD */
+.locCard {
+  width: min(520px, 96vw);
+  border-radius: 26px;
+  border: 1px solid var(--stroke);
+  background: linear-gradient(
+    180deg,
+    rgba(22, 26, 33, 0.95),
+    rgba(16, 20, 26, 0.95)
+  );
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  position: relative;
+}
+
 .locCard__close {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.65);
-  color: #fff;
-  font-weight: 1000;
-  z-index: 2;
+  top: 12px;
+  right: 12px;
+  width: 42px;
+  height: 42px;
+  border-radius: 16px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  z-index: 1;
 }
+
 .locCard__map {
   width: 100%;
-  height: 220px;
+  height: 240px;
   object-fit: cover;
   display: block;
 }
+
 .locCard__body {
   padding: 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
+
 .locCard__title {
-  color: $orange2;
-  font-weight: 1000;
+  font-weight: 950;
+  font-size: 15px;
 }
 .locCard__coords {
-  font-family: monospace;
-  font-size: 11px;
-  opacity: 0.75;
-  color: $text;
+  color: var(--muted);
+  font-size: 12px;
 }
+
 .locCard__btn {
-  padding: 12px;
-  border-radius: 14px;
-  text-decoration: none;
-  text-align: center;
-  font-weight: 1000;
-  border: 1px solid;
-}
-.locCard__btn--waze {
-  background: rgba(118, 186, 153, 0.15);
-  border-color: rgba(118, 186, 153, 0.4);
-  color: #76ba99;
-}
-.locCard__btn--gm {
-  background: rgba(66, 133, 244, 0.15);
-  border-color: rgba(66, 133, 244, 0.4);
-  color: #4285f4;
-}
-
-/* Route Card Modal */
-.route-modal {
-  z-index: 10100;
-}
-
-.routeCard {
   width: 100%;
-  max-width: 420px;
+  padding: 12px;
   border-radius: 18px;
-  overflow: hidden;
-  background: $bg;
-  position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--stroke);
+  text-decoration: none;
+  color: var(--text);
+  text-align: center;
+  font-weight: 900;
+  background: rgba(255, 255, 255, 0.03);
+
+  &--waze {
+    border-color: rgba(255, 106, 0, 0.4);
+    background: rgba(255, 106, 0, 0.1);
+  }
+  &--gm {
+    border-color: rgba(96, 165, 250, 0.4);
+    background: rgba(96, 165, 250, 0.1);
+  }
 }
 
+/* PRICE UPDATE MODAL */
+.priceUpdateModal,
+.priceApprovalModal,
+.jobImagesModal,
+.hoursWorkedModal,
+.routeCard {
+  width: min(560px, 96vw);
+  border-radius: 26px;
+  border: 1px solid var(--stroke);
+  background: linear-gradient(
+    180deg,
+    rgba(22, 26, 33, 0.95),
+    rgba(16, 20, 26, 0.95)
+  );
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.priceUpdateModal__header,
+.jobImagesModal__header,
+.hoursWorkedModal__header,
 .routeCard__header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  justify-content: space-between;
+  padding: 14px 14px;
+  border-bottom: 1px solid var(--stroke);
 }
 
-.routeCard__title {
-  font-size: 18px;
-  font-weight: 1000;
-  color: $orange2;
+.priceUpdateModal__title,
+.jobImagesModal__title,
+.hoursWorkedModal__title,
+.routeCard__title,
+.priceApprovalModal__title {
   margin: 0;
+  font-size: 15px;
+  font-weight: 950;
 }
 
+.priceUpdateModal__close,
+.jobImagesModal__close,
+.hoursWorkedModal__close,
 .routeCard__close {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
-  font-weight: 1000;
+  width: 42px;
+  height: 42px;
+  border-radius: 16px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
 }
 
-.routeCard__mapWrapper {
-  position: relative;
-  width: 100%;
-  height: 300px;
-  background: rgba(0, 0, 0, 0.2);
-}
-
-.routeCard__map {
-  width: 100%;
-  height: 100%;
-  border: none;
-}
-
-.routeCard__loading {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: $text;
-  font-weight: 900;
-  z-index: 10;
-  background: rgba(0, 0, 0, 0.7);
-  padding: 12px 20px;
-  border-radius: 12px;
-}
-
-.routeCard__legend {
-  position: absolute;
-  bottom: 12px;
-  right: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: rgba(0, 0, 0, 0.7);
-  padding: 10px;
-  border-radius: 12px;
-  z-index: 10;
-}
-
-.routeCard__legendItem {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.routeCard__legendDot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.routeCard__legendDot--start {
-  background: #ff6a00;
-}
-
-.routeCard__legendDot--end {
-  background: #22c55e;
-}
-
-.routeCard__legendText {
-  font-size: 12px;
-  font-weight: 900;
-  color: $text;
-  white-space: nowrap;
-}
-
+.priceUpdateModal__body,
+.priceApprovalModal__body,
+.jobImagesModal__body,
+.hoursWorkedModal__body,
 .routeCard__body {
-  padding: 16px;
+  padding: 14px;
 }
 
-.routeCard__info {
-  margin-bottom: 16px;
-}
-
-.routeCard__infoRow {
+.priceUpdateModal__currentPrice,
+.priceUpdateModal__newPrice {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.routeCard__infoRow--highlight {
-  background: rgba($orange, 0.1);
-  padding: 12px;
-  border-radius: 12px;
-  border-bottom: none;
-  margin-top: 8px;
-}
-
-.routeCard__infoLabel {
-  font-size: 13px;
-  font-weight: 900;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.routeCard__infoValue {
-  font-size: 13px;
-  font-weight: 1000;
-  color: $text;
-  font-family: monospace;
-}
-
-.routeCard__infoValue--time {
-  color: $orange2;
-  font-size: 16px;
-  font-weight: 1100;
-}
-
-.routeCard__actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.routeCard__btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 12px 16px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 900;
-  text-decoration: none;
-  transition: all 0.2s ease;
-  border: 1px solid;
-}
-
-.routeCard__btn--google {
-  background: rgba(66, 133, 244, 0.15);
-  border-color: rgba(66, 133, 244, 0.4);
-  color: #4285f4;
-}
-
-.routeCard__btn--google:hover {
-  background: rgba(66, 133, 244, 0.25);
-  border-color: rgba(66, 133, 244, 0.6);
-}
-
-.routeCard__btnIcon {
-  font-size: 18px;
-}
-
-.routeCard__btnText {
-  font-weight: 900;
-}
-
-.routeCard__backBtn {
-  width: 100%;
-  padding: 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: $text;
-  font-weight: 1000;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.routeCard__backBtn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.routeCard__backBtn:active {
-  transform: scale(0.98);
-}
-
-/* Price Update Modal */
-.priceUpdateModal {
-  width: 100%;
-  max-width: 420px;
-  border-radius: 18px;
-  background: rgba(15, 16, 20, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  overflow: hidden;
-}
-
-.priceUpdateModal__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.priceUpdateModal__title {
-  font-size: 18px;
-  font-weight: 1000;
-  color: $orange2;
-  margin: 0;
-}
-
-.priceUpdateModal__close {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
-  font-weight: 1000;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-}
-
-.priceUpdateModal__body {
-  padding: 18px;
-}
-
-.priceUpdateModal__currentPrice {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  margin-bottom: 18px;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 
 .priceUpdateModal__label {
-  font-size: 14px;
-  font-weight: 900;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 12px;
 }
 
 .priceUpdateModal__value {
-  font-size: 18px;
-  font-weight: 1000;
-  color: $text;
-}
+  font-weight: 950;
+  font-size: 14px;
 
-.priceUpdateModal__value--new {
-  color: $orange2;
-  font-size: 20px;
-}
-
-.priceUpdateModal__change {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  &--new {
+    color: rgba(255, 255, 255, 0.95);
+  }
 }
 
 .priceUpdateModal__inputGroup {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba($orange, 0.2);
-  border-radius: 12px;
-  padding: 0 14px;
+  gap: 10px;
+  margin: 10px 0;
 }
 
 .priceUpdateModal__input {
   flex: 1;
-  height: 48px;
-  border: none;
-  background: transparent;
-  color: $text;
-  font-size: 18px;
-  font-weight: 1000;
+  height: 44px;
+  border-radius: 16px;
+  border: 1px solid var(--stroke);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  padding: 0 12px;
   outline: none;
-  text-align: center;
-  font-family: inherit;
-}
 
-.priceUpdateModal__input::-webkit-inner-spin-button,
-.priceUpdateModal__input::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.priceUpdateModal__input[type="number"] {
-  -moz-appearance: textfield;
+  &:focus {
+    border-color: rgba(255, 106, 0, 0.55);
+    box-shadow: 0 0 0 4px rgba(255, 106, 0, 0.14);
+  }
 }
 
 .priceUpdateModal__percent {
-  font-size: 18px;
-  font-weight: 1000;
-  color: $orange2;
-}
-
-.priceUpdateModal__newPrice {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px;
-  background: rgba($orange, 0.1);
-  border-radius: 12px;
-  border: 1px solid rgba($orange, 0.2);
+  color: var(--muted);
+  font-weight: 900;
 }
 
 .priceUpdateModal__changeAmount {
-  text-align: center;
-  padding: 8px;
+  margin-top: 8px;
 }
 
 .priceUpdateModal__changeText {
-  font-size: 16px;
-  font-weight: 1000;
+  font-weight: 950;
+
+  &--increase {
+    color: var(--green);
+  }
+  &--decrease {
+    color: var(--red);
+  }
 }
 
-.priceUpdateModal__changeText--increase {
-  color: #22c55e;
-}
-
-.priceUpdateModal__changeText--decrease {
-  color: #ef4444;
-}
-
-.priceUpdateModal__footer {
-  display: flex;
+.priceUpdateModal__footer,
+.priceApprovalModal__footer,
+.hoursWorkedModal__footer {
+  padding: 12px 14px 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
-  padding: 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--stroke);
 }
 
-.priceUpdateModal__btn {
-  flex: 1;
-  padding: 14px;
-  border-radius: 12px;
-  border: none;
-  font-size: 14px;
-  font-weight: 1000;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.priceUpdateModal__btn--cancel {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: $text;
-}
-
-.priceUpdateModal__btn--submit {
-  background: linear-gradient(135deg, $orange, $orange2);
-  color: #0b0c10;
-  box-shadow: 0 0 20px rgba($orange, 0.3);
-}
-
-.priceUpdateModal__btn--submit:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Price Approval Modal */
-.priceApprovalModal {
-  width: 100%;
-  max-width: 420px;
+.priceUpdateModal__btn,
+.priceApprovalModal__btn,
+.hoursWorkedModal__btn {
+  padding: 12px;
   border-radius: 18px;
-  background: rgba(15, 16, 20, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  overflow: hidden;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-weight: 950;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  &--submit,
+  &--approve {
+    border-color: rgba(255, 106, 0, 0.55);
+    background: rgba(255, 106, 0, 0.14);
+  }
+
+  &--reject {
+    border-color: rgba(239, 68, 68, 0.45);
+    background: rgba(239, 68, 68, 0.12);
+  }
 }
 
-.priceApprovalModal__header {
-  padding: 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.priceApprovalModal__title {
-  font-size: 18px;
-  font-weight: 1000;
-  color: $orange2;
-  margin: 0;
-  text-align: center;
-}
-
-.priceApprovalModal__body {
-  padding: 18px;
-}
-
+/* PRICE APPROVAL DETAILS */
 .priceApprovalModal__message {
-  font-size: 16px;
-  font-weight: 900;
-  color: $text;
-  text-align: center;
-  line-height: 1.6;
-  margin-bottom: 20px;
+  font-weight: 800;
+  line-height: 1.5;
 }
 
 .priceApprovalModal__changePercent {
-  font-weight: 1000;
-  font-size: 18px;
-}
+  font-weight: 950;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin: 0 6px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.03);
 
-.priceApprovalModal__changePercent--increase {
-  color: #22c55e;
-}
+  &--increase {
+    border-color: rgba(34, 197, 94, 0.4);
+    background: rgba(34, 197, 94, 0.1);
+  }
 
-.priceApprovalModal__changePercent--decrease {
-  color: #ef4444;
+  &--decrease {
+    border-color: rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.1);
+  }
 }
 
 .priceApprovalModal__details {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  padding: 14px;
+  margin-top: 12px;
+  border-radius: 20px;
+  border: 1px solid var(--stroke);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 12px;
 }
 
 .priceApprovalModal__detailRow {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  gap: 12px;
   padding: 8px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
 
-.priceApprovalModal__detailRow:last-child {
-  border-bottom: none;
+  & + & {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
 }
 
 .priceApprovalModal__detailLabel {
-  font-size: 14px;
-  font-weight: 900;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--muted);
+  font-weight: 750;
+  font-size: 12px;
 }
 
 .priceApprovalModal__detailValue {
-  font-size: 16px;
-  font-weight: 1000;
-  color: $text;
+  font-weight: 950;
+
+  &--new {
+    color: rgba(255, 255, 255, 0.95);
+  }
+
+  &--increase {
+    color: var(--green);
+  }
+
+  &--decrease {
+    color: var(--red);
+  }
 }
 
-.priceApprovalModal__detailValue--new {
-  color: $orange2;
-  font-size: 18px;
-}
-
-.priceApprovalModal__detailValue--increase {
-  color: #22c55e;
-}
-
-.priceApprovalModal__detailValue--decrease {
-  color: #ef4444;
-}
-
-.priceApprovalModal__footer {
-  display: flex;
-  gap: 10px;
-  padding: 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.priceApprovalModal__btn {
-  flex: 1;
-  padding: 14px;
-  border-radius: 12px;
-  border: none;
-  font-size: 14px;
-  font-weight: 1000;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.priceApprovalModal__btn--reject {
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.35);
-  color: #ef4444;
-}
-
-.priceApprovalModal__btn--approve {
-  background: linear-gradient(135deg, #22c55e, #16a34a);
-  color: #0b0c10;
-  box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
-}
-
-.priceApprovalModal__btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Job Images Modal */
-.jobImagesModal {
-  background: rgba(11, 11, 15, 0.98);
-  border-radius: 20px;
-  padding: 24px;
-  max-width: 600px;
-  width: 90vw;
-  max-height: 90vh;
-  overflow-y: auto;
-  border: 1px solid rgba($orange, 0.2);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
-}
-
-.jobImagesModal__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.jobImagesModal__title {
-  font-size: 20px;
-  font-weight: 1000;
-  color: $text;
-}
-
-.jobImagesModal__close {
-  background: none;
-  border: none;
-  color: $muted;
-  font-size: 24px;
-  cursor: pointer;
-  padding: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-.jobImagesModal__close:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: $text;
-}
-
-.jobImagesModal__body {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
+/* JOB IMAGES */
 .jobImagesModal__empty {
+  color: var(--muted);
   text-align: center;
-  color: $muted;
-  font-size: 16px;
-  font-weight: 900;
-  padding: 40px 20px;
+  padding: 24px 0;
 }
 
 .jobImagesModal__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+
+  @media (max-width: 420px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .jobImagesModal__imageBtn {
-  width: 100%;
-  aspect-ratio: 1;
-  border: none;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 12px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  border: 0;
+  background: transparent;
   padding: 0;
-}
-
-.jobImagesModal__imageBtn:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba($orange, 0.3);
+  cursor: pointer;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .jobImagesModal__image {
   width: 100%;
-  height: 100%;
+  height: 110px;
   object-fit: cover;
   display: block;
+
+  @media (min-width: 560px) {
+    height: 140px;
+  }
 }
 
-/* Hours Worked Modal */
-.hoursWorkedModal {
-  background: rgba(11, 11, 15, 0.98);
-  border-radius: 20px;
-  padding: 24px;
-  max-width: 400px;
-  width: 90vw;
-  border: 1px solid rgba($orange, 0.2);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
-}
-
-.hoursWorkedModal__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.hoursWorkedModal__title {
-  font-size: 20px;
-  font-weight: 1000;
-  color: $text;
-}
-
-.hoursWorkedModal__close {
-  background: none;
-  border: none;
-  color: $muted;
-  font-size: 24px;
-  cursor: pointer;
-  padding: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-.hoursWorkedModal__close:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: $text;
-}
-
-.hoursWorkedModal__body {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
+/* HOURS WORKED */
 .hoursWorkedModal__message {
-  font-size: 16px;
-  font-weight: 900;
-  color: $text;
-  line-height: 1.5;
+  font-weight: 850;
+  margin-bottom: 12px;
 }
 
 .hoursWorkedModal__field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
 }
 
 .hoursWorkedModal__label {
-  font-size: 14px;
-  font-weight: 900;
-  color: $muted;
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 12px;
 }
 
 .hoursWorkedModal__input {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-  padding: 14px 16px;
-  color: $text;
-  font-size: 18px;
-  font-weight: 1000;
-  text-align: center;
-  transition: all 0.2s ease;
-}
-
-.hoursWorkedModal__input:focus {
+  height: 44px;
+  border-radius: 16px;
+  border: 1px solid var(--stroke);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  padding: 0 12px;
   outline: none;
-  border-color: $orange;
-  box-shadow: 0 0 0 3px rgba($orange, 0.2);
+
+  &:focus {
+    border-color: rgba(255, 106, 0, 0.55);
+    box-shadow: 0 0 0 4px rgba(255, 106, 0, 0.14);
+  }
 }
 
 .hoursWorkedModal__priceInfo {
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  border: 1px solid var(--stroke);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 12px;
 }
 
 .hoursWorkedModal__priceRow {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  gap: 12px;
   padding: 8px 0;
-}
 
-.hoursWorkedModal__priceRow--total {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  & + & {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  &--total .hoursWorkedModal__priceValue--total {
+    color: var(--orange);
+  }
 }
 
 .hoursWorkedModal__priceLabel {
-  font-size: 14px;
-  font-weight: 900;
-  color: $muted;
+  color: var(--muted);
+  font-weight: 750;
+  font-size: 12px;
 }
 
 .hoursWorkedModal__priceValue {
-  font-size: 16px;
-  font-weight: 1000;
-  color: $text;
+  font-weight: 950;
 }
 
-.hoursWorkedModal__priceValue--total {
-  font-size: 20px;
-  font-weight: 1100;
-  color: $orange2;
+/* ROUTE MODAL */
+.route-modal {
+  align-items: center;
 }
 
-.hoursWorkedModal__footer {
+.routeCard {
+  width: min(760px, 96vw);
+}
+
+.routeCard__mapWrapper {
+  position: relative;
+  height: min(46vh, 380px);
+  border-bottom: 1px solid var(--stroke);
+}
+
+.routeCard__map {
+  width: 100%;
+  height: 100%;
+}
+
+.routeCard__loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-weight: 900;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.routeCard__legend {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+}
+
+.routeCard__legendItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.routeCard__legendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+
+  &--start {
+    background: var(--orange);
+    box-shadow: 0 0 0 4px rgba(255, 106, 0, 0.14);
+  }
+
+  &--end {
+    background: var(--green);
+    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.14);
+  }
+}
+
+.routeCard__info {
+  border-radius: 20px;
+  border: 1px solid var(--stroke);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 12px;
+}
+
+.routeCard__infoRow {
+  display: flex;
+  justify-content: space-between;
   gap: 12px;
-  margin-top: 20px;
+  padding: 8px 0;
+
+  & + & {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  &--highlight {
+    .routeCard__infoValue--time {
+      color: var(--orange);
+    }
+  }
 }
 
-.hoursWorkedModal__btn {
-  flex: 1;
-  padding: 14px 20px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 1000;
+.routeCard__infoLabel {
+  color: var(--muted);
+  font-weight: 750;
+  font-size: 12px;
+}
+
+.routeCard__infoValue {
+  font-weight: 950;
+}
+
+.routeCard__actions {
+  margin-top: 12px;
+}
+
+.routeCard__btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(96, 165, 250, 0.4);
+  background: rgba(96, 165, 250, 0.1);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 950;
+}
+
+.routeCard__backBtn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
   cursor: pointer;
-  transition: all 0.2s ease;
-  border: none;
+  font-weight: 900;
 }
 
-.hoursWorkedModal__btn--cancel {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: $text;
+/* Mapbox marker classes (you already set inline styles; these are safe defaults) */
+.handyman-marker,
+.job-marker {
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
 }
 
-.hoursWorkedModal__btn--submit {
-  background: linear-gradient(135deg, $orange, $orange2);
-  color: #0b0c10;
-  box-shadow: 0 0 20px rgba($orange, 0.3);
+/* Mobile tweaks */
+@media (max-width: 420px) {
+  .chat__status {
+    display: none;
+  }
+  .chat__statusUpdateRow .status-update-btn {
+    width: 30%;
+    max-width: none;
+    margin-right: 0 !important;
+    margin-left: auto !important;
+  }
 }
 
-.hoursWorkedModal__btn--submit:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+/* Accessibility focus */
+:where(button, a, input, textarea) {
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(255, 106, 0, 0.16);
+    border-color: rgba(255, 106, 0, 0.55);
+  }
 }
 </style>

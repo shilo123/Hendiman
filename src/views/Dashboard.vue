@@ -8,9 +8,13 @@
       </div>
     </div>
 
-    <!-- TOP BAR - hidden when loading, chat is active, shown when minimized or no job -->
+    <!-- TOP BAR - hidden when loading, chat is active, shown when minimized or no job, or when IncomeDetailModal is open -->
     <DashboardTopBar
-      v-if="!isLoading && (!currentAssignedJob || isChatMinimized)"
+      v-if="
+        !isLoading &&
+        (!currentAssignedJob || isChatMinimized) &&
+        !showIncomeDetailModal
+      "
       :me="me"
       :isHendiman="isHendiman"
       :isAvailable="isAvailable"
@@ -323,6 +327,7 @@
           @view="onView"
           @edit-job="onEditJob"
           @delete-job="onDeleteJob"
+          @quotation="onQuotation"
           @next-jobs-page="onJobsNextPage"
           @prev-jobs-page="onJobsPrevPage"
         />
@@ -516,8 +521,11 @@
                 </div>
               </div>
 
-              <!-- Stripe Payment Element -->
-              <div class="subscription-payment-form__field">
+              <!-- Stripe Payment Element (only if fillCreditCardNow is true) -->
+              <div
+                v-if="fillCreditCardNow"
+                class="subscription-payment-form__field"
+              >
                 <label class="subscription-payment-form__label"
                   >פרטי תשלום</label
                 >
@@ -556,8 +564,11 @@
                 ></div>
               </div>
 
-              <!-- Security Notice -->
-              <div class="subscription-payment-form__security">
+              <!-- Security Notice (only if fillCreditCardNow is true) -->
+              <div
+                v-if="fillCreditCardNow"
+                class="subscription-payment-form__security"
+              >
                 <div class="subscription-payment-form__security-icon">🔒</div>
                 <div class="subscription-payment-form__security-text">
                   התשלום מאובטח ומצפין. פרטי הכרטיס שלך לא נשמרים בשרת שלנו.
@@ -572,6 +583,26 @@
                 {{ subscriptionError }}
               </div>
 
+              <!-- Switch: Fill credit card now or after 14 days -->
+              <div class="subscription-payment-toggle">
+                <label class="subscription-payment-toggle__label">
+                  <span class="subscription-payment-toggle__text">
+                    {{
+                      fillCreditCardNow
+                        ? "מלא פרטי אשראי עכשיו"
+                        : "מלא פרטי אשראי אחרי 14 יום חינם"
+                    }}
+                  </span>
+                  <input
+                    type="checkbox"
+                    v-model="fillCreditCardNow"
+                    class="subscription-payment-toggle__input"
+                    @change="handlePaymentToggleChange"
+                  />
+                  <span class="subscription-payment-toggle__slider"></span>
+                </label>
+              </div>
+
               <!-- Submit Button -->
               <button
                 type="button"
@@ -579,30 +610,45 @@
                 @click="handleSubscriptionPayment"
                 :disabled="
                   isProcessingSubscription ||
-                  !isSubscriptionStripeReady ||
-                  !subscriptionClientSecret
+                  (fillCreditCardNow &&
+                    (!isSubscriptionStripeReady || !subscriptionClientSecret))
                 "
               >
                 <span v-if="isProcessingSubscription">מעבד תשלום...</span>
-                <span v-else>
+                <span v-else-if="fillCreditCardNow">
+                  לתשלום
                   {{
                     selectedSubscriptionPlan === "annual"
-                      ? `הרשם למנוי שנתי - ${formatCurrency(499.9)} /שנה`
-                      : `הרשם למנוי חודשי - ${formatCurrency(49.9)} /חודש`
+                      ? formatCurrency(499.9) + " /שנה"
+                      : formatCurrency(49.9) + " /חודש"
                   }}
                 </span>
+                <span v-else>התחל 14 יום חינם</span>
               </button>
             </div>
 
             <!-- Actions (shown when payment form is not visible) -->
             <div v-else class="subscription-required-modal__actions">
-              <button
-                type="button"
-                class="subscription-required-modal__btn subscription-required-modal__btn--test"
-                @click="handleTestAccess"
-              >
-                🧪 Test (גישה חינם)
-              </button>
+              <!-- Switch: Fill credit card now or after 14 days (only if showTrialToggle is true) -->
+              <div v-if="showTrialToggle" class="subscription-payment-toggle">
+                <label class="subscription-payment-toggle__label">
+                  <span class="subscription-payment-toggle__text">
+                    {{
+                      fillCreditCardNow
+                        ? "מלא פרטי אשראי עכשיו"
+                        : "מלא פרטי אשראי אחרי 14 יום חינם"
+                    }}
+                  </span>
+                  <input
+                    type="checkbox"
+                    v-model="fillCreditCardNow"
+                    class="subscription-payment-toggle__input"
+                    @change="handlePaymentToggleChange"
+                  />
+                  <span class="subscription-payment-toggle__slider"></span>
+                </label>
+              </div>
+
               <button
                 type="button"
                 class="subscription-required-modal__btn subscription-required-modal__btn--subscribe"
@@ -610,11 +656,13 @@
                 :disabled="!selectedSubscriptionPlan"
               >
                 {{
-                  selectedSubscriptionPlan === "annual"
-                    ? "הרשם למנוי שנתי - 499.90 ₪"
-                    : selectedSubscriptionPlan === "monthly"
-                    ? "הרשם למנוי חודשי - 49.90 ₪"
-                    : "בחר מנוי"
+                  fillCreditCardNow
+                    ? `לתשלום ${
+                        selectedSubscriptionPlan === "annual"
+                          ? "499.90 ₪ /שנה"
+                          : "49.90 ₪ /חודש"
+                      }`
+                    : "התחל 14 יום חינם"
                 }}
               </button>
             </div>
@@ -685,63 +733,27 @@
           }`"
         />
 
-        <!-- Onboarding Required Modal (for handyman) -->
-        <div
-          v-if="showOnboardingModal && isHendiman"
-          class="onboardingModal"
-          dir="rtl"
-          @click.self="showOnboardingModal = false"
-        >
-          <div class="onboardingModal__content">
-            <button
-              class="onboardingModal__close"
-              type="button"
-              @click="showOnboardingModal = false"
-              aria-label="סגור"
-            >
-              ✕
-            </button>
-            <div class="onboardingModal__icon">💳</div>
-            <h2 class="onboardingModal__title">הגדר חשבון תשלומים</h2>
-            <p class="onboardingModal__message">
-              <span v-if="onboardingUrl">
-                עוד לא מלאת פרטי חשבון כדי שתוכל לקבל כסף. אנא השלם את הגדרת
-                חשבון התשלומים ב-Stripe.
-              </span>
-              <span v-else>
-                עוד לא מלאת פרטי חשבון כדי שתוכל לקבל כסף. אנא פנה לתמיכה להשלמת
-                ההגדרה.
-              </span>
-            </p>
-            <div class="onboardingModal__actions">
-              <a
-                v-if="onboardingUrl"
-                :href="onboardingUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="onboardingModal__btn onboardingModal__btn--primary"
-                @click="showOnboardingModal = false"
-              >
-                הגדר עכשיו
-              </a>
-              <button
-                v-else
-                class="onboardingModal__btn onboardingModal__btn--primary"
-                type="button"
-                @click="fetchOnboardingLinkForModal"
-              >
-                הגדר עכשיו
-              </button>
-              <button
-                class="onboardingModal__btn onboardingModal__btn--secondary"
-                type="button"
-                @click="showOnboardingModal = false"
-              >
-                מאוחר יותר
-              </button>
-            </div>
-          </div>
-        </div>
+        <!-- Client Quotations Modal -->
+        <ClientQuotationsModal
+          v-if="!isHendiman"
+          :visible="showClientQuotationsModal"
+          :job="selectedQuotedJob"
+          @close="showClientQuotationsModal = false"
+          @accepted="onQuotationAccepted"
+        />
+
+        <!-- Handyman Quotation Modal -->
+        <HandymanQuotationModal
+          v-if="isHendiman"
+          :visible="showHandymanQuotationModal"
+          :job="selectedQuotedJob"
+          :handymanId="store.user?._id || me?._id || $route.params.id"
+          :handymanName="store.user?.username || me?.name || ''"
+          @close="showHandymanQuotationModal = false"
+          @submitted="onQuotationSubmitted"
+        />
+
+        <!-- Onboarding Required Modal (for handyman) - REMOVED -->
 
         <div v-if="showJobCancelledModal" class="jobCancelledModal" dir="rtl">
           <div
@@ -1217,6 +1229,9 @@ import JobChatMobile from "@/components/Dashboard/JobChatMobile.vue";
 import MinimizableNotification from "@/components/Global/MinimizableNotification.vue";
 import ProblemReportModal from "@/components/Dashboard/ProblemReportModal.vue";
 import IncomeDetailModal from "@/components/Dashboard/IncomeDetailModal.vue";
+import ClientQuotationsModal from "@/components/Dashboard/ClientQuotationsModal.vue";
+import HandymanQuotationModal from "@/components/Dashboard/HandymanQuotationModal.vue";
+import logger from "@/utils/logger";
 import axios from "axios";
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
@@ -1244,6 +1259,8 @@ export default {
     MinimizableNotification,
     ProblemReportModal,
     IncomeDetailModal,
+    ClientQuotationsModal,
+    HandymanQuotationModal,
   },
   data() {
     return {
@@ -1310,6 +1327,9 @@ export default {
       showIncomeDetailModal: false, // Show income detail modal for handyman
       incomeDetailJob: null, // Job for income detail
       incomeDetailPayment: null, // Payment info for income detail
+      showClientQuotationsModal: false, // Show client quotations modal
+      showHandymanQuotationModal: false, // Show handyman quotation modal
+      selectedQuotedJob: null, // Selected job with quotations for client/handyman
       isMobile: window.innerWidth <= 768,
       // Rating for client
       pendingRatingValue: 0,
@@ -1335,6 +1355,8 @@ export default {
       showSubscriptionModal: false,
       selectedSubscriptionPlan: "annual", // 'annual' or 'monthly'
       showSubscriptionPaymentForm: false,
+      fillCreditCardNow: false, // Switch: fill credit card now or after 14 days
+      subscriptionStatus: null, // Store subscription status from API
       // Stripe for subscription
       subscriptionStripe: null,
       subscriptionElements: null,
@@ -1478,6 +1500,39 @@ export default {
     filteredHandymen() {
       return this.store.filteredHandymen(this.dirFilters);
     },
+    showTrialToggle() {
+      // Show toggle only if:
+      // 1. User is not in trial period (needsBilling is true or subscriptionExpiresAt has passed)
+      // 2. User is not FREE
+      if (!this.subscriptionStatus) return true; // Default to showing if status not loaded
+
+      // Don't show toggle for FREE users
+      if (this.subscriptionStatus.isFree) return false;
+
+      // If subscriptionExpiresAt exists and has passed, don't show toggle (must pay now)
+      if (this.subscriptionStatus.subscriptionExpiresAt) {
+        const expiresAt = new Date(
+          this.subscriptionStatus.subscriptionExpiresAt
+        );
+        const now = new Date();
+        if (now >= expiresAt) {
+          return false; // Expired - must pay now, no toggle
+        }
+      }
+
+      // If needsBilling is true (after trial/expiration), don't show toggle
+      if (this.subscriptionStatus.needsBilling) {
+        return false; // Must pay now, no toggle
+      }
+
+      // If in trial, show toggle
+      if (this.subscriptionStatus.isTrial) {
+        return true; // In trial - can choose to pay now or later
+      }
+
+      // Default: show toggle
+      return true;
+    },
     statusTabsWithCounts() {
       // השתמש ב-filteredJobs שכבר מסנן לפי התמחויות ומרחק
       const allFilteredJobs = this.store.filteredJobs(
@@ -1583,33 +1638,76 @@ export default {
           let isHandymanInJob = false;
           if (job.handymanId) {
             if (Array.isArray(job.handymanId)) {
-              isHandymanInJob = job.handymanId.some(
-                (id) => String(id) === userIdStr
-              );
+              isHandymanInJob = job.handymanId.some((id) => {
+                // Handle both ObjectId and string - try multiple formats
+                let idStr = "";
+                if (id) {
+                  if (id._id) {
+                    idStr = String(id._id);
+                  } else if (id.$oid) {
+                    idStr = String(id.$oid);
+                  } else if (typeof id === "object" && id.toString) {
+                    idStr = id.toString();
+                  } else {
+                    idStr = String(id);
+                  }
+                }
+                return idStr === userIdStr;
+              });
             } else {
-              isHandymanInJob = String(job.handymanId) === userIdStr;
+              // Handle single handymanId (not array)
+              let handymanIdStr = "";
+              if (job.handymanId) {
+                if (job.handymanId._id) {
+                  handymanIdStr = String(job.handymanId._id);
+                } else if (job.handymanId.$oid) {
+                  handymanIdStr = String(job.handymanId.$oid);
+                } else if (
+                  typeof job.handymanId === "object" &&
+                  job.handymanId.toString
+                ) {
+                  handymanIdStr = job.handymanId.toString();
+                } else {
+                  handymanIdStr = String(job.handymanId);
+                }
+              }
+              isHandymanInJob = handymanIdStr === userIdStr;
             }
           }
-          // כל עבודה שלא בסטטוס "open" או "done" צריכה להיפתח
-          // לא עבודות שדורגו (ratingSubmitted: true)
-          // לא עבודות שהתשלום שוחרר (paymentStatus: "paid")
-          return (
+          // כל עבודה שלא בסטטוס "open" או "done" או ביטול צריכה להיפתח
+          // בודק רק את הסטטוס - ללא תנאים נוספים של paymentStatus או ratingSubmitted
+          const isCancelled =
+            job.cancel === true ||
+            job.isCancelled === true ||
+            job.status === "cancelled";
+          const isAssigned =
             isHandymanInJob &&
-            job.status !== "open" && // לא עבודות פתוחות
-            job.status !== "done" && // לא עבודות שהושלמו
-            job.paymentStatus !== "paid" && // לא עבודות שהתשלום שוחרר
-            !job.ratingSubmitted // לא עבודות שדורגו
-          );
+            job.status !== "open" &&
+            job.status !== "done" &&
+            !isCancelled;
+          if (isAssigned) {
+            logger.log(
+              `[AssignedJobs] הנדימן משובץ לעבודה: ${
+                job._id || job.id
+              }, status: ${job.status}`
+            );
+          }
+          return isAssigned;
         } else {
           // עבור לקוח - בודק אם clientId תואם
           // עבור לקוח: עבודה ב-"done" עם clientApproved: false צריכה להיפתח (לאשר)
           // עבור לקוח: עבודה שהתשלום שוחרר (paymentStatus: "paid") לא צריכה להיפתח
           // עבור לקוח: עבודה שדורגה (ratingSubmitted: true) לא צריכה להיפתח
+          const isCancelled =
+            job.cancel === true ||
+            job.isCancelled === true ||
+            job.status === "cancelled";
           return (
             job.clientId &&
             String(job.clientId) === userIdStr &&
             job.handymanId && // רק עבודות ששובצו
             job.status !== "open" && // לא עבודות פתוחות
+            !isCancelled && // לא עבודות מבוטלות
             job.paymentStatus !== "paid" && // לא עבודות שהתשלום שוחרר
             !job.ratingSubmitted && // לא עבודות שדורגו
             (job.status !== "done" || // לא עבודות שהושלמו (או...)
@@ -1627,25 +1725,47 @@ export default {
         this.activeAssignedJob &&
         (this.activeAssignedJob._id || this.activeAssignedJob.id)
       ) {
-        // כל עבודה שהסטטוס שלה הוא לא "open" או "done" תציג את הצ'אט
+        // כל עבודה שהסטטוס שלה הוא לא "open" או "done" או עבודה מבוטלת תציג את הצ'אט
         // לא נבדוק paymentStatus או ratingSubmitted - רק status
+        const isCancelled =
+          this.activeAssignedJob.cancel === true ||
+          this.activeAssignedJob.isCancelled === true ||
+          this.activeAssignedJob.status === "cancelled";
         if (
           this.activeAssignedJob.status === "open" ||
-          this.activeAssignedJob.status === "done"
+          this.activeAssignedJob.status === "done" ||
+          isCancelled
         ) {
-          // אם העבודה סיימה, נקה את activeAssignedJob כדי לסגור את הצ'אט
+          // אם העבודה סיימה או מבוטלת, נקה את activeAssignedJob כדי לסגור את הצ'אט
           this.activeAssignedJob = null;
           this.isChatMinimized = true;
           return null;
         }
+        logger.log(
+          `[CurrentAssigned] מחזיר activeAssignedJob: ${
+            this.activeAssignedJob._id || this.activeAssignedJob.id
+          }, status: ${this.activeAssignedJob.status}`
+        );
         return this.activeAssignedJob;
       }
       if (this.currentAssignedJobs.length > 0) {
         const job = this.currentAssignedJobs[0];
-        // בדוק גם כאן אם העבודה סיימה
-        if (job && (job.status === "open" || job.status === "done")) {
+        // בדוק גם כאן אם העבודה סיימה או מבוטלת
+        const isCancelled =
+          job?.cancel === true ||
+          job?.isCancelled === true ||
+          job?.status === "cancelled";
+        if (
+          job &&
+          (job.status === "open" || job.status === "done" || isCancelled)
+        ) {
           return null;
         }
+        logger.log(
+          `[CurrentAssigned] מחזיר עבודה מ-currentAssignedJobs: ${
+            job._id || job.id
+          }, status: ${job.status}`
+        );
         return job;
       }
       return null;
@@ -2003,9 +2123,7 @@ export default {
           const onboardingUrl = error.response.data.onboardingUrl;
 
           if (onboardingUrl) {
-            // Show modal with onboarding link
-            this.onboardingUrl = onboardingUrl;
-            this.showOnboardingModal = true;
+            // Onboarding modal removed - just show error message
             this.toast?.showError(
               error.response.data.message ||
                 "עליך להשלים את הגדרת חשבון התשלומים לפני קבלת עבודה"
@@ -2024,6 +2142,11 @@ export default {
       }
     },
 
+    onQuotation(job) {
+      // Open HandymanQuotationModal for quoted job
+      this.selectedQuotedJob = job;
+      this.showHandymanQuotationModal = true;
+    },
     onView(job) {
       this.jobDetails = job;
     },
@@ -2528,6 +2651,28 @@ export default {
         this.jobsPage = this.jobsPagination.page - 1;
       }
     },
+    onQuotationAccepted(data) {
+      // Refresh jobs after quotation accepted
+      if (this.store && this.store.fetchDashboardData) {
+        const userId = this.store.user?._id || this.$route.params.id;
+        this.store.fetchDashboardData(userId).then(() => {
+          // Check for assigned job after refresh
+          this.checkForAssignedJob();
+        });
+      }
+      this.toast?.showSuccess(
+        `הצעת המחיר של ${data.handymanName} נבחרה בהצלחה!`
+      );
+    },
+    onQuotationSubmitted(quotation) {
+      // Refresh jobs after quotation submitted
+      if (this.store && this.store.fetchDashboardData) {
+        const userId = this.store.user?._id || this.$route.params.id;
+        this.store.fetchDashboardData(userId);
+      }
+      this.showHandymanQuotationModal = false;
+      this.selectedQuotedJob = null;
+    },
     async onJobStatusUpdated(newStatus) {
       // Update the job in store immediately
       const jobId = this.activeAssignedJob?._id || this.activeAssignedJob?.id;
@@ -2557,14 +2702,8 @@ export default {
         await this.onRefresh();
       }
 
-      // If job payment is released (paymentStatus: "paid"), close the chat for both client and handyman
-      // Note: We check paymentStatus from the job object, not from newStatus
-      if (this.activeAssignedJob?.paymentStatus === "paid") {
-        this.activeAssignedJob = null;
-        this.isChatMinimized = false;
-        // Refresh to update job list
-        await this.onRefresh();
-      }
+      // לא סוגרים את הצ'אט לפי paymentStatus - רק לפי סטטוס העבודה
+      // הצ'אט ייסגר רק אם הסטטוס הוא "open", "done" או ביטול (זה מטופל ב-currentAssignedJob computed)
     },
 
     async onCancelJob() {
@@ -2680,21 +2819,50 @@ export default {
           if (job.handymanId) {
             if (Array.isArray(job.handymanId)) {
               isHandymanInJob = job.handymanId.some((id) => {
-                // Handle both ObjectId and string
-                const idStr = id?._id ? String(id._id) : String(id);
+                // Handle both ObjectId and string - try multiple formats
+                let idStr = "";
+                if (id) {
+                  if (id._id) {
+                    idStr = String(id._id);
+                  } else if (id.$oid) {
+                    idStr = String(id.$oid);
+                  } else if (typeof id === "object" && id.toString) {
+                    idStr = id.toString();
+                  } else {
+                    idStr = String(id);
+                  }
+                }
                 return idStr === userIdStr;
               });
             } else {
-              const handymanIdStr = job.handymanId?._id
-                ? String(job.handymanId._id)
-                : String(job.handymanId);
+              // Handle single handymanId (not array)
+              let handymanIdStr = "";
+              if (job.handymanId) {
+                if (job.handymanId._id) {
+                  handymanIdStr = String(job.handymanId._id);
+                } else if (job.handymanId.$oid) {
+                  handymanIdStr = String(job.handymanId.$oid);
+                } else if (
+                  typeof job.handymanId === "object" &&
+                  job.handymanId.toString
+                ) {
+                  handymanIdStr = job.handymanId.toString();
+                } else {
+                  handymanIdStr = String(job.handymanId);
+                }
+              }
               isHandymanInJob = handymanIdStr === userIdStr;
             }
           }
-          // כל עבודה שלא בסטטוס "open" או "done" צריכה להיפתח
-          return (
-            isHandymanInJob && job.status !== "open" && job.status !== "done"
-          );
+          // כל עבודה שלא בסטטוס "open" או "done" או עבודה מבוטלת צריכה להיפתח
+          // עבודה מבוטלת = יש לה cancel: true או isCancelled: true או status: "cancelled"
+          const isCancelled =
+            job.cancel === true ||
+            job.isCancelled === true ||
+            job.status === "cancelled";
+          const isStatusValid =
+            job.status !== "open" && job.status !== "done" && !isCancelled;
+          return isHandymanInJob && isStatusValid;
         } else {
           // עבור לקוח - בודק אם clientId תואם
           const clientIdStr = job.clientId?._id
@@ -2702,12 +2870,17 @@ export default {
             : String(job.clientId || "");
           const isClientMatch = clientIdStr === userIdStr;
           const hasHandyman = !!job.handymanId;
-          // כל עבודה שלא בסטטוס "open" או "done" צריכה להיפתח
+          // כל עבודה שלא בסטטוס "open" או "done" או עבודה מבוטלת צריכה להיפתח
+          const isCancelled =
+            job.cancel === true ||
+            job.isCancelled === true ||
+            job.status === "cancelled";
           return (
             isClientMatch &&
             hasHandyman &&
             job.status !== "open" &&
-            job.status !== "done"
+            job.status !== "done" &&
+            !isCancelled
           );
         }
       });
@@ -2761,34 +2934,75 @@ export default {
           if (job.handymanId) {
             if (Array.isArray(job.handymanId)) {
               isHandymanInJob = job.handymanId.some((id) => {
-                // Handle both ObjectId and string
-                const idStr = id?._id ? String(id._id) : String(id);
+                // Handle both ObjectId and string - try multiple formats
+                let idStr = "";
+                if (id) {
+                  if (id._id) {
+                    idStr = String(id._id);
+                  } else if (id.$oid) {
+                    idStr = String(id.$oid);
+                  } else if (typeof id === "object" && id.toString) {
+                    idStr = id.toString();
+                  } else {
+                    idStr = String(id);
+                  }
+                }
                 return idStr === userIdStr;
               });
             } else {
-              const handymanIdStr = job.handymanId?._id
-                ? String(job.handymanId._id)
-                : String(job.handymanId);
+              // Handle single handymanId (not array)
+              let handymanIdStr = "";
+              if (job.handymanId) {
+                if (job.handymanId._id) {
+                  handymanIdStr = String(job.handymanId._id);
+                } else if (job.handymanId.$oid) {
+                  handymanIdStr = String(job.handymanId.$oid);
+                } else if (
+                  typeof job.handymanId === "object" &&
+                  job.handymanId.toString
+                ) {
+                  handymanIdStr = job.handymanId.toString();
+                } else {
+                  handymanIdStr = String(job.handymanId);
+                }
+              }
               isHandymanInJob = handymanIdStr === userIdStr;
             }
           }
-          // כל עבודה שלא בסטטוס "open" או "done" צריכה להיפתח
-          return (
+          // כל עבודה שלא בסטטוס "open" או "done" או עבודה מבוטלת צריכה להיפתח
+          const isCancelled =
+            job.cancel === true ||
+            job.isCancelled === true ||
+            job.status === "cancelled";
+          const isAssigned =
             isHandymanInJob &&
-            job.status !== "open" && // לא עבודות פתוחות
-            job.status !== "done" // לא עבודות שהושלמו
-          );
+            job.status !== "open" &&
+            job.status !== "done" &&
+            !isCancelled;
+          if (isAssigned) {
+            logger.log(
+              `[CheckAssigned] נמצאה עבודה משובצת: ${
+                job._id || job.id
+              }, status: ${job.status}`
+            );
+          }
+          return isAssigned;
         } else {
           // עבור לקוח - בודק אם clientId תואם
           const clientIdStr = job.clientId?._id
             ? String(job.clientId._id)
             : String(job.clientId || "");
-          // כל עבודה שלא בסטטוס "open" או "done" צריכה להיפתח
+          // כל עבודה שלא בסטטוס "open" או "done" או ביטול צריכה להיפתח
+          const isCancelled =
+            job.cancel === true ||
+            job.isCancelled === true ||
+            job.status === "cancelled";
           return (
             clientIdStr === userIdStr &&
             job.handymanId && // רק עבודות ששובצו
             job.status !== "open" && // לא עבודות פתוחות
-            job.status !== "done" // לא עבודות שהושלמו
+            job.status !== "done" && // לא עבודות שהושלמו
+            !isCancelled // לא עבודות מבוטלות
           );
         }
       });
@@ -2832,11 +3046,16 @@ export default {
                       isHandymanInJob = handymanIdStr === userIdStr;
                     }
                   }
+                  const isCancelled =
+                    job.cancel === true ||
+                    job.isCancelled === true ||
+                    job.status === "cancelled";
                   return (
                     isHandymanInJob &&
                     job.status !== "open" &&
-                    job.status !== "done"
-                    // עבור הנדימן - לא מציגים עבודות עם status "done"
+                    job.status !== "done" &&
+                    !isCancelled
+                    // עבור הנדימן - לא מציגים עבודות עם status "done" או מבוטלות
                   );
                 });
               }
@@ -2848,8 +3067,23 @@ export default {
       }
 
       // Only set activeAssignedJob if it's a valid active job
-      // כל עבודה שהסטטוס שלה הוא לא "open" או "done" תפתח את הצ'אט
+      // כל עבודה שהסטטוס שלה הוא לא "open" או "done" או עבודה מבוטלת תפתח את הצ'אט
       if (assignedJob) {
+        // בדוק שוב שהעבודה לא סיימה או מבוטלת (למקרה שהסטטוס השתנה)
+        const isCancelled =
+          assignedJob.cancel === true ||
+          assignedJob.isCancelled === true ||
+          assignedJob.status === "cancelled";
+        if (
+          assignedJob.status === "open" ||
+          assignedJob.status === "done" ||
+          isCancelled
+        ) {
+          // אם העבודה סיימה או מבוטלת, נקה את activeAssignedJob כדי לסגור את הצ'אט
+          this.activeAssignedJob = null;
+          this.isChatMinimized = true;
+          return;
+        }
         // שמור את ה-activeAssignedJob רק אם הוא לא כבר מוגדר או שהוא עבודה אחרת
         const shouldSet =
           !this.activeAssignedJob ||
@@ -2866,6 +3100,61 @@ export default {
       this.socket = io(URL, {
         transports: ["websocket", "polling"],
       });
+
+      // Listen for new quotations (for clients)
+      if (!this.isHendiman) {
+        this.socket.on("quotation:new", async (data) => {
+          try {
+            const userId = this.store.user?._id || this.$route.params.id;
+            const { URL } = await import("@/Url/url");
+            const quotationsResponse = await axios.get(
+              `${URL}/api/clients/${userId}/quoted-jobs-with-quotations`
+            );
+            if (
+              quotationsResponse.data.success &&
+              quotationsResponse.data.jobs &&
+              quotationsResponse.data.jobs.length > 0
+            ) {
+              // Find the job that has new quotations
+              const jobWithQuotations = quotationsResponse.data.jobs.find(
+                (j) => String(j._id) === String(data.jobId)
+              );
+              if (
+                jobWithQuotations &&
+                jobWithQuotations.quotations &&
+                jobWithQuotations.quotations.length > 0
+              ) {
+                // Open modal if not already open
+                if (!this.showClientQuotationsModal) {
+                  this.selectedQuotedJob = jobWithQuotations;
+                  this.showClientQuotationsModal = true;
+                } else {
+                  // Update selected job if modal is already open
+                  this.selectedQuotedJob = jobWithQuotations;
+                }
+              }
+            }
+          } catch (error) {
+            logger.error("Error handling quotation:new event:", error);
+          }
+        });
+
+        // Listen for quotation accepted confirmation (for clients)
+        this.socket.on("quotation:accepted-by-client", async (data) => {
+          this.toast?.showSuccess("הצעת המחיר נבחרה בהצלחה!");
+          // Refresh jobs to get updated status
+          await this.onRefresh();
+        });
+      } else {
+        // Listen for quotation accepted (for handymen)
+        this.socket.on("quotation:accepted", async (data) => {
+          this.toast?.showSuccess("הצעת המחיר שלך נבחרה! 🎉");
+          // Refresh jobs to get updated status
+          await this.onRefresh();
+          // Check if this job is now assigned to this handyman
+          await this.checkForAssignedJob();
+        });
+      }
 
       this.socket.on("connect", () => {
         // Join user's personal room (for receiving job-accepted events)
@@ -2887,10 +3176,14 @@ export default {
         }
 
         // Also join job room when receiving job updates
-        this.socket.on("job-updated", (data) => {
+        this.socket.on("job-updated", async (data) => {
           if (data && data.jobId) {
             const jobIdString = String(data.jobId);
             this.socket.emit("join-job", jobIdString);
+
+            // Check if this update means the user is now assigned to this job
+            // Refresh and check for assigned jobs
+            await this.checkForAssignedJob();
           }
         });
       });
@@ -2900,7 +3193,9 @@ export default {
         const jobId = String(data.jobId || "");
         const userId = this.store.user?._id || this.me?.id;
 
-        if (!userId || !jobId) return;
+        if (!userId || !jobId) {
+          return;
+        }
 
         // Refresh to get updated job data
         await this.onRefresh();
@@ -2946,11 +3241,40 @@ export default {
             // For handyman: check if handymanId matches (support array)
             if (acceptedJob.handymanId) {
               if (Array.isArray(acceptedJob.handymanId)) {
-                belongsToUser = acceptedJob.handymanId.some(
-                  (id) => String(id) === userIdStr
-                );
+                belongsToUser = acceptedJob.handymanId.some((id) => {
+                  // Handle both ObjectId and string - try multiple formats
+                  let idStr = "";
+                  if (id) {
+                    if (id._id) {
+                      idStr = String(id._id);
+                    } else if (id.$oid) {
+                      idStr = String(id.$oid);
+                    } else if (typeof id === "object" && id.toString) {
+                      idStr = id.toString();
+                    } else {
+                      idStr = String(id);
+                    }
+                  }
+                  return idStr === userIdStr;
+                });
               } else {
-                belongsToUser = String(acceptedJob.handymanId) === userIdStr;
+                // Handle single handymanId (not array)
+                let handymanIdStr = "";
+                if (acceptedJob.handymanId) {
+                  if (acceptedJob.handymanId._id) {
+                    handymanIdStr = String(acceptedJob.handymanId._id);
+                  } else if (acceptedJob.handymanId.$oid) {
+                    handymanIdStr = String(acceptedJob.handymanId.$oid);
+                  } else if (
+                    typeof acceptedJob.handymanId === "object" &&
+                    acceptedJob.handymanId.toString
+                  ) {
+                    handymanIdStr = acceptedJob.handymanId.toString();
+                  } else {
+                    handymanIdStr = String(acceptedJob.handymanId);
+                  }
+                }
+                belongsToUser = handymanIdStr === userIdStr;
               }
             }
           }
@@ -2959,9 +3283,10 @@ export default {
           if (
             belongsToUser &&
             acceptedJob.status !== "open" &&
-            acceptedJob.status !== "done" &&
-            !this.activeAssignedJob
+            acceptedJob.status !== "done"
           ) {
+            // Always open the chat for the new job, even if there's another active job
+            // The user should see the newly assigned job
             this.activeAssignedJob = acceptedJob;
             this.isChatMinimized = false;
           }
@@ -3008,7 +3333,7 @@ export default {
                 this.showClientApprovalModal = true;
               }
             } catch (error) {
-              console.error("Error fetching job for approval:", error);
+              logger.error("Error fetching job for approval:", error);
             }
           }
 
@@ -3022,8 +3347,8 @@ export default {
       // Listen for onboarding required (when client approves and handyman needs onboarding)
       this.socket.on("onboarding-required", async (data) => {
         if (this.isHendiman && data.needsOnboarding) {
-          this.onboardingUrl = data.onboardingUrl;
-          this.showOnboardingModal = true;
+          // Onboarding modal removed - just log the event
+          logger.info("Onboarding required but modal removed");
         }
       });
 
@@ -3071,17 +3396,8 @@ export default {
         // Refresh jobs to get latest data
         await this.onRefresh();
 
-        // If payment is released (paymentStatus: "paid"), close the chat for both client and handyman
-        if (paymentStatus === "paid" || data.paymentReleased) {
-          // Check if this is the currently active job
-          const currentJobId = String(
-            this.activeAssignedJob?._id || this.activeAssignedJob?.id || ""
-          );
-          if (currentJobId === jobId) {
-            this.activeAssignedJob = null;
-            this.isChatMinimized = false;
-          }
-        }
+        // לא סוגרים את הצ'אט לפי paymentStatus - רק לפי סטטוס העבודה
+        // הצ'אט ייסגר רק אם הסטטוס הוא "open", "done" או ביטול (זה מטופל ב-currentAssignedJob computed)
 
         if (this.isHendiman) {
           // Show notification that payment was approved and released
@@ -3118,7 +3434,7 @@ export default {
 
       // Listen for payment-released event (when client releases payment) - show IncomeDetailModal
       this.socket.on("payment-released", async (data) => {
-        console.log(
+        logger.log(
           "[Dashboard] Received payment-released event:",
           data,
           "isHendiman:",
@@ -3127,17 +3443,15 @@ export default {
 
         // Check if this is for handyman
         if (!this.isHendiman) {
-          console.log("[Dashboard] Skipping - not handyman");
           return;
         }
 
         if (!data || !data.jobId || !data.paymentReleased) {
-          console.log("[Dashboard] Skipping - missing required data", data);
           return;
         }
 
         const jobId = String(data.jobId || "");
-        console.log(
+        logger.log(
           "[Dashboard] Processing payment-released for handyman, jobId:",
           jobId
         );
@@ -3148,7 +3462,7 @@ export default {
           this.incomeDetailJob = data.jobInfo;
           this.incomeDetailPayment = data.paymentInfo;
           this.showIncomeDetailModal = true;
-          console.log(
+          logger.log(
             "[Dashboard] IncomeDetailModal shown with jobInfo and paymentInfo",
             {
               showIncomeDetailModal: this.showIncomeDetailModal,
@@ -3160,19 +3474,18 @@ export default {
 
           // Force Vue to update
           this.$nextTick(() => {
-            console.log(
+            logger.log(
               "[Dashboard] After nextTick - showIncomeDetailModal:",
               this.showIncomeDetailModal
             );
           });
         } else if (data.jobInfo) {
           // Only jobInfo available, fetch payment info
-          console.log("[Dashboard] Payment info not in event, fetching...");
           const job = data.jobInfo;
           await this.showIncomeDetail(job);
         } else if (data.jobId) {
           // Only jobId available, fetch both job and payment info
-          console.log(
+          logger.log(
             "[Dashboard] Fetching job and payment info for jobId:",
             jobId
           );
@@ -3182,13 +3495,13 @@ export default {
             if (jobResponse.data?.success && jobResponse.data?.job) {
               await this.showIncomeDetail(jobResponse.data.job);
             } else {
-              console.error("[Dashboard] Failed to fetch job info");
+              logger.error("[Dashboard] Failed to fetch job info");
             }
           } catch (error) {
-            console.error("[Dashboard] Error fetching job info:", error);
+            logger.error("[Dashboard] Error fetching job info:", error);
           }
         } else {
-          console.error(
+          logger.error(
             "[Dashboard] No jobInfo or jobId in payment-released event"
           );
         }
@@ -3217,14 +3530,9 @@ export default {
         );
 
         if (response.data && response.data.success && response.data.url) {
-          this.onboardingUrl = response.data.url;
-          // Save handymanId to localStorage before opening Stripe onboarding
-          if (handymanId) {
-            localStorage.setItem("userId", String(handymanId));
-          }
-          // Open the onboarding link in a new tab
-          window.open(this.onboardingUrl, "_blank");
-          this.showOnboardingModal = false;
+          // REMOVED - Stripe onboarding modal removed
+          // Just show error message instead
+          this.toast?.showError("הגדרת חשבון תשלומים הוסרה מהמערכת");
         } else {
           const errorMessage =
             response.data?.message ||
@@ -3278,74 +3586,21 @@ export default {
           { handymanId: String(handymanId) }
         );
         if (response.data && response.data.success && response.data.url) {
-          this.onboardingUrl = response.data.url;
-          this.showOnboardingModal = true;
+          // REMOVED - Stripe onboarding modal removed
+          // Just log the event
+          logger.info("Onboarding link received but modal removed");
         } else {
-          // Even if no URL, show modal with message
-          this.onboardingUrl = null;
-          this.showOnboardingModal = true;
+          // REMOVED - Stripe onboarding modal removed
+          logger.info("No onboarding URL but modal removed");
         }
       } catch (error) {
-        // Show modal even if error (with message that they need to contact support)
-        this.onboardingUrl = null;
-        this.showOnboardingModal = true;
+        // REMOVED - Stripe onboarding modal removed
+        logger.info("Error fetching onboarding link but modal removed");
       }
     },
     async checkHandymanOnboardingStatus() {
-      if (!this.isHendiman) return;
-
-      // Use route ID as fallback if store.user._id is not available
-      const handymanId =
-        this.store.user?._id ||
-        this.me?.id ||
-        this.me?._id ||
-        this.$route.params.id;
-
-      if (!handymanId) {
-        return;
-      }
-
-      try {
-        const { URL } = await import("@/Url/url");
-        const response = await axios.get(
-          `${URL}/api/handyman/${handymanId}/stripe/status`
-        );
-
-        if (response.data && response.data.success) {
-          const {
-            needsOnboarding,
-            hasAccount,
-            transfersEnabled,
-            payoutsEnabled,
-          } = response.data;
-
-          // Only show modal if account doesn't exist
-          // If account exists (even if not fully ready), don't show modal on mount
-          // The modal will show when client approves a job (via fetchOnboardingLinkForJob)
-          if (needsOnboarding && !hasAccount) {
-            // No account exists - show modal to create account
-            // Fetch onboarding link
-            const linkResponse = await axios.post(
-              `${URL}/api/handyman/stripe/onboarding-link`,
-              { handymanId: String(handymanId) }
-            );
-
-            if (
-              linkResponse.data &&
-              linkResponse.data.success &&
-              linkResponse.data.url
-            ) {
-              this.onboardingUrl = linkResponse.data.url;
-            } else {
-              this.onboardingUrl = null;
-            }
-
-            this.showOnboardingModal = true;
-          }
-        }
-      } catch (error) {
-        // Don't show modal on error - might be temporary issue
-      }
+      // REMOVED - Stripe onboarding modal removed
+      return;
     },
     onJobApproved() {
       // Handler for job-approved event from ClientActions
@@ -3667,29 +3922,54 @@ export default {
       try {
         const userId = this.store.user?._id || this.$route.params.id;
         if (!userId || !this.handymanToBlock) {
-          this.toast?.showError("חסרים פרטים לחסימת הנדימן");
+          this.toast?.showError(
+            this.isUnblockingHandyman
+              ? "חסרים פרטים לביטול חסימת הנדימן"
+              : "חסרים פרטים לחסימת הנדימן"
+          );
           return;
         }
 
         const { URL } = await import("@/Url/url");
-        const response = await axios.post(`${URL}/api/users/block-handyman`, {
+
+        // אם זה ביטול חסימה, שלח action: "unblock"
+        const requestBody = {
           userId,
           handymanId: this.handymanToBlock,
-        });
+        };
+
+        if (this.isUnblockingHandyman) {
+          requestBody.action = "unblock";
+        }
+
+        const response = await axios.post(
+          `${URL}/api/users/block-handyman`,
+          requestBody
+        );
 
         if (response.data && response.data.success) {
-          this.toast?.showSuccess("הנדימן נחסם בהצלחה");
+          this.toast?.showSuccess(
+            this.isUnblockingHandyman
+              ? "ביטול חסימת הנדימן בוצע בהצלחה"
+              : "הנדימן נחסם בהצלחה"
+          );
           this.closeBlockHandymanModal();
           // Refresh handymen list
           await this.onRefresh();
         } else {
           this.toast?.showError(
-            response.data?.message || "שגיאה בחסימת הנדימן"
+            response.data?.message ||
+              (this.isUnblockingHandyman
+                ? "שגיאה בביטול חסימת הנדימן"
+                : "שגיאה בחסימת הנדימן")
           );
         }
       } catch (error) {
         this.toast?.showError(
-          error.response?.data?.message || "שגיאה בחסימת הנדימן"
+          error.response?.data?.message ||
+            (this.isUnblockingHandyman
+              ? "שגיאה בביטול חסימת הנדימן"
+              : "שגיאה בחסימת הנדימן")
         );
       } finally {
         this.isBlockingHandyman = false;
@@ -3954,7 +4234,7 @@ export default {
           this.isStripeReady = true;
         }
       } catch (error) {
-        console.error("Error initializing trial payment:", error);
+        logger.error("Error initializing trial payment:", error);
         this.toast?.showError("שגיאה בטעינת טופס התשלום");
       }
     },
@@ -4007,7 +4287,7 @@ export default {
           }
         }
       } catch (error) {
-        console.error("Error processing trial payment:", error);
+        logger.error("Error processing trial payment:", error);
         if (errorsElement) {
           errorsElement.textContent = "שגיאה בעיבוד התשלום. אנא נסה שוב.";
         }
@@ -4035,7 +4315,7 @@ export default {
           this.toast?.showError(data.message || "שגיאה");
         }
       } catch (error) {
-        console.error("Error confirming trial expiration:", error);
+        logger.error("Error confirming trial expiration:", error);
         this.toast?.showError("שגיאה");
       }
     },
@@ -4059,14 +4339,53 @@ export default {
           this.toast?.showError(data.message || "שגיאה במתן גישה חינם");
         }
       } catch (error) {
-        console.error("Error giving test access:", error);
+        logger.error("Error giving test access:", error);
         this.toast?.showError("שגיאה במתן גישה חינם");
       }
     },
     async handleSubscribe() {
-      // Show payment form and initialize Stripe
-      this.showSubscriptionPaymentForm = true;
-      await this.initializeSubscriptionPayment();
+      // If fillCreditCardNow is true, show payment form and initialize Stripe
+      if (this.fillCreditCardNow) {
+        this.showSubscriptionPaymentForm = true;
+        await this.initializeSubscriptionPayment();
+      } else {
+        // If fillCreditCardNow is false, register without payment (14 days free trial)
+        await this.handleSubscriptionWithoutPayment();
+      }
+    },
+    async handlePaymentToggleChange() {
+      // If user toggles to fill credit card now, initialize Stripe
+      if (this.fillCreditCardNow && this.showSubscriptionPaymentForm) {
+        await this.initializeSubscriptionPayment();
+      }
+    },
+    async handleSubscriptionWithoutPayment() {
+      // Register handyman without payment (14 days free trial)
+      const userId = this.store.user?._id || this.$route.params.id;
+      try {
+        const { URL } = await import("@/Url/url");
+        const { data } = await axios.post(
+          `${URL}/api/subscription/register-without-payment`,
+          {
+            userId,
+            planType: this.selectedSubscriptionPlan,
+          }
+        );
+
+        if (data && data.success) {
+          this.toast?.showSuccess("הרשמה ל14 יום חינם בוצעה בהצלחה!");
+          this.showSubscriptionModal = false;
+          // Refresh user data
+          await this.store.fetchDashboardData(userId);
+        } else {
+          this.subscriptionError =
+            data?.message || "שגיאה בהרשמה. אנא נסה שוב.";
+        }
+      } catch (error) {
+        logger.error("Error registering without payment:", error);
+        this.subscriptionError =
+          error.response?.data?.message || "שגיאה בהרשמה. אנא נסה שוב.";
+      }
     },
     formatCurrency(amount) {
       return new Intl.NumberFormat("he-IL", {
@@ -4197,17 +4516,17 @@ export default {
             // Hide loading indicator after successful mount
             this.isLoadingSubscriptionPayment = false;
           } catch (mountError) {
-            console.error("Error mounting payment element:", mountError);
+            logger.error("Error mounting payment element:", mountError);
             this.subscriptionError = "שגיאה בטעינת שדות התשלום. אנא נסה שוב.";
             this.isLoadingSubscriptionPayment = false;
           }
         } else {
-          console.error("Payment element container not found");
+          logger.error("Payment element container not found");
           this.subscriptionError = "שגיאה בטעינת שדות התשלום. אנא רענן את הדף.";
           this.isLoadingSubscriptionPayment = false;
         }
       } catch (error) {
-        console.error("Error initializing subscription payment:", error);
+        logger.error("Error initializing subscription payment:", error);
         this.subscriptionError = "שגיאה באתחול מערכת התשלומים. אנא נסה שוב.";
         this.isLoadingSubscriptionPayment = false;
       }
@@ -4283,7 +4602,7 @@ export default {
           this.subscriptionError = "מצב מנוי לא צפוי. אנא פנה לתמיכה.";
         }
       } catch (error) {
-        console.error("Error processing subscription payment:", error);
+        logger.error("Error processing subscription payment:", error);
         this.subscriptionError =
           error.message || "שגיאה בחיבור לשרת. אנא נסה שוב.";
       } finally {
@@ -4296,20 +4615,11 @@ export default {
     const userId = this.$route.params.id;
     let activeJobCheckPromise = null;
     if (userId) {
-      console.log("[Dashboard] 🚀 Starting checkActiveJob for user:", userId);
       // Call check-active-job in parallel with fetchDashboardData
       activeJobCheckPromise = this.store
         .checkActiveJob(userId)
         .then((result) => {
-          console.log("[Dashboard] 📥 checkActiveJob result:", result);
           if (result && result.success && result.hasActiveJob && result.jobId) {
-            console.log(
-              "[Dashboard] ✅ Active job found:",
-              result.jobId,
-              "status:",
-              result.status
-            );
-
             // If we got the full job object, verify user is assigned and use it immediately
             if (
               result.job &&
@@ -4325,19 +4635,38 @@ export default {
                 if (result.job.handymanId) {
                   if (Array.isArray(result.job.handymanId)) {
                     isUserAssigned = result.job.handymanId.some((id) => {
-                      const idStr = id?._id
-                        ? String(id._id)
-                        : id?.$oid
-                        ? String(id.$oid)
-                        : String(id);
+                      // Handle both ObjectId and string - try multiple formats
+                      let idStr = "";
+                      if (id) {
+                        if (id._id) {
+                          idStr = String(id._id);
+                        } else if (id.$oid) {
+                          idStr = String(id.$oid);
+                        } else if (typeof id === "object" && id.toString) {
+                          idStr = id.toString();
+                        } else {
+                          idStr = String(id);
+                        }
+                      }
                       return idStr === userIdStr;
                     });
                   } else {
-                    const handymanIdStr = result.job.handymanId?._id
-                      ? String(result.job.handymanId._id)
-                      : result.job.handymanId?.$oid
-                      ? String(result.job.handymanId.$oid)
-                      : String(result.job.handymanId);
+                    // Handle single handymanId (not array)
+                    let handymanIdStr = "";
+                    if (result.job.handymanId) {
+                      if (result.job.handymanId._id) {
+                        handymanIdStr = String(result.job.handymanId._id);
+                      } else if (result.job.handymanId.$oid) {
+                        handymanIdStr = String(result.job.handymanId.$oid);
+                      } else if (
+                        typeof result.job.handymanId === "object" &&
+                        result.job.handymanId.toString
+                      ) {
+                        handymanIdStr = result.job.handymanId.toString();
+                      } else {
+                        handymanIdStr = String(result.job.handymanId);
+                      }
+                    }
                     isUserAssigned = handymanIdStr === userIdStr;
                   }
                 }
@@ -4353,17 +4682,7 @@ export default {
               if (isUserAssigned) {
                 this.activeAssignedJob = result.job;
                 this.isChatMinimized = false;
-                console.log(
-                  "[Dashboard] ✅ Chat opened immediately with job object:",
-                  result.jobId,
-                  "user is assigned"
-                );
                 return; // Done - chat is open
-              } else {
-                console.log(
-                  "[Dashboard] ⚠️ Active job found but user is not assigned:",
-                  result.jobId
-                );
               }
             }
 
@@ -4381,24 +4700,81 @@ export default {
 
                 if (this.isHendiman) {
                   // For handyman - check if handymanId matches (support array)
+                  logger.log(
+                    "[Dashboard] 🔍 Checking handyman assignment in store.jobs:",
+                    "userId:",
+                    userIdStr,
+                    "handymanId:",
+                    job.handymanId
+                  );
                   if (job.handymanId) {
                     if (Array.isArray(job.handymanId)) {
-                      isUserAssigned = job.handymanId.some((id) => {
-                        const idStr = id?._id
-                          ? String(id._id)
-                          : id?.$oid
-                          ? String(id.$oid)
-                          : String(id);
-                        return idStr === userIdStr;
+                      logger.log(
+                        "[Dashboard] 🔍 handymanId is array, checking elements..."
+                      );
+                      isUserAssigned = job.handymanId.some((id, index) => {
+                        // Handle both ObjectId and string - try multiple formats
+                        let idStr = "";
+                        if (id) {
+                          if (id._id) {
+                            idStr = String(id._id);
+                          } else if (id.$oid) {
+                            idStr = String(id.$oid);
+                          } else if (typeof id === "object" && id.toString) {
+                            idStr = id.toString();
+                          } else {
+                            idStr = String(id);
+                          }
+                        }
+                        const matches = idStr === userIdStr;
+                        logger.log(
+                          `[Dashboard] 🔍 Array element ${index}:`,
+                          "id:",
+                          id,
+                          "idStr:",
+                          idStr,
+                          "userIdStr:",
+                          userIdStr,
+                          "matches:",
+                          matches
+                        );
+                        return matches;
                       });
+                      logger.log(
+                        "[Dashboard] 🔍 isUserAssigned from array:",
+                        isUserAssigned
+                      );
                     } else {
-                      const handymanIdStr = job.handymanId?._id
-                        ? String(job.handymanId._id)
-                        : job.handymanId?.$oid
-                        ? String(job.handymanId.$oid)
-                        : String(job.handymanId);
+                      // Handle single handymanId (not array)
+                      let handymanIdStr = "";
+                      if (job.handymanId) {
+                        if (job.handymanId._id) {
+                          handymanIdStr = String(job.handymanId._id);
+                        } else if (job.handymanId.$oid) {
+                          handymanIdStr = String(job.handymanId.$oid);
+                        } else if (
+                          typeof job.handymanId === "object" &&
+                          job.handymanId.toString
+                        ) {
+                          handymanIdStr = job.handymanId.toString();
+                        } else {
+                          handymanIdStr = String(job.handymanId);
+                        }
+                      }
                       isUserAssigned = handymanIdStr === userIdStr;
+                      logger.log(
+                        "[Dashboard] 🔍 Single handymanId comparison:",
+                        handymanIdStr,
+                        "===",
+                        userIdStr,
+                        "→",
+                        isUserAssigned
+                      );
                     }
+                  } else {
+                    logger.log(
+                      "[Dashboard] ⚠️ No handymanId in job from store.jobs"
+                    );
                   }
                 } else {
                   // For client - check if clientId matches
@@ -4412,24 +4788,14 @@ export default {
                 if (isUserAssigned) {
                   this.activeAssignedJob = job;
                   this.isChatMinimized = false;
-                  console.log(
-                    "[Dashboard] ✅ Chat opened immediately for active job:",
-                    result.jobId,
-                    "user is assigned"
-                  );
                   this.pendingActiveJobId = null; // Clear since we found it
-                } else {
-                  console.log(
-                    "[Dashboard] ⚠️ Active job found but user is not assigned:",
-                    result.jobId
-                  );
                 }
               }
             });
           }
         })
         .catch((error) => {
-          console.error("[Dashboard] ❌ Error checking active job:", error);
+          logger.error("[Dashboard] ❌ Error checking active job:", error);
         });
     }
     // Don't clear activeAssignedJob on mount - let checkForAssignedJob handle it
@@ -4520,16 +4886,99 @@ export default {
         return;
       }
 
-      // בדוק אם הנדימן צריך מנוי פעיל
-      if (data.User.isHandyman === true) {
-        const hasAccess =
-          data.User.trialExpiresAt === "always" || // Free forever
-          data.User.hasActiveSubscription === true;
+      // Check for quoted jobs with quotations (for clients only)
+      if (!data.User.isHandyman) {
+        try {
+          const userId = this.store.user?._id || this.$route.params.id;
+          const { URL } = await import("@/Url/url");
 
-        if (!hasAccess) {
-          // הנדימן לא מנוי - הצג פופאפ מנוי
-          this.showSubscriptionModal = true;
-          // המשך לטעון את הנתונים אבל עם פופאפ פתוח
+          // First, check for expired quoted jobs and expire them
+          try {
+            await axios.post(`${URL}/api/jobs/check-expired-quoted`);
+          } catch (expiredCheckError) {
+            // Silent fail - not critical
+            logger.error(
+              "Error checking expired quoted jobs:",
+              expiredCheckError
+            );
+          }
+
+          // Then, get quoted jobs with quotations
+          const quotationsResponse = await axios.get(
+            `${URL}/api/clients/${userId}/quoted-jobs-with-quotations`
+          );
+          if (
+            quotationsResponse.data.success &&
+            quotationsResponse.data.jobs &&
+            quotationsResponse.data.jobs.length > 0
+          ) {
+            // Open modal with first job that has quotations
+            const firstJobWithQuotations = quotationsResponse.data.jobs[0];
+            if (
+              firstJobWithQuotations.quotations &&
+              firstJobWithQuotations.quotations.length > 0
+            ) {
+              this.selectedQuotedJob = firstJobWithQuotations;
+              this.showClientQuotationsModal = true;
+            }
+          }
+        } catch (quotationsError) {
+          logger.error("Error checking quoted jobs:", quotationsError);
+          // Silent fail - not critical
+        }
+      }
+
+      // בדוק אם הנדימן צריך מנוי פעיל (באמצעות endpoint חדש)
+      if (data.User.isHandyman === true) {
+        try {
+          const userId = this.store.user?._id || this.$route.params.id;
+          const { URL } = await import("@/Url/url");
+          const statusResponse = await axios.get(
+            `${URL}/api/subscription/status?userId=${userId}`
+          );
+
+          if (statusResponse.data && statusResponse.data.success) {
+            const status = statusResponse.data;
+            // Store subscription status for use in computed properties
+            this.subscriptionStatus = status;
+
+            // אם המשתמש חינם - אין צורך לעשות כלום
+            if (status.isFree) {
+              // Free forever - no action needed
+            }
+            // אם המשתמש בימי נסיון - אין צורך לעשות כלום
+            else if (status.isTrial) {
+              // Still in trial - no action needed
+              // If in trial and showing modal, set fillCreditCardNow to false by default
+              if (this.showSubscriptionModal) {
+                this.fillCreditCardNow = false;
+              }
+            }
+            // אם צריך חיוב - הצג פופאפ מנוי
+            else if (status.needsBilling) {
+              this.showSubscriptionModal = true;
+              // If needs billing (after expiration), force fillCreditCardNow to true
+              this.fillCreditCardNow = true;
+            }
+            // אם יש מנוי פעיל - אין צורך לעשות כלום
+            else if (
+              status.hasActiveSubscription &&
+              !status.subscriptionCancelled
+            ) {
+              // Has active subscription - no action needed
+            }
+          }
+        } catch (statusError) {
+          // אם יש שגיאה, נשתמש בלוגיקה הישנה כגיבוי
+          logger.error("Error checking subscription status:", statusError);
+          const hasAccess =
+            data.User.trialExpiresAt === "always" || // Free forever
+            data.User.hasActiveSubscription === true;
+
+          if (!hasAccess) {
+            // הנדימן לא מנוי - הצג פופאפ מנוי
+            this.showSubscriptionModal = true;
+          }
         }
       }
 
@@ -4541,6 +4990,10 @@ export default {
         this.me.phone = data.User.phone;
         this.me.email = data.User.email;
         this.me.city = data.User.city;
+        this.me.subscriptionPlanType = data.User.subscriptionPlanType;
+        this.me.subscriptionExpiresAt = data.User.subscriptionExpiresAt;
+        this.me.trialExpiresAt = data.User.trialExpiresAt;
+        this.me.billingStartDate = data.User.billingStartDate;
         this.isHendiman = data.User.isHandyman;
 
         // עדכן את הקואורדינטות גם מה-User שנטען (למקרה שהן השתנו)
@@ -4579,6 +5032,7 @@ export default {
           const pendingJob = this.store.jobs?.find(
             (j) => String(j._id || j.id) === String(this.pendingActiveJobId)
           );
+
           if (
             pendingJob &&
             pendingJob.status !== "open" &&
@@ -4594,19 +5048,38 @@ export default {
               if (pendingJob.handymanId) {
                 if (Array.isArray(pendingJob.handymanId)) {
                   isUserAssigned = pendingJob.handymanId.some((id) => {
-                    const idStr = id?._id
-                      ? String(id._id)
-                      : id?.$oid
-                      ? String(id.$oid)
-                      : String(id);
+                    // Handle both ObjectId and string - try multiple formats
+                    let idStr = "";
+                    if (id) {
+                      if (id._id) {
+                        idStr = String(id._id);
+                      } else if (id.$oid) {
+                        idStr = String(id.$oid);
+                      } else if (typeof id === "object" && id.toString) {
+                        idStr = id.toString();
+                      } else {
+                        idStr = String(id);
+                      }
+                    }
                     return idStr === userIdStr;
                   });
                 } else {
-                  const handymanIdStr = pendingJob.handymanId?._id
-                    ? String(pendingJob.handymanId._id)
-                    : pendingJob.handymanId?.$oid
-                    ? String(pendingJob.handymanId.$oid)
-                    : String(pendingJob.handymanId);
+                  // Handle single handymanId (not array)
+                  let handymanIdStr = "";
+                  if (pendingJob.handymanId) {
+                    if (pendingJob.handymanId._id) {
+                      handymanIdStr = String(pendingJob.handymanId._id);
+                    } else if (pendingJob.handymanId.$oid) {
+                      handymanIdStr = String(pendingJob.handymanId.$oid);
+                    } else if (
+                      typeof pendingJob.handymanId === "object" &&
+                      pendingJob.handymanId.toString
+                    ) {
+                      handymanIdStr = pendingJob.handymanId.toString();
+                    } else {
+                      handymanIdStr = String(pendingJob.handymanId);
+                    }
+                  }
                   isUserAssigned = handymanIdStr === userIdStr;
                 }
               }
@@ -4622,18 +5095,137 @@ export default {
             if (isUserAssigned) {
               this.activeAssignedJob = pendingJob;
               this.isChatMinimized = false;
-              console.log(
-                "[Dashboard] ✅ Chat opened for pending active job:",
-                this.pendingActiveJobId,
-                "user is assigned"
-              );
               this.pendingActiveJobId = null; // Clear
             } else {
-              console.log(
-                "[Dashboard] ⚠️ Pending job found but user is not assigned:",
-                this.pendingActiveJobId
+              // Try to fetch the job directly from server as fallback
+              if (this.isHendiman) {
+                try {
+                  const { URL } = await import("@/Url/url");
+                  const response = await axios.get(
+                    `${URL}/jobs/${this.pendingActiveJobId}`
+                  );
+                  if (
+                    response.data &&
+                    response.data.success &&
+                    response.data.job
+                  ) {
+                    const fetchedJob = response.data.job;
+                    // Check assignment again with fetched job
+                    let isUserAssigned = false;
+                    if (fetchedJob.handymanId) {
+                      if (Array.isArray(fetchedJob.handymanId)) {
+                        isUserAssigned = fetchedJob.handymanId.some((id) => {
+                          let idStr = "";
+                          if (id) {
+                            if (id._id) idStr = String(id._id);
+                            else if (id.$oid) idStr = String(id.$oid);
+                            else if (typeof id === "object" && id.toString)
+                              idStr = id.toString();
+                            else idStr = String(id);
+                          }
+                          return idStr === userIdStr;
+                        });
+                      } else {
+                        let handymanIdStr = "";
+                        if (fetchedJob.handymanId._id)
+                          handymanIdStr = String(fetchedJob.handymanId._id);
+                        else if (fetchedJob.handymanId.$oid)
+                          handymanIdStr = String(fetchedJob.handymanId.$oid);
+                        else if (
+                          typeof fetchedJob.handymanId === "object" &&
+                          fetchedJob.handymanId.toString
+                        )
+                          handymanIdStr = fetchedJob.handymanId.toString();
+                        else handymanIdStr = String(fetchedJob.handymanId);
+                        isUserAssigned = handymanIdStr === userIdStr;
+                      }
+                    }
+                    if (
+                      isUserAssigned &&
+                      fetchedJob.status !== "open" &&
+                      fetchedJob.status !== "done"
+                    ) {
+                      const isCancelled =
+                        fetchedJob.cancel === true ||
+                        fetchedJob.isCancelled === true ||
+                        fetchedJob.status === "cancelled";
+                      if (!isCancelled) {
+                        this.activeAssignedJob = fetchedJob;
+                        this.isChatMinimized = false;
+                        this.pendingActiveJobId = null;
+                      }
+                    }
+                  }
+                } catch (fetchError) {
+                  // Error fetching pending job
+                }
+              }
+              if (this.pendingActiveJobId) {
+                this.pendingActiveJobId = null; // Clear invalid pending job
+              }
+            }
+          } else if (!pendingJob) {
+            // Job not in store.jobs - try to fetch it directly
+            try {
+              const { URL } = await import("@/Url/url");
+              const response = await axios.get(
+                `${URL}/jobs/${this.pendingActiveJobId}`
               );
-              this.pendingActiveJobId = null; // Clear invalid pending job
+              if (response.data && response.data.success && response.data.job) {
+                const fetchedJob = response.data.job;
+                const userId = this.store.user?._id || this.me?._id;
+                const userIdStr = String(userId);
+                let isUserAssigned = false;
+
+                if (this.isHendiman) {
+                  if (fetchedJob.handymanId) {
+                    if (Array.isArray(fetchedJob.handymanId)) {
+                      isUserAssigned = fetchedJob.handymanId.some((id) => {
+                        let idStr = "";
+                        if (id) {
+                          if (id._id) idStr = String(id._id);
+                          else if (id.$oid) idStr = String(id.$oid);
+                          else if (typeof id === "object" && id.toString)
+                            idStr = id.toString();
+                          else idStr = String(id);
+                        }
+                        return idStr === userIdStr;
+                      });
+                    } else {
+                      let handymanIdStr = "";
+                      if (fetchedJob.handymanId._id)
+                        handymanIdStr = String(fetchedJob.handymanId._id);
+                      else if (fetchedJob.handymanId.$oid)
+                        handymanIdStr = String(fetchedJob.handymanId.$oid);
+                      else if (
+                        typeof fetchedJob.handymanId === "object" &&
+                        fetchedJob.handymanId.toString
+                      )
+                        handymanIdStr = fetchedJob.handymanId.toString();
+                      else handymanIdStr = String(fetchedJob.handymanId);
+                      isUserAssigned = handymanIdStr === userIdStr;
+                    }
+                  }
+                }
+
+                if (
+                  isUserAssigned &&
+                  fetchedJob.status !== "open" &&
+                  fetchedJob.status !== "done"
+                ) {
+                  const isCancelled =
+                    fetchedJob.cancel === true ||
+                    fetchedJob.isCancelled === true ||
+                    fetchedJob.status === "cancelled";
+                  if (!isCancelled) {
+                    this.activeAssignedJob = fetchedJob;
+                    this.isChatMinimized = false;
+                    this.pendingActiveJobId = null;
+                  }
+                }
+              }
+            } catch (fetchError) {
+              // Error fetching pending job
             }
           }
         }
@@ -4691,17 +5283,8 @@ export default {
                 if (isUserAssigned) {
                   this.activeAssignedJob = pendingJob;
                   this.isChatMinimized = false;
-                  console.log(
-                    "[Dashboard] ✅ Chat opened for pending active job (delayed):",
-                    this.pendingActiveJobId,
-                    "user is assigned"
-                  );
                   this.pendingActiveJobId = null; // Clear
                 } else {
-                  console.log(
-                    "[Dashboard] ⚠️ Pending job found but user is not assigned (delayed):",
-                    this.pendingActiveJobId
-                  );
                   this.pendingActiveJobId = null; // Clear invalid pending job
                 }
               }
@@ -4852,10 +5435,7 @@ export default {
           }
         }
 
-        // Check if handyman needs to complete onboarding (on mount)
-        if (this.isHendiman) {
-          await this.checkHandymanOnboardingStatus();
-        }
+        // Check if handyman needs to complete onboarding (on mount) - REMOVED
       }
 
       // Initialize WebSocket for real-time updates
@@ -8270,6 +8850,79 @@ $r2: 26px;
   margin-top: 24px;
 }
 
+.subscription-payment-toggle {
+  margin-bottom: 12px;
+  margin-top: 8px;
+}
+
+.subscription-payment-toggle__label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba($orange, 0.2);
+  transition: all 0.2s ease;
+}
+
+.subscription-payment-toggle__label:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba($orange, 0.3);
+}
+
+.subscription-payment-toggle__text {
+  font-size: 14px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.9);
+  flex: 1;
+}
+
+.subscription-payment-toggle__input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.subscription-payment-toggle__slider {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.subscription-payment-toggle__slider::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.subscription-payment-toggle__input:checked
+  + .subscription-payment-toggle__slider {
+  background: linear-gradient(135deg, $orange, $orange2);
+}
+
+.subscription-payment-toggle__input:checked
+  + .subscription-payment-toggle__slider::before {
+  transform: translateX(-24px);
+  background: #0b0b0f;
+}
+
 .subscription-required-modal__btn {
   width: 100%;
   padding: 14px 20px;
@@ -8282,16 +8935,7 @@ $r2: 26px;
   font-family: $font-family;
 }
 
-.subscription-required-modal__btn--test {
-  background: linear-gradient(135deg, #4caf50, #66bb6a);
-  color: #0b0c10;
-  box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
-}
-
-.subscription-required-modal__btn--test:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(76, 175, 80, 0.4);
-}
+/* Test button removed - no longer needed */
 
 .subscription-required-modal__btn--subscribe {
   background: linear-gradient(135deg, $orange, $orange2);
@@ -8572,6 +9216,29 @@ $r2: 26px;
 
 .subscription-payment-form__stripe-element {
   padding: 12px 14px;
+
+  /* Hide Stripe test/developer buttons and iframes */
+  button[data-testid*="test"],
+  button[aria-label*="test"],
+  button[aria-label*="Test"],
+  a[href*="test"],
+  a[href*="Test"],
+  [class*="test"],
+  [class*="Test"],
+  [id*="test"],
+  [id*="Test"],
+  iframe[name*="__privateStripeFrame"],
+  iframe[name*="privateStripeFrame"],
+  iframe[src*="stripe.com"][src*="elements-inner"],
+  iframe[title*="מסגרת כלים למפתחי פס"],
+  iframe[title*="Stripe developer tools frame"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
   border-radius: 10px;
   border: 1px solid rgba($orange, 0.3);
   background: rgba(255, 255, 255, 0.06);

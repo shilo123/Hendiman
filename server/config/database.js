@@ -1,4 +1,5 @@
 const { MongoClient } = require("mongodb");
+const { serverLogger } = require("../utils/logger");
 
 let collection;
 let collectionJobs;
@@ -47,7 +48,10 @@ async function connectDatabase() {
     } catch (ttlIndexError) {
       // אם ה-index כבר קיים או יש שגיאה אחרת, זה בסדר
       if (ttlIndexError.code !== 85 && ttlIndexError.code !== 86) {
-        console.warn("⚠️ Warning creating TTL index:", ttlIndexError.message);
+        serverLogger.warn(
+          "⚠️ Warning creating TTL index:",
+          ttlIndexError.message
+        );
       }
     }
 
@@ -57,7 +61,7 @@ async function connectDatabase() {
     } catch (chatsIndexError) {
       // Index already exists or other error - that's fine
       if (chatsIndexError.code !== 85 && chatsIndexError.code !== 86) {
-        console.warn(
+        serverLogger.warn(
           "⚠️ Warning creating chats index:",
           chatsIndexError.message
         );
@@ -68,10 +72,10 @@ async function connectDatabase() {
     try {
       // Single index on handymanId (works with arrays and direct matches)
       await collectionJobs.createIndex({ handymanId: 1 }, { background: true });
-      console.log("✅ Created index on Jobs: handymanId");
+      serverLogger.log("✅ Created index on Jobs: handymanId");
     } catch (jobsIndexError1) {
       if (jobsIndexError1.code !== 85 && jobsIndexError1.code !== 86) {
-        console.warn(
+        serverLogger.warn(
           "⚠️ Warning creating jobs handymanId index:",
           jobsIndexError1.message
         );
@@ -81,10 +85,10 @@ async function connectDatabase() {
     try {
       // Single index on clientId
       await collectionJobs.createIndex({ clientId: 1 }, { background: true });
-      console.log("✅ Created index on Jobs: clientId");
+      serverLogger.log("✅ Created index on Jobs: clientId");
     } catch (jobsIndexError2) {
       if (jobsIndexError2.code !== 85 && jobsIndexError2.code !== 86) {
-        console.warn(
+        serverLogger.warn(
           "⚠️ Warning creating jobs clientId index:",
           jobsIndexError2.message
         );
@@ -94,10 +98,10 @@ async function connectDatabase() {
     try {
       // Single index on status for general filtering
       await collectionJobs.createIndex({ status: 1 }, { background: true });
-      console.log("✅ Created index on Jobs: status");
+      serverLogger.log("✅ Created index on Jobs: status");
     } catch (jobsIndexError3) {
       if (jobsIndexError3.code !== 85 && jobsIndexError3.code !== 86) {
-        console.warn(
+        serverLogger.warn(
           "⚠️ Warning creating jobs status index:",
           jobsIndexError3.message
         );
@@ -110,12 +114,12 @@ async function connectDatabase() {
         { handymanId: 1, status: 1, isDeleted: 1 },
         { background: true }
       );
-      console.log(
+      serverLogger.log(
         "✅ Created compound index on Jobs: handymanId + status + isDeleted"
       );
     } catch (jobsIndexError4) {
       if (jobsIndexError4.code !== 85 && jobsIndexError4.code !== 86) {
-        console.warn(
+        serverLogger.warn(
           "⚠️ Warning creating jobs handymanId compound index:",
           jobsIndexError4.message
         );
@@ -128,12 +132,12 @@ async function connectDatabase() {
         { clientId: 1, status: 1, isDeleted: 1 },
         { background: true }
       );
-      console.log(
+      serverLogger.log(
         "✅ Created compound index on Jobs: clientId + status + isDeleted"
       );
     } catch (jobsIndexError5) {
       if (jobsIndexError5.code !== 85 && jobsIndexError5.code !== 86) {
-        console.warn(
+        serverLogger.warn(
           "⚠️ Warning creating jobs clientId compound index:",
           jobsIndexError5.message
         );

@@ -19,3 +19,4 @@ lerna-debug.log*
 /server/temp
 /server/uploads
 /src/Url/port.json
+/server/logs/*.log

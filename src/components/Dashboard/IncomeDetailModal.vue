@@ -63,17 +63,7 @@
             </div>
           </div>
 
-          <div v-if="urgentFee > 0" class="incomeBreakdown__item">
-            <div class="incomeBreakdown__label">
-              <span class="incomeBreakdown__icon">⚡</span>
-              קריאה דחופה
-            </div>
-            <div
-              class="incomeBreakdown__value incomeBreakdown__value--negative"
-            >
-              -{{ formatMoney(urgentFee) }} ₪
-            </div>
-          </div>
+          <!-- ה-urgentFee משולם על ידי הלקוח, לא מופחת מההנדימן -->
 
           <div class="incomeBreakdown__divider"></div>
 
@@ -111,6 +101,7 @@
 <script>
 import axios from "axios";
 import { URL } from "@/Url/url";
+import logger from "@/utils/logger";
 
 export default {
   name: "IncomeDetailModal",
@@ -136,14 +127,14 @@ export default {
   },
   watch: {
     isVisible(newVal) {
-      console.log("[IncomeDetailModal] isVisible changed to:", newVal, {
+      logger.log("[IncomeDetailModal] isVisible changed to:", newVal, {
         jobInfo: this.jobInfo,
         paymentInfo: this.paymentInfo,
       });
     },
   },
   mounted() {
-    console.log("[IncomeDetailModal] Mounted with:", {
+    logger.log("[IncomeDetailModal] Mounted with:", {
       isVisible: this.isVisible,
       jobInfo: this.jobInfo,
       paymentInfo: this.paymentInfo,
@@ -165,19 +156,20 @@ export default {
       if (this.paymentInfo && this.paymentInfo.spacious_H !== undefined) {
         return this.paymentInfo.spacious_H;
       }
-      return this.totalAmount - this.commission - this.urgentFee;
+      // ה-urgentFee משולם על ידי הלקוח, לא מופחת מההנדימן
+      return this.totalAmount - this.commission;
     },
   },
   watch: {
     isVisible(newVal) {
-      console.log("[IncomeDetailModal] isVisible changed to:", newVal, {
+      logger.log("[IncomeDetailModal] isVisible changed to:", newVal, {
         jobInfo: this.jobInfo,
         paymentInfo: this.paymentInfo,
       });
     },
   },
   async mounted() {
-    console.log("[IncomeDetailModal] Mounted with:", {
+    logger.log("[IncomeDetailModal] Mounted with:", {
       isVisible: this.isVisible,
       jobInfo: this.jobInfo,
       paymentInfo: this.paymentInfo,
@@ -191,13 +183,13 @@ export default {
         if (response.data.success && response.data.fee !== undefined) {
           this.platformFeePercent = response.data.fee;
         } else {
-          console.error(
+          logger.error(
             "Failed to load platform fee: Invalid response",
             response.data
           );
         }
       } catch (error) {
-        console.error("Error loading platform fee from API:", error);
+        logger.error("Error loading platform fee from API:", error);
         // Try to reload after a delay
         setTimeout(() => this.loadPlatformFee(), 2000);
       }
@@ -234,6 +226,8 @@ $border: rgba(255, 255, 255, 0.1);
   padding: 20px;
   backdrop-filter: blur(12px);
   animation: fadeIn 0.3s ease;
+  overflow-y: auto; /* אפשר גלילה */
+  -webkit-overflow-scrolling: touch; /* גלילה חלקה ב-iOS */
 }
 
 @keyframes fadeIn {
@@ -259,6 +253,10 @@ $border: rgba(255, 255, 255, 0.1);
   position: relative;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
   animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  margin: auto; /* מרכז את התוכן גם כאשר יש גלילה */
+  max-height: calc(100vh - 40px); /* השאר מקום ל-padding */
+  overflow-y: auto; /* אפשר גלילה בתוך התוכן */
+  -webkit-overflow-scrolling: touch; /* גלילה חלקה ב-iOS */
 }
 
 @keyframes slideUp {
@@ -339,6 +337,8 @@ $border: rgba(255, 255, 255, 0.1);
   flex-direction: column;
   gap: 20px;
   margin-bottom: 24px;
+  /* התוכן יכול להיגלל אם הוא ארוך מדי */
+  min-height: 0; /* מאפשר ל-flex item להתכווץ */
 }
 
 .incomeCard {

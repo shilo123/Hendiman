@@ -535,6 +535,8 @@ $orange2: #ff8a2b;
   place-items: center;
   transition: transform 140ms ease, background 140ms ease,
     border-color 140ms ease;
+  position: relative;
+  bottom: 22%;
 
   &:hover {
     transform: translateY(-1px);

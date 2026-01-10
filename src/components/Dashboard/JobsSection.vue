@@ -480,7 +480,17 @@
 
             <template v-if="job.subcategoryInfo?.price || job.price">
               <span class="metaSep" v-if="distanceLabel(job)">•</span>
-              <span class="price"
+              <span
+                v-if="
+                  job.subcategoryInfo?.price === 'bid' ||
+                  job.subcategoryInfo?.price === 'quoted' ||
+                  job.price === 'bid' ||
+                  job.price === 'quoted'
+                "
+                class="price price--bid"
+                >הצעת מחיר</span
+              >
+              <span v-else class="price"
                 >{{ job.subcategoryInfo?.price || job.price }} ₪</span
               >
             </template>
@@ -498,7 +508,11 @@
             >הזמנה אישית</span
           >
 
+          <span v-if="job.status === 'quoted'" class="chip chip--quoted">
+            הצעת מחיר
+          </span>
           <span
+            v-else
             class="chip chip--status"
             :class="{ 'chip--done': job.status === 'done' }"
           >
@@ -525,7 +539,22 @@
         </div>
 
         <div class="job__footer">
-          <button class="job__action" type="button" @click="$emit('view', job)">
+          <!-- Quotation Button (for handyman, quoted jobs) -->
+          <button
+            v-if="isHendiman && job.status === 'quoted'"
+            class="job__action job__action--quotation"
+            type="button"
+            @click="$emit('quotation', job)"
+          >
+            <span class="job__actionIc" aria-hidden="true">💰</span>
+            תציע מחיר
+          </button>
+          <button
+            v-else
+            class="job__action"
+            type="button"
+            @click="$emit('view', job)"
+          >
             <span class="job__actionIc" aria-hidden="true">👁️</span>
             צפייה
           </button>
@@ -616,6 +645,7 @@ export default {
     "prev-jobs-page",
     "edit-job",
     "delete-job",
+    "quotation",
   ],
   data() {
     return {
@@ -782,6 +812,8 @@ export default {
       return d < 1 ? d.toFixed(2) : d.toFixed(1);
     },
     getStatusLabel(status) {
+      if (status === "quoted") return "הצעת מחיר";
+      if (status === "expired") return "פג תוקף";
       const labels = {
         open: "פתוחה",
         assigned: "שובצה",
@@ -1714,6 +1746,15 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   color: $orange3;
   white-space: nowrap;
 
+  &--bid {
+    background: rgba($orange, 0.2);
+    border: 1px solid rgba($orange, 0.4);
+    padding: 4px 10px;
+    border-radius: 8px;
+    color: $orange2;
+    font-weight: 1000;
+  }
+
   @media (max-width: 768px) {
     margin-inline-start: auto;
     font-size: 11px;
@@ -1787,6 +1828,17 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
     border-color: rgba(16, 185, 129, 0.45);
     background: rgba(16, 185, 129, 0.18);
     color: #10b981;
+  }
+  &--quoted {
+    border-color: rgba($orange, 0.5);
+    background: linear-gradient(
+      135deg,
+      rgba($orange, 0.2),
+      rgba($orange2, 0.15)
+    );
+    color: $orange2;
+    font-weight: 1200;
+    box-shadow: 0 0 10px rgba($orange, 0.3);
   }
   &--hourly {
     border-color: rgba($orange2, 0.28);
@@ -1896,6 +1948,23 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 
 .job__action:hover .job__actionIc {
   transform: scale(1.1) rotate(5deg);
+}
+
+.job__action--quotation {
+  background: linear-gradient(135deg, rgba($orange, 0.2), rgba($orange2, 0.15));
+  border-color: rgba($orange, 0.5);
+  color: $orange2;
+  box-shadow: 0 8px 24px rgba($orange, 0.25);
+
+  &:hover {
+    background: linear-gradient(
+      135deg,
+      rgba($orange, 0.3),
+      rgba($orange2, 0.2)
+    );
+    border-color: $orange;
+    box-shadow: 0 12px 32px rgba($orange, 0.35);
+  }
 }
 
 /* Empty */

@@ -5964,29 +5964,59 @@ function findAvailablePort(startPort) {
       let product, price, subscription;
 
       if (planType === "annual") {
-        // For annual subscription, create a one-time payment (not recurring)
+        // For annual subscription, create a yearly recurring subscription
         try {
           product = await stripe.products.create({
             name: "מנוי שנתי הנדימן",
             description: "מנוי שנתי לפלטפורמת הנדימן",
           });
         } catch (productError) {
-          throw productError;
+          // Product might already exist, try to find it
+          const products = await stripe.products.list({ limit: 100 });
+          product = products.data.find((p) => p.name === "מנוי שנתי הנדימן");
+          if (!product) throw productError;
         }
 
         try {
           price = await stripe.prices.create({
             product: product.id,
             currency: "ils",
-            unit_amount: amountInAgorot, // One-time payment, no recurring
+            recurring: {
+              interval: "year",
+            },
+            unit_amount: amountInAgorot,
           });
         } catch (priceError) {
-          throw priceError;
+          // Price might already exist
+          const prices = await stripe.prices.list({ limit: 100 });
+          price = prices.data.find(
+            (p) =>
+              p.product === product.id &&
+              p.currency === "ils" &&
+              p.recurring?.interval === "year" &&
+              p.unit_amount === amountInAgorot
+          );
+          if (!price) throw priceError;
         }
 
-        // For annual subscription, we don't create a Stripe subscription
-        // Instead, we'll just record the payment and set expiration date manually
-        subscription = null; // Annual is not a Stripe subscription, it's a one-time payment
+        try {
+          // Create subscription with payment_method directly
+          subscription = await stripe.subscriptions.create({
+            customer: customer.id,
+            items: [
+              {
+                price: price.id,
+              },
+            ],
+            default_payment_method: paymentMethodIdToUse,
+            metadata: {
+              type: "handyman_subscription",
+              planType: "annual",
+            },
+          });
+        } catch (subscriptionError) {
+          throw subscriptionError;
+        }
       } else {
         // Monthly subscription (recurring)
         try {
@@ -6152,15 +6182,17 @@ function findAvailablePort(startPort) {
         trialExpiresAt: trialExpiresAt, // 14 days trial period
       };
 
-      // For annual subscription, set expiration date (1 year from now)
+      // For annual subscription, store Stripe subscription ID
+      // Stripe will handle the expiration automatically (1 year)
       if (planType === "annual") {
-        const oneYearFromNow = new Date();
-        oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
-        userData.subscriptionExpiresAt = oneYearFromNow;
-        userData.stripeSubscriptionId = null; // No Stripe subscription for annual
+        userData.stripeSubscriptionId = subscription?.id || null;
+        // Remove subscriptionExpiresAt - Stripe manages it via subscription.current_period_end
+        userData.subscriptionExpiresAt = null;
       } else {
         // For monthly subscription, store Stripe subscription ID
         userData.stripeSubscriptionId = subscription?.id || null;
+        // Remove subscriptionExpiresAt - Stripe manages it via subscription.current_period_end
+        userData.subscriptionExpiresAt = null;
       }
 
       if (googleId) {
@@ -6402,80 +6434,80 @@ function findAvailablePort(startPort) {
         customerId = customer.id;
       }
 
-      // Create Stripe Subscription for monthly plan
+      // Create Stripe Subscription (monthly or annual)
       let stripeSubscriptionId = null;
-      if (finalPlanType === "monthly") {
-        // Create product and price if they don't exist
-        let product = null;
-        let price = null;
+      let product = null;
+      let price = null;
 
-        try {
-          product = await stripe.products.create({
-            name: "מנוי חודשי הנדימן",
-            description: "מנוי חודשי לפלטפורמת הנדימן",
-          });
-        } catch (productError) {
-          // Product might already exist, try to find it
-          const products = await stripe.products.list({ limit: 100 });
-          product = products.data.find((p) => p.name === "מנוי חודשי הנדימן");
-          if (!product) throw productError;
-        }
+      // Create product based on plan type
+      const productName =
+        finalPlanType === "annual" ? "מנוי שנתי הנדימן" : "מנוי חודשי הנדימן";
+      const productDescription =
+        finalPlanType === "annual"
+          ? "מנוי שנתי לפלטפורמת הנדימן"
+          : "מנוי חודשי לפלטפורמת הנדימן";
 
-        try {
-          price = await stripe.prices.create({
-            product: product.id,
-            currency: "ils",
-            recurring: {
-              interval: "month",
+      try {
+        product = await stripe.products.create({
+          name: productName,
+          description: productDescription,
+        });
+      } catch (productError) {
+        // Product might already exist, try to find it
+        const products = await stripe.products.list({ limit: 100 });
+        product = products.data.find((p) => p.name === productName);
+        if (!product) throw productError;
+      }
+
+      // Create price based on plan type
+      try {
+        price = await stripe.prices.create({
+          product: product.id,
+          currency: "ils",
+          recurring: {
+            interval: finalPlanType === "annual" ? "year" : "month",
+          },
+          unit_amount: amountInAgorot,
+        });
+      } catch (priceError) {
+        // Price might already exist
+        const prices = await stripe.prices.list({ limit: 100 });
+        price = prices.data.find(
+          (p) =>
+            p.product === product.id &&
+            p.currency === "ils" &&
+            p.recurring?.interval ===
+              (finalPlanType === "annual" ? "year" : "month") &&
+            p.unit_amount === amountInAgorot
+        );
+        if (!price) throw priceError;
+      }
+
+      // Create subscription
+      try {
+        const subscription = await stripe.subscriptions.create({
+          customer: customerId,
+          items: [
+            {
+              price: price.id,
             },
-            unit_amount: amountInAgorot,
-          });
-        } catch (priceError) {
-          // Price might already exist
-          const prices = await stripe.prices.list({ limit: 100 });
-          price = prices.data.find(
-            (p) =>
-              p.product === product.id &&
-              p.currency === "ils" &&
-              p.recurring?.interval === "month" &&
-              p.unit_amount === amountInAgorot
-          );
-          if (!price) throw priceError;
-        }
-
-        try {
-          const subscription = await stripe.subscriptions.create({
-            customer: customerId,
-            items: [
-              {
-                price: price.id,
-              },
-            ],
-            default_payment_method: paymentMethodId,
-            metadata: {
-              type: "handyman_subscription",
-              planType: "monthly",
-              userId: userId.toString(),
-            },
-          });
-          stripeSubscriptionId = subscription.id;
-        } catch (subscriptionError) {
-          serverLogger.error("Error creating subscription:", subscriptionError);
-          throw subscriptionError;
-        }
+          ],
+          default_payment_method: paymentMethodId,
+          metadata: {
+            type: "handyman_subscription",
+            planType: finalPlanType,
+            userId: userId.toString(),
+          },
+        });
+        stripeSubscriptionId = subscription.id;
+      } catch (subscriptionError) {
+        serverLogger.error("Error creating subscription:", subscriptionError);
+        throw subscriptionError;
       }
 
       // For existing users, no trial period - subscription starts immediately
-      // Calculate expiration date based on plan type
-      let subscriptionExpiresAt = null;
-      if (finalPlanType === "annual") {
-        // Annual subscription expires in 1 year
-        subscriptionExpiresAt = new Date();
-        subscriptionExpiresAt.setFullYear(
-          subscriptionExpiresAt.getFullYear() + 1
-        );
-      }
-      // For monthly, subscription is managed by Stripe, no expiration date needed
+      // Stripe manages subscription expiration automatically via subscription.current_period_end
+      // Remove subscriptionExpiresAt - Stripe manages it
 
       // Update user with subscription info
       const updateData = {
@@ -6484,9 +6516,16 @@ function findAvailablePort(startPort) {
         subscriptionPlanType: finalPlanType,
         paymentMethodId: paymentMethodId,
         trialExpiresAt: null, // No trial period for existing users
-        subscriptionExpiresAt: subscriptionExpiresAt, // Only for annual plan
+        subscriptionExpiresAt: null, // Stripe manages expiration via subscription.current_period_end
         stripeSubscriptionId: stripeSubscriptionId,
+        subscriptionCancelled: false, // Reset cancellation status if resubscribing
       };
+
+      // Remove subscriptionExpiresAt if it exists (cleanup old data)
+      await usersCol.updateOne(
+        { _id: new ObjectId(userId) },
+        { $unset: { subscriptionExpiresAt: "" } }
+      );
 
       await usersCol.updateOne(
         { _id: new ObjectId(userId) },
@@ -6623,18 +6662,170 @@ function findAvailablePort(startPort) {
         });
       }
 
-      // Attach payment method to customer
-      await stripe.paymentMethods.attach(paymentMethodId, {
-        customer: user.stripeCustomerId,
+      // Check if payment method is already attached to this customer
+      let paymentMethod;
+      try {
+        paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+      } catch (retrieveError) {
+        serverLogger.error(
+          `Error retrieving payment method ${paymentMethodId}:`,
+          retrieveError
+        );
+        return res.status(400).json({
+          success: false,
+          message: "שגיאה באימות פרטי התשלום. אנא נסה שוב.",
+          error: retrieveError.message,
+        });
+      }
+
+      const paymentMethodCustomerId =
+        typeof paymentMethod.customer === "string"
+          ? paymentMethod.customer
+          : paymentMethod.customer?.id || paymentMethod.customer;
+
+      if (
+        !paymentMethodCustomerId ||
+        paymentMethodCustomerId !== user.stripeCustomerId
+      ) {
+        // Attach payment method to customer if not already attached
+        try {
+          await stripe.paymentMethods.attach(paymentMethodId, {
+            customer: user.stripeCustomerId,
+          });
+          serverLogger.info(
+            `Payment method ${paymentMethodId} attached to customer ${user.stripeCustomerId}`
+          );
+        } catch (attachError) {
+          // If already attached to this customer, that's fine
+          if (
+            attachError.type === "StripeInvalidRequestError" &&
+            attachError.code === "payment_method_already_attached"
+          ) {
+            serverLogger.info(
+              `Payment method ${paymentMethodId} already attached to customer ${user.stripeCustomerId}`
+            );
+          } else {
+            serverLogger.error(
+              `Error attaching payment method ${paymentMethodId} to customer ${user.stripeCustomerId}:`,
+              attachError
+            );
+            return res.status(500).json({
+              success: false,
+              message: "שגיאה בחיבור פרטי התשלום ללקוח. אנא נסה שוב.",
+              error: attachError.message,
+            });
+          }
+        }
+      }
+
+      // Set as default payment method for customer
+      await stripe.customers.update(user.stripeCustomerId, {
+        invoice_settings: {
+          default_payment_method: paymentMethodId,
+        },
       });
 
       // Update subscription to use new payment method
-      await stripe.subscriptions.update(user.stripeSubscriptionId, {
-        default_payment_method: paymentMethodId,
-      });
+      let updatedSubscription = await stripe.subscriptions.update(
+        user.stripeSubscriptionId,
+        {
+          default_payment_method: paymentMethodId,
+        }
+      );
+
+      // Verify the update was successful - try to ensure the payment method is set correctly
+      let subscriptionPaymentMethodId = null;
+      if (updatedSubscription.default_payment_method) {
+        subscriptionPaymentMethodId =
+          typeof updatedSubscription.default_payment_method === "string"
+            ? updatedSubscription.default_payment_method
+            : updatedSubscription.default_payment_method?.id ||
+              updatedSubscription.default_payment_method;
+      }
+
+      // If payment method doesn't match, try to verify and retry if needed
+      if (subscriptionPaymentMethodId !== paymentMethodId) {
+        serverLogger.warn(
+          `Payment method ID mismatch after update. Expected: ${paymentMethodId}, Got: ${subscriptionPaymentMethodId}. Verifying...`
+        );
+
+        // Double check by retrieving the subscription fresh from Stripe
+        try {
+          const verifiedSubscription = await stripe.subscriptions.retrieve(
+            user.stripeSubscriptionId
+          );
+
+          let verifiedPaymentMethodId = null;
+          if (verifiedSubscription.default_payment_method) {
+            verifiedPaymentMethodId =
+              typeof verifiedSubscription.default_payment_method === "string"
+                ? verifiedSubscription.default_payment_method
+                : verifiedSubscription.default_payment_method?.id ||
+                  verifiedSubscription.default_payment_method;
+          }
+
+          if (verifiedPaymentMethodId !== paymentMethodId) {
+            // Payment method still doesn't match, try updating again
+            serverLogger.warn(
+              `Payment method still not matching. Retrying update...`
+            );
+            updatedSubscription = await stripe.subscriptions.update(
+              user.stripeSubscriptionId,
+              {
+                default_payment_method: paymentMethodId,
+              }
+            );
+
+            // Verify the retry by retrieving again
+            const finalVerifiedSubscription =
+              await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+            let finalPaymentMethodId = null;
+            if (finalVerifiedSubscription.default_payment_method) {
+              finalPaymentMethodId =
+                typeof finalVerifiedSubscription.default_payment_method ===
+                "string"
+                  ? finalVerifiedSubscription.default_payment_method
+                  : finalVerifiedSubscription.default_payment_method?.id ||
+                    finalVerifiedSubscription.default_payment_method;
+            }
+
+            if (finalPaymentMethodId === paymentMethodId) {
+              serverLogger.info(
+                `Payment method successfully updated after retry for subscription ${user.stripeSubscriptionId}: ${paymentMethodId}`
+              );
+              // Use the retrieved subscription as the final one
+              updatedSubscription = finalVerifiedSubscription;
+            } else {
+              serverLogger.error(
+                `Payment method update failed after retry. Expected: ${paymentMethodId}, Got: ${finalPaymentMethodId}. Continuing anyway - payment method is set on customer and will be used for next invoice.`
+              );
+              // Continue anyway - the payment method is attached to the customer
+              // and set as default for the customer, so it will be used for future invoices
+              // Use the retrieved subscription anyway
+              updatedSubscription = finalVerifiedSubscription;
+            }
+          } else {
+            serverLogger.info(
+              `Payment method successfully verified after retrieve for subscription ${user.stripeSubscriptionId}: ${paymentMethodId}`
+            );
+            // Use the verified subscription
+            updatedSubscription = verifiedSubscription;
+          }
+        } catch (verifyError) {
+          serverLogger.error(
+            `Error verifying subscription payment method update:`,
+            verifyError
+          );
+          // Continue anyway - we've attempted the update, payment method is attached to customer
+        }
+      } else {
+        serverLogger.info(
+          `Payment method successfully updated for subscription ${user.stripeSubscriptionId} to ${paymentMethodId}`
+        );
+      }
 
       // Update user's payment method ID in database
-      await usersCol.updateOne(
+      const updateResult = await usersCol.updateOne(
         { _id: user._id },
         {
           $set: {
@@ -6643,15 +6834,112 @@ function findAvailablePort(startPort) {
         }
       );
 
+      if (updateResult.matchedCount === 0) {
+        serverLogger.error(
+          `User not found when updating payment method: ${userId}`
+        );
+        return res.status(404).json({
+          success: false,
+          message: "משתמש לא נמצא בעת עדכון פרטי התשלום",
+        });
+      }
+
+      serverLogger.info(
+        `Payment method updated successfully for user ${userId}, subscription ${user.stripeSubscriptionId}`
+      );
+
       return res.json({
         success: true,
         message: "פרטי התשלום עודכנו בהצלחה",
+        subscriptionId: updatedSubscription.id,
+        paymentMethodId: paymentMethodId,
       });
     } catch (error) {
       serverLogger.error("Error updating payment method:", error);
       return res.status(500).json({
         success: false,
         message: "שגיאה בעדכון פרטי התשלום",
+        error: error.message,
+      });
+    }
+  });
+
+  // Register subscription without payment (14 days free trial)
+  app.post("/api/subscription/register-without-payment", async (req, res) => {
+    try {
+      const { userId, planType } = req.body;
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: "userId required",
+        });
+      }
+
+      const usersCol = getCollection();
+      let user;
+      try {
+        user = await usersCol.findOne({ _id: new ObjectId(userId) });
+      } catch (objectIdError) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid userId format",
+        });
+      }
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      if (!user.isHandyman) {
+        return res.status(400).json({
+          success: false,
+          message: "Only handymen can register for subscription",
+        });
+      }
+
+      // Calculate billing start date (14 days from now)
+      const billingStart = new Date();
+      billingStart.setDate(billingStart.getDate() + 14);
+
+      // Calculate trial expiration (14 days from now)
+      const trialExpiresAt = new Date();
+      trialExpiresAt.setDate(trialExpiresAt.getDate() + 14);
+
+      // Update user with trial info
+      const updateData = {
+        subscriptionPlanType: planType || "monthly",
+        billingStartDate: billingStart,
+        trialExpiresAt: trialExpiresAt,
+        hasActiveSubscription: false, // Will be set to true after payment
+        subscriptionCancelled: false,
+      };
+
+      // Remove subscriptionExpiresAt if it exists (cleanup old data)
+      await usersCol.updateOne(
+        { _id: user._id },
+        {
+          $set: updateData,
+          $unset: { subscriptionExpiresAt: "" },
+        }
+      );
+
+      // Get updated user
+      const updatedUser = await usersCol.findOne({ _id: user._id });
+
+      return res.json({
+        success: true,
+        user: updatedUser,
+        message: "הרשמה ל14 יום חינם בוצעה בהצלחה",
+      });
+    } catch (error) {
+      serverLogger.error("Error registering without payment:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה בהרשמה ללא תשלום",
         error: error.message,
       });
     }
@@ -6754,6 +7042,19 @@ function findAvailablePort(startPort) {
         });
       }
 
+      // Check if user is FREE - cannot cancel FREE subscription
+      if (
+        user.subscriptionPlanType === "FREE" ||
+        user.subscriptionExpiresAt === "FREE" ||
+        user.trialExpiresAt === "always" ||
+        user.billingStartDate === "FREE"
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Cannot cancel FREE subscription",
+        });
+      }
+
       if (!user.hasActiveSubscription && user.trialExpiresAt !== "always") {
         return res.status(400).json({
           success: false,
@@ -6761,71 +7062,102 @@ function findAvailablePort(startPort) {
         });
       }
 
-      // Check if user has annual subscription (no stripeSubscriptionId)
-      const isAnnualSubscription =
-        user.hasActiveSubscription && !user.stripeSubscriptionId;
+      // Calculate expiration date (end of current month)
+      const now = new Date();
+      const expirationDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      expirationDate.setHours(23, 59, 59, 999); // End of month
 
-      if (isAnnualSubscription) {
-        // For annual subscriptions, cancel immediately
-        await usersCol.updateOne(
-          { _id: user._id },
-          {
-            $set: {
-              subscriptionCancelled: true,
-              hasActiveSubscription: false,
-            },
-          }
-        );
+      // Determine subscription plan type
+      const planType = user.subscriptionPlanType || "monthly";
 
-        // Send cancellation email (non-blocking)
-        sendSubscriptionCancellationEmail(
-          user,
-          "annual",
-          user.subscriptionExpiresAt,
-          URL_CLIENT
-        ).catch((emailError) => {
-          serverLogger.error(
-            "[Cancel Subscription] Error sending cancellation email:",
-            emailError
+      if (user.stripeSubscriptionId) {
+        // Cancel via Stripe (both monthly and annual now have subscriptions)
+        try {
+          const subscription = await stripe.subscriptions.retrieve(
+            user.stripeSubscriptionId
           );
-          // Don't fail the request if email fails
-        });
 
-        return res.json({
-          success: true,
-          message: "Subscription cancelled successfully",
-          expiresAt: user.subscriptionExpiresAt,
-        });
-      } else if (user.stripeSubscriptionId) {
-        // For monthly subscriptions, cancel via Stripe
-        const subscription = await stripe.subscriptions.retrieve(
-          user.stripeSubscriptionId
-        );
+          // Cancel at period end (not immediately) to allow access until period ends
+          await stripe.subscriptions.update(user.stripeSubscriptionId, {
+            cancel_at_period_end: true,
+          });
 
-        // Cancel immediately (not at period end)
-        await stripe.subscriptions.cancel(user.stripeSubscriptionId);
+          // Update user in database with expiration date (end of current month)
+          await usersCol.updateOne(
+            { _id: user._id },
+            {
+              $set: {
+                subscriptionCancelled: true,
+                subscriptionExpiresAt: expirationDate,
+                // Keep hasActiveSubscription true until period ends
+                // Keep stripeSubscriptionId to track the subscription
+              },
+            }
+          );
 
-        // Update user in database
+          // Get actual expiration from subscription (period end)
+          const subscriptionExpirationDate = subscription.current_period_end
+            ? new Date(subscription.current_period_end * 1000)
+            : expirationDate;
+
+          // Send cancellation email (non-blocking)
+          sendSubscriptionCancellationEmail(
+            user,
+            planType,
+            subscriptionExpirationDate,
+            URL_CLIENT
+          ).catch((emailError) => {
+            serverLogger.error(
+              "[Cancel Subscription] Error sending cancellation email:",
+              emailError
+            );
+            // Don't fail the request if email fails
+          });
+
+          return res.json({
+            success: true,
+            message: "Subscription cancelled successfully",
+            expiresAt: subscriptionExpirationDate,
+          });
+        } catch (stripeError) {
+          serverLogger.error(
+            "[Cancel Subscription] Stripe error:",
+            stripeError
+          );
+          // If Stripe fails, still update DB with expiration date
+          await usersCol.updateOne(
+            { _id: user._id },
+            {
+              $set: {
+                subscriptionCancelled: true,
+                hasActiveSubscription: false,
+                subscriptionExpiresAt: expirationDate,
+              },
+            }
+          );
+          return res.json({
+            success: true,
+            message: "Subscription cancelled (database updated)",
+            expiresAt: expirationDate,
+          });
+        }
+      } else {
+        // Legacy: No Stripe subscription ID - cancel in database only
         await usersCol.updateOne(
           { _id: user._id },
           {
             $set: {
               subscriptionCancelled: true,
               hasActiveSubscription: false,
-              stripeSubscriptionId: null, // Remove subscription ID
+              subscriptionExpiresAt: expirationDate,
             },
           }
         );
 
-        // Get expiration date from subscription
-        const expirationDate = subscription.current_period_end
-          ? new Date(subscription.current_period_end * 1000)
-          : null;
-
         // Send cancellation email (non-blocking)
         sendSubscriptionCancellationEmail(
           user,
-          "monthly",
+          planType,
           expirationDate,
           URL_CLIENT
         ).catch((emailError) => {
@@ -6840,11 +7172,6 @@ function findAvailablePort(startPort) {
           success: true,
           message: "Subscription cancelled successfully",
           expiresAt: expirationDate,
-        });
-      } else {
-        return res.status(400).json({
-          success: false,
-          message: "Unable to determine subscription type",
         });
       }
     } catch (error) {
@@ -6903,22 +7230,43 @@ function findAvailablePort(startPort) {
         needsBilling: false,
         billingStartDate: null,
         trialExpiresAt: null,
+        subscriptionExpiresAt: null,
+        subscriptionPlanType: user.subscriptionPlanType || null,
         hasActiveSubscription: user.hasActiveSubscription || false,
         stripeSubscriptionId: user.stripeSubscriptionId || null,
         subscriptionCancelled: user.subscriptionCancelled || false,
       };
 
-      // Check if user is free forever
+      // Check if user is FREE forever
       if (
+        user.subscriptionPlanType === "FREE" ||
+        user.subscriptionExpiresAt === "FREE" ||
         user.trialExpiresAt === "always" ||
         user.billingStartDate === "FREE"
       ) {
         subscriptionStatus.isFree = true;
         subscriptionStatus.billingStartDate = "FREE";
+        subscriptionStatus.subscriptionPlanType = "FREE";
         return res.json({
           success: true,
           ...subscriptionStatus,
         });
+      }
+
+      // Check subscriptionExpiresAt (for cancelled subscriptions or expired subscriptions)
+      if (user.subscriptionExpiresAt && user.subscriptionExpiresAt !== "FREE") {
+        const expiresAt = new Date(user.subscriptionExpiresAt);
+        subscriptionStatus.subscriptionExpiresAt = expiresAt;
+
+        // If subscriptionExpiresAt has passed
+        if (now >= expiresAt) {
+          subscriptionStatus.needsBilling = true;
+          subscriptionStatus.hasActiveSubscription = false;
+          return res.json({
+            success: true,
+            ...subscriptionStatus,
+          });
+        }
       }
 
       // Check billingStartDate
@@ -12773,9 +13121,9 @@ function findAvailablePort(startPort) {
             temperature: 0.1,
           });
 
-          // Track AI usage and cost
+          // Track AI usage and cost (gpt-4.1-nano pricing)
           if (spamCheck.usage) {
-            await trackAIUsage(spamCheck.usage);
+            await trackAIUsage(spamCheck.usage, "gpt-4.1-nano");
           }
 
           const isSpam =
@@ -12817,9 +13165,9 @@ ${categoryNames.map((cat, idx) => `${idx + 1}. ${cat}`).join("\n")}
             temperature: 0.3,
           });
 
-          // Track AI usage and cost
+          // Track AI usage and cost (gpt-4.1-nano pricing)
           if (completion.usage) {
-            await trackAIUsage(completion.usage);
+            await trackAIUsage(completion.usage, "gpt-4.1-nano");
           }
 
           const matchedCategory =
@@ -12872,9 +13220,12 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                       temperature: 0.2,
                     });
 
-                  // Track AI usage and cost
+                  // Track AI usage and cost (gpt-4.1-nano pricing)
                   if (subcategoryCompletion.usage) {
-                    await trackAIUsage(subcategoryCompletion.usage);
+                    await trackAIUsage(
+                      subcategoryCompletion.usage,
+                      "gpt-4.1-nano"
+                    );
                   }
 
                   matchedSubcategory =
@@ -13740,6 +14091,17 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           handimanBlocked = [];
         }
 
+        // Check if job should be in quoted status (if any subcategory has price="bid")
+        const hasQuotedSubcategory = subcategoryInfoArray.some(
+          (subInfo) => subInfo.price === "bid" || subInfo.price === "quoted"
+        );
+        const jobStatus = hasQuotedSubcategory ? "quoted" : "open";
+
+        // Set quotedUntil if job is quoted (60 minutes from now)
+        const quotedUntil = hasQuotedSubcategory
+          ? new Date(Date.now() + 60 * 60 * 1000) // 60 minutes
+          : null;
+
         // Create job with subcategoryInfo as array
         const jobData = {
           clientId: userId || null,
@@ -13754,9 +14116,16 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           imageUrl: imageUrlArray, // Array of image URLs
           when: when || "asap",
           urgent: urgent || false,
-          status: "open",
-          paymentIntentId: req.body.paymentIntentId || null, // Stripe Payment Intent ID
-          paymentMethodId: paymentMethodId || null, // Stripe Payment Method ID (token, not card details)
+          status: jobStatus, // "open" or "quoted"
+          quotedUntil: quotedUntil, // Only for quoted jobs
+          quotations: hasQuotedSubcategory ? [] : undefined, // Empty array for quoted jobs
+          chosenQuotation: null, // Will be set when client chooses
+          paymentIntentId: hasQuotedSubcategory
+            ? null
+            : req.body.paymentIntentId || null, // No payment intent for quoted jobs
+          paymentMethodId: hasQuotedSubcategory
+            ? null
+            : paymentMethodId || null, // No payment method for quoted jobs
           "handiman-Blocked": handimanBlocked, // Copy blocked handymen from client
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -13915,17 +14284,31 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                 const subcategoryNames = subcategoryInfoArray
                   .map((s) => s.subcategory || s.category)
                   .join(", ");
-                await sendPushNotification(
-                  handyman.fcmToken,
-                  handymanIdSpecial
-                    ? "הזמנה אישית עבורך! 🔧"
-                    : "עבודה חדשה באזור שלך! 🔧",
-                  `${subcategoryNames} - ${location || "מיקום"}`,
-                  {
-                    type: "new_job",
-                    jobId: savedJobId.toString(),
-                  }
-                );
+
+                // Different message for quoted jobs
+                if (hasQuotedSubcategory) {
+                  await sendPushNotification(
+                    handyman.fcmToken,
+                    "עבודה חדשה להצעת מחיר! 💰",
+                    `קיבלת עבודה חדשה להצעת מחיר: ${subcategoryNames}`,
+                    {
+                      type: "new_quoted_job",
+                      jobId: savedJobId.toString(),
+                    }
+                  );
+                } else {
+                  await sendPushNotification(
+                    handyman.fcmToken,
+                    handymanIdSpecial
+                      ? "הזמנה אישית עבורך! 🔧"
+                      : "עבודה חדשה באזור שלך! 🔧",
+                    `${subcategoryNames} - ${location || "מיקום"}`,
+                    {
+                      type: "new_job",
+                      jobId: savedJobId.toString(),
+                    }
+                  );
+                }
               }
             }
           } catch (notifyError) {
@@ -14474,6 +14857,250 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
   });
 
   // Get categories endpoint
+  // ============================================================
+  // QUOTATION SYSTEM - AI Matching with Confidence (Step 3)
+  // ============================================================
+
+  // Endpoint: AI matching for short text input with confidence score
+  app.post("/api/ai/match-subcategory", async (req, res) => {
+    try {
+      const { shortText } = req.body; // 2-4 words from user (e.g., "סתימה בכיור")
+
+      serverLogger.log(`[AI-MATCH] בקשת התאמה חדשה - טקסט: "${shortText}"`);
+
+      if (
+        !shortText ||
+        typeof shortText !== "string" ||
+        shortText.trim().length === 0
+      ) {
+        serverLogger.warn("[AI-MATCH] בקשה לא תקינה - טקסט ריק או חסר");
+        return res.status(400).json({
+          success: false,
+          message: "יש לספק טקסט קצר",
+        });
+      }
+
+      // Load categories from JSON file
+      let categoriesData;
+      try {
+        const categoriesPath = path.join(__dirname, "API", "Categorhs.json");
+        const categoriesFile = fs.readFileSync(categoriesPath, "utf8");
+        categoriesData = JSON.parse(categoriesFile);
+      } catch (error) {
+        return res.status(500).json({
+          success: false,
+          message: "שגיאה בטעינת קטגוריות",
+          error: error.message,
+        });
+      }
+
+      const categories = categoriesData.categories || [];
+
+      // Build a flat list of all subcategories with their categories for matching
+      const allSubcategories = [];
+      categories.forEach((cat) => {
+        if (cat.subcategories && Array.isArray(cat.subcategories)) {
+          cat.subcategories.forEach((sub) => {
+            allSubcategories.push({
+              category: cat.name,
+              subcategory: sub.name,
+              price: sub.price,
+              workType: sub.workType || "קבלנות",
+            });
+          });
+        }
+      });
+
+      // Initialize OpenAI client
+      const apiKey = process.env.OPENAI_ACCESS_KEY;
+      if (!apiKey) {
+        return res.status(500).json({
+          success: false,
+          message: "שגיאה בהגדרת OpenAI",
+        });
+      }
+
+      const openai = new OpenAI({
+        apiKey: apiKey,
+      });
+
+      // Build prompt for matching with confidence
+      const subcategoryList = allSubcategories
+        .map((sub, idx) => `${idx + 1}. ${sub.category} > ${sub.subcategory}`)
+        .join("\n");
+
+      const matchingPrompt = `אתה עוזר להתאים בקשה קצרה של לקוח לתת-קטגוריה מהקטלוג.
+
+בקשה מהלקוח: "${shortText.trim()}"
+
+רשימת כל התת-קטגוריות בקטלוג (פורמט: קטגוריה > תת-קטגוריה):
+${subcategoryList}
+
+ענה ב-JSON בלבד עם המבנה הבא:
+{
+  "matched": true/false,
+  "category": "שם הקטגוריה" או null,
+  "subcategory": "שם התת-קטגוריה המדויק מהרשימה" או "${shortText.trim()}",
+  "canonicalSubcategory": "שם התת-קטגוריה המדויק מהרשימה" או null,
+  "confidence": 0.0-1.0
+}
+
+כללים קריטיים ל-confidence (חובה להיות מדויק):
+- confidence 0.85-1.0: התאמה מושלמת ומדויקת - המילים זהות או כמעט זהות לתת-קטגוריה מהקטלוג
+- confidence 0.70-0.84: התאמה טובה - יש קשר ברור אבל המילים לא זהות בדיוק (לדוגמה: "תליית תמונה" = "תליית תמונות")
+- confidence 0.60-0.69: התאמה סבירה - יש קשר אבל לא בטוח שזה בדיוק אותו דבר (לדוגמה: "תיקון דלת" = "תיקון דלתות")
+- confidence 0.40-0.59: התאמה חלשה - יש קשר רופף, ייתכן שזה לא אותו דבר (לדוגמה: "תליית מדף" = "תליית תמונות")
+- confidence 0.20-0.39: התאמה מאוד חלשה - קשר רחוק, כנראה לא אותו דבר
+- confidence 0.0-0.19: אין התאמה - אין קשר ברור לקטלוג
+
+כללים נוספים:
+- matched=true רק אם confidence >= 0.60
+- matched=false אם confidence < 0.60
+- subcategory: אם matched=true, זה שם התת-קטגוריה מהרשימה. אם matched=false, זה הטקסט המקורי "${shortText.trim()}".
+- canonicalSubcategory: רק אם matched=true, זה שם התת-קטגוריה המדויק מהרשימה.
+- category: רק אם matched=true, זה שם הקטגוריה מהרשימה.
+
+חשוב מאוד: be strict עם ה-confidence. עדיף confidence נמוך מדי מאשר גבוה מדי.
+
+ענה רק ב-JSON ללא טקסט נוסף.`;
+
+      try {
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4.1-mini",
+          messages: [
+            {
+              role: "system",
+              content:
+                "אתה עוזר מקצועי להתאמת בקשות לתת-קטגוריות. ענה תמיד ב-JSON בלבד.",
+            },
+            {
+              role: "user",
+              content: matchingPrompt,
+            },
+          ],
+          max_tokens: 300,
+          temperature: 0.3,
+          response_format: { type: "json_object" },
+        });
+
+        // Track AI usage (gpt-4.1-mini pricing)
+        if (completion.usage) {
+          await trackAIUsage(completion.usage, "gpt-4.1-mini");
+        }
+
+        const responseText =
+          completion.choices[0]?.message?.content?.trim() || "{}";
+        let matchResult;
+        try {
+          matchResult = JSON.parse(responseText);
+        } catch (parseError) {
+          // Fallback: try to extract JSON from text if wrapped
+          const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            matchResult = JSON.parse(jsonMatch[0]);
+          } else {
+            throw new Error("Failed to parse AI response");
+          }
+        }
+
+        serverLogger.log(
+          `[AI-MATCH] תשובה מ-AI: matched=${matchResult.matched}, confidence=${matchResult.confidence}, category="${matchResult.category}", subcategory="${matchResult.subcategory}"`
+        );
+
+        // Validate and normalize response
+        const confidence = Math.max(
+          0,
+          Math.min(1, parseFloat(matchResult.confidence) || 0)
+        );
+
+        // Confidence thresholds:
+        // >= 0.70: High confidence match (Case A: continue with fixed price)
+        // 0.60-0.69: Medium confidence match (Case B: show recommendation)
+        // < 0.60: Low confidence/no match (Case C: direct to quoted)
+        const matched = confidence >= 0.6;
+
+        const category = matchResult.category || null;
+        const canonicalSubcategory = matchResult.canonicalSubcategory || null;
+        const subcategory = matchResult.subcategory || shortText.trim();
+
+        // If matched (confidence >= 0.60), verify the subcategory exists in our catalog
+        if (matched && canonicalSubcategory) {
+          const foundSub = allSubcategories.find(
+            (sub) =>
+              sub.subcategory === canonicalSubcategory &&
+              sub.category === category
+          );
+
+          if (!foundSub) {
+            // Invalid match - reset to unmatched
+            serverLogger.warn(
+              `[AI-MATCH] התאמה לא תקינה - לא נמצא בקטלוג: category="${category}", subcategory="${canonicalSubcategory}"`
+            );
+            return res.json({
+              success: true,
+              matched: false,
+              category: null,
+              subcategory: shortText.trim(),
+              canonicalSubcategory: null,
+              confidence: 0.1,
+            });
+          }
+
+          const finalResult = {
+            success: true,
+            matched: true,
+            category: category,
+            subcategory: canonicalSubcategory, // Use canonical for matched
+            canonicalSubcategory: canonicalSubcategory,
+            confidence: confidence,
+            price: foundSub.price,
+            workType: foundSub.workType,
+          };
+
+          serverLogger.log(
+            `[AI-MATCH] תוצאה סופית (matched): confidence=${confidence}, category="${category}", subcategory="${canonicalSubcategory}", price=${foundSub.price}`
+          );
+
+          return res.json(finalResult);
+        }
+
+        // Not matched
+        const finalResult = {
+          success: true,
+          matched: false,
+          category: null,
+          subcategory: shortText.trim(), // Keep original text
+          canonicalSubcategory: null,
+          confidence: confidence,
+        };
+
+        serverLogger.log(
+          `[AI-MATCH] תוצאה סופית (not matched): confidence=${confidence}, subcategory="${shortText.trim()}"`
+        );
+
+        return res.json(finalResult);
+      } catch (error) {
+        serverLogger.error("Error in AI matching:", error);
+        // Fallback: return unmatched
+        return res.json({
+          success: true,
+          matched: false,
+          category: null,
+          subcategory: shortText.trim(),
+          canonicalSubcategory: null,
+          confidence: 0.1,
+        });
+      }
+    } catch (error) {
+      serverLogger.error("Error in /api/ai/match-subcategory:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה בעיבוד הבקשה",
+        error: error.message,
+      });
+    }
+  });
+
   app.get("/categories", async (req, res) => {
     try {
       const categoriesPath = path.join(__dirname, "API", "Categorhs.json");
@@ -14505,6 +15132,247 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
     const categoriesFile = fs.readFileSync(categoriesPath, "utf8");
     return JSON.parse(categoriesFile);
   }
+
+  // ============================================================
+  // QUOTATION SYSTEM - Create Job in Quoted Status
+  // ============================================================
+
+  // Endpoint: Create job with quoted status (alternative to create-call-v2 for quoted jobs)
+  app.post("/create-call-quoted", async (req, res) => {
+    try {
+      const collection = getCollection();
+      const jobsCollection = getCollectionJobs();
+
+      const {
+        userId,
+        subcategory, // Short text from user (e.g., "סתימה בכיור")
+        category, // Category from AI (if matched)
+        desc,
+        location,
+        imageUrl,
+        imageUrls,
+        when,
+        urgent,
+        coordinates,
+        usingMyLocation,
+        locationEnglishName,
+        selectedCity,
+      } = req.body;
+
+      // Get coordinates from location (same logic as create-call-v2)
+      let userLng = null;
+      let userLat = null;
+      let resolvedLocationText = null;
+
+      if (
+        coordinates &&
+        (coordinates.lng !== undefined || coordinates.lon !== undefined) &&
+        coordinates.lat !== undefined
+      ) {
+        const rawLng =
+          coordinates.lng !== undefined ? coordinates.lng : coordinates.lon;
+        const parsedLng = parseFloat(rawLng);
+        const parsedLat = parseFloat(coordinates.lat);
+        if (Number.isFinite(parsedLng) && Number.isFinite(parsedLat)) {
+          userLng = parsedLng;
+          userLat = parsedLat;
+          try {
+            const {
+              reverseGeocodeCoordinates,
+            } = require("./services/geocodingService");
+            const reverseGeocodeResult = await reverseGeocodeCoordinates(
+              parsedLat,
+              parsedLng
+            );
+            if (
+              reverseGeocodeResult &&
+              reverseGeocodeResult.formatted_address
+            ) {
+              let cleanedAddress = reverseGeocodeResult.formatted_address;
+              cleanedAddress = cleanedAddress
+                .replace(/\s*[A-Z0-9]+\+[A-Z0-9]+\s*/g, "")
+                .trim();
+              resolvedLocationText = cleanedAddress;
+            }
+          } catch (error) {
+            serverLogger.error("Error in reverse geocoding:", error.message);
+          }
+        }
+      } else if (locationEnglishName || selectedCity || location) {
+        try {
+          const { geocodeAddress } = require("./services/geocodingService");
+          const addressToSearch =
+            locationEnglishName || selectedCity || location;
+          const geocodeResult = await geocodeAddress(addressToSearch);
+          if (
+            geocodeResult &&
+            geocodeResult.results &&
+            geocodeResult.results.length > 0
+          ) {
+            const firstResult = geocodeResult.results[0];
+            const locationData = firstResult.geometry.location;
+            userLng = locationData.lng;
+            userLat = locationData.lat;
+            resolvedLocationText = firstResult.formatted_address;
+          }
+        } catch (error) {
+          serverLogger.error("Error in geocoding:", error.message);
+        }
+      }
+
+      if (!userLng || !userLat) {
+        return res.status(400).json({
+          success: false,
+          message: "לא ניתן לקבוע מיקום",
+        });
+      }
+
+      // Get client info
+      let clientName = null;
+      let handimanBlocked = [];
+      if (userId) {
+        try {
+          const clientObjectId = new ObjectId(userId);
+          const client = await collection.findOne({ _id: clientObjectId });
+          if (client) {
+            clientName = client.username || null;
+            handimanBlocked = Array.isArray(client["handiman-Blocked"])
+              ? client["handiman-Blocked"].map((id) => {
+                  if (id instanceof ObjectId) return id;
+                  if (typeof id === "string") {
+                    try {
+                      return new ObjectId(id);
+                    } catch (e) {
+                      return id;
+                    }
+                  }
+                  return id;
+                })
+              : [];
+          }
+        } catch (error) {
+          // Continue without clientName
+        }
+      }
+
+      // Support both array and single string for images
+      const imageUrlArray = imageUrls
+        ? Array.isArray(imageUrls)
+          ? imageUrls
+          : [imageUrls]
+        : imageUrl
+        ? Array.isArray(imageUrl)
+          ? imageUrl
+          : [imageUrl]
+        : [];
+
+      // Create subcategoryInfo array with price="bid" for quoted status
+      const subcategoryInfoArray = [
+        {
+          category: category || "כללי",
+          subcategory: subcategory || "עבודה כללית",
+          price: "bid", // Mark as bidding
+          workType: "קבלנות",
+        },
+      ];
+
+      // Set quotedUntil to 60 minutes from now
+      const quotedUntil = new Date();
+      quotedUntil.setMinutes(quotedUntil.getMinutes() + 60);
+
+      // Create job with quoted status
+      const jobData = {
+        clientId: userId || null,
+        clientName: clientName,
+        handymanId: null,
+        handymanName: null,
+        handymanIdSpecial: null,
+        subcategoryInfo: subcategoryInfoArray,
+        workType: "קבלנות",
+        desc: desc || "",
+        locationText: resolvedLocationText || location || "מיקום",
+        imageUrl: imageUrlArray,
+        when: when || "asap",
+        urgent: urgent || false,
+        status: "quoted", // Quoted status
+        quotedUntil: quotedUntil, // Timeout for quotations
+        quotations: [], // Empty array to start
+        chosenQuotation: null, // Will be set when client chooses
+        paymentIntentId: null, // No payment intent for quoted jobs
+        paymentMethodId: null,
+        "handiman-Blocked": handimanBlocked,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        location: {
+          type: "Point",
+          coordinates: [userLng, userLat],
+        },
+        coordinates: {
+          lng: userLng,
+          lat: userLat,
+        },
+      };
+
+      const result = await jobsCollection.insertOne(jobData);
+      const savedJobId = result.insertedId;
+
+      // Send push notifications to all handymen in area (in background)
+      (async () => {
+        try {
+          // Find handymen in area (simplified - you might want to use the same logic as create-call-v2)
+          const allHandymen = await collection
+            .find({
+              isHandyman: true,
+              isBlocked: { $ne: true },
+              location: {
+                $near: {
+                  $geometry: {
+                    type: "Point",
+                    coordinates: [userLng, userLat],
+                  },
+                  $maxDistance: 50000, // 50km
+                },
+              },
+            })
+            .limit(50)
+            .toArray();
+
+          for (const handyman of allHandymen) {
+            if (handyman.fcmToken) {
+              await sendPushNotification(
+                handyman.fcmToken,
+                "עבודה חדשה להצעת מחיר! 💰",
+                `קיבלת עבודה חדשה להצעת מחיר: ${subcategory || "עבודה כללית"}`,
+                {
+                  type: "new_quoted_job",
+                  jobId: savedJobId.toString(),
+                }
+              );
+            }
+          }
+        } catch (error) {
+          serverLogger.error("Error sending push notifications:", error);
+        }
+      })();
+
+      return res.json({
+        success: true,
+        jobId: savedJobId,
+        job: {
+          _id: savedJobId,
+          ...jobData,
+        },
+        message: "עבודה נוצרה במצב הצעת מחיר",
+      });
+    } catch (error) {
+      serverLogger.error("Error in /create-call-quoted:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה ביצירת עבודה",
+        error: error.message,
+      });
+    }
+  });
 
   // Add category endpoint
   app.post("/categories", async (req, res) => {
@@ -17895,12 +18763,637 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
     }
   });
 
+  // ============================================================
+  // QUOTATION SYSTEM - Endpoints (Before httpServer so io is available)
+  // ============================================================
+
+  // Helper function to get io instance (will be set after httpServer creation)
+  let io = null;
+  function setIoInstance(ioInstance) {
+    io = ioInstance;
+  }
+
+  // Endpoint: Create quotation (handyman submits a quote)
+  app.post("/api/jobs/:jobId/quotations", async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const { handymanId, handymanName, quotation, handymanText } = req.body;
+
+      if (
+        !handymanId ||
+        !handymanName ||
+        !quotation ||
+        typeof quotation !== "number" ||
+        quotation <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "נדרשים: handymanId, handymanName, quotation (מספר חיובי)",
+        });
+      }
+
+      const jobsCollection = getCollectionJobs();
+      const collection = getCollection();
+
+      // Find job
+      const job = await jobsCollection.findOne({ _id: new ObjectId(jobId) });
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "עבודה לא נמצאה",
+        });
+      }
+
+      // Validate job status
+      if (job.status !== "quoted") {
+        return res.status(400).json({
+          success: false,
+          message: "עבודה לא במצב הצעת מחיר",
+        });
+      }
+
+      // Check if quotedUntil has passed
+      if (job.quotedUntil && new Date(job.quotedUntil) < new Date()) {
+        // Auto-expire job
+        await jobsCollection.updateOne(
+          { _id: new ObjectId(jobId) },
+          { $set: { status: "expired", updatedAt: new Date() } }
+        );
+        return res.status(400).json({
+          success: false,
+          message: "תם זמן ההצעות לעבודה זו",
+        });
+      }
+
+      // Check if handyman already submitted a quotation
+      const existingQuotations = Array.isArray(job.quotations)
+        ? job.quotations
+        : [];
+      const hasExistingQuote = existingQuotations.some(
+        (q) => String(q.handymanId) === String(handymanId)
+      );
+
+      if (hasExistingQuote) {
+        return res.status(400).json({
+          success: false,
+          message: "כבר הצעת מחיר לעבודה זו",
+        });
+      }
+
+      // Create new quotation object
+      const newQuotation = {
+        _id: new ObjectId(),
+        handymanId: new ObjectId(handymanId),
+        handymanName: handymanName,
+        quotation: quotation,
+        handymanText: handymanText || "",
+        createdAt: new Date(),
+      };
+
+      // Add quotation to job
+      const updateResult = await jobsCollection.updateOne(
+        { _id: new ObjectId(jobId) },
+        {
+          $push: { quotations: newQuotation },
+          $set: { updatedAt: new Date() },
+        }
+      );
+
+      if (updateResult.matchedCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "עבודה לא נמצאה",
+        });
+      }
+
+      // Send WebSocket event to client if connected
+      if (io && job.clientId) {
+        io.to(`user-${job.clientId}`).emit("quotation:new", {
+          jobId: jobId,
+          quotationSummary: {
+            handymanId: handymanId,
+            handymanName: handymanName,
+            quotation: quotation,
+            quotationId: newQuotation._id.toString(),
+          },
+        });
+      }
+
+      // Send FCM push notification to client if not connected
+      if (job.clientId) {
+        try {
+          const client = await collection.findOne({
+            _id: new ObjectId(job.clientId),
+          });
+          if (client && client.fcmToken) {
+            // Find subcategory for message
+            const subcategoryInfo =
+              Array.isArray(job.subcategoryInfo) &&
+              job.subcategoryInfo.length > 0
+                ? job.subcategoryInfo.find((sub) => sub.price === "bid") ||
+                  job.subcategoryInfo[0]
+                : { subcategory: "עבודה" };
+
+            await sendPushNotification(
+              client.fcmToken,
+              "התקבלה הצעת מחיר חדשה! 💰",
+              `קיבלת הצעת מחיר חדשה לעבודה: ${
+                subcategoryInfo.subcategory || "עבודה"
+              }`,
+              {
+                type: "new_quotation",
+                jobId: jobId,
+              }
+            );
+          }
+        } catch (pushError) {
+          serverLogger.error("Error sending push notification:", pushError);
+        }
+      }
+
+      return res.json({
+        success: true,
+        message: "הצעת מחיר נשלחה בהצלחה",
+        quotation: newQuotation,
+      });
+    } catch (error) {
+      serverLogger.error("Error in /api/jobs/:jobId/quotations:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה בשליחת הצעת מחיר",
+        error: error.message,
+      });
+    }
+  });
+
+  // Endpoint: Get quoted jobs with quotations for client
+  app.get(
+    "/api/clients/:clientId/quoted-jobs-with-quotations",
+    async (req, res) => {
+      try {
+        const { clientId } = req.params;
+        const jobsCollection = getCollectionJobs();
+
+        // Find all quoted jobs for this client that have quotations
+        const quotedJobs = await jobsCollection
+          .find({
+            clientId: new ObjectId(clientId),
+            status: "quoted",
+            quotations: { $exists: true, $ne: [] },
+          })
+          .sort({ updatedAt: -1 })
+          .limit(10)
+          .toArray();
+
+        // Filter out expired jobs
+        const validJobs = quotedJobs.filter((job) => {
+          if (!job.quotedUntil) return true;
+          return new Date(job.quotedUntil) >= new Date();
+        });
+
+        return res.json({
+          success: true,
+          jobs: validJobs,
+        });
+      } catch (error) {
+        serverLogger.error(
+          "Error in /api/clients/:clientId/quoted-jobs-with-quotations:",
+          error
+        );
+        return res.status(500).json({
+          success: false,
+          message: "שגיאה בטעינת עבודות",
+          error: error.message,
+        });
+      }
+    }
+  );
+
+  // Endpoint: AI-generated quotation text with streaming
+  app.post("/api/ai/quotation-text", async (req, res) => {
+    try {
+      const { jobId, handymanId } = req.body;
+
+      if (!jobId || !handymanId) {
+        return res.status(400).json({
+          success: false,
+          message: "jobId and handymanId required",
+        });
+      }
+
+      const jobsCollection = getCollectionJobs();
+      const job = await jobsCollection.findOne({ _id: new ObjectId(jobId) });
+
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          message: "עבודה לא נמצאה",
+        });
+      }
+
+      // Build user content from job
+      const subcategoryInfo =
+        Array.isArray(job.subcategoryInfo) && job.subcategoryInfo.length > 0
+          ? job.subcategoryInfo.find((sub) => sub.price === "bid") ||
+            job.subcategoryInfo[0]
+          : { category: "כללי", subcategory: "עבודה כללית" };
+
+      const category = subcategoryInfo.category || "כללי";
+      const subcategory = subcategoryInfo.subcategory || "עבודה כללית";
+      const desc = job.desc || "";
+      const images = Array.isArray(job.imageUrl)
+        ? job.imageUrl
+        : job.imageUrl
+        ? [job.imageUrl]
+        : [];
+      const when = job.when || "asap";
+      const urgent = job.urgent || false;
+      const locationText = job.locationText || "";
+
+      // Build images list as URLs
+      const imagesList =
+        images.length > 0
+          ? images.map((url, idx) => `תמונה ${idx + 1}: ${url}`).join("\n")
+          : "אין תמונות";
+
+      const userContent = `קטגוריה: ${category}
+תת-קטגוריה: ${subcategory}
+תיאור מהלקוח: ${desc || "אין תיאור"}
+תמונות:
+${imagesList}
+מיקום: ${locationText}
+דחיפות: ${urgent ? "דחוף" : "רגיל"}
+מועד: ${when === "asap" ? "בהקדם האפשרי" : when}`;
+
+      // Initialize OpenAI
+      const apiKey = process.env.OPENAI_ACCESS_KEY;
+      if (!apiKey) {
+        return res.status(500).json({
+          success: false,
+          message: "שגיאה בהגדרת OpenAI",
+        });
+      }
+
+      const openai = new OpenAI({
+        apiKey: apiKey,
+      });
+
+      // Set up streaming response
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+
+      // System prompt (exactly as specified)
+      const systemPrompt = `אתה עוזר להנדימן לנסח ללקוח הסבר קצר (עד 4 שורות) להצעת מחיר עבור עבודה לבית, על בסיס תיאור הלקוח ותמונות (כקישורים). כתוב בעברית מקצועית ולא מכירתית. אל תציין סכומים או טווחי מחירים. אל תבטיח הבטחות מוחלטות. אל תזכיר שאתה AI. החזר רק את הטקסט עצמו, עד 4 שורות.`;
+
+      try {
+        const stream = await openai.chat.completions.create({
+          model: "gpt-4.1-mini",
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt,
+            },
+            {
+              role: "user",
+              content: userContent,
+            },
+          ],
+          stream: true,
+          temperature: 0.7,
+          max_tokens: 200,
+        });
+
+        let fullResponse = "";
+
+        // Stream the response and collect content for usage calculation
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content || "";
+          if (content) {
+            fullResponse += content;
+            res.write(`data: ${JSON.stringify({ content })}\n\n`);
+          }
+        }
+
+        // Calculate AI usage based on actual content
+        // Token estimation: for Hebrew/English mixed text, ~1 token ≈ 3.5-4 characters
+        // Using conservative estimate of 4 chars per token
+        const promptTokens = Math.ceil(
+          (systemPrompt.length + userContent.length) / 4
+        );
+        const completionTokens = Math.ceil(fullResponse.length / 4);
+
+        const estimatedUsage = {
+          prompt_tokens: promptTokens,
+          completion_tokens: completionTokens,
+          total_tokens: promptTokens + completionTokens,
+        };
+
+        // Track AI usage after streaming completes (gpt-4.1-mini pricing)
+        await trackAIUsage(estimatedUsage, "gpt-4.1-mini");
+
+        // Send completion signal
+        res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+        res.end();
+      } catch (streamError) {
+        serverLogger.error("Error in OpenAI streaming:", streamError);
+        res.write(
+          `data: ${JSON.stringify({ error: "שגיאה ביצירת הטקסט" })}\n\n`
+        );
+        res.end();
+      }
+    } catch (error) {
+      serverLogger.error("Error in /api/ai/quotation-text:", error);
+      return res.status(500).json({
+        success: false,
+        message: "שגיאה ביצירת טקסט הצעת מחיר",
+        error: error.message,
+      });
+    }
+  });
+
+  // Endpoint: Accept quotation (client chooses a quote)
+  app.post(
+    "/api/jobs/:jobId/quotations/:quotationId/accept",
+    async (req, res) => {
+      try {
+        const { jobId, quotationId } = req.params;
+        const jobsCollection = getCollectionJobs();
+        const collection = getCollection();
+
+        // Find job
+        const job = await jobsCollection.findOne({ _id: new ObjectId(jobId) });
+        if (!job) {
+          return res.status(404).json({
+            success: false,
+            message: "עבודה לא נמצאה",
+          });
+        }
+
+        // Validate job status
+        if (job.status !== "quoted") {
+          return res.status(400).json({
+            success: false,
+            message: "עבודה לא במצב הצעת מחיר",
+          });
+        }
+
+        // Find quotation
+        const quotations = Array.isArray(job.quotations) ? job.quotations : [];
+        const selectedQuotation = quotations.find(
+          (q) => String(q._id) === String(quotationId)
+        );
+
+        if (!selectedQuotation) {
+          return res.status(404).json({
+            success: false,
+            message: "הצעת מחיר לא נמצאה",
+          });
+        }
+
+        const selectedHandymanId = selectedQuotation.handymanId;
+        const selectedHandymanName = selectedQuotation.handymanName;
+        const selectedQuotationAmount = selectedQuotation.quotation;
+
+        // Update subcategoryInfo - find the item with price="bid" and update it
+        // CRITICAL: subcategoryInfo is an array, we need to find the correct item, not assume [0]
+        const subcategoryInfoArray = Array.isArray(job.subcategoryInfo)
+          ? job.subcategoryInfo
+          : job.subcategoryInfo
+          ? [job.subcategoryInfo]
+          : [];
+
+        const updatedSubcategoryInfo = subcategoryInfoArray.map((subInfo) => {
+          // Find the item with price="bid" or "quoted" (the quoted subcategory)
+          if (subInfo.price === "bid" || subInfo.price === "quoted") {
+            return {
+              ...subInfo,
+              price: selectedQuotationAmount, // Update price to chosen quotation
+            };
+          }
+          return subInfo;
+        });
+
+        // Verify we found and updated at least one subcategory with price="bid"
+        const hasUpdatedSubcategory = updatedSubcategoryInfo.some(
+          (subInfo) => subInfo.price === selectedQuotationAmount
+        );
+
+        if (!hasUpdatedSubcategory && subcategoryInfoArray.length > 0) {
+          // Fallback: if no "bid" found, update the first one (shouldn't happen but safety)
+          updatedSubcategoryInfo[0].price = selectedQuotationAmount;
+          serverLogger.warn(
+            `Warning: No subcategory with price="bid" found in job ${jobId}, updated first item as fallback`
+          );
+        }
+
+        // Update job: change status to assigned, set handyman, update price
+        const updateResult = await jobsCollection.updateOne(
+          { _id: new ObjectId(jobId) },
+          {
+            $set: {
+              status: "assigned",
+              handymanId: [selectedHandymanId], // Keep as array for compatibility
+              handymanName: [selectedHandymanName],
+              subcategoryInfo: updatedSubcategoryInfo,
+              chosenQuotation: {
+                handymanId: selectedHandymanId,
+                quotationId: new ObjectId(quotationId),
+                quotation: selectedQuotationAmount,
+              },
+              updatedAt: new Date(),
+            },
+          }
+        );
+
+        if (updateResult.matchedCount === 0) {
+          return res.status(404).json({
+            success: false,
+            message: "עבודה לא נמצאה",
+          });
+        }
+
+        // Send WebSocket event to selected handyman
+        if (io) {
+          io.to(`user-${selectedHandymanId}`).emit("quotation:accepted", {
+            jobId: jobId,
+            message: "הצעת המחיר שלך נבחרה!",
+          });
+        }
+
+        // Send FCM push notification to selected handyman
+        try {
+          const handyman = await collection.findOne({
+            _id: selectedHandymanId,
+          });
+          if (handyman && handyman.fcmToken) {
+            await sendPushNotification(
+              handyman.fcmToken,
+              "הצעת המחיר שלך נבחרה! 🎉",
+              `הלקוח בחר בהצעת המחיר שלך לעבודה: ${
+                job.subcategoryInfo?.[0]?.subcategory || "עבודה"
+              }`,
+              {
+                type: "quotation_accepted",
+                jobId: jobId,
+              }
+            );
+          }
+        } catch (pushError) {
+          serverLogger.error(
+            "Error sending push notification to handyman:",
+            pushError
+          );
+        }
+
+        // Send WebSocket event to client (confirmation)
+        if (io && job.clientId) {
+          io.to(`user-${job.clientId}`).emit("quotation:accepted-by-client", {
+            jobId: jobId,
+            handymanId: selectedHandymanId.toString(),
+            handymanName: selectedHandymanName,
+          });
+        }
+
+        return res.json({
+          success: true,
+          message: "הצעת מחיר נבחרה בהצלחה",
+          jobId: jobId,
+          handymanId: selectedHandymanId.toString(),
+          handymanName: selectedHandymanName,
+          quotation: selectedQuotationAmount,
+        });
+      } catch (error) {
+        serverLogger.error(
+          "Error in /api/jobs/:jobId/quotations/:quotationId/accept:",
+          error
+        );
+        return res.status(500).json({
+          success: false,
+          message: "שגיאה בבחירת הצעת מחיר",
+          error: error.message,
+        });
+      }
+    }
+  );
+
+  // ============================================================
+  // QUOTATION SYSTEM - Timeout/Expired Jobs Checker
+  // ============================================================
+
+  // Function to check and expire quoted jobs (used by both endpoint and periodic task)
+  async function checkAndExpireQuotedJobs() {
+    try {
+      const jobsCollection = getCollectionJobs();
+      const now = new Date();
+
+      // Find all quoted jobs that passed quotedUntil
+      const expiredJobs = await jobsCollection
+        .find({
+          status: "quoted",
+          quotedUntil: { $exists: true, $lt: now },
+        })
+        .toArray();
+
+      if (expiredJobs.length === 0) {
+        return {
+          success: true,
+          expiredCount: 0,
+          message: "אין עבודות שפג תוקפן",
+        };
+      }
+
+      // Update all expired jobs to "expired" status
+      const updateResult = await jobsCollection.updateMany(
+        {
+          status: "quoted",
+          quotedUntil: { $exists: true, $lt: now },
+        },
+        {
+          $set: {
+            status: "expired",
+            updatedAt: now,
+          },
+        }
+      );
+
+      // Send notifications to clients about expired jobs
+      const collection = getCollection();
+      for (const job of expiredJobs) {
+        if (job.clientId) {
+          try {
+            const client = await collection.findOne({
+              _id: new ObjectId(job.clientId),
+            });
+            if (client && client.fcmToken) {
+              // Find the quoted subcategory (price="bid" or price="quoted")
+              let subcategoryText = "עבודה";
+              if (
+                Array.isArray(job.subcategoryInfo) &&
+                job.subcategoryInfo.length > 0
+              ) {
+                const quotedSubcategory = job.subcategoryInfo.find(
+                  (sub) => sub.price === "bid" || sub.price === "quoted"
+                );
+                if (quotedSubcategory) {
+                  subcategoryText = quotedSubcategory.subcategory || "עבודה";
+                } else {
+                  subcategoryText =
+                    job.subcategoryInfo[0]?.subcategory || "עבודה";
+                }
+              }
+
+              await sendPushNotification(
+                client.fcmToken,
+                "פג תוקף הצעות המחיר",
+                `תם הזמן לקבלת הצעות לעבודה: ${subcategoryText}`,
+                {
+                  type: "quotation_expired",
+                  jobId: job._id.toString(),
+                }
+              );
+            }
+          } catch (notifyError) {
+            serverLogger.error(
+              "Error sending expired notification:",
+              notifyError
+            );
+          }
+        }
+      }
+
+      return {
+        success: true,
+        expiredCount: updateResult.modifiedCount,
+        message: `עודכנו ${updateResult.modifiedCount} עבודות שפג תוקפן`,
+      };
+    } catch (error) {
+      serverLogger.error("Error in checkAndExpireQuotedJobs:", error);
+      return {
+        success: false,
+        message: "שגיאה בבדיקת עבודות שפג תוקפן",
+        error: error.message,
+      };
+    }
+  }
+
+  // Endpoint: Check and expire quoted jobs that passed quotedUntil
+  app.post("/api/jobs/check-expired-quoted", async (req, res) => {
+    const result = await checkAndExpireQuotedJobs();
+    if (result.success) {
+      return res.json(result);
+    } else {
+      return res.status(500).json(result);
+    }
+  });
+
   // Create HTTP server
   const httpServer = createServer(app);
 
   // Initialize Socket.IO
   const { Server } = require("socket.io");
-  const io = new Server(httpServer, {
+  io = new Server(httpServer, {
     cors: {
       origin:
         process.env.NODE_ENV === "production" ? true : allowedOrigins || [],
@@ -19075,6 +20568,23 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
     }
   });
 
+  // Start periodic task to check and expire quoted jobs (every 5 minutes)
+  setInterval(async () => {
+    try {
+      const result = await checkAndExpireQuotedJobs();
+      if (result.expiredCount > 0) {
+        serverLogger.log(
+          `✅ [QUOTATION-EXPIRY] Expired ${result.expiredCount} quoted job(s)`
+        );
+      }
+    } catch (error) {
+      serverLogger.error(
+        "[QUOTATION-EXPIRY] Error in periodic expiry check:",
+        error
+      );
+    }
+  }, 5 * 60 * 1000); // Every 5 minutes
+
   // Start server
   // In development, listen on all interfaces (0.0.0.0) to allow access via IP
   const hostname =
@@ -19091,6 +20601,14 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           serverLogger.log(`Server is running on port ${PORT}`);
         }
       }
+      // Run initial check on server start
+      checkAndExpireQuotedJobs().then((result) => {
+        if (result.expiredCount > 0) {
+          serverLogger.log(
+            `✅ [QUOTATION-EXPIRY] Initial check: Expired ${result.expiredCount} quoted job(s)`
+          );
+        }
+      });
     })
 
     .on("error", (err) => {

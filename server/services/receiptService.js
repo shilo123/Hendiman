@@ -1,5 +1,6 @@
 const { Resend } = require("resend");
 const { ObjectId } = require("mongodb");
+const { serverLogger } = require("../utils/logger");
 
 // FROM_EMAIL must be from a verified domain
 // For local/testing: use Resend's test domain (onboarding@resend.dev) - works without domain verification
@@ -19,7 +20,7 @@ function getResend() {
   if (!resend) {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {
-      console.warn(
+      serverLogger.warn(
         "[receiptService] RESEND_API_KEY not set. Receipt emails will not be sent."
       );
       return null;
@@ -66,7 +67,7 @@ async function getNextCounter(counterName, db) {
     await countersCol.insertOne({ _id: counterName, seq: 1 });
     return 1;
   } catch (error) {
-    console.error(`Error in getNextCounter for ${counterName}:`, error);
+    serverLogger.error(`Error in getNextCounter for ${counterName}:`, error);
     // Fallback: try to get existing or create new
     try {
       const existing = await countersCol.findOne({ _id: counterName });
@@ -81,7 +82,7 @@ async function getNextCounter(counterName, db) {
       await countersCol.insertOne({ _id: counterName, seq: 1 });
       return 1;
     } catch (fallbackError) {
-      console.error(
+      serverLogger.error(
         `Fallback error in getNextCounter for ${counterName}:`,
         fallbackError
       );
@@ -718,7 +719,7 @@ function generatePaymentMethodUpdateHTML(user, last4Digits) {
 async function sendPaymentMethodUpdateEmail(user, last4Digits) {
   const resendInstance = getResend();
   if (!resendInstance) {
-    console.warn(
+    serverLogger.warn(
       "[receiptService] Cannot send payment method update email: RESEND_API_KEY not configured"
     );
     return {
@@ -739,7 +740,7 @@ async function sendPaymentMethodUpdateEmail(user, last4Digits) {
   });
 
   if (error) {
-    console.error(`❌ [RECEIPTS] Resend API error:`, error);
+    serverLogger.error(`❌ [RECEIPTS] Resend API error:`, error);
     throw new Error(error.message || "Failed to send email");
   }
 
@@ -753,7 +754,7 @@ async function sendReceiptEmail(receipt, htmlContent, subject, toEmail) {
   const resendInstance = getResend();
   if (!resendInstance) {
     // If Resend is not configured, return error but don't throw
-    console.warn(
+    serverLogger.warn(
       "[receiptService] Cannot send receipt email: RESEND_API_KEY not configured"
     );
     return {
@@ -773,7 +774,7 @@ async function sendReceiptEmail(receipt, htmlContent, subject, toEmail) {
   });
 
   if (error) {
-    console.error(`❌ [RECEIPTS] Resend API error:`, error);
+    serverLogger.error(`❌ [RECEIPTS] Resend API error:`, error);
     throw new Error(error.message || "Failed to send email");
   }
 
@@ -969,7 +970,7 @@ async function createAndSendReceipt(
     } catch (emailError) {
       // Email sending failed, but receipt is already saved in DB
       // Update receipt with failed status and error message
-      console.error(
+      serverLogger.error(
         "❌ [RECEIPTS] Email sending failed, but receipt saved to DB:",
         emailError.message
       );
@@ -1011,7 +1012,7 @@ async function createAndSendReceipt(
       );
     }
 
-    console.error("❌ [RECEIPTS] Error creating receipt:", error);
+    serverLogger.error("❌ [RECEIPTS] Error creating receipt:", error);
     throw error;
   }
 }
@@ -1200,7 +1201,7 @@ function generateWelcomeEmailHTML(user, password, isHandyman, baseUrl) {
 async function sendWelcomeEmail(user, password, isHandyman, baseUrl) {
   const resendInstance = getResend();
   if (!resendInstance) {
-    console.warn(
+    serverLogger.warn(
       "[receiptService] Cannot send welcome email: RESEND_API_KEY not configured"
     );
     return {
@@ -1210,7 +1211,7 @@ async function sendWelcomeEmail(user, password, isHandyman, baseUrl) {
   }
 
   if (!user.email) {
-    console.warn(
+    serverLogger.warn(
       "[receiptService] Cannot send welcome email: user has no email"
     );
     return {
@@ -1236,7 +1237,7 @@ async function sendWelcomeEmail(user, password, isHandyman, baseUrl) {
   });
 
   if (error) {
-    console.error(`❌ [RECEIPTS] Resend API error:`, error);
+    serverLogger.error(`❌ [RECEIPTS] Resend API error:`, error);
     throw new Error(error.message || "Failed to send email");
   }
 
@@ -1332,7 +1333,7 @@ function generateTrialExpiredEmailHTML(user, baseUrl) {
 async function sendTrialExpiredEmail(user, baseUrl) {
   const resendInstance = getResend();
   if (!resendInstance) {
-    console.warn(
+    serverLogger.warn(
       "[receiptService] Cannot send trial expired email: RESEND_API_KEY not configured"
     );
     return {
@@ -1342,7 +1343,7 @@ async function sendTrialExpiredEmail(user, baseUrl) {
   }
 
   if (!user.email) {
-    console.warn(
+    serverLogger.warn(
       "[receiptService] Cannot send trial expired email: user has no email"
     );
     return {
@@ -1363,7 +1364,7 @@ async function sendTrialExpiredEmail(user, baseUrl) {
   });
 
   if (error) {
-    console.error(`❌ [RECEIPTS] Resend API error:`, error);
+    serverLogger.error(`❌ [RECEIPTS] Resend API error:`, error);
     throw new Error(error.message || "Failed to send email");
   }
 
@@ -1485,7 +1486,7 @@ async function sendSubscriptionCancellationEmail(
   try {
     const resendInstance = getResend();
     if (!resendInstance) {
-      console.warn(
+      serverLogger.warn(
         "[receiptService] Cannot send subscription cancellation email: RESEND_API_KEY not configured"
       );
       return {
@@ -1495,7 +1496,7 @@ async function sendSubscriptionCancellationEmail(
     }
 
     if (!user || !user.email) {
-      console.warn(
+      serverLogger.warn(
         "[receiptService] Cannot send subscription cancellation email: user has no email",
         user ? "User exists but no email" : "User is null/undefined"
       );
@@ -1508,7 +1509,7 @@ async function sendSubscriptionCancellationEmail(
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(user.email)) {
-      console.warn(`[receiptService] Invalid email format: ${user.email}`);
+      serverLogger.warn(`[receiptService] Invalid email format: ${user.email}`);
       return {
         success: false,
         error: "Invalid email format",
@@ -1532,7 +1533,7 @@ async function sendSubscriptionCancellationEmail(
     });
 
     if (error) {
-      console.error(`❌ [RECEIPTS] Resend API error:`, error);
+      serverLogger.error(`❌ [RECEIPTS] Resend API error:`, error);
       // Don't throw - just return error status
       return {
         success: false,
@@ -1542,7 +1543,7 @@ async function sendSubscriptionCancellationEmail(
 
     return { success: true, messageId: data?.id };
   } catch (error) {
-    console.error(
+    serverLogger.error(
       "[receiptService] Unexpected error in sendSubscriptionCancellationEmail:",
       error
     );

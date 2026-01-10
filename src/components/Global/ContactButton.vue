@@ -19,9 +19,10 @@ export default {
   name: "ContactButton",
   computed: {
     showButton() {
-      // Show only on specific pages: Dashboard, CreateCall, logIn, Register
+      // Show only on specific pages: Dashboard, logIn, Register
+      // NOT on CreateCall page
       const routeName = this.$route?.name;
-      const allowedRoutes = ["Dashboard", "CreateCall", "logIn", "Register"];
+      const allowedRoutes = ["Dashboard", "logIn", "Register"];
       return allowedRoutes.includes(routeName);
     },
   },
@@ -42,7 +43,7 @@ $bg: #0b0b0f;
   position: fixed;
   bottom: 20px;
   left: 20px;
-  z-index: 1000;
+  z-index: 999; /* נמוך יותר מ-JobChatMobile (z-index: 1000) */
   display: flex;
   align-items: center;
   gap: 8px;
@@ -87,5 +88,23 @@ $bg: #0b0b0f;
   &__text {
     font-weight: 1000;
   }
+
+  /* הסתר את הכפתור כאשר יש צ'אט פעיל */
+  &--hidden {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    z-index: -1 !important;
+  }
+}
+
+/* CSS גלובלי - הסתר את הכפתור כאשר יש צ'אט פעיל */
+:global(.has-active-chat) .contact-button {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  z-index: -1 !important;
 }
 </style>

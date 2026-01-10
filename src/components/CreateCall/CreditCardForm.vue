@@ -221,6 +221,8 @@ export default {
         cvv: "",
       },
       uniqueId: Math.random().toString(36).substring(7),
+      stripeObserver: null,
+      stripeHideInterval: null,
     };
   },
   watch: {
@@ -264,6 +266,9 @@ export default {
       this.$nextTick(() => {
         this.initStripeCardElement();
         this.initWalletButton();
+        this.hideStripeDeveloperButtons();
+        // Set up observer to hide Stripe buttons that are added dynamically
+        this.observeStripeButtons();
       });
     } catch (e) {
       // אם Stripe לא נטען, ניפול ל-manual
@@ -274,8 +279,15 @@ export default {
     try {
       if (this.cardElement) this.cardElement.unmount();
       if (this.prButton) this.prButton.unmount();
-    } catch (e) {
-    }
+      if (this.stripeObserver) {
+        this.stripeObserver.disconnect();
+        this.stripeObserver = null;
+      }
+      if (this.stripeHideInterval) {
+        clearInterval(this.stripeHideInterval);
+        this.stripeHideInterval = null;
+      }
+    } catch (e) {}
   },
 
   methods: {
@@ -468,8 +480,7 @@ export default {
           this.lastWalletEvent.complete(status);
           this.lastWalletEvent = null;
         }
-      } catch (e) {
-      }
+      } catch (e) {}
     },
 
     // ---------------------------
@@ -589,6 +600,100 @@ export default {
         );
       this.$emit("payment-method-created", pm.id);
       return pm.id;
+    },
+
+    /**
+     * הסתר כפתורי Stripe למפתחים
+     */
+    hideStripeDeveloperButtons() {
+      // Hide only Stripe developer iframes (not the main Stripe Elements iframe)
+      const hideIframe = (iframe) => {
+        if (!iframe) return;
+
+        // Check if this is a developer tools iframe (not the main payment element)
+        const isDeveloperIframe =
+          iframe.name?.includes("__privateStripeFrame") ||
+          iframe.name?.includes("privateStripeFrame") ||
+          iframe.title?.includes("מסגרת כלים למפתחי פס") ||
+          iframe.title?.includes("Stripe developer tools frame") ||
+          (iframe.src?.includes("stripe.com") &&
+            (iframe.src?.includes("elements-inner") ||
+              iframe.src?.includes("easel")) &&
+            iframe.style?.position === "fixed");
+
+        if (isDeveloperIframe) {
+          iframe.style.display = "none";
+          iframe.style.visibility = "hidden";
+          iframe.style.opacity = "0";
+          iframe.style.pointerEvents = "none";
+          iframe.style.width = "0";
+          iframe.style.height = "0";
+          iframe.style.position = "absolute";
+          iframe.style.left = "-9999px";
+          iframe.style.top = "-9999px";
+          iframe.style.zIndex = "-99999";
+        }
+      };
+
+      // Hide existing developer iframes
+      document.querySelectorAll("iframe").forEach(hideIframe);
+    },
+
+    /**
+     * Observe DOM for dynamically added Stripe iframes and hide them
+     */
+    observeStripeButtons() {
+      if (typeof MutationObserver === "undefined") return;
+
+      this.stripeObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === 1) {
+              // Element node
+              if (node.tagName === "IFRAME") {
+                this.hideStripeDeveloperButtons();
+              } else if (node.querySelectorAll) {
+                // Check for iframes inside added nodes
+                node.querySelectorAll("iframe").forEach((iframe) => {
+                  const isDeveloperIframe =
+                    iframe.name?.includes("__privateStripeFrame") ||
+                    iframe.name?.includes("privateStripeFrame") ||
+                    iframe.title?.includes("מסגרת כלים למפתחי פס") ||
+                    iframe.title?.includes("Stripe developer tools frame") ||
+                    (iframe.src?.includes("stripe.com") &&
+                      (iframe.src?.includes("elements-inner") ||
+                        iframe.src?.includes("easel")) &&
+                      iframe.style?.position === "fixed");
+
+                  if (isDeveloperIframe) {
+                    iframe.style.display = "none";
+                    iframe.style.visibility = "hidden";
+                    iframe.style.opacity = "0";
+                    iframe.style.pointerEvents = "none";
+                    iframe.style.width = "0";
+                    iframe.style.height = "0";
+                    iframe.style.position = "absolute";
+                    iframe.style.left = "-9999px";
+                    iframe.style.top = "-9999px";
+                    iframe.style.zIndex = "-99999";
+                  }
+                });
+              }
+            }
+          });
+        });
+      });
+
+      // Observe the entire document for dynamically added elements
+      this.stripeObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+
+      // Also periodically check (as a fallback)
+      this.stripeHideInterval = setInterval(() => {
+        this.hideStripeDeveloperButtons();
+      }, 1000);
     },
   },
 };
@@ -726,6 +831,24 @@ $danger: #ff3b3b;
 
 .wallet__btn {
   min-height: 48px;
+
+  /* Hide Stripe developer/test buttons and iframes inside Wallet Button */
+  iframe[name*="__privateStripeFrame"],
+  iframe[name*="privateStripeFrame"],
+  iframe[src*="stripe.com"][src*="elements-inner"],
+  iframe[title*="מסגרת כלים למפתחי פס"],
+  iframe[title*="Stripe developer tools frame"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    position: absolute !important;
+    left: -9999px !important;
+    top: -9999px !important;
+    z-index: -9999 !important;
+  }
 }
 
 .skeleton {
@@ -806,6 +929,24 @@ $danger: #ff3b3b;
   position: relative;
   padding: 14px 12px;
   min-height: 48px;
+
+  /* Hide Stripe developer/test buttons and iframes inside Stripe Element */
+  iframe[name*="__privateStripeFrame"],
+  iframe[name*="privateStripeFrame"],
+  iframe[src*="stripe.com"][src*="elements-inner"],
+  iframe[title*="מסגרת כלים למפתחי פס"],
+  iframe[title*="Stripe developer tools frame"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    position: absolute !important;
+    left: -9999px !important;
+    top: -9999px !important;
+    z-index: -9999 !important;
+  }
 }
 
 .stripeWrap:focus-within {
@@ -876,6 +1017,29 @@ $danger: #ff3b3b;
 
 .msg--err {
   color: rgba($danger, 0.95);
+}
+
+/* Hide Stripe developer/test buttons and iframes */
+:deep(iframe[name*="__privateStripeFrame"]),
+:deep(iframe[name*="privateStripeFrame"]),
+:deep(iframe[src*="stripe.com"][src*="elements-inner"]),
+:deep(iframe[title*="מסגרת כלים למפתחי פס"]),
+:deep(iframe[title*="Stripe developer tools frame"]),
+:deep(.stripe-test-mode-badge),
+:deep([class*="__PrivateStripeElement"]),
+:deep([class*="privateStripe"]),
+:deep([id*="__privateStripe"]),
+:deep([id*="privateStripe"]) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  position: absolute !important;
+  left: -9999px !important;
+  top: -9999px !important;
+  z-index: -9999 !important;
 }
 
 /* mobile */
