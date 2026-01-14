@@ -19102,11 +19102,49 @@ ${subcategoryList}
     // Serve static files from Vue app in production
     if (process.env.NODE_ENV === "production") {
       const distPath = path.join(__dirname, "..", "dist");
-      app.use(express.static(distPath));
+      app.use(
+        express.static(distPath, {
+          index: false,
+        })
+      );
 
       // Serve index.html for all routes (SPA fallback)
-      app.get("*", (req, res) => {
-        res.sendFile(path.join(distPath, "index.html"));
+      app.get("*", (req, res, next) => {
+        // IMPORTANT: Do not let the SPA fallback intercept API/WebSocket routes.
+        // This file registers additional /api GET endpoints after this block.
+        if (req.path === "/api" || req.path.startsWith("/api/")) {
+          return next();
+        }
+        if (req.path.startsWith("/socket.io")) {
+          return next();
+        }
+
+        // If a request looks like a static asset (has a file extension) but the
+        // file was not found by express.static, return 404 instead of index.html.
+        // This prevents "Unexpected token '<'" (HTML returned for JS/CSS).
+        if (path.extname(req.path)) {
+          return res.status(404).end();
+        }
+
+        const indexPath = path.join(distPath, "index.html");
+        if (!fs.existsSync(indexPath)) {
+          try {
+            serverLogger.error(
+              "[static] dist/index.html not found. Did the client build run?",
+              {
+                distPath,
+              }
+            );
+          } catch (e) {
+            // ignore
+          }
+          return res
+            .status(500)
+            .send("Client build not found (missing dist/index.html)");
+        }
+
+        res.setHeader("Cache-Control", "no-store");
+        return res.sendFile(indexPath);
       });
     }
 
