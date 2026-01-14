@@ -30,6 +30,55 @@
       content="<%= BASE_URL %>img/icons/msapplication-icon-144x144.png"
     />
     <title><%= htmlWebpackPlugin.options.title %></title>
+
+    <% if (process.env.NODE_ENV === 'production') { %>
+    <script>
+      // Prevent stale Workbox caches from breaking new deploys.
+      // IMPORTANT: only targets the Vue PWA service worker (service-worker.js),
+      // and leaves firebase-messaging-sw.js registrations intact.
+      (function () {
+        try {
+          if ("serviceWorker" in navigator) {
+            navigator.serviceWorker
+              .getRegistrations()
+              .then(function (regs) {
+                regs.forEach(function (reg) {
+                  var swUrl =
+                    (reg && reg.active && reg.active.scriptURL) ||
+                    (reg && reg.installing && reg.installing.scriptURL) ||
+                    (reg && reg.waiting && reg.waiting.scriptURL) ||
+                    "";
+
+                  // Unregister only the Vue/Workbox SW.
+                  if (swUrl && swUrl.indexOf("service-worker.js") !== -1) {
+                    reg.unregister();
+                  }
+                });
+              })
+              .catch(function () {});
+          }
+
+          // Clear only Workbox precache caches.
+          if (typeof caches !== "undefined" && caches.keys) {
+            caches
+              .keys()
+              .then(function (keys) {
+                keys.forEach(function (key) {
+                  if (key && key.indexOf("workbox") !== -1) {
+                    caches.delete(key);
+                  }
+                  if (key && key.indexOf("precache") !== -1) {
+                    caches.delete(key);
+                  }
+                });
+              })
+              .catch(function () {});
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <% } %>
+
     <script
       src="https://kit.fontawesome.com/c251545ec1.js"
       crossorigin="anonymous"
