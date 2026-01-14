@@ -770,6 +770,29 @@ function findAvailablePort(startPort) {
       }
     });
 
+    // Receive client-side error reports (helps debug production-only issues)
+    // This is intentionally lightweight and logs to server logs (Heroku compatible).
+    app.post("/api/client-error", async (req, res) => {
+      try {
+        const payload = req.body || {};
+        serverLogger.error("[client-error]", {
+          href: payload.href,
+          userAgent: payload.userAgent,
+          type: payload.type,
+          message: payload.message,
+          stack: payload.stack,
+          filename: payload.filename,
+          lineno: payload.lineno,
+          colno: payload.colno,
+          reason: payload.reason,
+          extra: payload.extra,
+        });
+        return res.status(204).end();
+      } catch (e) {
+        return res.status(204).end();
+      }
+    });
+
     // Log all POST requests for debugging
     app.use((req, res, next) => {
       next();
@@ -19123,6 +19146,14 @@ ${subcategoryList}
         // file was not found by express.static, return 404 instead of index.html.
         // This prevents "Unexpected token '<'" (HTML returned for JS/CSS).
         if (path.extname(req.path)) {
+          try {
+            serverLogger.log("[static] 404 asset", {
+              path: req.path,
+              referer: req.headers?.referer,
+            });
+          } catch (e) {
+            // ignore
+          }
           return res.status(404).end();
         }
 
