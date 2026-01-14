@@ -109,839 +109,737 @@
     </div>
 
     <!-- Main Content -->
-    <div v-else class="shell">
-      <!-- Top bar -->
-      <header class="topbar">
-        <button
-          class="topbar__back"
-          type="button"
-          @click="goBack"
-          aria-label="חזור"
-        >
-          ←
-        </button>
+    <div v-else class="shell ccV3">
+      <div class="ccPhone">
+        <!-- Header (sticky) -->
+        <header class="ccHeader">
+          <div class="ccHeaderTop">
+            <button
+              class="ccBack"
+              type="button"
+              @click="goBack"
+              aria-label="חזור"
+            >
+              <span class="material-symbols-outlined">arrow_forward</span>
+            </button>
 
-        <div class="topbar__center">
-          <div class="topbar__title">צור קריאה</div>
-          <div class="topbar__subtitle">תהליך קצר • 4 שלבים • אישור מהיר</div>
-        </div>
+            <h2 class="ccHeaderTitle">
+              <template v-if="currentStep === 1">צור קריאה</template>
+              <template v-else-if="currentStep === 2"
+                >פרטי הקריאה ומיקום</template
+              >
+              <template v-else-if="currentStep === 4">תשלום ואישור</template>
+              <template v-else>יצירת קריאה</template>
+            </h2>
 
-        <div class="topbar__glow"></div>
-      </header>
+            <div class="ccHeaderSpacer" aria-hidden="true"></div>
+          </div>
 
-      <!-- Step Indicator -->
-      <div class="step-indicator">
-        <div
-          class="step-item"
-          :class="{ active: currentStep >= 1, completed: currentStep > 1 }"
-        >
-          <div class="step-number">1</div>
-          <div class="step-label">תיאור</div>
-        </div>
-        <div class="step-line" :class="{ active: currentStep > 1 }"></div>
+          <div
+            class="ccHeaderProgress"
+            :class="`ccHeaderProgress--s${currentStep}`"
+            aria-label="התקדמות"
+          >
+            <div class="ccProgressRowV3">
+              <span class="ccProgressPctV3">{{ progressPercent }}%</span>
+            </div>
 
-        <div
-          class="step-item"
-          :class="{ active: currentStep >= 2, completed: currentStep > 2 }"
-        >
-          <div class="step-number">2</div>
-          <div class="step-label">פרטים</div>
-        </div>
-        <div class="step-line" :class="{ active: currentStep > 2 }"></div>
+            <div
+              class="ccProgressTrackV3"
+              role="progressbar"
+              :aria-valuenow="progressPercent"
+              aria-valuemin="0"
+              aria-valuemax="100"
+            >
+              <div
+                class="ccProgressFillV3"
+                :style="{ width: progressPercent + '%' }"
+              ></div>
+            </div>
+          </div>
+        </header>
 
-        <div
-          class="step-item"
-          :class="{ active: currentStep >= 3, completed: currentStep > 3 }"
-        >
-          <div class="step-number">3</div>
-          <div class="step-label">תמונות</div>
-        </div>
-        <div class="step-line" :class="{ active: currentStep > 3 }"></div>
+        <!-- Content (scroll) -->
+        <main class="ccMain custom-scrollbar">
+          <!-- STEP 1 -->
+          <div v-if="currentStep === 1" class="ccStep ccStep--1">
+            <div class="ccPad">
+              <div class="ccStepIntro">
+                <h3 class="ccH3">תאר בקצרה מה צריך שנעשה?</h3>
+              </div>
 
-        <div
-          class="step-item"
-          :class="{ active: currentStep >= 4, completed: currentStep > 4 }"
-        >
-          <div class="step-number">4</div>
-          <div class="step-label">אשראי</div>
-        </div>
-      </div>
-
-      <!-- Content -->
-      <main class="content">
-        <!-- STEP 1 -->
-        <div
-          v-if="currentStep === 1"
-          class="step-content step-content--animated"
-        >
-          <div class="step-container">
-            <section class="block block--requests">
-              <div class="block__head">
-                <div class="block__label">תאר בקצרה מה צריך שנעשה?</div>
-
+              <div class="ccRow">
                 <button
                   type="button"
-                  class="manual-select-btn"
+                  class="ccPillBtn"
                   @click="openManualCategorySelector"
                 >
-                  ✋ בחר ידנית
+                  <span class="material-symbols-outlined ccIcon">list</span>
+                  <span class="ccPillBtnTxt">בחר ידנית</span>
                 </button>
               </div>
 
-              <div class="field-stack">
-                <div class="field-stack__input">
-                  <input
-                    class="input-small"
-                    type="text"
-                    v-model="call.requests[0]"
-                    @input="clearError('requests')"
-                    placeholder="למשל: תליית מדף"
-                  />
-                </div>
-
-                <div v-if="errors.requests" class="msg msg--err">
+              <div class="ccField">
+                <p class="ccLabel">תיאור הבקשה</p>
+                <input
+                  class="ccInput ccInput--tall"
+                  type="text"
+                  v-model="call.requests[0]"
+                  @input="clearError('requests')"
+                  placeholder="לדוגמה: תליית מדף"
+                  autocomplete="off"
+                />
+                <div v-if="errors.requests" class="ccErr">
                   {{ errors.requests }}
                 </div>
+              </div>
 
-                <div class="lux-divider">
-                  <span class="lux-divider__line"></span>
-                  <span class="lux-divider__txt">אפשר להוסיף עוד</span>
-                  <span class="lux-divider__line"></span>
-                </div>
-
-                <!-- Additional Requests -->
-                <div
-                  v-for="(request, index) in call.requests.slice(1)"
-                  :key="index"
-                  class="additional-request"
+              <div
+                v-for="(request, index) in call.requests.slice(1)"
+                :key="index"
+                class="ccExtraReq"
+              >
+                <input
+                  class="ccInput"
+                  type="text"
+                  v-model="call.requests[index + 1]"
+                  :placeholder="`בקשה ${index + 2}`"
+                  autocomplete="off"
+                />
+                <button
+                  type="button"
+                  class="ccIconBtn"
+                  @click="removeRequest(index + 1)"
+                  aria-label="הסר בקשה"
                 >
-                  <input
-                    class="input-small"
-                    type="text"
-                    v-model="call.requests[index + 1]"
-                    :placeholder="`בקשה ${index + 2}`"
-                  />
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+
+              <button type="button" class="ccAddReq" @click="addRequest">
+                <span class="ccAddReqIcon">
+                  <span class="material-symbols-outlined">add</span>
+                </span>
+                <span>הוסף בקשה נוספת</span>
+              </button>
+
+              <div class="ccPromo">
+                <div class="ccPromoInner">
+                  <div class="ccPromoGlow" aria-hidden="true"></div>
+                  <span class="material-symbols-outlined ccPromoIcon"
+                    >handyman</span
+                  >
+                  <p class="ccPromoTxt">אנחנו כאן לעזור עם כל תיקון</p>
+                </div>
+              </div>
+
+              <div class="ccMiniNote">
+                נשמור את זה ברור כדי שה־AI יתאים לך הנדימן מדויק
+              </div>
+            </div>
+          </div>
+
+          <!-- STEP 2 -->
+          <div v-if="currentStep === 2" class="ccStep ccStep--2">
+            <div class="ccPad">
+              <!-- Loading Categories -->
+              <section
+                v-if="isLoadingCategories"
+                class="ccCard ccCard--loading"
+              >
+                <div class="loading-categories">
+                  <div class="loading-categories__spinner" aria-hidden="true">
+                    <div class="spinner-dot"></div>
+                    <div class="spinner-dot"></div>
+                    <div class="spinner-dot"></div>
+                  </div>
+                  <p class="loading-categories__text">
+                    מחפש את התחומים הדרושים לך באמצעות AI
+                  </p>
+                  <p class="loading-categories__subtext">
+                    תוך רגע זה ננעל כמו כפפה
+                  </p>
+                </div>
+              </section>
+
+              <!-- Found Categories - Always show if there are categories -->
+              <section
+                v-if="foundCategories.length > 0"
+                class="ccCard ccCard--cats"
+              >
+                <div class="ccCardHead">
+                  <div class="ccCardTitle">
+                    <span
+                      class="material-symbols-outlined ccIcon ccIcon--primary"
+                      >auto_awesome</span
+                    >
+                    <span>קטגוריות שזוהו</span>
+                  </div>
                   <button
                     type="button"
-                    class="remove-request-btn"
-                    @click="removeRequest(index + 1)"
-                    aria-label="הסר בקשה"
+                    class="ccLinkBtn"
+                    @click="refineCategories"
                   >
-                    ✕
+                    ערוך
                   </button>
                 </div>
 
-                <button
-                  type="button"
-                  class="add-request-btn"
-                  @click="addRequest"
-                >
-                  <span class="add-request-btn__icon">➕</span>
-                  <span>הוסף בקשה נוספת</span>
-                </button>
+                <div class="ccCats">
+                  <div
+                    v-for="(category, index) in foundCategories"
+                    :key="index"
+                    class="ccCatCard"
+                    :class="{
+                      'ccCatCard--quoted': category.price === 'bid',
+                      'ccCatCard--featured': index === 0,
+                    }"
+                  >
+                    <div class="ccCatBody">
+                      <div class="ccCatTop">
+                        <span class="ccAIBadge">{{
+                          index === 0 ? "AI זיהוי גבוה" : "AI"
+                        }}</span>
+                        <span class="ccCatName">
+                          {{
+                            category.showAiSelection
+                              ? category.subcategory || category.category
+                              : category.originalText || category.subcategory
+                          }}
+                        </span>
+                      </div>
 
-                <div class="mini-trust">
-                  <span class="mini-trust__dot"></span>
-                  <span>נשמור את זה ברור כדי שה־AI יתאים לך הנדימן מדויק</span>
+                      <div class="ccCatMeta">
+                        <span class="ccCatMetaLbl">קטגוריה:</span>
+                        <span class="ccCatMetaVal">{{
+                          category.category
+                        }}</span>
+                      </div>
+
+                      <div
+                        v-if="
+                          category.showAiSelection === false &&
+                          category.subcategory
+                        "
+                        class="ccCatMeta ccCatMeta--sub"
+                      >
+                        <span class="ccCatMetaLbl">מה המערכת מצאה:</span>
+                        <span class="ccCatMetaVal">{{
+                          category.subcategory
+                        }}</span>
+                      </div>
+
+                      <div class="ccCatPriceRow">
+                        <span
+                          v-if="category.price && category.price !== 'bid'"
+                          class="ccCatPrice"
+                          >{{ category.price }} ₪</span
+                        >
+                        <span
+                          v-else-if="category.price === 'bid'"
+                          class="ccCatPrice ccCatPrice--bid"
+                          >הצעת מחיר</span
+                        >
+                      </div>
+
+                      <button
+                        type="button"
+                        class="ccCatQuote"
+                        @click="openWorkForQuotation(index)"
+                        v-if="
+                          category.price !== 'bid' &&
+                          !category.needsRecommendation
+                        "
+                      >
+                        פתח להצעת מחיר
+                      </button>
+                    </div>
+
+                    <div class="ccCatThumb" aria-hidden="true"></div>
+
+                    <!-- Recommendation message for low confidence/uncertain match -->
+                    <div
+                      v-if="category.needsRecommendation"
+                      class="category-card__recommendation"
+                    >
+                      <div class="category-card__recommendation-content">
+                        <div class="category-card__recommendation-head">
+                          <div class="category-card__recommendation-icon">
+                            <span class="material-symbols-outlined"
+                              >warning</span
+                            >
+                          </div>
+                          <div class="category-card__recommendation-title">
+                            אנחנו לא בטוחים בהתאמה
+                          </div>
+                          <div class="category-card__recommendation-badge">
+                            {{ getConfidencePct(category) }}%
+                          </div>
+                        </div>
+                        <p class="category-card__recommendation-text">
+                          לגבי העבודה
+                          <strong>"{{ category.originalText }}"</strong>, ייתכן
+                          שהיא לא מתאימה בדיוק למה שמצאנו במערכת. כדי לוודא
+                          שהעבודה תטופל נכון – אפשר לפתוח את הקריאה להצעת מחיר.
+                        </p>
+                        <div class="category-card__recommendation-actions">
+                          <button
+                            type="button"
+                            class="category-card__recommendation-btn category-card__recommendation-btn--primary"
+                            @click="openWorkForQuotation(index)"
+                          >
+                            פתח להצעת מחיר
+                          </button>
+                          <button
+                            type="button"
+                            class="category-card__recommendation-btn category-card__recommendation-btn--secondary"
+                            @click="dismissRecommendation(index)"
+                          >
+                            המשך עם העבודה שמצאנו
+                          </button>
+                          <button
+                            type="button"
+                            class="category-card__recommendation-btn category-card__recommendation-btn--remove"
+                            @click="removeWorkByIndex(index)"
+                          >
+                            הסר עבודה זו
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </section>
+              </section>
+
+              <section class="ccCard ccCard--desc">
+                <h3 class="ccSectionTitle">הרחב להנדימן על התקלות</h3>
+                <div class="ccTextareaWrap">
+                  <textarea
+                    class="ccTextarea"
+                    v-model="call.desc"
+                    @input="clearError('desc')"
+                    rows="6"
+                    maxlength="500"
+                    placeholder="תאר את הבעיה בפירוט כדי שנוכל לתת הצעת מחיר מדויקת..."
+                  ></textarea>
+                  <div class="ccCharCount">
+                    {{ (call.desc || "").length }}/500
+                  </div>
+                </div>
+                <div v-if="errors.desc" class="ccErr">{{ errors.desc }}</div>
+              </section>
+
+              <section class="ccCard ccCard--location">
+                <div class="ccLocHead">
+                  <h3 class="ccSectionTitle">מיקום השירות</h3>
+                  <button
+                    v-if="!isLoadingLocation"
+                    type="button"
+                    class="ccLinkBtn"
+                    @click="toggleLocationEdit"
+                  >
+                    {{ isEditingLocation ? "סגור" : "ערוך" }}
+                  </button>
+                </div>
+
+                <div class="location-content">
+                  <!-- Loading indicator -->
+                  <div v-if="isLoadingLocation" class="location-loading">
+                    <div class="location-loading__spinner">
+                      <div class="spinner"></div>
+                    </div>
+                    <p class="location-loading__text">מאתר מיקום מדויק...</p>
+                    <p class="location-loading__subtext">
+                      אנא המתן, זה עשוי לקחת מספר שניות
+                    </p>
+                  </div>
+
+                  <!-- Autocomplete -->
+                  <div
+                    v-if="!isLoadingLocation && isEditingLocation"
+                    class="ccLocInput"
+                  >
+                    <AddressAutocomplete
+                      v-model="call.location"
+                      input-id="call-location"
+                      :placeholder="
+                        usingMyLocation ? 'המיקום שלי' : 'הכנס שם ישוב'
+                      "
+                      :required="!usingMyLocation && !selectedMapLocation"
+                      @update:modelValue="onLocationChange"
+                      @update:englishName="onEnglishNameUpdate"
+                      @update:selectedCity="onCitySelected"
+                    />
+                  </div>
+
+                  <!-- House number -->
+                  <div
+                    v-if="
+                      call.location &&
+                      call.location !== 'המיקום שלי' &&
+                      !isLoadingLocation &&
+                      !detectedLocation &&
+                      isEditingLocation
+                    "
+                    class="house-number-input"
+                  >
+                    <input
+                      type="text"
+                      v-model="call.houseNumber"
+                      placeholder="מספר בית\\בלוק"
+                      class="ccInput"
+                      :class="{ 'ccInput--error': errors.houseNumber }"
+                    />
+                    <div v-if="errors.houseNumber" class="ccErr">
+                      {{ errors.houseNumber }}
+                    </div>
+                  </div>
+
+                  <!-- Actions -->
+                  <div
+                    v-if="!isLoadingLocation && locationEmbedUrl"
+                    class="ccLocPreview"
+                  >
+                    <div class="ccLocMap">
+                      <iframe
+                        class="ccLocMapFrame"
+                        :src="locationEmbedUrl"
+                        loading="lazy"
+                        referrerpolicy="no-referrer-when-downgrade"
+                        title="תצוגת מפה"
+                      ></iframe>
+                      <div class="ccLocMapOverlay">
+                        <div class="ccLocPill">
+                          <span
+                            class="material-symbols-outlined ccIcon ccIcon--primary"
+                            >location_on</span
+                          >
+                          <span class="ccLocPillTxt">
+                            {{ locationLabelText }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div v-if="isEditingLocation" class="ccLocBtns">
+                      <button
+                        class="ccLocBtn"
+                        type="button"
+                        @click="setMyLocation"
+                        :disabled="isLoadingLocation"
+                      >
+                        <span
+                          class="material-symbols-outlined ccIcon ccIcon--primary"
+                          >near_me</span
+                        >
+                        <span>מיקום נוכחי</span>
+                      </button>
+
+                      <button
+                        class="ccLocBtn"
+                        type="button"
+                        @click="openMapPicker"
+                      >
+                        <span
+                          class="material-symbols-outlined ccIcon ccIcon--primary"
+                          >map</span
+                        >
+                        <span>בחירה במפה</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="errors.location" class="msg msg--err">
+                  {{ errors.location }}
+                </div>
+              </section>
+            </div>
           </div>
 
-          <button
-            v-if="!isLoadingLocation"
-            class="next-step-btn"
-            type="button"
-            @click="nextStep"
-          >
-            <span>שלב הבא</span>
-          </button>
-        </div>
+          <!-- STEP 3 -->
+          <div v-if="currentStep === 3" class="ccStep ccStep--3">
+            <div class="ccPad">
+              <div class="ccStepIntro">
+                <h3 class="ccH3">שלב 3: תמונות ודחיפות</h3>
+                <p class="ccSub">עזור לנו להבין טוב יותר את המשימה</p>
+              </div>
 
-        <!-- STEP 2 -->
-        <div
-          v-if="currentStep === 2"
-          class="step-content step-content--animated"
-        >
-          <div class="step-container">
-            <!-- Loading Categories -->
-            <section
-              v-if="isLoadingCategories"
-              class="block block--loading-categories"
-            >
-              <div class="loading-categories">
-                <div class="loading-categories__spinner" aria-hidden="true">
-                  <div class="spinner-dot"></div>
-                  <div class="spinner-dot"></div>
-                  <div class="spinner-dot"></div>
+              <section class="ccCard">
+                <div class="ccCardHead">
+                  <h3 class="ccSectionTitle">תמונות של התקלה</h3>
+                  <span class="ccReqTag">חובה</span>
                 </div>
-                <p class="loading-categories__text">
-                  מחפש את התחומים הדרושים לך באמצעות AI
-                </p>
-                <p class="loading-categories__subtext">
-                  תוך רגע זה ננעל כמו כפפה
-                </p>
-              </div>
-            </section>
 
-            <!-- Found Categories - Always show if there are categories -->
-            <section
-              v-if="foundCategories.length > 0"
-              class="block block--found-categories"
-            >
-              <div class="block__head">
-                <div class="block__label">התחומים שנמצאו:</div>
-                <button
-                  type="button"
-                  class="block__refine-btn"
-                  @click="refineCategories"
-                >
-                  זה לא נכון? נסה לדייק יותר
-                </button>
-              </div>
+                <div class="ccUpload">
+                  <input
+                    :id="`callImage-${call.imageUrls.length}`"
+                    type="file"
+                    accept="image/*"
+                    @change="handleCallImageUpload"
+                    class="ccFileInput"
+                    :disabled="call.imageUrls.length >= 4 || isUploadingImage"
+                  />
 
-              <div class="categories-list">
+                  <label
+                    :for="`callImage-${call.imageUrls.length}`"
+                    class="ccUploadDrop"
+                    :class="{
+                      'is-disabled':
+                        call.imageUrls.length >= 4 || isUploadingImage,
+                      'is-error': errors.image,
+                    }"
+                  >
+                    <div class="ccUploadIconWrap">
+                      <span class="material-symbols-outlined ccUploadIcon"
+                        >add_a_photo</span
+                      >
+                    </div>
+                    <div class="ccUploadCopy">
+                      <p class="ccUploadTitle">
+                        העלאת תמונות ({{ call.imageUrls.length }}/4)
+                      </p>
+                      <p class="ccUploadHint">
+                        מומלץ לצלם את התקלה מכמה זוויות
+                      </p>
+                    </div>
+                  </label>
+                </div>
+
                 <div
-                  v-for="(category, index) in foundCategories"
-                  :key="index"
-                  class="category-card"
-                  :class="{
-                    'category-card--quoted': category.price === 'bid',
-                  }"
+                  v-if="
+                    call.imageUrls.length > 0 || call.imagePreviews.length > 0
+                  "
+                  class="ccImgGrid"
                 >
-                  <div class="category-card__header">
-                    <span class="category-card__name">
-                      {{
-                        category.originalText ||
-                        category.subcategory ||
-                        category.category ||
-                        `תחום ${index + 1}`
-                      }}
-                    </span>
-
-                    <span
-                      v-if="category.price && category.price !== 'bid'"
-                      class="category-card__price"
-                    >
-                      {{ category.price }} ₪
-                    </span>
-                    <span
-                      v-else-if="category.price === 'bid'"
-                      class="category-card__price category-card__price--bid"
-                    >
-                      הצעת מחיר
-                    </span>
-                  </div>
-
-                  <div class="category-card__details">
-                    <span
-                      v-if="category.category"
-                      class="category-card__category"
-                    >
-                      קטגוריה: {{ category.category }}
-                    </span>
-                    <span
-                      v-if="category.workType"
-                      class="category-card__work-type"
-                    >
-                      סוג: {{ category.workType }}
-                    </span>
-                  </div>
-
-                  <!-- Button to open for quotation on each work card -->
-                  <div class="category-card__actions">
+                  <div
+                    v-for="(img, index) in call.imageUrls.length > 0
+                      ? call.imageUrls
+                      : call.imagePreviews"
+                    :key="index"
+                    class="ccImg"
+                  >
+                    <img
+                      :src="img"
+                      :alt="`תמונה ${index + 1}`"
+                      class="ccImgEl"
+                    />
                     <button
                       type="button"
-                      class="category-card__quote-btn"
-                      @click="openWorkForQuotation(index)"
-                      v-if="category.price !== 'bid'"
+                      class="ccImgRm"
+                      @click="removeCallImage(index)"
                     >
-                      פתח להצעת מחיר
+                      <span class="material-symbols-outlined">close</span>
                     </button>
                   </div>
+                </div>
 
-                  <!-- Recommendation message for low confidence (0.6-0.7) -->
-                  <div
-                    v-if="category.needsRecommendation"
-                    class="category-card__recommendation"
-                  >
-                    <div class="category-card__recommendation-content">
-                      <p class="category-card__recommendation-text">
-                        לגבי העבודה
-                        <strong>"{{ category.originalText }}"</strong>, ייתכן
-                        שהיא לא מתאימה בדיוק למה שמצאנו במערכת. כדי לוודא
-                        שהעבודה תטופל נכון – אפשר לפתוח את הקריאה להצעת מחיר.
-                      </p>
-                      <div class="category-card__recommendation-actions">
-                        <button
-                          type="button"
-                          class="category-card__recommendation-btn category-card__recommendation-btn--primary"
-                          @click="openWorkForQuotation(index)"
-                        >
-                          פתח להצעת מחיר
-                        </button>
-                        <button
-                          type="button"
-                          class="category-card__recommendation-btn category-card__recommendation-btn--secondary"
-                          @click="dismissRecommendation(index)"
-                        >
-                          המשך עם העבודה שמצאנו
-                        </button>
-                        <button
-                          type="button"
-                          class="category-card__recommendation-btn category-card__recommendation-btn--remove"
-                          @click="removeWorkByIndex(index)"
-                        >
-                          הסר עבודה זו
-                        </button>
+                <div v-if="errors.image" class="ccErr">{{ errors.image }}</div>
+              </section>
+
+              <section class="ccCard">
+                <button
+                  class="ccUrgent"
+                  :class="{ 'is-on': call.urgent }"
+                  type="button"
+                  @click="onToggleUrgent"
+                >
+                  <div class="ccUrgentLeft">
+                    <div class="ccUrgentIcon">
+                      <span class="material-symbols-outlined">bolt</span>
+                    </div>
+                    <div class="ccUrgentCopy">
+                      <div class="ccUrgentTop">
+                        <span class="ccUrgentTitle">קריאה דחופה</span>
+                        <span class="ccUrgentTag">+10 ₪</span>
+                      </div>
+                      <div class="ccUrgentSub">
+                        הקריאה שלך תהיה מוצגת מעל קריאות אחרות
                       </div>
                     </div>
                   </div>
 
-                  <div class="category-card__shine" aria-hidden="true"></div>
-                </div>
-              </div>
-            </section>
-
-            <section class="block">
-              <div class="block__head">
-                <div class="block__label">הרחב להנדימן על התקלות</div>
-                <div class="block__req">מומלץ</div>
-              </div>
-
-              <textarea
-                class="textarea"
-                v-model="call.desc"
-                @input="clearError('desc')"
-                rows="6"
-                placeholder="תאר בפירוט את הבעיה, מה צריך לתקן, וכל מידע רלוונטי..."
-              ></textarea>
-
-              <div class="textarea-hint">
-                <span class="textarea-hint__dot"></span>
-                <span>מפרט טוב = הצעת מחיר מדויקת יותר</span>
-              </div>
-
-              <div v-if="errors.desc" class="msg msg--err">
-                {{ errors.desc }}
-              </div>
-            </section>
-
-            <section class="block block--location">
-              <div class="block__head">
-                <div class="block__label">מיקום</div>
-                <div class="block__req">חובה</div>
-              </div>
-
-              <div class="location-content">
-                <!-- Loading indicator -->
-                <div v-if="isLoadingLocation" class="location-loading">
-                  <div class="location-loading__spinner">
-                    <div class="spinner"></div>
+                  <div class="ccSwitch" :class="{ 'is-on': call.urgent }">
+                    <div class="ccSwitchKnob"></div>
                   </div>
-                  <p class="location-loading__text">מאתר מיקום מדויק...</p>
-                  <p class="location-loading__subtext">
-                    אנא המתן, זה עשוי לקחת מספר שניות
-                  </p>
-                </div>
+                </button>
+              </section>
 
-                <!-- Autocomplete -->
-                <div
-                  v-if="
-                    !selectedMapLocation &&
-                    !isLoadingLocation &&
-                    !detectedLocation
-                  "
-                  class="location-input-wrapper"
+              <div class="ccWarn">
+                <span class="material-symbols-outlined ccIcon ccIcon--primary"
+                  >warning</span
                 >
-                  <div class="location-headline">
-                    <span class="location-headline__icon">📌</span>
-                    <span class="location-headline__txt"
-                      >בחר ישוב או השתמש במיקום</span
-                    >
-                  </div>
-
-                  <AddressAutocomplete
-                    v-model="call.location"
-                    input-id="call-location"
-                    :placeholder="
-                      usingMyLocation ? 'המיקום שלי' : 'הכנס שם ישוב'
-                    "
-                    :required="!usingMyLocation && !selectedMapLocation"
-                    @update:modelValue="onLocationChange"
-                    @update:englishName="onEnglishNameUpdate"
-                    @update:selectedCity="onCitySelected"
-                  />
-                </div>
-
-                <!-- House number -->
-                <div
-                  v-if="
-                    call.location &&
-                    call.location !== 'המיקום שלי' &&
-                    !selectedMapLocation &&
-                    !isLoadingLocation &&
-                    !detectedLocation
-                  "
-                  class="house-number-input"
-                >
-                  <input
-                    type="text"
-                    v-model="call.houseNumber"
-                    placeholder="מספר בית\\בלוק"
-                    class="input-small"
-                    :class="{ 'input-small--error': errors.houseNumber }"
-                  />
-                  <div v-if="errors.houseNumber" class="msg msg--err">
-                    {{ errors.houseNumber }}
-                  </div>
-                </div>
-
-                <!-- Selected from map -->
-                <div v-if="selectedMapLocation" class="selected-location">
-                  <div class="selected-location__content">
-                    <span class="selected-location__text">מיקום נבחר במפה</span>
-                    <span class="selected-location__badge">MAP</span>
-                  </div>
-
-                  <button
-                    type="button"
-                    class="selected-location__change"
-                    @click="
-                      selectedMapLocation = null;
-                      call.coordinates = {};
-                    "
-                  >
-                    שנה
-                  </button>
-                </div>
-
-                <!-- Detected location -->
-                <div
-                  v-if="detectedLocation && usingMyLocation"
-                  class="selected-location"
-                >
-                  <div class="selected-location__content">
-                    <span class="selected-location__text">{{
-                      detectedLocation
-                    }}</span>
-                    <span class="selected-location__badge">GPS</span>
-                  </div>
-
-                  <button
-                    type="button"
-                    class="selected-location__change"
-                    @click="
-                      detectedLocation = null;
-                      usingMyLocation = false;
-                      call.location = 'המיקום שלי';
-                      call.coordinates = {};
-                      geoCoordinates = null;
-                    "
-                  >
-                    שנה
-                  </button>
-
-                  <button
-                    v-if="!isImprovingLocation"
-                    type="button"
-                    class="improve-location-btn"
-                    @click="improveLocation"
-                  >
-                    <span class="improve-location-btn__icon">🎯</span>
-                    <span class="improve-location-btn__text">
-                      מיקום לא נכון? תן לנו למצוא את המיקום המדוייק
-                    </span>
-                  </button>
-
-                  <div v-if="isImprovingLocation" class="location-loading">
-                    <div class="location-loading__spinner">
-                      <div class="spinner"></div>
-                    </div>
-                    <p class="location-loading__text">משפר מיקום מדויק...</p>
-                    <p class="location-loading__subtext">
-                      זה עשוי לקחת עד 15 שניות
-                    </p>
-                  </div>
-                </div>
-
-                <!-- Actions -->
-                <div
-                  v-if="
-                    !selectedMapLocation &&
-                    !detectedLocation &&
-                    !isLoadingLocation
-                  "
-                  class="location-actions"
-                >
-                  <button
-                    class="location-btn location-btn--map"
-                    type="button"
-                    @click="openMapPicker"
-                  >
-                    <span class="location-btn__icon">🗺️</span>
-                    <span class="location-btn__text">דקור במפה</span>
-                  </button>
-
-                  <button
-                    class="location-btn location-btn--gps"
-                    type="button"
-                    @click="setMyLocation"
-                    :disabled="isLoadingLocation"
-                  >
-                    <span v-if="isLoadingLocation" class="location-btn__spinner"
-                      >⏳</span
-                    >
-                    <span v-else class="location-btn__icon">📍</span>
-                    <span class="location-btn__text">
-                      {{
-                        isLoadingLocation ? "מאתר מיקום מדויק..." : "לפי מיקום"
-                      }}
-                    </span>
-                  </button>
-                </div>
-              </div>
-
-              <div v-if="errors.location" class="msg msg--err">
-                {{ errors.location }}
-              </div>
-            </section>
-          </div>
-
-          <div v-if="!isLoadingLocation" class="step-actions">
-            <button class="back-btn" type="button" @click="prevStep">
-              חזרה
-            </button>
-
-            <button class="next-step-btn" type="button" @click="nextStep">
-              <span>שלב הבא</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- STEP 3 -->
-        <div
-          v-if="currentStep === 3"
-          class="step-content step-content--animated"
-        >
-          <div class="step-container">
-            <section class="block">
-              <div class="block__head">
-                <div class="block__label">תמונות</div>
-                <div class="block__req">חובה</div>
-              </div>
-
-              <div class="uploadRow">
-                <input
-                  :id="`callImage-${call.imageUrls.length}`"
-                  type="file"
-                  accept="image/*"
-                  @change="handleCallImageUpload"
-                  class="file-input"
-                  :disabled="call.imageUrls.length >= 4 || isUploadingImage"
-                />
-
-                <label
-                  :for="`callImage-${call.imageUrls.length}`"
-                  class="uploadBtn"
-                  :class="{
-                    'uploadBtn--done': call.imageUrls.length > 0,
-                    'uploadBtn--err': errors.image,
-                    'uploadBtn--disabled':
-                      call.imageUrls.length >= 4 || isUploadingImage,
-                    'uploadBtn--loading': isUploadingImage,
-                  }"
-                >
-                  <span
-                    v-if="isUploadingImage"
-                    class="uploadBtn__spinner"
-                  ></span>
-                  <span v-else class="uploadBtn__icon">📷</span>
-
-                  <span class="uploadBtn__txt">
-                    {{
-                      isUploadingImage
-                        ? "מעלה תמונה..."
-                        : call.imageUrls.length === 0
-                        ? "בחר תמונה"
-                        : call.imageUrls.length >= 4
-                        ? "הגעת למקסימום (4 תמונות)"
-                        : `העלה עוד תמונה (${call.imageUrls.length}/4)`
-                    }}
-                  </span>
-                </label>
-              </div>
-
-              <div class="upload-hint">אפשר להעלות עד 4 תמונות</div>
-
-              <div
-                v-if="
-                  call.imageUrls.length > 0 || call.imagePreviews.length > 0
-                "
-                class="images-grid"
-              >
-                <div
-                  v-for="(img, index) in call.imageUrls.length > 0
-                    ? call.imageUrls
-                    : call.imagePreviews"
-                  :key="index"
-                  class="image-item"
-                >
-                  <img
-                    :src="img"
-                    :alt="`תמונה ${index + 1}`"
-                    class="image-item__img"
-                  />
-                  <button
-                    type="button"
-                    class="image-item__remove"
-                    @click="removeCallImage(index)"
-                  >
-                    ✕
-                  </button>
-                  <div class="image-item__shade" aria-hidden="true"></div>
-                </div>
-              </div>
-
-              <div v-if="errors.image" class="msg msg--err">
-                {{ errors.image }}
-              </div>
-            </section>
-
-            <section class="block">
-              <button
-                class="urgentRow"
-                :class="{ 'urgentRow--on': call.urgent }"
-                type="button"
-                @click="onToggleUrgent"
-              >
-                <span class="urgentRow__left">
-                  <span class="toggleDot" />
-                  <span class="urgentRow__title">קריאה דחופה</span>
-                </span>
-                <span class="urgentRow__right">
-                  +10 ₪ <span class="chev">›</span>
-                </span>
-              </button>
-
-              <div v-if="call.urgent" class="urgent-note">
-                הקריאות שלך יהיו מוצגות מעל קריאות אחרות
-              </div>
-
-              <div class="urgent-trust" v-if="call.urgent">
-                <span class="urgent-trust__dot"></span>
-                <span>נותן עדיפות אצל הנדימנים הזמינים כרגע</span>
-              </div>
-            </section>
-
-            <section class="block">
-              <div class="field">
-                <div class="field__label">סוג עבודה</div>
-                <select class="select" v-model="call.workType">
-                  <option value="קלה">קלה</option>
-                  <option value="מורכבת">מורכבת</option>
-                  <option value="קשה">קשה</option>
-                </select>
-
-                <div class="field-hint">
-                  <span class="field-hint__dot"></span>
-                  <span>זה עוזר לנו לתמחר נכון ולהתאים איש מקצוע מתאים</span>
-                </div>
-              </div>
-            </section>
-
-            <section class="block block--last">
-              <div class="note note--warn">
-                <span class="note__icon">⚠️</span>
-                <span>
+                <p>
                   קנס על ביטול אחרי שקבלו את העבודה יכול להגיע עד:
-                  <b>200</b> שקלות
-                </span>
-              </div>
-            </section>
-          </div>
-
-          <div v-if="!isLoadingLocation" class="step-actions">
-            <button class="back-btn" type="button" @click="prevStep">
-              חזרה
-            </button>
-
-            <button class="next-step-btn" type="button" @click="nextStep">
-              <span>שלב הבא</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- STEP 4 -->
-        <div
-          v-if="currentStep === 4"
-          class="step-content step-content--animated"
-        >
-          <div class="step-container">
-            <!-- Loading payment method -->
-            <div
-              v-if="isLoadingPaymentMethod && paymentMethodId"
-              class="saved-payment-method-wrapper"
-            >
-              <div class="payment-method-loading">
-                <div class="loading-spinner"></div>
-                <p>טוען פרטי כרטיס...</p>
+                  <strong>200</strong> שקלים.
+                </p>
               </div>
             </div>
+          </div>
 
-            <!-- Saved payment method -->
-            <div
-              v-else-if="savedPaymentMethod && !showChangePaymentMethod"
-              class="saved-payment-method-wrapper"
-            >
-              <div class="pay-hero">
-                <div class="pay-hero__badge">תשלום מאובטח</div>
-                <div class="pay-hero__title">כמעט סיימנו</div>
-                <div class="pay-hero__sub">
-                  הכרטיס השמור מוכן — תשלום יתבצע רק אחרי שליחת הקריאה
+          <!-- STEP 4 -->
+          <div v-if="currentStep === 4" class="ccStep ccStep--4">
+            <div class="ccPad">
+              <!-- Loading payment method -->
+              <div
+                v-if="isLoadingPaymentMethod && paymentMethodId"
+                class="saved-payment-method-wrapper"
+              >
+                <div class="payment-method-loading">
+                  <div class="loading-spinner"></div>
+                  <p>טוען פרטי כרטיס...</p>
                 </div>
               </div>
 
-              <div class="flip-card">
-                <div class="flip-card-inner">
-                  <div class="flip-card-front">
-                    <p class="heading_8264">
-                      {{ getCardBrandName(savedPaymentMethod.card?.brand) }}
-                    </p>
+              <!-- Saved payment method -->
+              <div
+                v-else-if="savedPaymentMethod && !showChangePaymentMethod"
+                class="ccPay"
+              >
+                <div class="ccPayIntro">
+                  <h3 class="ccH3 ccCenter">סיכום הזמנה</h3>
+                  <p class="ccSub ccCenter">שלב אחרון לאישור הקריאה</p>
+                </div>
 
-                    <svg
-                      class="logo"
-                      xmlns="http://www.w3.org/2000/svg"
-                      x="0px"
-                      y="0px"
-                      width="36"
-                      height="36"
-                      viewBox="0 0 48 48"
+                <div class="ccCardPreview">
+                  <div class="ccCardPreviewTop">
+                    <div class="ccCardBadge">PREMIUM ACCESS</div>
+                    <span class="material-symbols-outlined ccCardTap"
+                      >contactless</span
                     >
-                      <path
-                        fill="#ff9800"
-                        d="M32 10A14 14 0 1 0 32 38A14 14 0 1 0 32 10Z"
-                      ></path>
-                      <path
-                        fill="#d50000"
-                        d="M16 10A14 14 0 1 0 16 38A14 14 0 1 0 16 10Z"
-                      ></path>
-                      <path
-                        fill="#ff3d00"
-                        d="M18,24c0,4.755,2.376,8.95,6,11.48c3.624-2.53,6-6.725,6-11.48s-2.376-8.95-6-11.48 C20.376,15.05,18,19.245,18,24z"
-                      ></path>
-                    </svg>
-
-                    <svg
-                      version="1.1"
-                      class="chip"
-                      id="Layer_1"
-                      xmlns="http://www.w3.org/2000/svg"
-                      xmlns:xlink="http://www.w3.org/1999/xlink"
-                      x="0px"
-                      y="0px"
-                      width="30px"
-                      height="30px"
-                      viewBox="0 0 50 50"
-                      xml:space="preserve"
-                    >
-                      <image
-                        id="image0"
-                        width="50"
-                        height="50"
-                        x="0"
-                        y="0"
-                        href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAMAAAAp4XiDAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAB6VBMVEUAAACNcTiVeUKVeUOYfEaafEeUeUSYfEWZfEaykleyklaXe0SWekSZZjOYfEWYe0WXfUWXe0WcgEicfkiXe0SVekSXekSWekKYe0a9nF67m12ZfUWUeEaXfESVekOdgEmVeUWWekSniU+VeUKVeUOrjFKYfEWliE6WeESZe0GSe0WYfES7ml2Xe0WXeESUeEOWfEWcf0eWfESXe0SXfEWYekSVeUKXfEWxklawkVaZfEWWekOUekOWekSYfESZe0eXekWYfEWZe0WZe0eVeUSWeETAnmDCoWLJpmbxy4P1zoXwyoLIpWbjvXjivnjgu3bfu3beunWvkFWxkle/nmDivXiWekTnwXvkwHrCoWOuj1SXe0TEo2TDo2PlwHratnKZfEbQrWvPrWuafUfbt3PJp2agg0v0zYX0zYSfgkvKp2frxX7mwHrlv3rsxn/yzIPgvHfduXWXe0XuyIDzzISsjVO1lVm0lFitjVPzzIPqxX7duna0lVncuHTLqGjvyIHeuXXxyYGZfUayk1iyk1e2lln1zYTEomO2llrbtnOafkjFpGSbfkfZtXLhvHfkv3nqxH3mwXujhU3KqWizlFilh06khk2fgkqsjlPHpWXJp2erjVOhg0yWe0SliE+XekShhEvAn2D///+gx8TWAAAARnRSTlMACVCTtsRl7Pv7+vxkBab7pZv5+ZlL/UnU/f3SJCVe+Fx39naA9/75XSMh0/3SSkia+pil/KRj7Pr662JPkrbP7OLQ0JFOijI1MwAAAAFiS0dEorDd34wAAAAJcEhZcwAACxMAAAsTAQCanBgAAAAHdElNRQfnAg0IDx2lsiuJAAACLElEQVRIx2NkGAXkAUYmZhZWPICFmYkRVQcbOwenmzse4MbFzc6DpIGXj8PD04sA8PbhF+CFaxEU8iWkAQT8hEVgOkTF/InR4eUVICYO1SIhCRMLDAoKDvFDVhUaEhwUFAjjSUlDdMiEhcOEItzdI6OiYxA6YqODIt3dI2DcuDBZsBY5eVTr4xMSYcyk5BRUOXkFsBZFJTQnp6alQxgZmVloUkrKYC0qqmji2WE5EEZuWB6alKoKdi35YQUQRkFYPpFaCouKIYzi6EDitJSUlsGY5RWVRGjJLyxNy4ZxqtIqqvOxaVELQwZFZdkIJVU1RSiSalAt6rUwUBdWG1CP6pT6gNqwOrgCdQyHNYR5YQFhDXj8MiK1IAeyN6aORiyBjByVTc0FqBoKWpqwRCVSgilOaY2OaUPw29qjOzqLvTAchpos47u6EZyYnngUSRwpuTe6D+6qaFQdOPNLRzOM1dzhRZyW+CZouHk3dWLXglFcFIflQhj9YWjJGlZcaKAVSvjyPrRQ0oQVKDAQHlYFYUwIm4gqExGmBSkutaVQJeomwViTJqPK6OhCy2Q9sQBk8cY0DxjTJw0lAQWK6cOKfgNhpKK7ZMpUeF3jPa28BCETamiEqJKM+X1gxvWXpoUjVIVPnwErw71nmpgiqiQGBjNzbgs3j1nus+fMndc+Cwm0T52/oNR9lsdCS24ra7Tq1cbWjpXV3sHRCb1idXZ0sGdltXNxRateRwHRAACYHutzk/2I5QAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAyMy0wMi0xM1QwODoxNToyOSswMDowMEUnN7UAAAAldEVYdGRhdGU6bW9kaWZ5ADIwMjMtMDItMTNUMDg6MTU6MjkrMDA6MDA0eo8JAAAAKHRFWHRkYXRlOnRpbWVzdGFtcAAyMDIzLTAyLTEzVDA4OjE1OjI5KzAwOjAwY2+u1gAAAABJRU5ErkJggg=="
-                      ></image>
-                    </svg>
-
-                    <svg
-                      version="1.1"
-                      class="contactless"
-                      id="Layer_1"
-                      xmlns="http://www.w3.org/2000/svg"
-                      xmlns:xlink="http://www.w3.org/1999/xlink"
-                      x="0px"
-                      y="0px"
-                      width="20px"
-                      height="20px"
-                      viewBox="0 0 50 50"
-                      xml:space="preserve"
-                    >
-                      <image
-                        id="image0"
-                        width="50"
-                        height="50"
-                        x="0"
-                        y="0"
-                        href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAQAAAC0NkA6AAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAAmJLR0QA/4ePzL8AAAAJcEhZcwAACxMAAAsTAQCanBgAAAAHdElNRQfnAg0IEzgIwaKTAAADDklEQVRYw+1XS0iUURQ+f5qPyjQflGRFEEFK76koKGxRbWyVVLSOgsCgwjZBJJYuKogSIoOonUK4q3U0WVBWFPZYiIE6kuArG3VGzK/FfPeMM/MLt99/NuHdfPd888/57jn3nvsQWWj/VcMlvMMd5KRTogqx9iCdIjUUmcGR9ImUYowyP3xNGQJoRLVaZ2DaZf8kyjEJALhI28ELioyiwC+Rc3QZwRYyO/DH51hQgWm6DMIh10KmD4u9O16K49itVoPOAmcGAWWOepXIRScAoJZ2Frro8oN+EyTT6lWkkg6msZfMSR35QTJmjU0g15tIGSJ08ZZMJkJkHpNZgSkyXosS13TkJpZ62mPIJvOSzC1bp8vRhhCakEk7G9/o4gmZdbpsTcKu0m63FbnBP9Qrc15zbkbemfgNDtEOI8NO5L5O9VYyRYgmJayZ9nPaxZrSjW4+F6Uw9yQqIiIZwhp2huQTf6OIvCZyGM6gDJBZbyXifJXr7FZjGXsdxADxI7HUJFB6iWvsIhFpkoiIiGTJfjJfiCuJg2ZEspq9EHGVpYgzKqwJqSAOEwuJQ/pxPvE3cYltJCLdxBLiSKKIE5HxJKcTRNeadxfhDiuYw44zVs1dxKwRk/uCxIiQkxKBsSctRVAge9g1E15EHE6yRUaJecRxcWlukdRIbGFOSZCMWQA/iWauIP3slREHXPyliqBcrrD71AmzZ+rD1Mt2Yr8TZc/UR4/YtFnbijnHi3UrN9vKQ9rPaJf867ZiaqDB+czeKYmd3pNa6fuI75MiC0uXXSR5aEMf7s7a6r/PudVXkjFb/SsrCRfROk0Fx6+H1i9kkTGn/E1vEmt1m089fh+RKdQ5O+xNJPUicUIjO0Dm7HwvErEr0YxeibL1StSh37STafE4I7zcBdRq1DiOkdmlTJVnkQTBTS7X1FYyvfO4piaInKbDCDaT2anLudYXCRFsQBgAcIF2/Okwgvz5+Z4tsw118dzruvIvjhTB+HOuWy8UvovEH6beitBKxDyxm9MmISKCWrzB7bSlaqGlsf0FC0gMjzTg6GgAAAAldEVYdGRhdGU6Y3JlYXRlADIwMjMtMDItMTNUMDg6MTk6NTYrMDA6MDCjlq7LAAAAJXRFWHRkYXRlOm1vZGlmeQAyMDIzLTAyLTEzVDA4OjE5OjU2KzAwOjAw0ssWdwAAACh0RVh0ZGF0ZTp0aW1lc3RhbXAAMjAyMy0wMi0xM1QwODoxOTo1NiswMDowMIXeN6gAAAAASUVORK5CYII="
-                      ></image>
-                    </svg>
-
-                    <p class="number">
-                      {{ savedPaymentMethod.card?.last4 || "****" }} **** ****
-                      ****
-                    </p>
-
-                    <p class="valid_thru">VALID THRU</p>
-                    <p class="date_8264">
-                      {{
-                        formatExpiryDate(
-                          savedPaymentMethod.card?.expMonth,
-                          savedPaymentMethod.card?.expYear
-                        )
-                      }}
-                    </p>
-
-                    <p class="name">
-                      {{ store?.user?.username?.toUpperCase() || "CARDHOLDER" }}
-                    </p>
-
-                    <div class="card-shine" aria-hidden="true"></div>
                   </div>
 
-                  <div class="flip-card-back">
-                    <div class="strip"></div>
-                    <div class="mstrip"></div>
-                    <div class="sstrip">
-                      <p class="code">***</p>
+                  <div class="ccCardPreviewMid" dir="ltr">
+                    <div class="ccCardDigits">
+                      •••• •••• ••••
+                      {{ savedPaymentMethod.card?.last4 || "••••" }}
                     </div>
                   </div>
-                </div>
-              </div>
 
-              <div class="payment-method-actions">
+                  <div class="ccCardPreviewBottom" dir="ltr">
+                    <div class="ccCardCol">
+                      <div class="ccCardMeta">CARD HOLDER</div>
+                      <div class="ccCardVal">
+                        {{
+                          store?.user?.username?.toUpperCase() || "CARDHOLDER"
+                        }}
+                      </div>
+                    </div>
+                    <div class="ccCardCol">
+                      <div class="ccCardMeta">EXPIRES</div>
+                      <div class="ccCardVal">
+                        {{
+                          formatExpiryDate(
+                            savedPaymentMethod.card?.expMonth,
+                            savedPaymentMethod.card?.expYear
+                          )
+                        }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="ccCardGlow" aria-hidden="true"></div>
+                </div>
+
                 <button
-                  class="btn btn--secondary"
+                  class="ccChangePay"
                   type="button"
                   @click="changePaymentMethod"
                 >
-                  שנה אמצעי תשלום
+                  <span class="material-symbols-outlined ccIcon ccIcon--primary"
+                    >credit_card</span
+                  >
+                  <span>החלף אמצעי תשלום</span>
                 </button>
               </div>
-            </div>
 
-            <!-- Credit Card Form -->
-            <CreditCardForm
-              v-if="!savedPaymentMethod || showChangePaymentMethod"
-              ref="creditCardForm"
-              v-model="creditCard"
-              :errors="errors"
-              :amount="totalPrice"
-              currency="ils"
-              @update:errors="errors = $event"
-              @payment-method-created="onPaymentMethodCreated"
-              @validation-changed="onCreditCardValidationChanged"
-            />
+              <!-- Credit Card Form -->
+              <CreditCardForm
+                v-if="!savedPaymentMethod || showChangePaymentMethod"
+                ref="creditCardForm"
+                v-model="creditCard"
+                :errors="errors"
+                :amount="totalPrice"
+                currency="ils"
+                @update:errors="errors = $event"
+                @payment-method-created="onPaymentMethodCreated"
+                @validation-changed="onCreditCardValidationChanged"
+              />
+
+              <div class="ccPriceBox" v-if="totalPrice > 0">
+                <div
+                  v-for="(subcat, idx) in subcategoryInfoArray || []"
+                  :key="idx"
+                  class="ccPriceRow"
+                >
+                  <span class="ccPriceLabel">
+                    {{ subcat?.subcategory || subcat?.name || "עבודה" }}
+                  </span>
+                  <span class="ccPriceVal"
+                    >₪ {{ Number(subcat?.price || 0).toFixed(2) }}</span
+                  >
+                </div>
+                <div v-if="call.urgent" class="ccPriceRow">
+                  <span class="ccPriceLabel">דחיפות</span>
+                  <span class="ccPriceVal">₪ 10.00</span>
+                </div>
+
+                <div class="ccPriceDivider"></div>
+
+                <div class="ccPriceRow ccPriceRow--total">
+                  <span class="ccTotalLabel">סה"כ לתשלום</span>
+                  <span class="ccTotalVal"
+                    >₪ {{ Number(totalPrice || 0).toFixed(2) }}</span
+                  >
+                </div>
+              </div>
+
+              <div class="ccSecure">
+                <span class="material-symbols-outlined">lock</span>
+                <span>תשלום מאובטח בתקן PCI-DSS</span>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <!-- Footer (sticky) -->
+        <footer class="ccFooter">
+          <!-- Step 1 footer -->
+          <div v-if="currentStep === 1" class="ccFooterRow">
+            <button class="ccPrimaryBtn" type="button" @click="nextStep">
+              המשך לשלב הבא
+            </button>
           </div>
 
-          <div class="step-actions">
-            <button class="back-btn" type="button" @click="prevStep">
+          <!-- Step 2 footer -->
+          <div
+            v-else-if="currentStep === 2"
+            class="ccFooterRow ccFooterRow--two"
+          >
+            <button class="ccPrimaryBtn" type="button" @click="nextStep">
+              המשך לשלב הבא
+            </button>
+            <button class="ccGhostBtn" type="button" @click="prevStep">
+              ביטול
+            </button>
+          </div>
+
+          <!-- Step 3 footer -->
+          <div
+            v-else-if="currentStep === 3"
+            class="ccFooterRow ccFooterRow--two"
+          >
+            <button class="ccPrimaryBtn" type="button" @click="nextStep">
+              המשך לשלב הבא
+            </button>
+            <button class="ccOutlineBtn" type="button" @click="prevStep">
               חזרה
             </button>
+          </div>
 
+          <!-- Step 4 footer -->
+          <div v-else class="ccFooterRow">
             <button
-              class="submit-btn"
+              class="ccPrimaryBtn"
               type="button"
               @click="onSubmitCall"
               :disabled="
@@ -949,11 +847,22 @@
               "
             >
               <span v-if="isProcessingPayment">מעבד תשלום...</span>
-              <span v-else>שלח קריאה</span>
+              <span v-else>{{
+                totalPrice > 0 ? "אישור ותשלום" : "שלח קריאה"
+              }}</span>
+              <span
+                v-if="!isProcessingPayment"
+                class="material-symbols-outlined ccBtnIcon"
+                >arrow_back</span
+              >
+            </button>
+
+            <button class="ccOutlineBtn" type="button" @click="prevStep">
+              חזרה
             </button>
           </div>
-        </div>
-      </main>
+        </footer>
+      </div>
     </div>
 
     <!-- Map Picker Modal -->
@@ -1181,6 +1090,7 @@ export default {
       currentStep: 1,
       isLoading: false,
       isLoadingLocation: false,
+      isEditingLocation: true,
       isImprovingLocation: false, // האם משפרים את המיקום
       detectedLocation: null, // הכתובת שנמצאה מ-reverse geocoding
       call: {
@@ -1246,6 +1156,14 @@ export default {
     };
   },
   computed: {
+    totalSteps() {
+      return 4;
+    },
+    progressPercent() {
+      const total = Number(this.totalSteps) || 4;
+      const step = Math.min(Math.max(Number(this.currentStep) || 0, 0), total);
+      return Math.round((step / total) * 100);
+    },
     totalPrice() {
       // Calculate total price from all subcategories
       // If any subcategory has price="bid", return 0 (no payment needed for quoted jobs)
@@ -1274,6 +1192,27 @@ export default {
         total += 10;
       }
       return total;
+    },
+    locationLabelText() {
+      if (this.detectedLocation && this.usingMyLocation)
+        return this.detectedLocation;
+      return this.call.location || "";
+    },
+    locationEmbedUrl() {
+      const latRaw = this.call?.coordinates?.lat;
+      const lngRaw = this.call?.coordinates?.lng;
+      const lat = typeof latRaw === "number" ? latRaw : parseFloat(latRaw);
+      const lng = typeof lngRaw === "number" ? lngRaw : parseFloat(lngRaw);
+      const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+
+      const query = hasCoords
+        ? `${lat},${lng}`
+        : (this.locationLabelText || "").trim();
+
+      if (!query || query === "המיקום שלי") return null;
+      return `https://www.google.com/maps?q=${encodeURIComponent(
+        query
+      )}&z=16&output=embed`;
     },
   },
   async created() {
@@ -1840,6 +1779,7 @@ export default {
       this.usingMyLocation = true;
       this.locationEnglishName = null;
       this.detectedLocation = null;
+      this.isEditingLocation = true;
 
       // Show loading state for location
       this.isLoadingLocation = true;
@@ -1899,6 +1839,7 @@ export default {
               this.call.location = cleanedAddress;
               this.locationEnglishName = city || null;
               this.clearError("location"); // Clear any validation errors
+              this.isEditingLocation = false;
 
               // If we have street number separately, we can optionally show it
               // But for now, we'll use the full address from the API
@@ -1906,17 +1847,20 @@ export default {
               this.detectedLocation = "מיקום שנמצא";
               this.call.location = "מיקום שנמצא";
               this.clearError("location"); // Clear any validation errors
+              this.isEditingLocation = false;
             }
           } else {
             this.detectedLocation = "מיקום שנמצא";
             this.call.location = "מיקום שנמצא";
             this.clearError("location"); // Clear any validation errors
+            this.isEditingLocation = false;
           }
         } catch (geocodeError) {
           logger.error("Error in reverse geocoding:", geocodeError);
           this.detectedLocation = "מיקום שנמצא";
           this.call.location = "מיקום שנמצא";
           this.clearError("location"); // Clear any validation errors
+          this.isEditingLocation = false;
         }
       } catch (error) {
         logger.error("Error getting location:", error);
@@ -2021,6 +1965,7 @@ export default {
         this.usingMyLocation = false;
         this.detectedLocation = null;
         this.call.coordinates = {};
+        this.selectedMapLocation = null;
 
         // Skip city validation if location was selected from map or using my location
         if (
@@ -2050,7 +1995,11 @@ export default {
       if (city) {
         this.locationEnglishName =
           city.english_name || city.שם_ישוב_לועזי || null;
+        this.isEditingLocation = false;
       }
+    },
+    toggleLocationEdit() {
+      this.isEditingLocation = !this.isEditingLocation;
     },
     isValidCity(cityName) {
       if (!cityName || cityName.trim() === "" || cityName === "המיקום שלי") {
@@ -2356,6 +2305,7 @@ export default {
           this.usingMyLocation = false;
           this.selectedMapLocation = { lat, lng };
           this.clearError("location");
+          this.isEditingLocation = false;
         } else {
           this.call.location = "מיקום שנבחר במפה";
           this.locationEnglishName = null;
@@ -2365,6 +2315,7 @@ export default {
           };
           this.usingMyLocation = false;
           this.selectedMapLocation = { lat, lng };
+          this.isEditingLocation = false;
         }
 
         this.closeMapPicker();
@@ -2378,6 +2329,7 @@ export default {
         this.usingMyLocation = false;
         this.selectedMapLocation = { lat, lng };
         this.clearError("location");
+        this.isEditingLocation = false;
         this.closeMapPicker();
         this.toast?.showSuccess("מיקום נבחר בהצלחה");
       }
@@ -2469,8 +2421,17 @@ export default {
           delete callData.coordinates;
         }
 
+        const submitSubcategoryInfo = (this.subcategoryInfoArray || []).map(
+          (subcat) => ({
+            category: subcat.category,
+            subcategory: subcat.subcategory,
+            price: subcat.price ?? null,
+            workType: subcat.workType ?? null,
+          })
+        );
+
         // Check if this is a quoted job (any subcategory has price="bid")
-        const hasQuotedSubcategory = this.subcategoryInfoArray.some(
+        const hasQuotedSubcategory = submitSubcategoryInfo.some(
           (subcat) => subcat.price === "bid" || subcat.price === "quoted"
         );
 
@@ -2478,9 +2439,9 @@ export default {
         if (hasQuotedSubcategory) {
           // Find the quoted subcategory (or first one if multiple)
           const quotedSub =
-            this.subcategoryInfoArray.find(
+            submitSubcategoryInfo.find(
               (sub) => sub.price === "bid" || sub.price === "quoted"
-            ) || this.subcategoryInfoArray[0];
+            ) || submitSubcategoryInfo[0];
 
           const quotedCallData = {
             userId: this.$route.params.id || null,
@@ -2542,8 +2503,8 @@ export default {
         }
 
         // Regular job creation - continue with existing flow
-        // Add subcategoryInfo array to callData
-        callData.subcategoryInfo = this.subcategoryInfoArray;
+        // Add subcategoryInfo array to callData (sanitized)
+        callData.subcategoryInfo = submitSubcategoryInfo;
 
         // Create Payment Method with Stripe Elements before sending to server
         // This way we only send the paymentMethodId (token) to server, not card details
@@ -3116,13 +3077,6 @@ export default {
           (r) => r && r.trim().length > 0
         );
 
-        console.log(
-          "[CreateCall] fetchCategoriesFromAI - מספר בקשות:",
-          validRequests.length,
-          "בקשות:",
-          validRequests
-        );
-
         if (validRequests.length === 0) {
           this.toast?.showError("יש למלא לפחות בקשה אחת");
           this.isLoadingCategories = false;
@@ -3132,8 +3086,6 @@ export default {
         // Call new AI matching endpoint for EACH request separately
         const matchPromises = validRequests.map(async (request) => {
           const trimmedRequest = request.trim();
-          console.log("[CreateCall] שולח בקשה ל-AI matching:", trimmedRequest);
-
           try {
             const response = await axios.post(
               `${URL}/api/ai/match-subcategory`,
@@ -3148,11 +3100,6 @@ export default {
               matchResult: response.data,
             };
           } catch (error) {
-            console.error(
-              "[CreateCall] שגיאה בקריאה ל-AI matching עבור:",
-              trimmedRequest,
-              error
-            );
             return {
               originalRequest: trimmedRequest,
               success: false,
@@ -3162,14 +3109,42 @@ export default {
         });
 
         const results = await Promise.all(matchPromises);
-        console.log(
-          "[CreateCall] תוצאות AI matching:",
-          results.map((r) => ({
-            request: r.originalRequest,
-            matched: r.matchResult?.matched,
-            confidence: r.matchResult?.confidence,
-          }))
-        );
+
+        const toText = (value, depth = 0) => {
+          if (typeof value === "string") return value;
+          if (typeof value === "number") return String(value);
+          if (Array.isArray(value)) return toText(value[0], depth + 1);
+          if (value && typeof value === "object") {
+            if (depth >= 4) return "";
+            const candidate =
+              value.name ||
+              value.title ||
+              value.label ||
+              value.hebrewName ||
+              value.subcategory ||
+              value.category ||
+              "";
+            return toText(candidate, depth + 1);
+          }
+          return "";
+        };
+
+        const toConfidence = (value) => {
+          if (value === null || value === undefined) return 0;
+          let n;
+          if (typeof value === "string") {
+            const cleaned = value.trim().replace("%", "").replace(",", ".");
+            n = Number(cleaned);
+          } else {
+            n = Number(value);
+          }
+          if (!Number.isFinite(n)) return 0;
+          // Accept both [0..1] and [0..100] formats
+          if (n > 1 && n <= 100) n = n / 100;
+          if (n < 0) n = 0;
+          if (n > 1) n = 1;
+          return n;
+        };
 
         // Process results and build subcategoryInfoArray
         const processedCategories = [];
@@ -3178,37 +3153,60 @@ export default {
 
         results.forEach((result, index) => {
           if (!result.success || !result.matchResult) {
-            console.warn("[CreateCall] בקשה נכשלה:", result.originalRequest);
             return;
           }
 
           const matchResult = result.matchResult;
+          const categoryName = toText(matchResult.category) || "כללי";
+          const subcategoryName =
+            toText(
+              matchResult.canonicalSubcategory || matchResult.subcategory
+            ) || "";
+
+          const confidenceValue = toConfidence(
+            matchResult.confidence ?? matchResult.fullResponse?.confidence
+          );
+          const matchedValue = Boolean(
+            matchResult.matched ?? matchResult.fullResponse?.matched
+          );
+
+          const aiSelection = {
+            category: categoryName,
+            subcategory: subcategoryName,
+            price: matchResult.price ?? null,
+            workType: matchResult.workType || "קבלנות",
+            matched: matchedValue,
+            confidence: confidenceValue,
+          };
 
           // Case A: High confidence (>= 0.7) - Fixed price
-          if (matchResult.matched && matchResult.confidence >= 0.7) {
+          if (matchedValue && confidenceValue >= 0.7) {
             processedCategories.push({
-              category: matchResult.category,
-              subcategory: matchResult.subcategory,
-              price: matchResult.price, // Keep original price from AI
+              category: categoryName,
+              subcategory: subcategoryName,
+              price: matchResult.price ?? null,
               workType: matchResult.workType || "קבלנות",
               originalText: result.originalRequest, // Keep original text for display
-              confidence: matchResult.confidence, // Store confidence for UI
+              confidence: confidenceValue, // Store confidence for UI
               needsRecommendation: false, // No recommendation needed
+              showAiSelection: true,
+              ai: aiSelection,
+              aiResponse: aiSelection,
             });
           }
           // Case B: Medium confidence (0.6-0.69) - Show recommendation on card, but still display with original price
           else if (
-            matchResult.matched &&
-            matchResult.confidence >= 0.6 &&
-            matchResult.confidence < 0.7
+            matchedValue &&
+            confidenceValue >= 0.6 &&
+            confidenceValue < 0.7
           ) {
             // Store first low confidence match for tracking
             if (!firstLowConfidenceMatch) {
               firstLowConfidenceMatch = {
                 matched: true,
-                confidence: matchResult.confidence,
-                category: matchResult.category,
-                subcategory: matchResult.subcategory,
+                confidence: confidenceValue,
+                category: categoryName,
+                subcategory: subcategoryName,
                 price: matchResult.price,
                 workType: matchResult.workType || "קבלנות",
                 originalText: result.originalRequest,
@@ -3216,25 +3214,31 @@ export default {
             }
             // Add to categories for display with original price (not "bid") but with recommendation flag
             processedCategories.push({
-              category: matchResult.category,
-              subcategory: matchResult.subcategory,
-              price: matchResult.price, // Keep original price from AI
+              category: categoryName,
+              subcategory: subcategoryName,
+              price: matchResult.price ?? null,
               workType: matchResult.workType || "קבלנות",
               originalText: result.originalRequest, // Keep original text for display
-              confidence: matchResult.confidence, // Store confidence for UI
+              confidence: confidenceValue, // Store confidence for UI
               needsRecommendation: true, // Show recommendation message on this card
+              showAiSelection: false,
+              ai: aiSelection,
+              aiResponse: aiSelection,
             });
           }
-          // Case C: Low confidence/no match (< 0.6) - Quoted
+          // Case C: Low confidence/no match (< 0.6) - require user decision (3 buttons)
           else {
             processedCategories.push({
-              category: matchResult.category || "כללי",
-              subcategory: matchResult.subcategory, // Original text
-              price: "bid",
+              category: categoryName,
+              subcategory: subcategoryName || result.originalRequest,
+              price: matchResult.price ?? null,
               workType: "קבלנות",
               originalText: result.originalRequest, // Keep original text for display
-              confidence: matchResult.confidence || 0, // Store confidence for UI
-              needsRecommendation: false, // No recommendation, goes directly to quoted
+              confidence: confidenceValue, // Store confidence for UI
+              needsRecommendation: true,
+              showAiSelection: false,
+              ai: aiSelection,
+              aiResponse: aiSelection,
             });
           }
         });
@@ -3245,19 +3249,7 @@ export default {
         this.foundCategories = processedCategories;
         // Clear aiMatchResult - we don't need it anymore as recommendation is on card
         this.aiMatchResult = null;
-
-        console.log(
-          "[CreateCall] סיכום עיבוד:",
-          `נמצאו ${processedCategories.length} קטגוריות`,
-          firstLowConfidenceMatch
-            ? `המלצה: ${firstLowConfidenceMatch.originalText} (confidence: ${firstLowConfidenceMatch.confidence})`
-            : "אין המלצות"
-        );
       } catch (error) {
-        console.error(
-          "[CreateCall] שגיאה כללית ב-fetchCategoriesFromAI:",
-          error
-        );
         logger.error("Error in fetchCategoriesFromAI:", error);
         this.toast?.showError("לא הצלחנו לחפש את התחומים. נסה שוב מאוחר יותר.");
       } finally {
@@ -3275,35 +3267,140 @@ export default {
     },
     openWorkForQuotation(index) {
       // User clicked "פתח להצעת מחיר" button on a specific work card
+      const applyQuotationChoice = (item) => {
+        if (!item) return item;
+
+        // Keep AI snapshot (so user can still choose "continue" later)
+        const ai = item.ai || item.aiResponse;
+
+        return {
+          ...item,
+          // Quotation flow should show the original request text as the title
+          showAiSelection: false,
+          // Per requirement: category should become "כללי" when opening quotation
+          category: "כללי",
+          price: "bid",
+          needsRecommendation: false,
+          ai: item.ai || ai,
+          aiResponse: item.aiResponse || ai,
+        };
+      };
+
       if (this.subcategoryInfoArray[index]) {
-        // Update only the specific work to have price="bid" and dismiss recommendation
-        this.subcategoryInfoArray[index] = {
-          ...this.subcategoryInfoArray[index],
-          price: "bid",
-          needsRecommendation: false, // Remove recommendation after choosing quotation
-        };
-        // Update foundCategories as well
-        this.foundCategories[index] = {
-          ...this.foundCategories[index],
-          price: "bid",
-          needsRecommendation: false, // Remove recommendation after choosing quotation
-        };
+        this.subcategoryInfoArray[index] = applyQuotationChoice(
+          this.subcategoryInfoArray[index]
+        );
+      }
+      if (this.foundCategories[index]) {
+        this.foundCategories[index] = applyQuotationChoice(
+          this.foundCategories[index]
+        );
       }
     },
     dismissRecommendation(index) {
-      // User clicked "המשך עם העבודה שמצאנו" - dismiss the recommendation
-      if (this.foundCategories[index]) {
-        this.foundCategories[index] = {
-          ...this.foundCategories[index],
-          needsRecommendation: false,
+      // User clicked "המשך עם העבודה שמצאנו" - restore AI selection and dismiss the recommendation
+      const toText = (value, depth = 0) => {
+        if (typeof value === "string") return value;
+        if (typeof value === "number") return String(value);
+        if (Array.isArray(value)) return toText(value[0], depth + 1);
+        if (value && typeof value === "object") {
+          if (depth >= 4) return "";
+          const candidate =
+            value.name ||
+            value.title ||
+            value.label ||
+            value.hebrewName ||
+            value.subcategory ||
+            value.category ||
+            "";
+          return toText(candidate, depth + 1);
+        }
+        return "";
+      };
+
+      const pickAiSelection = (item) => {
+        // Supports both new shape (ai/aiResponse=aiSelection) and legacy shape (aiResponse.fullResponse)
+        const raw =
+          item?.ai ||
+          item?.aiResponse ||
+          item?.aiResponse?.fullResponse ||
+          item?.aiResponse?.aiResponse ||
+          item?.fullAIResponse;
+        if (!raw) return null;
+
+        const category = toText(raw.category);
+        const subcategory = toText(raw.canonicalSubcategory || raw.subcategory);
+
+        return {
+          category: category || "כללי",
+          subcategory,
+          price: raw.price ?? null,
+          workType: raw.workType || "קבלנות",
         };
+      };
+
+      const applyContinueChoice = (item) => {
+        if (!item) return item;
+
+        const aiSel = pickAiSelection(item);
+        const aiSnapshot = item.ai || item.aiResponse || aiSel;
+
+        const safeCategory = toText(aiSel?.category || item.category) || "כללי";
+        const safeSubcategory = toText(
+          aiSel?.subcategory || item.subcategory || item.originalText
+        );
+
+        return {
+          ...item,
+          // Always normalize display fields to primitives so the UI can never render an object
+          category: safeCategory,
+          subcategory: safeSubcategory,
+          ...(aiSel
+            ? {
+                price: aiSel.price ?? item.price,
+                workType: aiSel.workType || item.workType,
+              }
+            : {}),
+          needsRecommendation: false,
+          showAiSelection: true,
+          ai: item.ai || aiSnapshot,
+          aiResponse: item.aiResponse || aiSnapshot,
+        };
+      };
+
+      if (this.foundCategories[index]) {
+        this.foundCategories[index] = applyContinueChoice(
+          this.foundCategories[index]
+        );
       }
       if (this.subcategoryInfoArray[index]) {
-        this.subcategoryInfoArray[index] = {
-          ...this.subcategoryInfoArray[index],
-          needsRecommendation: false,
-        };
+        this.subcategoryInfoArray[index] = applyContinueChoice(
+          this.subcategoryInfoArray[index]
+        );
       }
+    },
+
+    getConfidencePct(category) {
+      const raw =
+        category?.confidence ??
+        category?.ai?.confidence ??
+        category?.aiResponse?.confidence ??
+        category?.aiResponse?.fullResponse?.confidence;
+
+      if (raw === null || raw === undefined) return 0;
+
+      let n;
+      if (typeof raw === "string") {
+        const cleaned = raw.trim().replace("%", "").replace(",", ".");
+        n = Number(cleaned);
+      } else {
+        n = Number(raw);
+      }
+      if (!Number.isFinite(n)) return 0;
+      if (n > 1 && n <= 100) n = n / 100;
+      if (n < 0) n = 0;
+      if (n > 1) n = 1;
+      return Math.round(n * 100);
     },
     removeWorkByIndex(index) {
       // User clicked "הסר עבודה זו" - remove the work from both arrays
@@ -3360,17 +3457,7 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
 
 .create-call-page {
   min-height: 100vh;
-  background: radial-gradient(
-      800px 500px at 20% 0%,
-      rgba($orange, 0.14),
-      transparent 60%
-    ),
-    radial-gradient(
-      700px 450px at 90% 12%,
-      rgba($orange2, 0.1),
-      transparent 65%
-    ),
-    linear-gradient(180deg, $bg, $bg2);
+  background: #000;
   color: $text;
 }
 
@@ -3383,6 +3470,1232 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   margin: 0 auto;
   padding: 14px 14px calc(96px + env(safe-area-inset-bottom));
   box-sizing: border-box;
+}
+
+/* =========
+     CreateCall V3 – Phone UI (matches provided Tailwind mocks)
+     ========= */
+.shell.ccV3 {
+  max-width: none;
+  padding: 0;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #000;
+}
+
+.ccPhone {
+  width: 100%;
+  max-width: 430px;
+  height: 100dvh;
+  max-height: 932px;
+  background: #0a0a0a;
+  border-left: 1px solid rgba(39, 39, 42, 0.5);
+  border-right: 1px solid rgba(39, 39, 42, 0.5);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.75);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  font-family: Inter, Heebo, system-ui, -apple-system, Segoe UI, Arial,
+    sans-serif;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 10px;
+}
+
+.ccHeader {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(10, 10, 10, 0.92);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(46, 46, 46, 1);
+}
+
+.ccHeaderTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 16px 10px;
+}
+
+.ccBack {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    background: rgba(26, 26, 26, 0.7);
+  }
+
+  &:active {
+    opacity: 0.7;
+    transform: scale(0.98);
+  }
+}
+
+.ccHeaderTitle {
+  flex: 1;
+  text-align: center;
+  padding-left: 48px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: #fff;
+  margin: 0;
+}
+
+.ccHeaderSpacer {
+  width: 48px;
+  height: 48px;
+}
+
+.ccHeaderProgress {
+  padding: 10px 24px 16px;
+}
+
+.ccProgressRowV3 {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ccProgressStepV3 {
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.ccProgressPctV3 {
+  font-size: 13px;
+  font-weight: 900;
+  color: #ff8c00;
+  letter-spacing: -0.01em;
+}
+
+.ccProgressTrackV3 {
+  width: 100%;
+  height: 10px;
+  background: rgba(39, 39, 42, 0.9);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.ccHeaderProgress--s2 .ccProgressTrackV3 {
+  height: 6px;
+}
+
+.ccHeaderProgress--s3 .ccProgressTrackV3,
+.ccHeaderProgress--s4 .ccProgressTrackV3 {
+  height: 8px;
+}
+
+.ccProgressFillV3 {
+  height: 100%;
+  background: #ff8c00;
+  border-radius: 999px;
+  box-shadow: 0 0 12px rgba(255, 140, 0, 0.5);
+}
+
+.ccMiniStepper {
+  margin-top: 14px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px;
+}
+
+.ccMiniStepperLine {
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-50%);
+}
+
+.ccMiniStepperLineActive {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: #ff8c00;
+  transform: translateY(-50%);
+}
+
+.ccMiniStep {
+  position: relative;
+  z-index: 1;
+}
+
+.ccMiniDot {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 900;
+  background: #161616;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.ccMiniStep.is-done .ccMiniDot {
+  background: #ff8c00;
+  border-color: #ff8c00;
+  color: #000;
+}
+
+.ccMiniStep.is-active .ccMiniDot {
+  width: 32px;
+  height: 32px;
+  background: #ff8c00;
+  border: 4px solid #0a0a0a;
+  color: #000;
+  box-shadow: 0 0 10px rgba(255, 140, 0, 0.5);
+}
+
+.ccMain {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 24px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ccPad {
+  padding-bottom: 140px;
+}
+
+.ccStep--2 .ccPad,
+.ccStep--4 .ccPad {
+  padding-top: 14px;
+}
+
+.ccStepIntro {
+  padding-top: 24px;
+  padding-bottom: 8px;
+}
+
+.ccH3 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.ccSub {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: rgba(161, 161, 170, 1);
+  font-weight: 600;
+}
+
+.ccRow {
+  display: flex;
+  justify-content: flex-start;
+  padding: 10px 0;
+}
+
+.ccPillBtn {
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(63, 63, 70, 1);
+  background: rgba(24, 24, 27, 1);
+  color: #ff8c00;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease,
+    background 0.15s ease, opacity 0.15s ease;
+
+  &:hover {
+    border-color: rgba(255, 140, 0, 0.5);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+.ccIcon {
+  font-size: 18px;
+}
+
+.ccField {
+  margin-top: 10px;
+}
+
+.ccLabel {
+  margin: 0 0 8px;
+  padding: 0 4px;
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(161, 161, 170, 1);
+}
+
+.ccInput,
+.ccTextarea,
+.ccSelect {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 18px;
+  border: 1px solid rgba(39, 39, 42, 1);
+  background: rgba(26, 26, 26, 1);
+  color: #fff;
+  outline: none;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease,
+    background 0.15s ease;
+
+  &::placeholder {
+    color: rgba(82, 82, 91, 1);
+  }
+
+  &:focus {
+    border-color: rgba(255, 140, 0, 0.7);
+    box-shadow: 0 0 0 4px rgba(255, 140, 0, 0.2);
+  }
+}
+
+.ccInput {
+  padding: 16px 18px;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.ccInput--tall {
+  height: 64px;
+  font-size: 18px;
+}
+
+.ccExtraReq {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.ccIconBtn {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(39, 39, 42, 1);
+  background: rgba(26, 26, 26, 1);
+  color: rgba(244, 63, 94, 1);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+
+  &:active {
+    transform: scale(0.98);
+    opacity: 0.85;
+  }
+}
+
+.ccAddReq {
+  margin-top: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  border: none;
+  background: transparent;
+  color: #ff8c00;
+  font-weight: 800;
+  font-size: 15px;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+
+  &:hover {
+    opacity: 0.9;
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+.ccAddReqIcon {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 140, 0, 0.15);
+}
+
+.ccPromo {
+  margin-top: 48px;
+  border-radius: 24px;
+  border: 1px solid rgba(63, 63, 70, 0.5);
+  background: radial-gradient(
+      120px 120px at 30% 30%,
+      rgba(255, 140, 0, 0.22),
+      transparent 70%
+    ),
+    linear-gradient(135deg, rgba(255, 140, 0, 0.08), transparent);
+  height: 176px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.ccPromoInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: rgba(161, 161, 170, 1);
+}
+
+.ccPromoGlow {
+  position: absolute;
+  inset: auto;
+  width: 180px;
+  height: 180px;
+  border-radius: 999px;
+  background: rgba(255, 140, 0, 0.2);
+  filter: blur(34px);
+  opacity: 0.3;
+}
+
+.ccPromoIcon {
+  font-size: 56px;
+  color: rgba(255, 140, 0, 0.4);
+  position: relative;
+}
+
+.ccPromoTxt {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.ccMiniNote {
+  margin-top: 14px;
+  font-size: 12px;
+  color: rgba(113, 113, 122, 1);
+}
+
+.ccErr {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(244, 63, 94, 1);
+}
+
+.ccCard {
+  margin-top: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(46, 46, 46, 1);
+  background: rgba(26, 26, 26, 1);
+  padding: 16px;
+}
+
+.ccCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.ccCardTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.ccIcon--primary {
+  color: #ff8c00;
+}
+
+.ccLinkBtn {
+  border: none;
+  background: transparent;
+  color: #ff8c00;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ccCats {
+  display: grid;
+  gap: 12px;
+}
+
+.ccCatCard {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-radius: 18px;
+  border: 1px solid rgba(46, 46, 46, 1);
+  background: rgba(26, 26, 26, 1);
+  padding: 14px;
+  opacity: 0.9;
+}
+
+.ccCatCard--featured {
+  border: 2px solid #ff8c00;
+  box-shadow: 0 10px 30px rgba(255, 140, 0, 0.12);
+  opacity: 1;
+}
+
+.ccCatBody {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ccCatTop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ccAIBadge {
+  font-size: 10px;
+  font-weight: 900;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 140, 0, 0.2);
+  color: #ff8c00;
+  white-space: nowrap;
+}
+
+.ccCatName {
+  font-size: 16px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1.2;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ccCatMeta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ccCatMeta--sub {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.ccCatMetaLbl {
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.ccCatMetaVal {
+  font-weight: 900;
+  color: rgba(255, 140, 0, 0.9);
+}
+
+.ccCatPriceRow {
+  margin-top: 8px;
+}
+
+.ccCatPrice {
+  color: #ff8c00;
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.ccCatPrice--bid {
+  color: rgba(255, 140, 0, 0.75);
+}
+
+.ccCatQuote {
+  margin-top: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ccCatThumb {
+  width: 80px;
+  height: 80px;
+  flex: 0 0 80px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: radial-gradient(
+      50px 50px at 30% 30%,
+      rgba(255, 140, 0, 0.18),
+      transparent 70%
+    ),
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.04),
+      rgba(255, 255, 255, 0.02)
+    );
+}
+
+.ccSectionTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 900;
+  color: #fff;
+}
+
+.ccTextareaWrap {
+  position: relative;
+}
+
+.ccTextarea {
+  min-height: 120px;
+  resize: none;
+  padding: 16px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ccCharCount {
+  position: absolute;
+  bottom: 10px;
+  left: 12px;
+  font-size: 10px;
+  color: rgba(113, 113, 122, 1);
+  font-weight: 800;
+}
+
+.ccLocHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.ccLocMap {
+  height: 176px;
+  border-radius: 18px;
+  border: 1px solid rgba(46, 46, 46, 1);
+  overflow: hidden;
+  position: relative;
+  background: rgba(26, 26, 26, 1);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.ccLocMapBg {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+      200px 140px at 55% 35%,
+      rgba(255, 255, 255, 0.07),
+      transparent 70%
+    ),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.1));
+  opacity: 0.75;
+  filter: grayscale(1) invert(1) contrast(1.25);
+}
+
+.ccLocMapFrame {
+  display: block;
+  width: 100%;
+  height: 176px;
+  border: 0;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.ccLocMapOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ccLocPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 999px;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 140, 0, 0.5);
+  background: rgba(26, 26, 26, 1);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.ccLocPillTxt {
+  font-size: 13px;
+  font-weight: 900;
+  color: #fff;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ccLocBtns {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.ccLocBtn {
+  height: 54px;
+  border-radius: 14px;
+  border: 1px solid rgba(46, 46, 46, 1);
+  background: rgba(26, 26, 26, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  color: #fff;
+  font-weight: 900;
+  font-size: 13px;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+
+  &:hover {
+    border-color: rgba(255, 140, 0, 0.45);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+.ccReqTag {
+  font-size: 11px;
+  font-weight: 900;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: rgba(255, 140, 0, 0.1);
+  color: #ff8c00;
+}
+
+.ccUploadDrop {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 18px;
+  border: 2px dashed rgba(255, 255, 255, 0.1);
+  background: rgba(22, 22, 22, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease,
+    background 0.15s ease;
+  overflow: hidden;
+
+  &:hover {
+    border-color: rgba(255, 140, 0, 0.5);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+.ccFileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ccImgGrid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.ccImg {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(22, 22, 22, 1);
+  aspect-ratio: 1 / 1;
+}
+
+.ccImgEl {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ccImgRm {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.ccUploadIconWrap {
+  width: 76px;
+  height: 76px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 140, 0, 0.1);
+}
+
+.ccUploadIcon {
+  font-size: 48px;
+  color: #ff8c00;
+}
+
+.ccUploadCopy {
+  text-align: center;
+}
+
+.ccUploadTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 900;
+  color: #fff;
+}
+
+.ccUploadHint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: rgba(161, 161, 170, 1);
+  font-weight: 600;
+}
+
+.ccUrgent {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: rgba(22, 22, 22, 1);
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+
+  &.is-on {
+    box-shadow: 0 0 20px rgba(255, 140, 0, 0.35);
+    border-color: rgba(255, 140, 0, 0.9);
+  }
+
+  &:active {
+    transform: scale(0.99);
+  }
+}
+
+.ccUrgentLeft {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ccUrgentIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 140, 0, 0.2);
+  color: #ff8c00;
+}
+
+.ccUrgentTitle {
+  font-weight: 900;
+  color: #fff;
+}
+
+.ccUrgentTop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ccUrgentTag {
+  font-size: 11px;
+  font-weight: 900;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #ff8c00;
+  color: #000;
+}
+
+.ccUrgentSub {
+  margin-top: 2px;
+  font-size: 11px;
+  color: rgba(161, 161, 170, 1);
+  font-weight: 600;
+}
+
+.ccSwitch {
+  width: 51px;
+  height: 31px;
+  border-radius: 999px;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  transition: background 0.2s ease;
+}
+
+.ccSwitch .ccSwitchKnob {
+  width: 27px;
+  height: 27px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+  transform: translateX(0);
+  transition: transform 0.2s ease;
+}
+
+.ccSwitch.is-on {
+  background: #ff8c00;
+}
+
+.ccSwitch.is-on .ccSwitchKnob {
+  transform: translateX(-20px);
+}
+
+.ccSelectWrap {
+  position: relative;
+}
+
+.ccSelect {
+  appearance: none;
+  padding: 16px 16px 16px 44px;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.ccSelectChevron {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #ff8c00;
+}
+
+.ccWarn {
+  margin-top: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 140, 0, 0.2);
+  background: rgba(255, 140, 0, 0.05);
+  padding: 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: rgba(228, 228, 231, 1);
+
+  p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+}
+
+.ccPayIntro {
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.ccCenter {
+  text-align: center;
+}
+
+.ccCardPreview {
+  border-radius: 24px;
+  padding: 18px;
+  border: 1px solid rgba(255, 140, 0, 0.3);
+  background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 30px rgba(255, 122, 0, 0.1);
+}
+
+.ccCardPreview::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(
+    circle at center,
+    rgba(255, 122, 0, 0.08) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+.ccCardPreviewTop {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ccCardBadge {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  color: #ff8c00;
+}
+
+.ccCardTap {
+  font-size: 30px;
+  color: rgba(255, 140, 0, 0.8);
+}
+
+.ccCardPreviewMid {
+  position: relative;
+  z-index: 1;
+  margin-top: 26px;
+}
+
+.ccCardDigits {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 22px;
+  letter-spacing: 0.2em;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.ccCardPreviewBottom {
+  position: relative;
+  z-index: 1;
+  margin-top: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.ccCardMeta {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.ccCardVal {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.ccCardGlow {
+  position: absolute;
+  right: -40px;
+  bottom: -40px;
+  width: 140px;
+  height: 140px;
+  background: rgba(255, 140, 0, 0.18);
+  filter: blur(28px);
+  border-radius: 999px;
+}
+
+.ccChangePay {
+  margin-top: 18px;
+  width: 100%;
+  height: 56px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.ccPriceBox {
+  margin-top: 18px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(22, 22, 22, 1);
+  padding: 18px;
+}
+
+.ccPriceRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  color: rgba(161, 161, 170, 1);
+  font-weight: 700;
+}
+
+.ccPriceRow:first-child {
+  margin-top: 0;
+}
+
+.ccPriceVal {
+  color: #fff;
+  font-weight: 900;
+}
+
+.ccPriceDivider {
+  margin: 14px 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ccPriceRow--total {
+  color: #fff;
+}
+
+.ccTotalVal {
+  color: #ff8c00;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.ccSecure {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: rgba(113, 113, 122, 1);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ccFooter {
+  position: sticky;
+  bottom: 0;
+  z-index: 50;
+  background: rgba(10, 10, 10, 0.95);
+  backdrop-filter: blur(18px);
+  border-top: 1px solid rgba(46, 46, 46, 1);
+  padding: 18px 24px calc(22px + env(safe-area-inset-bottom));
+}
+
+.ccFooterRow {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.ccFooterRow--two {
+  justify-content: space-between;
+}
+
+.ccPrimaryBtn {
+  flex: 1;
+  height: 64px;
+  border: none;
+  border-radius: 18px;
+  background: #ff8c00;
+  color: #000;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.015em;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(255, 140, 0, 0.35);
+  transition: transform 0.15s ease, opacity 0.15s ease, filter 0.15s ease;
+
+  &:active {
+    transform: scale(0.97);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.ccGhostBtn {
+  flex: 1;
+  height: 64px;
+  border: none;
+  background: transparent;
+  color: rgba(161, 161, 170, 1);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.ccOutlineBtn {
+  flex: 0.45;
+  height: 64px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #fff;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.ccBtnIcon {
+  margin-right: 10px;
 }
 
 /* =========
@@ -4253,14 +5566,58 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   }
 
   &__recommendation {
+    width: 100%;
+    flex: 1 1 100%;
+    order: 3;
     margin-top: 12px;
     padding-top: 12px;
     border-top: 1px solid rgba(255, 106, 0, 0.2);
-    background: rgba(255, 106, 0, 0.08);
+    background: rgba(255, 106, 0, 0.1);
     border-radius: 10px;
     padding: 12px;
     position: relative;
     z-index: 2;
+  }
+
+  &__recommendation-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  &__recommendation-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 140, 0, 0.18);
+    border: 1px solid rgba(255, 140, 0, 0.25);
+    color: $orange2;
+
+    .material-symbols-outlined {
+      font-size: 18px;
+      line-height: 1;
+    }
+  }
+
+  &__recommendation-title {
+    font-size: 13px;
+    font-weight: 1000;
+    color: rgba(255, 255, 255, 0.92);
+    letter-spacing: -0.01em;
+  }
+
+  &__recommendation-badge {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 1000;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.85);
+    white-space: nowrap;
   }
 
   &__recommendation-content {
@@ -4285,16 +5642,16 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   &__recommendation-actions {
     display: flex;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
 
   &__recommendation-btn {
     flex: 1;
-    min-width: 100px;
-    padding: 10px 14px;
+    min-width: 0;
+    padding: 10px 10px;
     border-radius: 10px;
     border: none;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 1000;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -6483,6 +7840,309 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   .map-modal__map {
     height: 50vh;
   }
+}
+
+/* =========
+     UI v2 (Dark + Orange) — styling only
+     ========= */
+$ccPrimary: #ff7a00;
+$ccBg: #0a0a0a;
+$ccSurface: #1a1a1a;
+$ccBorder: rgba(255, 255, 255, 0.1);
+$ccText: rgba(255, 255, 255, 0.96);
+$ccMuted: rgba(161, 161, 170, 0.95);
+
+.create-call-page {
+  background: radial-gradient(
+      900px 520px at 15% 0%,
+      rgba($ccPrimary, 0.12),
+      transparent 60%
+    ),
+    radial-gradient(
+      720px 460px at 90% 10%,
+      rgba($ccPrimary, 0.08),
+      transparent 62%
+    ),
+    $ccBg;
+  color: $ccText;
+}
+
+.shell {
+  max-width: 430px;
+  padding: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(10, 10, 10, 0.84);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 14px 16px 10px;
+  overflow: hidden;
+}
+
+.topbar__glow {
+  opacity: 0.55;
+}
+
+.topbar__back {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: $ccText;
+}
+
+.topbar__back:active {
+  transform: scale(0.98);
+}
+
+.topbar__title {
+  font-weight: 1100;
+  letter-spacing: -0.02em;
+}
+
+.topbar__subtitle {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.ccProgress {
+  padding: 14px 16px 10px;
+}
+
+.ccProgressRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ccProgressStep {
+  font-size: 12px;
+  font-weight: 1000;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.ccProgressPct {
+  font-size: 13px;
+  font-weight: 1200;
+  color: $ccPrimary;
+  letter-spacing: -0.01em;
+}
+
+.ccProgressTrack {
+  margin-top: 10px;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ccProgressFill {
+  height: 100%;
+  background: $ccPrimary;
+  border-radius: 999px;
+  box-shadow: 0 0 14px rgba($ccPrimary, 0.45);
+  transition: width 0.35s cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+
+.step-indicator {
+  padding: 6px 16px 12px;
+  margin-top: 0;
+  gap: 10px;
+}
+
+.step-item {
+  flex: 0 0 auto;
+}
+
+.step-line {
+  flex: 1;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.step-line.active {
+  background: rgba($ccPrimary, 0.9);
+  box-shadow: 0 0 10px rgba($ccPrimary, 0.25);
+}
+
+.step-number {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 12px;
+}
+
+.step-item.active .step-number {
+  background: rgba($ccPrimary, 0.18);
+  border-color: rgba($ccPrimary, 0.55);
+  color: $ccPrimary;
+  box-shadow: 0 0 14px rgba($ccPrimary, 0.18);
+}
+
+.step-item.completed .step-number {
+  background: rgba($ccPrimary, 0.9);
+  border-color: rgba($ccPrimary, 0.9);
+  color: #0a0a0a;
+}
+
+.step-label {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px calc(120px + env(safe-area-inset-bottom));
+}
+
+.step-container {
+  max-height: none;
+  padding: 0;
+}
+
+.block {
+  background: $ccSurface;
+  border: 1px solid $ccBorder;
+  border-radius: 22px;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.block__label {
+  font-size: 18px;
+  font-weight: 1100;
+  letter-spacing: -0.015em;
+}
+
+.block__req {
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba($ccPrimary, 0.12);
+  border: 1px solid rgba($ccPrimary, 0.2);
+  color: $ccPrimary;
+  font-weight: 1000;
+}
+
+.input-small,
+.textarea,
+select {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 18px !important;
+  color: $ccText !important;
+}
+
+.input-small:focus,
+.textarea:focus,
+select:focus {
+  outline: none !important;
+  border-color: rgba($ccPrimary, 0.55) !important;
+  box-shadow: 0 0 0 4px rgba($ccPrimary, 0.18) !important;
+}
+
+.manual-select-btn {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: $ccPrimary;
+  font-weight: 1000;
+}
+
+.manual-select-btn:active {
+  transform: scale(0.98);
+}
+
+.add-request-btn {
+  border-radius: 999px;
+  background: transparent;
+  border: none;
+  color: $ccPrimary;
+  font-weight: 1100;
+}
+
+.category-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+}
+
+.category-card--quoted {
+  border-color: rgba($ccPrimary, 0.25);
+  box-shadow: 0 10px 26px rgba($ccPrimary, 0.08);
+}
+
+.category-card__price--bid {
+  color: $ccPrimary;
+}
+
+.category-card__quote-btn,
+.block__refine-btn {
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 1000;
+}
+
+.category-card__quote-btn:hover,
+.block__refine-btn:hover {
+  border-color: rgba($ccPrimary, 0.35);
+}
+
+.step-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  margin-top: 14px;
+  padding: 16px;
+  background: rgba(10, 10, 10, 0.9);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 18px 18px 0 0;
+}
+
+.next-step-btn,
+.next-btn-animated {
+  width: 100%;
+  height: 56px;
+  border-radius: 18px;
+  background: $ccPrimary;
+  color: #0a0a0a;
+  font-weight: 1200;
+  letter-spacing: -0.01em;
+  box-shadow: 0 10px 26px rgba($ccPrimary, 0.22);
+}
+
+.next-step-btn:active,
+.next-btn-animated:active {
+  transform: scale(0.985);
+}
+
+.back-btn {
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 1000;
+}
+
+.map-modal__content,
+.split-call-modal__content,
+.quotation-modal__content {
+  background: $ccBg;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 </style>
 

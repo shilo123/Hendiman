@@ -47,6 +47,28 @@
         </div>
       </header>
 
+      <!-- Progress -->
+      <div class="ccProgress" aria-label="התקדמות">
+        <div class="ccProgressRow">
+          <span class="ccProgressStep"
+            >שלב {{ currentStep }} מתוך {{ totalSteps }}</span
+          >
+          <span class="ccProgressPct">{{ progressPercent }}%</span>
+        </div>
+        <div
+          class="ccProgressTrack"
+          role="progressbar"
+          :aria-valuenow="progressPercent"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        >
+          <div
+            class="ccProgressFill"
+            :style="{ width: progressPercent + '%' }"
+          ></div>
+        </div>
+      </div>
+
       <!-- Handyman Specialties Display -->
       <section
         v-if="handymanDetails && handymanSpecialties.length > 0"
@@ -794,6 +816,14 @@ export default {
     };
   },
   computed: {
+    totalSteps() {
+      return 4;
+    },
+    progressPercent() {
+      const total = Number(this.totalSteps) || 4;
+      const step = Math.min(Math.max(Number(this.currentStep) || 0, 0), total);
+      return Math.round((step / total) * 100);
+    },
     totalPrice() {
       // Calculate total price from all subcategories
       let total = 0;
@@ -3884,5 +3914,161 @@ $danger: #ff3b3b;
   @media (max-width: 768px) {
     flex-direction: column;
   }
+}
+
+/* =========
+     UI v2 (Dark + Orange) — styling only
+     ========= */
+$ccPrimary: #ff7a00;
+$ccBg: #0a0a0a;
+$ccSurface: #1a1a1a;
+$ccBorder: rgba(255, 255, 255, 0.1);
+$ccText: rgba(255, 255, 255, 0.96);
+
+.create-call-page {
+  background: radial-gradient(
+      900px 520px at 15% 0%,
+      rgba($ccPrimary, 0.12),
+      transparent 60%
+    ),
+    radial-gradient(
+      720px 460px at 90% 10%,
+      rgba($ccPrimary, 0.08),
+      transparent 62%
+    ),
+    $ccBg;
+  color: $ccText;
+}
+
+.shell {
+  max-width: 430px;
+  padding: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(10, 10, 10, 0.84);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 14px 16px 10px;
+}
+
+.topbar__back {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: $ccText;
+}
+
+.ccProgress {
+  padding: 14px 16px 10px;
+}
+
+.ccProgressRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ccProgressStep {
+  font-size: 12px;
+  font-weight: 1000;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.ccProgressPct {
+  font-size: 13px;
+  font-weight: 1200;
+  color: $ccPrimary;
+}
+
+.ccProgressTrack {
+  margin-top: 10px;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ccProgressFill {
+  height: 100%;
+  background: $ccPrimary;
+  border-radius: 999px;
+  box-shadow: 0 0 14px rgba($ccPrimary, 0.45);
+  transition: width 0.35s cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+
+.step-indicator {
+  padding: 6px 16px 12px;
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px calc(120px + env(safe-area-inset-bottom));
+}
+
+.block {
+  background: $ccSurface;
+  border: 1px solid $ccBorder;
+  border-radius: 22px;
+  padding: 16px;
+}
+
+.input-small,
+.textarea,
+select {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 18px !important;
+  color: $ccText !important;
+}
+
+.input-small:focus,
+.textarea:focus,
+select:focus {
+  outline: none !important;
+  border-color: rgba($ccPrimary, 0.55) !important;
+  box-shadow: 0 0 0 4px rgba($ccPrimary, 0.18) !important;
+}
+
+.step-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  margin-top: 14px;
+  padding: 16px;
+  background: rgba(10, 10, 10, 0.9);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 18px 18px 0 0;
+}
+
+.next-step-btn,
+.next-btn-animated {
+  width: 100%;
+  height: 56px;
+  border-radius: 18px;
+  background: $ccPrimary;
+  color: #0a0a0a;
+  font-weight: 1200;
+  box-shadow: 0 10px 26px rgba($ccPrimary, 0.22);
+}
+
+.back-btn {
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 1000;
 }
 </style>

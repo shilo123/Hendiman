@@ -10,6 +10,10 @@ if (!fs.existsSync(logsDir)) {
 const serverLogPath = path.join(logsDir, "server.log");
 const clientLogPath = path.join(logsDir, "client.log");
 
+// Per project convention: logs should be persisted to files (server.log/client.log)
+// and not mirrored to stdout/stderr.
+const mirrorToConsole = false;
+
 // Helper function to format timestamp
 function getTimestamp() {
   return new Date().toISOString();
@@ -42,19 +46,28 @@ function writeToFile(filePath, message) {
   }
 }
 
+function writeToConsole(message) {
+  // Intentionally disabled.
+  void message;
+  return;
+}
+
 // Server logger
 const serverLogger = {
   log: (...args) => {
     const message = formatLogMessage("LOG", ...args);
     writeToFile(serverLogPath, message);
+    writeToConsole(message);
   },
   error: (...args) => {
     const message = formatLogMessage("ERROR", ...args);
     writeToFile(serverLogPath, message);
+    writeToConsole(message);
   },
   warn: (...args) => {
     const message = formatLogMessage("WARN", ...args);
     writeToFile(serverLogPath, message);
+    writeToConsole(message);
   },
 };
 
@@ -63,14 +76,17 @@ const clientLogger = {
   log: (...args) => {
     const message = formatLogMessage("LOG", ...args);
     writeToFile(clientLogPath, message);
+    writeToConsole(message);
   },
   error: (...args) => {
     const message = formatLogMessage("ERROR", ...args);
     writeToFile(clientLogPath, message);
+    writeToConsole(message);
   },
   warn: (...args) => {
     const message = formatLogMessage("WARN", ...args);
     writeToFile(clientLogPath, message);
+    writeToConsole(message);
   },
 };
 

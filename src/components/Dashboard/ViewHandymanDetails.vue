@@ -202,75 +202,10 @@
         <!-- Reviews Section -->
         <div class="reviews-section">
           <h2 class="reviews-title">ביקורות</h2>
-          <div v-if="loadingRatings" class="reviews-loading">
-            טוען ביקורות...
-          </div>
-          <div v-else-if="ratings.length === 0" class="reviews-empty">
-            אין ביקורות עדיין
-          </div>
-          <div v-else class="reviews-list">
-            <div
-              v-for="(rating, index) in ratings"
-              :key="index"
-              class="review-card"
-            >
-              <div class="review-card__gradient"></div>
-              <div class="review-card__content">
-                <div class="review-customer">
-                  <img
-                    :src="getCustomerImage(rating)"
-                    :alt="rating.customerName || 'לקוח'"
-                    class="review-customer__image"
-                    @error="onCustomerImageError"
-                  />
-                  <div class="review-customer__info">
-                    <div class="review-customer__name">
-                      {{ rating.customerName || "לקוח" }}
-                    </div>
-                    <div class="review-date">
-                      {{ formatDate(rating.createdAt) }}
-                    </div>
-                  </div>
-                  <div v-if="rating.jobType" class="review-job-type">
-                    <i class="fas fa-tools"></i>
-                    <span>{{ rating.jobType }}</span>
-                  </div>
-                </div>
-                <div class="review-header">
-                  <div class="review-rating">
-                    <div class="review-stars">
-                      <svg
-                        v-for="s in 5"
-                        :key="s"
-                        viewBox="0 0 24 24"
-                        xmlns="http://www.w3.org/2000/svg"
-                        class="review-star"
-                        :class="{
-                          'review-star--filled': s <= (rating.rating || 0),
-                        }"
-                      >
-                        <path
-                          d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
-                        ></path>
-                      </svg>
-                    </div>
-                    <span class="review-rating-value"
-                      >{{ rating.rating || 0 }}/5</span
-                    >
-                  </div>
-                </div>
-                <p
-                  v-if="rating.review && rating.review.trim()"
-                  class="review-text"
-                >
-                  {{ rating.review }}
-                </p>
-                <p v-else class="review-text review-text--empty">
-                  אין ביקורת טקסטואלית
-                </p>
-              </div>
-            </div>
-          </div>
+          <RatingsCarousel
+            v-if="handymanDetails && handymanDetails._id"
+            :handymanId="handymanDetails._id"
+          />
         </div>
 
         <!-- Actions -->
@@ -308,9 +243,13 @@
 <script>
 import axios from "axios";
 import { URL } from "@/Url/url";
+import RatingsCarousel from "./RatingsCarousel.vue";
 
 export default {
   name: "ViewHandymanDetails",
+  components: {
+    RatingsCarousel,
+  },
   props: {
     handymanDetails: {
       type: Object,
@@ -319,23 +258,9 @@ export default {
   },
   data() {
     return {
-      ratings: [],
-      loadingRatings: false,
       showSpecialties: false,
       imageLoading: true,
     };
-  },
-  watch: {
-    handymanDetails: {
-      immediate: true,
-      handler(newVal) {
-        if (newVal && newVal._id) {
-          this.loadRatings();
-          // Reset loading state when handyman changes
-          this.imageLoading = true;
-        }
-      },
-    },
   },
   computed: {
     specialtiesList() {
@@ -401,31 +326,6 @@ export default {
   methods: {
     toggleSpecialties() {
       this.showSpecialties = !this.showSpecialties;
-    },
-    async loadRatings() {
-      if (!this.handymanDetails || !this.handymanDetails._id) {
-        return;
-      }
-      this.loadingRatings = true;
-      try {
-        const handymanId = String(this.handymanDetails._id);
-        const response = await axios.get(`${URL}/ratings/${handymanId}`);
-        if (response.data.success && response.data.ratings) {
-          // Ensure ratings are properly formatted
-          this.ratings = response.data.ratings.map((rating) => ({
-            ...rating,
-            rating: Number(rating.rating) || 0,
-            review: rating.review || "",
-            createdAt: rating.createdAt || new Date(),
-          }));
-        } else {
-          this.ratings = [];
-        }
-      } catch (error) {
-        this.ratings = [];
-      } finally {
-        this.loadingRatings = false;
-      }
     },
     getCustomerImage(rating) {
       const defaultImage = "/img/Hendima-logo.png";
@@ -608,6 +508,8 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
   padding: 20px;
   flex: 1;
   overflow-y: auto;
+  display: block !important;
+  width: 100% !important;
 
   @media (max-width: 768px) {
     padding: 16px;
@@ -1313,6 +1215,8 @@ $shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
 // Reviews Section
 .reviews-section {
   margin-top: 24px;
+  display: block !important;
+  width: 100% !important;
 
   @media (max-width: 768px) {
     margin-top: 20px;

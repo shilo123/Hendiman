@@ -14,10 +14,13 @@ let db;
 
 async function connectDatabase() {
   try {
-    const url =
-      "mongodb+srv://hazshilo:1234@cluster0.0yzklos.mongodb.net/?tlsAllowInvalidCertificates=true";
+    const url = process.env.MONGODB_URI;
+    if (!url) {
+      throw new Error("❌ MONGODB_URI לא הוגדרה בקובץ .env");
+    }
     const connection = await MongoClient.connect(url);
     db = connection.db("Hendiman");
+    serverLogger.log("✅ חיבור למונגו הצליח!");
     collection = db.collection("Users-Hendiman");
     collectionJobs = db.collection("Jobs");
     collectionRatings = db.collection("rating");
@@ -144,8 +147,103 @@ async function connectDatabase() {
       }
     }
 
+    // Create indexes on rating collection for fast handyman ratings pagination
+    try {
+      await collectionRatings.createIndex(
+        { handymanId: 1, createdAt: -1 },
+        { background: true }
+      );
+      serverLogger.log(
+        "✅ Created compound index on rating: handymanId + createdAt(desc)"
+      );
+    } catch (ratingsIndexError1) {
+      if (ratingsIndexError1.code !== 85 && ratingsIndexError1.code !== 86) {
+        serverLogger.warn(
+          "⚠️ Warning creating rating handymanId+createdAt index:",
+          ratingsIndexError1.message
+        );
+      }
+    }
+
+    // Fallback index: use _id for recency when createdAt is missing/inconsistent
+    try {
+      await collectionRatings.createIndex(
+        { handymanId: 1, _id: -1 },
+        { background: true }
+      );
+      serverLogger.log(
+        "✅ Created compound index on rating: handymanId + _id(desc)"
+      );
+    } catch (ratingsIndexError2) {
+      if (ratingsIndexError2.code !== 85 && ratingsIndexError2.code !== 86) {
+        serverLogger.warn(
+          "⚠️ Warning creating rating handymanId+_id index:",
+          ratingsIndexError2.message
+        );
+      }
+    }
+
+    // Speeds up looking up a rating by jobId (used by jobs history cards)
+    try {
+      await collectionRatings.createIndex({ jobId: 1 }, { background: true });
+      serverLogger.log("✅ Created index on rating: jobId");
+    } catch (ratingsIndexErrorJobId) {
+      if (
+        ratingsIndexErrorJobId.code !== 85 &&
+        ratingsIndexErrorJobId.code !== 86
+      ) {
+        serverLogger.warn(
+          "⚠️ Warning creating rating jobId index:",
+          ratingsIndexErrorJobId.message
+        );
+      }
+    }
+
+    // Optimizes /handyman/:handymanId/jobs/history sorting by updatedAt/createdAt
+    try {
+      await collectionJobs.createIndex(
+        { handymanId: 1, isDeleted: 1, updatedAt: -1, createdAt: -1 },
+        { background: true }
+      );
+      serverLogger.log(
+        "✅ Created compound index on Jobs: handymanId + isDeleted + updatedAt(desc) + createdAt(desc)"
+      );
+    } catch (jobsIndexErrorHistory) {
+      if (
+        jobsIndexErrorHistory.code !== 85 &&
+        jobsIndexErrorHistory.code !== 86
+      ) {
+        serverLogger.warn(
+          "⚠️ Warning creating jobs history sort index:",
+          jobsIndexErrorHistory.message
+        );
+      }
+    }
+
+    // Fast pagination by recency using _id (works even if updatedAt/createdAt are missing/inconsistent)
+    try {
+      await collectionJobs.createIndex(
+        { handymanId: 1, _id: -1 },
+        { background: true }
+      );
+      serverLogger.log(
+        "✅ Created compound index on Jobs: handymanId + _id(desc)"
+      );
+    } catch (jobsIndexErrorIdSort) {
+      if (
+        jobsIndexErrorIdSort.code !== 85 &&
+        jobsIndexErrorIdSort.code !== 86
+      ) {
+        serverLogger.warn(
+          "⚠️ Warning creating jobs handymanId+_id index:",
+          jobsIndexErrorIdSort.message
+        );
+      }
+    }
+
     return { collection, collectionJobs, db };
   } catch (error) {
+    serverLogger.error("❌ שגיאה בחיבור למונגו:", error.message);
     throw error;
   }
 }

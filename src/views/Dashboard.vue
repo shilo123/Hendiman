@@ -11,6 +11,7 @@
     <!-- TOP BAR - hidden when loading, chat is active, shown when minimized or no job, or when IncomeDetailModal is open -->
     <DashboardTopBar
       v-if="
+        isHendiman &&
         !isLoading &&
         (!currentAssignedJob || isChatMinimized) &&
         !showIncomeDetailModal
@@ -27,6 +28,44 @@
       @view-ratings="onViewRatings"
       @return-to-job="onReturnToJob"
     />
+
+    <!-- Client header (mobile screenshot-like) -->
+    <header
+      v-if="
+        !isHendiman &&
+        !isLoading &&
+        (!currentAssignedJob || isChatMinimized) &&
+        !showIncomeDetailModal
+      "
+      class="mHdr"
+    >
+      <div class="mHdr__icons">
+        <button class="mHdr__icon" type="button" aria-label="התראות">
+          <font-awesome-icon :icon="['fas', 'bell']" />
+          <span class="mHdr__dot" aria-hidden="true"></span>
+        </button>
+        <button class="mHdr__icon" type="button" aria-label="שיתוף">
+          <font-awesome-icon :icon="['fas', 'share']" />
+        </button>
+      </div>
+
+      <div class="mHdr__center">
+        <div class="mHdr__kicker">
+          {{ me?.subscriptionPlanType ? "לקוח פרימיום" : "לקוח" }}
+        </div>
+        <div class="mHdr__name">{{ me?.name || me?.username }}</div>
+      </div>
+
+      <button
+        class="mHdr__avatar"
+        type="button"
+        aria-label="פרופיל"
+        @click="onOpenProfile"
+      >
+        <img v-if="me?.avatarUrl" :src="me.avatarUrl" alt="" />
+        <span v-else class="mHdr__ph">👤</span>
+      </button>
+    </header>
 
     <!-- MAIN -->
     <main class="grid">
@@ -54,6 +93,31 @@
           class="client-actions-top"
         />
 
+        <!-- CLIENT (mobile): handymen carousel like screenshot -->
+        <section v-if="!isHendiman && isMobile" class="clientNearby">
+          <div class="clientNearby__head">
+            <h2 class="clientNearby__title">הנדימנים באזורך</h2>
+            <button
+              type="button"
+              class="clientNearby__filter"
+              aria-label="סינון תוצאות"
+            >
+              ≡
+            </button>
+          </div>
+
+          <HandymenList
+            :filteredHandymen="filteredHandymen"
+            :pagination="handymenPagination"
+            @view-details="onViewHandymanDetails"
+            @open-chat="onOpenUserChat"
+            @personal-request="onPersonalRequest"
+            @block-handyman="onBlockHandyman"
+            @next-page="onNextPage"
+            @prev-page="onPrevPage"
+          />
+        </section>
+
         <!-- Return to job button (mobile only - above jobs) -->
         <button
           v-if="isMobile && currentAssignedJob && isChatMinimized"
@@ -67,7 +131,7 @@
         </button>
 
         <!-- RIGHT SIDE (moved before jobs for client) -->
-        <aside class="side" v-if="!isHendiman">
+        <aside class="side" v-if="!isHendiman && !isMobile">
           <!-- CLIENT: Create Call Button (desktop only) -->
           <section v-if="!isHendiman" class="panel client-actions-panel">
             <ClientActions
@@ -348,9 +412,9 @@
           </section>
         </aside>
 
-        <ViewHandymanDetails
+        <HandymanDetailsSheet
           v-if="handymanDetails"
-          :handymanDetails="handymanDetails"
+          :handyman="handymanDetails"
           @close="onCloseHandymanDetails"
           @book="onBookHandyman"
           @block="onBlockHandymanFromModal"
@@ -1211,6 +1275,49 @@
       :icon="['fas', 'check-circle']"
       @close="showClientPaymentNotification = false"
     />
+
+    <!-- Mobile client: floating + and bottom nav (screenshot-like UI) -->
+    <button
+      v-if="
+        !isHendiman &&
+        isMobile &&
+        !isLoading &&
+        (!currentAssignedJob || isChatMinimized) &&
+        showFabAfterScroll
+      "
+      class="fab"
+      type="button"
+      aria-label="צור קריאה"
+      @click="onCreateCallCta"
+    >
+      <span class="fab__plus" aria-hidden="true">+</span>
+      <span class="fab__label">צור קריאה</span>
+    </button>
+
+    <nav
+      v-if="
+        !isHendiman &&
+        isMobile &&
+        !isLoading &&
+        (!currentAssignedJob || isChatMinimized)
+      "
+      class="mNav"
+      aria-label="ניווט"
+    >
+      <button class="mNav__item" type="button">
+        <font-awesome-icon :icon="['fas', 'share']" class="mNav__ic" />
+        <span class="mNav__txt">האזור האישי שלי</span>
+      </button>
+      <button class="mNav__item" type="button">
+        <span class="mNav__badge" aria-hidden="true"></span>
+        <font-awesome-icon :icon="['fas', 'comment']" class="mNav__ic" />
+        <span class="mNav__txt">צ'אט</span>
+      </button>
+      <button class="mNav__item" type="button" @click="onOpenProfile">
+        <font-awesome-icon :icon="['fas', 'circle-user']" class="mNav__ic" />
+        <span class="mNav__txt">חשבון</span>
+      </button>
+    </nav>
   </div>
 </template>
 
@@ -1221,7 +1328,7 @@ import JobsSection from "@/components/Dashboard/JobsSection.vue";
 import HandymenList from "@/components/Dashboard/HandymenList.vue";
 import ClientActions from "@/components/Dashboard/ClientActions.vue";
 import HandymanTools from "@/components/Dashboard/HandymanTools.vue";
-import ViewHandymanDetails from "@/components/Dashboard/ViewHandymanDetails.vue";
+import HandymanDetailsSheet from "@/components/Dashboard/HandymanDetailsSheet.vue";
 import ViewJob from "@/components/Dashboard/ViewJob.vue";
 import ProfileSheet from "@/components/Dashboard/ProfileSheet.vue";
 import JobChat from "@/components/Dashboard/JobChat.vue";
@@ -1250,7 +1357,7 @@ export default {
     HandymenList,
     ClientActions,
     HandymanTools,
-    ViewHandymanDetails,
+    HandymanDetailsSheet,
     ViewJob,
     ProfileSheet,
     JobChat,
@@ -1314,6 +1421,7 @@ export default {
       dirFilters: { q: "", minRating: 0, minJobs: 0 },
       activeAssignedJob: null,
       isChatMinimized: false,
+      showFabAfterScroll: false,
       pendingActiveJobId: null, // Store active job ID from fast check
       doneJobsCache: [], // Cache for done jobs that need client approval (persists after refresh)
       showJobCancelledModal: false,
@@ -1778,6 +1886,15 @@ export default {
     },
     handleResize() {
       this.isMobile = window.innerWidth <= 768;
+    },
+    handleFabScroll() {
+      const y =
+        window.scrollY ??
+        window.pageYOffset ??
+        document.documentElement?.scrollTop ??
+        document.body?.scrollTop ??
+        0;
+      this.showFabAfterScroll = y > 10;
     },
     async onRefresh() {
       // שמור את ה-jobId הנוכחי לפני refresh (אם יש)
@@ -4033,7 +4150,15 @@ export default {
       try {
         const { data } = await axios.get(`${URL}/Gethandyman/${id}`);
         if (data.success) {
-          this.handymanDetails = data.Handyman;
+          // Enrich details with isBlocked from the current list (API may not include it)
+          const fromList = this.filteredHandymen?.find(
+            (h) => String(h._id || h.id) === String(id)
+          );
+
+          this.handymanDetails = {
+            ...data.Handyman,
+            isBlocked: fromList?.isBlocked === true,
+          };
         } else {
           this.toast.showError(data.message);
         }
@@ -4052,7 +4177,7 @@ export default {
     },
 
     onBlockHandymanFromModal(handyman) {
-      this.onBlockHandyman(handyman._id || handyman.id);
+      this.onBlockHandyman(handyman._id || handyman.id, handyman?.isBlocked);
       this.onCloseHandymanDetails();
     },
 
@@ -4804,6 +4929,10 @@ export default {
     // Listen for window resize to update mobile state
     window.addEventListener("resize", this.handleResize);
 
+    // Show the create-call FAB only after the user scrolls down
+    this.handleFabScroll();
+    window.addEventListener("scroll", this.handleFabScroll, { passive: true });
+
     // Get current GPS location for handymen (if "myLocation" is selected)
     if (this.isHendiman) {
       try {
@@ -5450,6 +5579,7 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener("resize", this.handleResize);
+    window.removeEventListener("scroll", this.handleFabScroll);
     this.disconnectWebSocket();
   },
   watch: {
@@ -5545,7 +5675,16 @@ $r2: 26px;
   min-height: -webkit-fill-available; // iOS fix
   color: $text;
   padding: 16px;
-  background: radial-gradient(
+  background-color: #030303;
+  background-image: linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.01) 25%,
+      transparent 25%
+    ),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.01) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.01) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.01) 75%),
+    radial-gradient(
       900px 520px at 10% -10%,
       rgba($orange, 0.18),
       transparent 55%
@@ -5556,6 +5695,8 @@ $r2: 26px;
       transparent 55%
     ),
     linear-gradient(180deg, $bg, $bg2);
+  background-size: 8px 8px, 8px 8px, 8px 8px, 8px 8px, auto, auto, auto;
+  background-attachment: fixed;
 
   @media (max-width: 768px) {
     padding: 12px 10px;
@@ -7035,7 +7176,7 @@ $r2: 26px;
     position: relative;
     z-index: 100;
     padding: 0;
-    margin: 12px 0 16px 0;
+    margin: 10px 0 10px 0;
     backdrop-filter: none;
   }
 }
@@ -7147,96 +7288,237 @@ $r2: 26px;
   }
 }
 
-.mobile-nav {
-  position: fixed;
-  bottom: 0;
-  right: 0;
-  left: 0;
-  display: none;
-  gap: 12px;
-  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-  background: rgba(11, 11, 15, 0.95);
-  backdrop-filter: blur(20px) saturate(180%);
-  border-top: 1px solid rgba(255, 122, 0, 0.2);
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
-  z-index: 2000;
+/* Screenshot-like client header */
+.mHdr {
+  position: sticky;
+  top: 0;
+  z-index: 2500;
+  direction: ltr;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  margin: -16px -16px 6px;
+  background: rgba(3, 3, 3, 0.9);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+  @media (max-width: 768px) {
+    margin: calc(-12px - env(safe-area-inset-top)) -10px 6px;
+    padding-top: calc(14px + env(safe-area-inset-top));
+  }
 }
 
-.nav-btn {
-  flex: 1;
+.mHdr__icons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mHdr__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  display: grid;
+  place-items: center;
+  position: relative;
+  cursor: pointer;
+
+  &:active {
+    transform: scale(0.92);
+  }
+}
+
+.mHdr__dot {
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: $orange;
+  border: 2px solid #030303;
+}
+
+.mHdr__center {
+  direction: rtl;
+  text-align: right;
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.mHdr__kicker {
+  font-size: 10px;
+  font-weight: 1000;
+  color: rgba(249, 115, 22, 0.75);
+  letter-spacing: 2px;
+}
+
+.mHdr__name {
+  font-size: 24px;
+  font-weight: 1100;
+  letter-spacing: -0.4px;
+  color: rgba(255, 255, 255, 0.95);
+  line-height: 1;
+}
+
+.mHdr__avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 2px solid rgba(249, 115, 22, 0.95);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 2px;
+  overflow: hidden;
+  cursor: pointer;
+
+  img {
+    width: 100%;
+    height: 100%;
+    border-radius: 999px;
+    object-fit: cover;
+    display: block;
+  }
+}
+
+.mHdr__ph {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* Mobile client nearby title row */
+.clientNearby {
+  margin: 6px 0 0;
+}
+
+.clientNearby__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 8px;
+  margin: 10px 0 12px;
+}
+
+.clientNearby__title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 1200;
+  letter-spacing: -0.6px;
+}
+
+.clientNearby__filter {
+  border: none;
+  background: transparent;
+  color: rgba(249, 115, 22, 0.75);
+  font-size: 22px;
+  font-weight: 1100;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Floating + */
+.fab {
+  position: fixed;
+  right: 24px;
+  bottom: calc(58px + 10px + env(safe-area-inset-bottom));
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(135deg, $orange, $orange2);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.65);
+  color: #0b0b0f;
+  z-index: 2600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.fab__plus {
+  font-size: 22px;
+  font-weight: 1200;
+  line-height: 1;
+}
+
+.fab__label {
+  font-size: 13px;
+  font-weight: 1100;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Bottom nav */
+.mNav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 58px;
+  padding: 4px 16px calc(9px + env(safe-area-inset-bottom));
+  background: rgba(5, 5, 5, 0.94);
+  backdrop-filter: blur(30px);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  gap: 10px;
+  z-index: 2500;
+}
+
+.mNav__item {
+  border: none;
+  background: transparent;
+  color: rgba(113, 113, 122, 0.95);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-height: 56px; // WCAG AA minimum touch target
-  padding: 8px 12px;
-  border: none;
-  border-radius: 16px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.06);
-  transition: all 0.2s ease;
-  touch-action: manipulation;
+  gap: 6px;
+  min-width: 62px;
   cursor: pointer;
-  -webkit-tap-highlight-color: rgba(255, 122, 0, 0.2);
-
-  &:focus-visible {
-    outline: 2px solid rgba(255, 122, 0, 0.6);
-    outline-offset: 2px;
-  }
+  position: relative;
 
   &:active {
-    transform: scale(0.98);
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  &__icon {
-    font-size: 20px;
-    line-height: 1;
-  }
-
-  &__label {
-    font-size: clamp(11px, 2.5vw, 12px);
-    line-height: 1.2;
-  }
-
-  &--primary {
-    background: linear-gradient(135deg, #ff6a00, #ff8a2b);
-    color: #0b0b0f;
-    font-weight: 800;
-    box-shadow: 0 4px 12px rgba(255, 106, 0, 0.3);
-    min-height: 56px; // Primary CTA: 48-56px range
-
-    &:hover {
-      box-shadow: 0 6px 16px rgba(255, 106, 0, 0.4);
-      transform: translateY(-1px);
-    }
-
-    &:active {
-      transform: translateY(0) scale(0.98);
-    }
-
-    .nav-btn__icon {
-      font-size: 24px;
-    }
-
-    .nav-btn__label {
-      font-size: clamp(13px, 3vw, 14px);
-      font-weight: 900;
-    }
+    transform: scale(0.96);
   }
 }
 
-@media (max-width: 768px) {
-  .mobile-nav {
-    display: flex;
-  }
+.mNav__ic {
+  font-size: 22px;
+}
 
-  // Removed bottom nav padding since nav is removed
+.mNav__txt {
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.mNav__badge {
+  position: absolute;
+  top: 4px;
+  right: 14px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: $orange;
+  border: 2px solid #030303;
+}
+
+@media (max-width: 768px) {
   .grid {
-    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
   }
 }
 

@@ -1,191 +1,166 @@
 <template>
-  <section class="nearby">
-    <!-- Wrapper header (clean + premium) -->
-    <!-- <header class="nearby__header">
-      <div class="nearby__titleWrap">
-        <h2 class="nearby__title">הנדימנים באזורך</h2>
-        <p class="nearby__hint">לחץ על כפתור לפעולה</p>
-      </div>
+  <section class="hc" aria-label="הנדימנים באזורך">
+    <div ref="track" class="hc__track" @scroll.passive="onTrackScroll">
+      <div v-for="(page, pageIndex) in pages" :key="pageIndex" class="hc__page">
+        <article
+          v-for="h in page"
+          :key="h.id || h._id"
+          class="hcCard"
+          :class="{ 'hcCard--blocked': h.isBlocked }"
+        >
+          <div class="hcCard__top">
+            <div class="hcCard__who">
+              <div class="hcCard__avatar">
+                <img
+                  class="hcCard__img"
+                  :src="getHandymanImage(h)"
+                  alt=""
+                  @error="onImageError"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <span class="hcCard__ring"></span>
 
-      <div class="nearby__pill" v-if="filteredHandymen?.length">
-        <span class="nearby__pillNum">{{ filteredHandymen.length }}</span>
-        <span class="nearby__pillTxt">תוצאות</span>
-      </div>
-    </header> -->
-
-    <div class="handymen-list" role="list" aria-label="הנדימנים באזורך">
-      <article
-        v-for="h in filteredHandymen"
-        :key="h.id || h._id"
-        class="hcard"
-        :class="{ 'hcard--blocked': h.isBlocked }"
-        role="listitem"
-      >
-        <!-- Row 1: avatar + name + rating -->
-        <div class="hcard__row1">
-          <div class="hcard__avatar">
-            <img
-              class="hcard__av"
-              :src="getHandymanImage(h)"
-              alt=""
-              @error="onImageError"
-              loading="lazy"
-              decoding="async"
-            />
-            <img
-              class="hcard__logo"
-              :src="getHandymanLogo(h)"
-              alt=""
-              @error="onLogoError"
-              loading="lazy"
-              decoding="async"
-            />
-          </div>
-
-          <div class="hcard__main">
-            <div class="hcard__nameLine">
-              <div class="hcard__name" :title="h.username">
-                {{ h.username }}
+                <button
+                  class="hcCard__avatarBtn"
+                  type="button"
+                  aria-label="פרטים"
+                  @click="$emit('view-details', h.id || h._id)"
+                >
+                  <font-awesome-icon :icon="['fas', 'info-circle']" />
+                </button>
               </div>
-              <span v-if="h.isBlocked" class="tag tag--danger">חסום</span>
-            </div>
 
-            <div class="hcard__ratingLine">
-              <template
-                v-if="
-                  h.rating !== null && h.rating !== undefined && h.rating > 0
-                "
-              >
-                <div class="stars" aria-label="דירוג">
-                  <template v-for="i in 5" :key="i">
-                    <font-awesome-icon
-                      v-if="i <= getFullStars(h.rating)"
-                      :icon="['fas', 'star']"
-                      class="star star--full"
-                    />
-                    <font-awesome-icon
-                      v-else-if="
-                        i === getFullStars(h.rating) + 1 &&
-                        hasHalfStar(h.rating)
-                      "
-                      :icon="['fas', 'star-half-stroke']"
-                      class="star star--half"
-                    />
-                    <font-awesome-icon
-                      v-else
-                      :icon="['fas', 'star']"
-                      class="star star--empty"
-                    />
-                  </template>
+              <div class="hcCard__info">
+                <h3 class="hcCard__name" :title="h.username">
+                  {{ h.username }}
+                </h3>
+
+                <div class="hcCard__meta">
+                  <font-awesome-icon
+                    :icon="['fas', 'location-dot']"
+                    class="hcCard__metaIc"
+                  />
+                  <span class="hcCard__metaTxt">{{ formatCityTravel(h) }}</span>
                 </div>
 
-                <span class="hcard__score">{{ formatRating(h.rating) }}</span>
-              </template>
+                <div class="hcCard__rating" v-if="hasRating(h)">
+                  <span class="hcCard__ratingNum">{{
+                    formatRating(h.rating)
+                  }}</span>
+                  <font-awesome-icon
+                    :icon="['fas', 'star']"
+                    class="hcCard__star"
+                  />
+                  <span class="hcCard__ratingCount"
+                    >({{ getRatingCount(h) }})</span
+                  >
+                </div>
+                <div v-else class="hcCard__rating hcCard__rating--empty">
+                  אין דירוג
+                </div>
+              </div>
+            </div>
 
-              <span v-else class="hcard__noRating">אין דירוג</span>
+            <span class="hcCard__spacer" aria-hidden="true"></span>
+
+            <button
+              class="hcCard__detailsBtn"
+              type="button"
+              @click="$emit('view-details', h.id || h._id)"
+            >
+              פרטים
+              <span class="hcCard__detailsArrow" aria-hidden="true">›</span>
+            </button>
+          </div>
+
+          <div
+            class="hcCard__cats"
+            v-if="getCategories(h).length"
+            aria-label="תחומי התמחות"
+          >
+            <div class="hcCard__catsTrack" role="list">
+              <span
+                v-for="c in getVisibleCategories(h)"
+                :key="c"
+                class="hcCard__cat"
+                role="listitem"
+              >
+                {{ c }}
+              </span>
+
+              <button
+                v-if="getMoreCategoriesCount(h) > 0"
+                type="button"
+                class="hcCard__cat hcCard__catBtn"
+                :class="{
+                  'hcCard__catBtn--less': isCategoriesExpanded(h),
+                  'hcCard__catBtn--more': !isCategoriesExpanded(h),
+                }"
+                :aria-label="
+                  isCategoriesExpanded(h)
+                    ? 'הסתר תחומי התמחות נוספים'
+                    : `הצג עוד ${getMoreCategoriesCount(h)} תחומי התמחות`
+                "
+                @click="toggleCategories(h)"
+              >
+                {{
+                  isCategoriesExpanded(h)
+                    ? "פחות"
+                    : `${getMoreCategoriesCount(h)}+`
+                }}
+              </button>
             </div>
           </div>
 
-          <!-- micro info button (kept) -->
-          <button
-            class="iconBtn"
-            type="button"
-            @click="$emit('view-details', h.id || h._id)"
-            title="פרטים"
-            aria-label="פרטים"
-          >
-            <font-awesome-icon :icon="['fas', 'info-circle']" />
-          </button>
-        </div>
+          <div class="hcCard__actions">
+            <button
+              class="hcBtn hcBtn--primary"
+              type="button"
+              @click="$emit('personal-request', h.id || h._id)"
+            >
+              <font-awesome-icon
+                :icon="['fas', 'calendar']"
+                class="hcBtn__ic"
+              />
+              הזמן
+            </button>
 
-        <!-- Row 2: compact chips (only 2) -->
-        <div class="hcard__row2" aria-label="מידע קצר">
-          <span class="chip">🧰 {{ h.jobDone || 0 }} עבודות</span>
+            <button
+              class="hcBtn"
+              :class="h.isBlocked ? 'hcBtn--muted' : 'hcBtn--block'"
+              type="button"
+              @click="$emit('block-handyman', h.id || h._id, h.isBlocked)"
+            >
+              <font-awesome-icon
+                :icon="h.isBlocked ? ['fas', 'unlock'] : ['fas', 'ban']"
+                class="hcBtn__ic"
+              />
+              {{ h.isBlocked ? "בטל" : "חסום" }}
+            </button>
+          </div>
+        </article>
+      </div>
 
-          <span
-            v-if="
-              h.travelTimeMinutes !== null && h.travelTimeMinutes !== undefined
-            "
-            class="chip"
-            :class="h.travelTimeMinutes === 0 ? 'chip--good' : 'chip--travel'"
-          >
-            <template v-if="h.travelTimeMinutes === 0">📍 בעיר שלך</template>
-            <template v-else>🚗 {{ h.travelTimeMinutes }} דק'</template>
-          </span>
-        </div>
-
-        <!-- Row 3: THREE buttons in ONE row (small, equal width) -->
-        <div class="hcard__row3" aria-label="פעולות">
-          <!-- <button
-            class="miniBtn miniBtn--ghost"
-            type="button"
-            @click="$emit('view-details', h.id || h._id)"
-            title="ראה עוד"
-          >
-            <font-awesome-icon
-              :icon="['fas', 'info-circle']"
-              class="miniBtn__ic"
-            />
-            ראה עוד
-          </button> -->
-
-          <button
-            class="miniBtn miniBtn--primary"
-            type="button"
-            @click="$emit('personal-request', h.id || h._id)"
-            title="הזמן"
-          >
-            <font-awesome-icon
-              :icon="['fas', 'calendar']"
-              class="miniBtn__ic"
-            />
-            הזמן
-          </button>
-
-          <button
-            class="miniBtn"
-            :class="h.isBlocked ? 'miniBtn--ok' : 'miniBtn--danger'"
-            type="button"
-            @click="$emit('block-handyman', h.id || h._id, h.isBlocked)"
-            :title="h.isBlocked ? 'בטל חסימת הנדימן' : 'חסום הנדימן'"
-          >
-            <font-awesome-icon
-              :icon="h.isBlocked ? ['fas', 'unlock'] : ['fas', 'ban']"
-              class="miniBtn__ic"
-            />
-            {{ h.isBlocked ? "בטל" : "חסום" }}
-          </button>
-        </div>
-      </article>
+      <div class="hc__endSpacer" aria-hidden="true"></div>
     </div>
 
-    <!-- Pagination -->
-    <div class="pagination" v-if="pagination.totalPages > 1">
+    <div class="hc__dots" v-if="visibleDotIndexes.length > 1">
       <button
-        class="pbtn"
+        v-for="idx in visibleDotIndexes"
+        :key="idx"
         type="button"
-        :disabled="!pagination.hasPrev"
-        @click="$emit('prev-page')"
-      >
-        הקודם
-      </button>
+        class="hc__dot"
+        :class="{ 'hc__dot--on': idx === activePage }"
+        :aria-label="`מעבר לעמוד ${idx + 1}`"
+        @click="scrollToPage(idx)"
+      ></button>
+    </div>
 
-      <span class="pagination__info">
-        {{ pagination.currentPage || pagination.page }} /
-        {{ pagination.totalPages }}
-      </span>
-
-      <button
-        class="pbtn"
-        type="button"
-        :disabled="!pagination.hasNext"
-        @click="$emit('next-page')"
-      >
-        הבא
-      </button>
+    <div class="hc__loading" v-if="loadingNext" aria-live="polite">
+      טוען עוד הנדימנים…
     </div>
   </section>
-  <!-- . -->
 </template>
 
 <script>
@@ -202,24 +177,264 @@ export default {
     "prev-page",
     "block-handyman",
   ],
+  data() {
+    return {
+      activePage: 0,
+      loadingNext: false,
+      expandedCategoriesByKey: {},
+    };
+  },
+  computed: {
+    safeHandymen() {
+      return Array.isArray(this.filteredHandymen) ? this.filteredHandymen : [];
+    },
+    pages() {
+      const out = [];
+      for (let i = 0; i < this.safeHandymen.length; i += 3) {
+        out.push(this.safeHandymen.slice(i, i + 3));
+      }
+      return out;
+    },
+    visibleDotIndexes() {
+      const total = this.pages.length;
+      if (total <= 1) return [];
+      const windowSize = Math.min(5, total);
+      const half = Math.floor(windowSize / 2);
+      let start = Math.max(0, this.activePage - half);
+      let end = start + windowSize - 1;
+      if (end >= total) {
+        end = total - 1;
+        start = Math.max(0, end - (windowSize - 1));
+      }
+      const out = [];
+      for (let i = start; i <= end; i++) out.push(i);
+      return out;
+    },
+  },
+  watch: {
+    filteredHandymen() {
+      this.loadingNext = false;
+      this.$nextTick(() => this.syncActivePage());
+    },
+    "pagination.currentPage"() {
+      this.loadingNext = false;
+      this.$nextTick(() => {
+        this.activePage = 0;
+        this.scrollToPage(0);
+      });
+    },
+    "pagination.page"() {
+      this.loadingNext = false;
+      this.$nextTick(() => {
+        this.activePage = 0;
+        this.scrollToPage(0);
+      });
+    },
+  },
+  mounted() {
+    this.syncActivePage();
+  },
+  beforeUnmount() {
+    // no-op
+  },
   methods: {
+    getHandymanKey(h) {
+      return String(h?.id || h?._id || h?.userId || h?.username || "");
+    },
+    isCategoriesExpanded(h) {
+      const k = this.getHandymanKey(h);
+      return !!(k && this.expandedCategoriesByKey[k]);
+    },
+    toggleCategories(h) {
+      const k = this.getHandymanKey(h);
+      if (!k) return;
+      this.expandedCategoriesByKey[k] = !this.expandedCategoriesByKey[k];
+    },
+    getMoreCategoriesCount(h) {
+      const cats = this.getCategories(h);
+      return cats.length > 2 ? cats.length - 2 : 0;
+    },
+    getVisibleCategories(h) {
+      const cats = this.getCategories(h);
+      if (cats.length <= 2) return cats;
+      return this.isCategoriesExpanded(h) ? cats : cats.slice(0, 2);
+    },
+    onTrackScroll() {
+      this.syncActivePage();
+    },
+    syncActivePage() {
+      const el = this.$refs.track;
+      if (!el) return;
+
+      const pageEls = el.querySelectorAll?.(".hc__page") || [];
+      if (!pageEls.length) {
+        this.activePage = 0;
+        return;
+      }
+
+      const dir = window.getComputedStyle(el).direction;
+      const trackRect = el.getBoundingClientRect();
+
+      let bestIndex = 0;
+      let bestDist = Infinity;
+      pageEls.forEach((p, idx) => {
+        const r = p.getBoundingClientRect();
+        const anchor = dir === "rtl" ? r.right : r.left;
+        const trackAnchor = dir === "rtl" ? trackRect.right : trackRect.left;
+        const dist = Math.abs(anchor - trackAnchor);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestIndex = idx;
+        }
+      });
+
+      this.activePage = Math.max(0, Math.min(this.pages.length - 1, bestIndex));
+      this.maybeLoadNext();
+    },
+    scrollToPage(index) {
+      const el = this.$refs.track;
+      if (!el) return;
+      const pageEls = el.querySelectorAll?.(".hc__page") || [];
+      const target = pageEls?.[index];
+      if (!target) return;
+      const dir = window.getComputedStyle(el).direction;
+      target.scrollIntoView({
+        behavior: "smooth",
+        inline: dir === "rtl" ? "end" : "start",
+        block: "nearest",
+      });
+    },
+    maybeLoadNext() {
+      const hasNext = !!this.pagination?.hasNext;
+      if (!hasNext || this.loadingNext) return;
+      if (this.pages.length < 1) return;
+      if (this.activePage >= this.pages.length - 1) {
+        this.loadingNext = true;
+        this.$emit("next-page");
+      }
+    },
+    hasRating(h) {
+      const r = Number(h?.rating);
+      return Number.isFinite(r) && r > 0;
+    },
     formatRating(rating) {
       if (rating === null || rating === undefined) return "0.0";
       const numRating = Number(rating);
       if (isNaN(numRating)) return "0.0";
       return numRating % 1 === 0 ? numRating.toFixed(0) : numRating.toFixed(1);
     },
-    getFullStars(rating) {
-      if (rating === null || rating === undefined) return 0;
-      const numRating = Number(rating);
-      if (isNaN(numRating) || numRating < 0) return 0;
-      return Math.floor(numRating);
+    getRatingCount(h) {
+      const c =
+        h?.ratingCount ??
+        h?.ratingsCount ??
+        h?.reviewsCount ??
+        h?.reviewCount ??
+        h?.ratings?.length ??
+        h?.reviews?.length ??
+        0;
+      const n = Number(c);
+      return Number.isFinite(n) && n >= 0 ? n : 0;
     },
-    hasHalfStar(rating) {
-      if (rating === null || rating === undefined) return false;
-      const numRating = Number(rating);
-      if (isNaN(numRating) || numRating < 0) return false;
-      return numRating % 1 >= 0.5;
+    toText(val) {
+      if (val === null || val === undefined) return "";
+      if (typeof val === "string") return val.trim();
+      if (typeof val === "number") return String(val);
+      if (Array.isArray(val)) {
+        for (const item of val) {
+          const t = this.toText(item);
+          if (t) return t;
+        }
+        return "";
+      }
+      if (typeof val === "object") {
+        // try common keys we use across the app/db
+        return (
+          this.toText(val.city) ||
+          this.toText(val.selectedCity) ||
+          this.toText(val.cityName) ||
+          this.toText(val.town) ||
+          this.toText(val.locality) ||
+          this.toText(val.settlement) ||
+          this.toText(val.place) ||
+          this.toText(val.name) ||
+          this.toText(val["שם_ישוב"]) ||
+          this.toText(val["שם"]) ||
+          this.toText(val.hebrewName) ||
+          this.toText(val.nameHe) ||
+          this.toText(val.englishName) ||
+          this.toText(val.nameEn) ||
+          this.toText(val.label) ||
+          this.toText(val.value) ||
+          ""
+        );
+      }
+      return "";
+    },
+    getCityText(h) {
+      // NOTE: some data uses 'adress' (typo) and sometimes nested address objects
+      const direct = this.toText(h?.city);
+      if (direct) return direct;
+
+      const addressObj = h?.address ?? h?.adress ?? h?.Adress ?? null;
+      const fromAddress =
+        this.toText(addressObj?.city) ||
+        this.toText(addressObj?.selectedCity) ||
+        this.toText(addressObj?.cityName) ||
+        this.toText(addressObj?.name) ||
+        this.toText(addressObj);
+      if (fromAddress) return fromAddress;
+
+      const locationText = this.toText(h?.locationText);
+      if (locationText) return locationText;
+
+      const location = this.toText(h?.location);
+      if (location) return location;
+
+      return "";
+    },
+    formatCityTravel(h) {
+      const city = this.getCityText(h);
+
+      const mins = Number(
+        h?.travelTimeMinutes ?? h?.durationMinutes ?? h?.travelMinutes
+      );
+      if (Number.isFinite(mins) && mins >= 0) {
+        return city
+          ? mins === 0
+            ? `${city} - בעיר שלך`
+            : `${city} - ${mins} דק'`
+          : mins === 0
+          ? "בעיר שלך"
+          : `${mins} דק'`;
+      }
+
+      return city || "לא צוין";
+    },
+    getCategories(h) {
+      const out = [];
+
+      const full = Array.isArray(h?.fullCategories) ? h.fullCategories : [];
+      for (const c of full) {
+        const s = String(c || "").trim();
+        if (s) out.push(s);
+      }
+
+      if (!out.length) {
+        const specs = Array.isArray(h?.specialties) ? h.specialties : [];
+        for (const sp of specs) {
+          const name = typeof sp === "string" ? sp : sp?.name;
+          const s = String(name || "").trim();
+          if (s) out.push(s);
+        }
+      }
+
+      // de-dup while preserving order
+      const seen = new Set();
+      return out.filter((x) => {
+        if (seen.has(x)) return false;
+        seen.add(x);
+        return true;
+      });
     },
     getHandymanImage(handyman) {
       const defaultImage = "/img/Hendima-logo.png";
@@ -274,6 +489,420 @@ export default {
   },
 };
 </script>
+
+<style lang="scss" scoped>
+$orange: #f97316;
+$orange2: #ea580c;
+
+.hc {
+  width: 100%;
+}
+
+.hc__track {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding: 0 16px;
+  direction: rtl;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.hc__track::-webkit-scrollbar {
+  display: none;
+}
+
+.hc__page {
+  flex: 0 0 calc(100% - 32px);
+  scroll-snap-align: start;
+  display: grid;
+  grid-template-rows: repeat(3, auto);
+  gap: 12px;
+}
+
+.hc__endSpacer {
+  flex: 0 0 20px;
+}
+
+.hcCard {
+  direction: rtl;
+  flex: 0 0 auto;
+  width: 100%;
+  border-radius: 26px;
+  padding: 12px;
+  background: linear-gradient(
+    165deg,
+    rgba(25, 25, 45, 0.7),
+    rgba(10, 10, 10, 0.98)
+  );
+  backdrop-filter: blur(25px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.hcCard::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 26px;
+  pointer-events: none;
+  background: radial-gradient(
+    520px 220px at 90% 0%,
+    rgba(249, 115, 22, 0.12),
+    transparent 60%
+  );
+}
+
+.hcCard--blocked {
+  opacity: 0.78;
+}
+
+.hcCard__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hcCard__who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.hcCard__avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 999px;
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.hcCard__ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 999px;
+  border: 2px solid rgba(249, 115, 22, 0.35);
+  pointer-events: none;
+}
+
+.hcCard__avatarBtn {
+  position: absolute;
+  bottom: -4px;
+  left: -4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(3, 3, 3, 0.8);
+  background: rgba(249, 115, 22, 0.95);
+  color: #0b0b0f;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+
+  &:active {
+    transform: scale(0.92);
+  }
+}
+
+.hcCard__img {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.hcCard__info {
+  min-width: 0;
+}
+
+.hcCard__nameRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hcCard__vip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #facc15, $orange);
+  color: #0b0b0f;
+  font-weight: 1100;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.hcCard__name {
+  margin: 0;
+  font-weight: 1100;
+  font-size: 20px;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hcCard__spacer {
+  width: 1px;
+}
+
+.hcCard__detailsBtn {
+  align-self: flex-start;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 1000;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+.hcCard__detailsArrow {
+  color: rgba(249, 115, 22, 0.95);
+  font-size: 16px;
+  line-height: 1;
+  margin-top: -1px;
+}
+
+.hcCard__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  color: rgba(161, 161, 170, 0.95);
+}
+
+.hcCard__cats {
+  margin-top: -4px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.hcCard__catsTrack {
+  display: flex;
+  direction: rtl;
+  flex-wrap: wrap;
+  gap: 8px;
+  row-gap: 8px;
+  max-width: 100%;
+  width: 100%;
+  padding: 4px 2px 0;
+  overflow: hidden;
+}
+
+.hcCard__cat {
+  flex: 0 0 auto;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hcCard__catBtn {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  line-height: 1;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 6px 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hcCard__catBtn--less {
+  background: rgba(249, 115, 22, 0.12);
+  border-color: rgba(249, 115, 22, 0.25);
+  color: rgba(249, 115, 22, 0.95);
+}
+
+.hcCard__catBtn--more {
+  background: rgba(249, 115, 22, 0.12);
+  border-color: rgba(249, 115, 22, 0.25);
+  color: rgba(249, 115, 22, 0.95);
+}
+
+.hc__loading {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(249, 115, 22, 0.95);
+}
+
+.hcCard__metaIc {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.hcCard__metaTxt {
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hcCard__rating {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-weight: 1000;
+}
+
+.hcCard__rating--empty {
+  color: rgba(161, 161, 170, 0.9);
+  font-weight: 800;
+}
+
+.hcCard__ratingNum {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.hcCard__star {
+  color: rgba(249, 115, 22, 0.95);
+}
+
+.hcCard__ratingCount {
+  color: rgba(113, 113, 122, 0.95);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.hcCard__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  width: fit-content;
+}
+
+.hcCard__pillIc {
+  color: $orange;
+  font-size: 14px;
+}
+
+.hcCard__pillTxt {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.4px;
+}
+
+.hcCard__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: end;
+}
+
+.hcBtn {
+  border-radius: 14px;
+  padding: 14px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 1100;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 120ms ease;
+
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+.hcBtn__ic {
+  font-size: 15px;
+}
+
+.hcBtn--primary {
+  background: linear-gradient(135deg, #fb923c, $orange2);
+  border: none;
+  color: #0b0b0f;
+  box-shadow: 0 8px 20px rgba(249, 115, 22, 0.25);
+}
+
+.hcBtn--block {
+  background: rgba(255, 50, 50, 0.03);
+  border: 1px solid rgba(255, 50, 50, 0.2);
+  color: rgba(255, 160, 160, 0.92);
+}
+
+.hcBtn--muted {
+  opacity: 0.85;
+}
+
+.hc__dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 0 0;
+}
+
+.hc__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  transition: width 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.hc__dot--on {
+  width: 26px;
+  background: rgba(34, 197, 94, 0.92);
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.45);
+}
+
+@media (max-width: 420px) {
+  .hcCard {
+    width: 78vw;
+    padding: 14px;
+  }
+  .hcCard__name {
+    font-size: 18px;
+  }
+  .hcBtn {
+    padding: 12px 10px;
+    font-size: 12px;
+  }
+}
+</style>
 
 <style lang="scss" scoped>
 $font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
