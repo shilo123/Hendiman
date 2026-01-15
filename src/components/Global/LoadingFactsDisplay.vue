@@ -22,21 +22,31 @@ export default {
   },
   computed: {
     currentFact() {
-      return this.facts[this.currentFactIndex] || '';
+      // Bounds checking for defensive programming
+      if (this.currentFactIndex >= 0 && this.currentFactIndex < this.facts.length) {
+        return this.facts[this.currentFactIndex];
+      }
+      return '';
     }
   },
   mounted() {
-    // Load facts from JSON
-    this.facts = Array.isArray(factsData) ? factsData : [];
-    
-    if (this.facts.length > 0) {
-      // Set initial random fact
-      this.currentFactIndex = this.getRandomIndex();
+    try {
+      // Load facts from JSON with error handling
+      this.facts = Array.isArray(factsData) ? factsData : [];
       
-      // Start interval to change fact every 4 seconds
-      this.intervalId = setInterval(() => {
-        this.currentFactIndex = this.getRandomIndex(this.currentFactIndex);
-      }, 4000);
+      if (this.facts.length > 0) {
+        // Set initial random fact
+        this.currentFactIndex = this.getRandomIndex();
+        
+        // Start interval to change fact every 4 seconds
+        this.intervalId = setInterval(() => {
+          this.currentFactIndex = this.getRandomIndex(this.currentFactIndex);
+        }, 4000);
+      }
+    } catch (error) {
+      // Gracefully handle JSON import errors
+      console.error('Failed to load facts:', error);
+      this.facts = [];
     }
   },
   beforeUnmount() {
@@ -47,6 +57,11 @@ export default {
   },
   methods: {
     getRandomIndex(excludeIndex = -1) {
+      // Defensive check: ensure facts array is not empty
+      if (!this.facts || this.facts.length === 0) {
+        return 0;
+      }
+      
       // Get random index, ensuring it's different from the excluded index
       let newIndex;
       do {
