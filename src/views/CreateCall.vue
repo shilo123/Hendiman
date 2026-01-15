@@ -3527,7 +3527,6 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   display: grid;
   grid-template-columns: 48px 1fr 48px;
   align-items: center;
-  gap: 8px;
   padding: 16px 16px 10px;
 }
 
