@@ -3524,9 +3524,9 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
 }
 
 .ccHeaderTop {
-  display: flex;
+  display: grid;
+  grid-template-columns: 48px 1fr 48px;
   align-items: center;
-  justify-content: space-between;
   padding: 16px 16px 10px;
 }
 
@@ -3541,6 +3541,7 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   place-items: center;
   cursor: pointer;
   transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+  justify-self: start;
 
   &:hover {
     background: rgba(26, 26, 26, 0.7);
@@ -3553,9 +3554,8 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
 }
 
 .ccHeaderTitle {
-  flex: 1;
   text-align: center;
-  padding-left: 48px;
+  justify-self: center;
   font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.015em;
@@ -3569,7 +3569,8 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
 }
 
 .ccHeaderProgress {
-  padding: 10px 24px 16px;
+  padding: 0 24px 16px;
+  margin-top: 12px;
 }
 
 .ccProgressRowV3 {
