@@ -6,6 +6,7 @@
         <div class="spinner"></div>
         <p class="loading-text">טוען נתונים...</p>
       </div>
+      <LoadingFactsDisplay />
     </div>
 
     <!-- TOP BAR - hidden when loading, chat is active, shown when minimized or no job, or when IncomeDetailModal is open -->
@@ -1334,6 +1335,7 @@ import ProfileSheet from "@/components/Dashboard/ProfileSheet.vue";
 import JobChat from "@/components/Dashboard/JobChat.vue";
 import JobChatMobile from "@/components/Dashboard/JobChatMobile.vue";
 import MinimizableNotification from "@/components/Global/MinimizableNotification.vue";
+import LoadingFactsDisplay from "@/components/Global/LoadingFactsDisplay.vue";
 import ProblemReportModal from "@/components/Dashboard/ProblemReportModal.vue";
 import IncomeDetailModal from "@/components/Dashboard/IncomeDetailModal.vue";
 import ClientQuotationsModal from "@/components/Dashboard/ClientQuotationsModal.vue";
@@ -1364,6 +1366,7 @@ export default {
     JobChatMobile,
     AddressAutocomplete,
     MinimizableNotification,
+    LoadingFactsDisplay,
     ProblemReportModal,
     IncomeDetailModal,
     ClientQuotationsModal,
