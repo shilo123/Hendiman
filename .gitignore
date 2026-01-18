@@ -20,3 +20,8 @@ lerna-debug.log*
 /server/uploads
 /src/Url/port.json
 /server/logs/*.log
+
+# Prevent accidental temp files and git command output files
+temp_*
+tatus
+erver
