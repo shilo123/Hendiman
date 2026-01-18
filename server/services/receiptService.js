@@ -1024,6 +1024,13 @@ function generateWelcomeEmailHTML(user, password, isHandyman, baseUrl) {
   const aboutUrl = `${baseUrl}/about`;
   const termsUrl = `${baseUrl}/terms-of-service`;
   const isGoogleUser = !!user?.googleId;
+  const isFacebookUser = !!user?.facebookId;
+  const isSocialUser = isGoogleUser || isFacebookUser;
+  const socialProviderName = isGoogleUser
+    ? "Google"
+    : isFacebookUser
+    ? "Facebook"
+    : "";
 
   return `
 <!DOCTYPE html>
@@ -1074,7 +1081,7 @@ function generateWelcomeEmailHTML(user, password, isHandyman, baseUrl) {
               <div style="background: linear-gradient(135deg, #fff5e6 0%, #ffe8cc 100%); border-radius: 16px; padding: 30px; margin-bottom: 30px; border: 2px solid rgba(255, 106, 0, 0.15); box-shadow: 0 4px 20px rgba(255, 106, 0, 0.1);">
                 <h2 style="color: #ff6a00; font-size: 20px; margin: 0 0 25px 0; font-weight: 900; display: flex; align-items: center; gap: 10px;" dir="rtl">
                   <span style="width: 4px; height: 24px; background: linear-gradient(135deg, #ff6a00 0%, #ff8a2b 100%); border-radius: 2px; display: inline-block;"></span>
-                  ${isGoogleUser ? "פרטי החשבון שלך" : "פרטי הכניסה שלך"}
+                  ${isSocialUser ? "פרטי החשבון שלך" : "פרטי הכניסה שלך"}
                 </h2>
                 <table width="100%" cellpadding="12" cellspacing="0" style="margin: 0;" dir="rtl">
                   <tr>
@@ -1084,7 +1091,7 @@ function generateWelcomeEmailHTML(user, password, isHandyman, baseUrl) {
                     }</td>
                   </tr>
                   ${
-                    !isGoogleUser && password
+                    !isSocialUser && password
                       ? `
                   <tr>
                     <td style="color: #4a5568; font-weight: 700; font-size: 14px; padding-bottom: 0; vertical-align: top; padding-top: 4px;">הסיסמה שלך:</td>
@@ -1100,13 +1107,13 @@ function generateWelcomeEmailHTML(user, password, isHandyman, baseUrl) {
                     </td>
                   </tr>
                   `
-                      : isGoogleUser
+                      : isSocialUser
                       ? `
                   <tr>
                     <td colspan="2" style="padding-top: 12px; padding-bottom: 0;">
                       <div style="background: rgba(66, 133, 244, 0.08); border: 1px solid rgba(66, 133, 244, 0.2); border-radius: 10px; padding: 15px; text-align: center;">
                         <p style="color: #4285f4; font-size: 14px; margin: 0; font-weight: 700; line-height: 1.5;" dir="rtl">
-                          🔐 הכניסה שלך מתבצעת דרך Google - אין צורך בסיסמה נפרדת
+                          🔐 הכניסה שלך מתבצעת דרך ${socialProviderName} - אין צורך בסיסמה נפרדת
                         </p>
                       </div>
                     </td>
@@ -1116,7 +1123,7 @@ function generateWelcomeEmailHTML(user, password, isHandyman, baseUrl) {
                   }
                 </table>
                 ${
-                  !isGoogleUser && password
+                  !isSocialUser && password
                     ? `
                 <div style="margin-top: 15px; padding: 12px; background: rgba(255, 106, 0, 0.05); border-radius: 8px; border: 1px solid rgba(255, 106, 0, 0.15);">
                   <p style="color: #666666; font-size: 12px; margin: 0; line-height: 1.5;" dir="rtl">

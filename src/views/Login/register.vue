@@ -103,6 +103,21 @@
             </div>
           </div>
 
+          <!-- Facebook welcome -->
+          <div
+            v-if="isFacebookUser && facebookUserData"
+            class="notice notice--ok"
+          >
+            <font-awesome-icon :icon="['fas', 'check-circle']" />
+            <div class="notice__text">
+              <div class="notice__title">
+                ברוך הבא,
+                {{ facebookUserData.name || facebookUserData.username }}!
+              </div>
+              <div class="notice__sub">רק נשלים כמה פרטים ונגמר הסיפור</div>
+            </div>
+          </div>
+
           <!-- Client -->
           <Transition name="tab-fade" mode="out-in">
             <div v-if="activeTab === 'client'" key="client" class="tab-body">
@@ -125,15 +140,39 @@
                     />
                   </div>
 
+                  <div
+                    v-else-if="
+                      isFacebookUser &&
+                      facebookUserData &&
+                      facebookUserData.picture
+                    "
+                    class="avatar"
+                  >
+                    <img
+                      :src="facebookUserData.picture"
+                      alt="Facebook Profile"
+                      crossorigin="anonymous"
+                      referrerpolicy="no-referrer"
+                      @error="handleImageError"
+                      @load="handleImageLoad"
+                    />
+                  </div>
+
                   <div v-else-if="clientForm.image" class="avatar">
                     <img :src="clientForm.imagePreview" alt="Preview" />
+                  </div>
+
+                  <div v-else-if="clientForm.imageUrl" class="avatar">
+                    <img :src="clientForm.imageUrl" alt="Profile" />
                   </div>
 
                   <div v-else class="avatar avatar--empty">
                     <span>📷</span>
                   </div>
                 </div>
-
+                (!isGoogleUser || !googleUserData || !googleUserData.picture) &&
+                (!isFacebookUser || !facebookUserData ||
+                !facebookUserData.picture)
                 <!-- העלאת תמונה (רק אם אין תמונת גוגל) -->
                 <div
                   v-if="
@@ -355,15 +394,39 @@
                     />
                   </div>
 
+                  <div
+                    v-else-if="
+                      isFacebookUser &&
+                      facebookUserData &&
+                      facebookUserData.picture
+                    "
+                    class="avatar"
+                  >
+                    <img
+                      :src="facebookUserData.picture"
+                      alt="Facebook Profile"
+                      crossorigin="anonymous"
+                      referrerpolicy="no-referrer"
+                      @error="handleImageError"
+                      @load="handleImageLoad"
+                    />
+                  </div>
+
                   <div v-else-if="handymanForm.image" class="avatar">
                     <img :src="handymanForm.imagePreview" alt="Preview" />
+                  </div>
+
+                  <div v-else-if="handymanForm.imageUrl" class="avatar">
+                    <img :src="handymanForm.imageUrl" alt="Profile" />
                   </div>
 
                   <div v-else class="avatar avatar--empty">
                     <span>🧰</span>
                   </div>
                 </div>
-
+                (!isGoogleUser || !googleUserData || !googleUserData.picture) &&
+                (!isFacebookUser || !facebookUserData ||
+                !facebookUserData.picture)
                 <div
                   v-if="
                     !isGoogleUser || !googleUserData || !googleUserData.picture
@@ -597,6 +660,8 @@ export default {
       toast: null,
       isGoogleUser: false,
       googleUserData: null,
+      isFacebookUser: false,
+      facebookUserData: null,
       isSubmitting: false,
       handymenCount: 0,
       isBlocked: false,
@@ -643,12 +708,14 @@ export default {
   created() {
     this.toast = useToast();
     this.handleGoogleCallback();
+    this.handleFacebookCallback();
     this.fetchHandymenCount();
   },
   watch: {
     "$route.query": {
       handler() {
         if (this.toast) this.handleGoogleCallback();
+        if (this.toast) this.handleFacebookCallback();
       },
       immediate: true,
     },
@@ -690,6 +757,8 @@ export default {
             const user = JSON.parse(decodeURIComponent(userData));
             this.googleUserData = user;
             this.isGoogleUser = true;
+            this.isFacebookUser = false;
+            this.facebookUserData = null;
 
             const targetForm =
               this.activeTab === "handyman"
@@ -737,6 +806,115 @@ export default {
             };
 
             this.toast.showSuccess("התחברות עם Google בוצעה בהצלחה!");
+
+            this.$router.replace({
+              path: this.$route.path,
+              query: {},
+            });
+          } catch (error) {
+            this.toast.showError("לא הצלחנו לעבד את נתוני המשתמש");
+          }
+        }
+      }
+    },
+
+    async handleFacebookCallback() {
+      if (!this.toast) this.toast = useToast();
+
+      const facebookAuth =
+        this.$route.query.facebookAuth ||
+        new URLSearchParams(window.location.search).get("facebookAuth");
+
+      if (facebookAuth === "success") {
+        const userData =
+          this.$route.query.user ||
+          new URLSearchParams(window.location.search).get("user");
+
+        const tab =
+          this.$route.query.tab ||
+          new URLSearchParams(window.location.search).get("tab") ||
+          "client";
+
+        if (tab === "client" || tab === "handyman") this.activeTab = tab;
+
+        if (userData) {
+          try {
+            const user = JSON.parse(decodeURIComponent(userData));
+            this.facebookUserData = user;
+            this.isFacebookUser = true;
+            this.isGoogleUser = false;
+            this.googleUserData = null;
+
+            const targetForm =
+              this.activeTab === "handyman"
+                ? this.handymanForm
+                : this.clientForm;
+
+            if (user.firstName && !targetForm.firstName)
+              targetForm.firstName = user.firstName;
+            if (user.lastName && !targetForm.lastName)
+              targetForm.lastName = user.lastName;
+
+            if (!targetForm.firstName && user.name) {
+              const nameParts = user.name.split(" ");
+              targetForm.firstName = nameParts[0] || "";
+              targetForm.lastName = nameParts.slice(1).join(" ") || "";
+            }
+
+            if (user.email && !targetForm.email) targetForm.email = user.email;
+
+            // Location may not be provided by Facebook for all apps/users
+            const fbLocation = user.location || user.city || "";
+            if (fbLocation && !targetForm.city) targetForm.city = fbLocation;
+            if (fbLocation && !targetForm.address)
+              targetForm.address = fbLocation;
+
+            // העלה את התמונה מ-Facebook ל-S3
+            if (user.picture) {
+              try {
+                const { data } = await axios.post(
+                  `${URL}/upload-image-from-url`,
+                  {
+                    imageUrl: user.picture,
+                  }
+                );
+                if (data.imageUrl) {
+                  targetForm.imageUrl = data.imageUrl;
+                } else {
+                  targetForm.imageUrl = user.picture;
+                }
+              } catch (error) {
+                targetForm.imageUrl = user.picture;
+              }
+            }
+
+            const fbId = user.facebookId || user.id;
+            if (fbId) {
+              if (!targetForm.password) targetForm.password = fbId;
+            }
+
+            this.facebookUserData = {
+              ...user,
+              firstName: targetForm.firstName,
+              lastName: targetForm.lastName,
+              email: targetForm.email,
+              picture: targetForm.imageUrl || user.picture,
+              facebookId: fbId,
+              location: targetForm.city || fbLocation,
+            };
+
+            const missingFields = [];
+            if (!targetForm.firstName) missingFields.push("שם פרטי");
+            if (!targetForm.lastName) missingFields.push("שם משפחה");
+            if (!targetForm.email) missingFields.push("מייל");
+            if (!targetForm.city) missingFields.push("עיר / מקום מגורים");
+
+            this.toast.showSuccess("התחברות עם Facebook בוצעה בהצלחה!");
+            if (missingFields.length) {
+              this.toast.showError(
+                `חסרים פרטים להשלמת הרשמה: ${missingFields.join(", ")}`
+              );
+            }
 
             this.$router.replace({
               path: this.$route.path,
@@ -860,6 +1038,27 @@ export default {
           }
         }
 
+        if (this.isFacebookUser && this.facebookUserData) {
+          if (this.facebookUserData.firstName && !formData.firstName)
+            formData.firstName = this.facebookUserData.firstName;
+          if (this.facebookUserData.lastName && !formData.lastName)
+            formData.lastName = this.facebookUserData.lastName;
+          if (this.facebookUserData.email && !formData.email)
+            formData.email = this.facebookUserData.email;
+          if (this.facebookUserData.picture && !formData.imageUrl)
+            formData.imageUrl = this.facebookUserData.picture;
+          const fbId =
+            this.facebookUserData.facebookId || this.facebookUserData.id;
+          if (fbId) {
+            if (!formData.password) formData.password = fbId;
+            formData.facebookId = fbId;
+          }
+          const fbLocation =
+            this.facebookUserData.location || this.facebookUserData.city;
+          if (fbLocation && !formData.city) formData.city = fbLocation;
+          if (fbLocation && !formData.address) formData.address = fbLocation;
+        }
+
         if (formData.image && !formData.imageUrl) {
           const upload = new FormData();
           upload.append("image", formData.image);
@@ -977,6 +1176,27 @@ export default {
             // שלח את ה-googleId כפרמטר נפרד
             formData.googleId = this.googleUserData.googleId;
           }
+        }
+
+        if (this.isFacebookUser && this.facebookUserData) {
+          if (this.facebookUserData.firstName && !formData.firstName)
+            formData.firstName = this.facebookUserData.firstName;
+          if (this.facebookUserData.lastName && !formData.lastName)
+            formData.lastName = this.facebookUserData.lastName;
+          if (this.facebookUserData.email && !formData.email)
+            formData.email = this.facebookUserData.email;
+          if (this.facebookUserData.picture && !formData.imageUrl)
+            formData.imageUrl = this.facebookUserData.picture;
+          const fbId =
+            this.facebookUserData.facebookId || this.facebookUserData.id;
+          if (fbId) {
+            if (!formData.password) formData.password = fbId;
+            formData.facebookId = fbId;
+          }
+          const fbLocation =
+            this.facebookUserData.location || this.facebookUserData.city;
+          if (fbLocation && !formData.city) formData.city = fbLocation;
+          if (fbLocation && !formData.address) formData.address = fbLocation;
         }
 
         if (formData.image && !formData.imageUrl) {
@@ -1117,6 +1337,10 @@ export default {
       window.location.href = `${URL}/auth/google?source=register&tab=${this.activeTab}`;
     },
 
+    ConenectWithFacebook() {
+      window.location.href = `${URL}/auth/facebook?source=register&tab=${this.activeTab}`;
+    },
+
     async fetchHandymenCount() {
       try {
         const { data } = await axios.get(`${URL}/handymen-count`);
@@ -1131,7 +1355,7 @@ export default {
     fillDemoData() {
       // Generate random suffix for unique emails
       const randomSuffix = Math.floor(Math.random() * 10000);
-      
+
       if (this.activeTab === "client") {
         // Fill client form with demo data
         this.clientForm.firstName = "יוסי";
@@ -1387,13 +1611,13 @@ export default {
   background: rgba(139, 92, 246, 0.15);
   border: 1px solid rgba(139, 92, 246, 0.3);
   color: #8b5cf6;
-  
+
   &:hover {
     background: rgba(139, 92, 246, 0.25);
     border-color: rgba(139, 92, 246, 0.5);
     color: #a78bfa;
   }
-  
+
   &:active {
     transform: scale(0.95);
   }

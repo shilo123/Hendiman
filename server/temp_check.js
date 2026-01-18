@@ -199,9 +199,13 @@ function findAvailablePort(startPort) {
   }
 
   // Session configuration for Passport
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret) {
+    throw new Error("❌ SESSION_SECRET חובה להגדיר בקובץ .env");
+  }
   app.use(
     session({
-      secret: process.env.SESSION_SECRET || "hendiman-secret-key",
+      secret: sessionSecret,
       resave: true,
       saveUninitialized: true,
       name: "hendiman.session", // Custom session name
@@ -244,6 +248,23 @@ function findAvailablePort(startPort) {
       }
 
       const { username, password, ifGoogleUser, googleId } = req.body;
+
+      // בדוק אם זה פרטי Admin
+      const adminUsername = process.env.ADMIN_USER_NAME;
+      const adminPassword = process.env.ADMIN_PASS;
+      
+      if (username === adminUsername && password === adminPassword && !ifGoogleUser) {
+        return res.json({
+          message: "Success",
+          isAdmin: true,
+          user: {
+            _id: "admin-user",
+            username: adminUsername,
+            email: "admin@hendiman.local",
+            isHandyman: false,
+          },
+        });
+      }
 
       let user;
 

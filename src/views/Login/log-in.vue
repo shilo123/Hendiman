@@ -1,168 +1,181 @@
 <template>
   <div class="login" dir="rtl">
-    <!-- רקע וידאו או GIF -->
-    <video
-      v-if="useVideo"
-      class="login__bg-video"
-      autoplay
-      muted
-      loop
-      playsinline
-    >
-      <source src="/img/backgroundApp.mp4" type="video/mp4" />
-      <source src="/img/backgroundApp.webm" type="video/webm" />
-    </video>
-    <div class="login__bg-image" v-else></div>
+    <!-- Background Effects -->
+    <div class="login__bg-gradient"></div>
+    <!-- Floating particles/embers (Abstract visual noise) -->
+    <div class="login__bg-pattern"></div>
+
+    <!-- Main Container -->
     <div class="login__wrap">
-      <!-- Desktop/Tablet sidebar -->
-      <aside class="login__side">
-        <div class="side">
-          <div class="side__logo">H</div>
-          <h1 class="side__title">Hendiman</h1>
-
-          <div class="side__tag">
-            <div class="side__tagMain">תיקונים קטנים</div>
-            <div class="side__tagSub">פתרונות גדולים</div>
-          </div>
-
-          <div class="side__features">
-            <div class="feat">
-              <span class="feat__i">⚡</span> הזמנה מהירה ונוחה
-            </div>
-            <div class="feat"><span class="feat__i">🔒</span> תשלום מאובטח</div>
-            <div class="feat">
-              <span class="feat__i">⭐</span> הנדימנים מאומתים
-            </div>
-          </div>
+      <!-- Hero Section: Logo -->
+      <div class="login__hero">
+        <!-- Logo Graphic -->
+        <div class="login__logoContainer">
+          <svg
+            class="login__logo"
+            viewBox="0 0 100 100"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path d="M20 10 H35 V42 H65 V10 H80 V90 H65 V57 H35 V90 H20 V10 Z" />
+          </svg>
+          <!-- Inner fire pulse effect -->
+          <div class="login__logoAura"></div>
         </div>
-      </aside>
+        <!-- Headline Text -->
+        <div class="login__headline">
+          <h1 class="login__title">התחברות</h1>
+          <p class="login__subtitle">כוח בידיים שלך</p>
+        </div>
+      </div>
 
-      <!-- Form -->
-      <main class="login__main">
-        <div class="card">
-          <!-- Mobile header -->
-          <div class="card__mobileHead">
-            <div class="card__mobileLogo">H</div>
-            <div class="card__mobileText">
-              <div class="card__mobileTitle">Hendiman</div>
-              <div class="card__mobileSub">תיקונים קטנים · פתרונות גדולים</div>
-            </div>
-          </div>
+      <!-- Login Card -->
+      <div class="login__card">
+        <!-- Blocked User Message -->
+        <div v-if="isBlocked" class="blocked-message">
+          <span class="material-symbols-outlined">block</span>
+          <span>המשתמש הזה חסום על ידי הנהלת הנדימן</span>
+        </div>
 
-          <p class="registerTop">
-            עדיין לא רשום?
-            <a href="#" @click.prevent="goToRegister">הרשם כאן</a>
-          </p>
-
-          <!-- Blocked User Message -->
-          <div v-if="isBlocked" class="blocked-message">
-            <font-awesome-icon :icon="['fas', 'ban']" />
-            <span>המשתמש הזה חסום על ידי הנהלת הנדימן</span>
-          </div>
-
-          <form class="form" @submit.prevent="handleLogin">
-            <label class="field">
-              <span class="field__label">מייל או שם משתמש</span>
+        <!-- Inputs Form -->
+        <form class="login__form" @submit.prevent="handleLogin">
+          <!-- Email Input -->
+          <div class="input-group">
+            <div class="input-wrapper">
+              <!-- Leading Icon -->
+              <div class="input-icon input-icon--leading">
+                <span class="material-symbols-outlined">bolt</span>
+              </div>
+              <!-- Input Field -->
               <input
                 v-model="username"
-                class="field__input"
+                class="input-field"
                 type="text"
-                placeholder="הכנס מייל או שם משתמש"
+                placeholder="אימייל או נייד"
                 required
                 autocomplete="username"
               />
-            </label>
+            </div>
+          </div>
 
-            <label class="field">
-              <span class="field__label">סיסמה</span>
-
-              <div v-if="!ifGoogleUser" class="pass">
-                <input
-                  v-model="password"
-                  class="field__input pass__input"
-                  :type="showPassword ? 'text' : 'password'"
-                  placeholder="הכנס סיסמה"
-                  required
-                  autocomplete="current-password"
-                />
-                <button
-                  type="button"
-                  class="pass__toggle"
-                  @click="showPassword = !showPassword"
-                  :aria-label="showPassword ? 'הסתר סיסמה' : 'הראה סיסמה'"
-                >
-                  <font-awesome-icon
-                    :icon="showPassword ? ['fas', 'eye-slash'] : ['fas', 'eye']"
-                  />
-                </button>
+          <!-- Password Input -->
+          <div class="input-group">
+            <div class="input-wrapper">
+              <!-- Leading Icon -->
+              <div class="input-icon input-icon--leading">
+                <span class="material-symbols-outlined">lock</span>
               </div>
-
+              <!-- Input Field -->
+              <input
+                v-if="!ifGoogleUser && !ifFacebookUser"
+                v-model="password"
+                class="input-field"
+                :type="showPassword ? 'text' : 'password'"
+                placeholder="סיסמה"
+                required
+                autocomplete="current-password"
+              />
               <input
                 v-else
                 v-model="password"
-                class="field__input"
+                class="input-field"
                 type="text"
-                placeholder="סיסמה (Google)"
+                :placeholder="
+                  ifGoogleUser ? 'סיסמה (Google)' : 'סיסמה (Facebook)'
+                "
                 required
                 autocomplete="current-password"
                 readonly
               />
-            </label>
+              <!-- Trailing Action (Visibility) -->
+              <button
+                v-if="!ifGoogleUser && !ifFacebookUser"
+                type="button"
+                class="input-icon input-icon--trailing"
+                @click="showPassword = !showPassword"
+                :aria-label="showPassword ? 'הסתר סיסמה' : 'הראה סיסמה'"
+              >
+                <span class="material-symbols-outlined">{{
+                  showPassword ? "visibility_off" : "visibility"
+                }}</span>
+              </button>
+            </div>
+          </div>
 
-            <button type="submit" class="btn btn--primary">התחבר</button>
-          </form>
+          <!-- Forgot Password Link and Register -->
+          <div class="forgot-password-wrapper">
+            <div class="forgot-password">
+              <a href="#" @click.prevent="handleForgotPassword">
+                שכחת סיסמה?
+              </a>
+            </div>
+            <div class="login__footer">
+              <p>
+                אין לך חשבון?
+                <a href="#" @click.prevent="goToRegister">הירשם עכשיו</a>
+              </p>
+            </div>
+          </div>
 
-          <!-- Biometric Authentication - Only on Mobile -->
-          <div
-            v-if="isMobile && hasBiometricCredentials"
-            class="biometric-auth"
+          <!-- Main Action Button -->
+          <button type="submit" class="login-btn">
+            כניסה לאזור אישי
+          </button>
+        </form>
+
+        <!-- Biometric Authentication - Only on Mobile -->
+        <div
+          v-if="isMobile && hasBiometricCredentials"
+          class="biometric-auth"
+        >
+          <button
+            type="button"
+            class="biometric-btn"
+            @click="handleBiometricLogin"
+            :disabled="biometricLoading"
           >
-            <button
-              type="button"
-              class="btn btn--biometric"
-              @click="handleBiometricLogin"
-              :disabled="biometricLoading"
-            >
-              <font-awesome-icon :icon="['fas', 'fingerprint']" />
-              <span>{{
-                biometricLoading ? "מתחבר..." : "התחבר עם טביעת אצבע"
-              }}</span>
-            </button>
-          </div>
-
-          <!-- forgot password as <a> -->
-          <a href="#" class="forgotLink" @click.prevent="handleForgotPassword">
-            שכחתי סיסמה
-          </a>
-
-          <div class="divider"><span>או</span></div>
-
-          <div class="social">
-            <button
-              type="button"
-              class="social__btn"
-              @click="ConenectWithGoogle"
-            >
-              <img src="@/assets/Google.png" alt="Google" />
-              התחבר עם Google
-            </button>
-
-            <button
-              type="button"
-              class="social__btn"
-              @click="ConenectWithFacebook"
-            >
-              <img src="@/assets/FaceBook.png" alt="Facebook" />
-              התחבר עם Facebook
-            </button>
-          </div>
-
-          <p class="registerBottom">
-            עדיין לא רשום?
-            <a href="#" @click.prevent="goToRegister">הרשם כאן</a>
-          </p>
+            <span class="material-symbols-outlined">fingerprint</span>
+            <span>{{
+              biometricLoading ? "מתחבר..." : "התחבר עם טביעת אצבע"
+            }}</span>
+          </button>
         </div>
-      </main>
+
+        <!-- Social Login Divider -->
+        <div class="social-divider">
+          <div class="social-divider__line"></div>
+          <span class="social-divider__text">או התחבר דרך</span>
+          <div class="social-divider__line"></div>
+        </div>
+
+        <!-- Social Buttons -->
+        <div class="social-buttons">
+          <!-- Google -->
+          <button
+            type="button"
+            class="social-btn"
+            @click="ConenectWithGoogle"
+          >
+            <svg class="social-btn__icon" fill="currentColor" viewBox="0 0 24 24">
+              <path
+                d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81z"
+              />
+            </svg>
+          </button>
+
+          <!-- Facebook -->
+          <button
+            type="button"
+            class="social-btn"
+            @click="ConenectWithFacebook"
+          >
+            <svg class="social-btn__icon" fill="currentColor" viewBox="0 0 24 24">
+              <path
+                d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.17 6 13 6c.88 0 1.63.02 2.25.07V8h-1.5c-1 0-1.33.5-1.33 1.47V12h2.5l-.33 3H12.2v6.8c4.56-.93 8-4.96 8-9.8z"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -184,9 +197,11 @@ export default {
       password: "",
       email: "",
       ifGoogleUser: false,
+      ifFacebookUser: false,
       toast: null,
       showPassword: false,
       googleId: null,
+      facebookId: null,
       isBlocked: false,
       useVideo: false, // שנה ל-true אם יש לך קובץ וידאו
       isMobile: false,
@@ -199,16 +214,24 @@ export default {
     this.toast = useToast();
     this.checkIfMobile();
     this.handleGoogleCallback();
+    this.handleFacebookCallback();
     // בדוק אם המשתמש הועבר לכאן כי הוא חסום
     if (this.$route.query.blocked === "true") {
       this.isBlocked = true;
       this.toast?.showError("המשתמש הזה חסום על ידי הנהלת הנדימן");
+    }
+
+    if (this.$route.query.error === "facebook_not_configured") {
+      this.toast?.showError("חיבור Facebook לא מוגדר בשרת");
+    } else if (this.$route.query.error === "auth_failed") {
+      this.toast?.showError("האימות נכשל, נסה שוב");
     }
   },
   watch: {
     "$route.query": {
       handler(newQuery) {
         if (this.toast) this.handleGoogleCallback();
+        if (this.toast) this.handleFacebookCallback();
         // בדוק אם המשתמש הועבר לכאן כי הוא חסום
         if (newQuery.blocked === "true") {
           this.isBlocked = true;
@@ -336,12 +359,45 @@ export default {
         if (userData) {
           try {
             this.ifGoogleUser = true;
+            this.ifFacebookUser = false;
+            this.facebookId = null;
             const user = JSON.parse(decodeURIComponent(userData));
             this.toast.showSuccess("התחברות עם Google בוצעה בהצלחה!");
             this.username = user.username;
             // השתמש ב-googleId כסיסמה, לא במייל
             this.password = user.googleId || user._id?.toString() || user.email;
             this.googleId = user.googleId;
+            await this.handleLogin();
+          } catch (error) {
+            this.toast?.showError("לא הצלחנו לעבד את נתוני המשתמש");
+          }
+        }
+      }
+    },
+
+    async handleFacebookCallback() {
+      if (!this.toast) this.toast = useToast();
+
+      const facebookAuth =
+        this.$route.query.facebookAuth ||
+        new URLSearchParams(window.location.search).get("facebookAuth");
+
+      if (facebookAuth === "success") {
+        const userData =
+          this.$route.query.user ||
+          new URLSearchParams(window.location.search).get("user");
+
+        if (userData) {
+          try {
+            this.ifFacebookUser = true;
+            this.ifGoogleUser = false;
+            this.googleId = null;
+            const user = JSON.parse(decodeURIComponent(userData));
+            this.toast.showSuccess("התחברות עם Facebook בוצעה בהצלחה!");
+            this.username = user.username || user.email || user.name || "";
+            this.password =
+              user.facebookId || user.id || user._id?.toString() || user.email;
+            this.facebookId = user.facebookId || user.id;
             await this.handleLogin();
           } catch (error) {
             this.toast?.showError("לא הצלחנו לעבד את נתוני המשתמש");
@@ -357,6 +413,8 @@ export default {
           password: this.password,
           ifGoogleUser: this.ifGoogleUser,
           googleId: this.googleId,
+          ifFacebookUser: this.ifFacebookUser,
+          facebookId: this.facebookId,
         });
 
         if (data.message === "Success") {
@@ -364,6 +422,18 @@ export default {
 
           if (this.ifGoogleUser && data.password) {
             this.password = data.password;
+          }
+
+          if (this.ifFacebookUser && data.password) {
+            this.password = data.password;
+          }
+
+          // בדוק אם זה Admin
+          if (data.isAdmin) {
+            this.$router.push({
+              name: "AdminManager",
+            });
+            return;
           }
 
           if (data.user && data.user._id) {
@@ -381,6 +451,10 @@ export default {
           if (this.ifGoogleUser) {
             this.toast.showError(
               "משתמש Google לא נמצא במערכת. אנא הירשם תחילה."
+            );
+          } else if (this.ifFacebookUser) {
+            this.toast.showError(
+              "משתמש Facebook לא נמצא במערכת. אנא הירשם תחילה."
             );
           } else {
             this.toast.showError("מייל או שם משתמש לא נכון");
@@ -410,11 +484,8 @@ export default {
       window.location.href = `${URL}/auth/google?source=login`;
     },
 
-    // לא היה לך בפונקציה – שמרתי את הקריאה כדי שלא יישבר
     ConenectWithFacebook() {
-      // אם יש לך endpoint לפייסבוק תשים פה
-      // window.location.href = `${URL}/auth/facebook?source=login`;
-      this.toast?.showError("פייסבוק עדיין לא מחובר בצד שרת");
+      window.location.href = `${URL}/auth/facebook?source=login`;
     },
 
     goToRegister() {
@@ -433,422 +504,586 @@ export default {
 </script>
 
 <style scoped lang="scss">
-$bg1: #0f0f0f;
-$bg2: #1a1a1a;
-$panel: #111111;
+// Color Variables
+$primary: #f27f0d;
+$primary-dark: #b35900;
+$background-dark: #050505;
 $text: rgba(255, 255, 255, 0.92);
-$muted: rgba(255, 255, 255, 0.62);
-$orange: #ff6a00;
-$orange2: #ff8a2b;
+$text-muted: rgba(255, 255, 255, 0.62);
 
-.login {
-  min-height: 100vh;
-  position: relative;
-  padding: 16px;
-  font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    Arial, sans-serif;
-  overflow: hidden;
+// Custom Styles for Glow Effects
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
-.login__bg-video,
-.login__bg-image {
-  position: fixed;
-  top: 0;
-  left: 0;
+.login {
+  min-height: 100dvh;
+  position: relative;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  z-index: -1;
+  padding: 0;
+  font-family: "Space Grotesk", "Noto Sans", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, Arial, sans-serif;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: $background-dark;
+  color: $text;
+  box-sizing: border-box;
+
+  @media (min-width: 640px) {
+    align-items: center;
+    padding: 24px;
+  }
+}
+
+// Background Effects
+.login__bg-gradient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(
+    circle at 50% 30%,
+    #4a2503 0%,
+    #1a0e05 40%,
+    #000000 80%
+  );
+}
+
+.login__bg-pattern {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.2;
+  background-image: url("https://www.transparenttextures.com/patterns/stardust.png");
   pointer-events: none;
 }
 
-.login__bg-image {
-  background-image: url("~@/../public/img/backgroundApp.webp");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  filter: brightness(0.8);
-}
-
-.login__bg-image::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.3);
-  z-index: 1;
-}
-
-.login__bg-video {
-  filter: brightness(0.5);
-}
-
+// Main Container
 .login__wrap {
   position: relative;
-  z-index: 1;
-  max-width: 1200px;
-  margin: 0 auto;
-  min-height: calc(100vh - 32px);
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 28px;
-  align-items: center;
-}
-
-.login__side {
-  display: flex;
-  justify-content: center;
-}
-
-.side {
+  z-index: 10;
   width: 100%;
-  max-width: 520px;
-  padding: 18px;
-}
-
-.side__logo {
-  width: 78px;
-  height: 78px;
-  border-radius: 999px;
-  background: $orange;
-  color: #0b0b0f;
-  display: grid;
-  place-items: center;
-  font-weight: 900;
-  font-size: 40px;
-  margin: 0 auto 18px;
-  box-shadow: 0 10px 26px rgba(255, 106, 0, 0.35);
-}
-
-.side__title {
-  margin: 0 0 18px;
-  text-align: center;
-  color: $orange;
-  font-size: 44px;
-  font-weight: 900;
-  letter-spacing: 1px;
-  text-shadow: 0 0 18px rgba(255, 106, 0, 0.35);
-}
-
-.side__tag {
-  border: 2px solid rgba(255, 106, 0, 0.85);
-  background: rgba(17, 17, 17, 0.9);
-  border-radius: 16px;
-  padding: 22px;
-  text-align: center;
-  box-shadow: 0 10px 26px rgba(255, 106, 0, 0.18);
-}
-
-.side__tagMain {
-  color: $orange;
-  font-weight: 900;
-  font-size: 30px;
-}
-.side__tagSub {
-  margin-top: 6px;
-  color: rgba(255, 255, 255, 0.92);
-  font-weight: 800;
-  font-size: 20px;
-}
-
-.side__features {
-  margin-top: 18px;
-  display: grid;
-  gap: 12px;
-}
-
-.feat {
+  max-width: 448px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  background: rgba(17, 17, 17, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  padding: 14px 16px;
-  color: rgba(255, 255, 255, 0.92);
-  font-weight: 700;
-}
-.feat__i {
-  font-size: 18px;
-  filter: drop-shadow(0 0 8px rgba(255, 106, 0, 0.35));
-}
-
-.login__main {
-  display: flex;
-  justify-content: center;
-}
-
-.card {
-  width: 100%;
-  max-width: 520px; /* הרחבתי! */
-  background: rgba(17, 17, 17, 0.92);
-  border: 2px solid rgba(255, 106, 0, 0.85);
-  border-radius: 18px;
-  padding: 22px;
-  box-shadow: 0 16px 46px rgba(255, 106, 0, 0.12);
-}
-
-.card__mobileHead {
-  display: none;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-.card__mobileLogo {
-  width: 48px;
-  height: 48px;
-  border-radius: 999px;
-  background: $orange;
-  color: #0b0b0f;
-  display: grid;
-  place-items: center;
-  font-weight: 1000;
-  font-size: 24px;
-  flex-shrink: 0;
-}
-.card__mobileTitle {
-  color: $orange;
-  font-weight: 1000;
-  font-size: 18px;
-  line-height: 1.1;
-}
-.card__mobileSub {
-  margin-top: 3px;
-  color: $muted;
-  font-weight: 800;
-  font-size: 12px;
-}
-
-.registerTop,
-.registerBottom {
-  text-align: center;
-  color: $muted;
-  font-weight: 700;
-  margin: 0 0 14px;
-  font-size: 14px;
-}
-.registerBottom {
-  margin-top: 16px;
-  margin-bottom: 0;
-}
-
-.registerTop a,
-.registerBottom a {
-  color: $orange;
-  text-decoration: none;
-  font-weight: 900;
-}
-.registerTop a:hover,
-.registerBottom a:hover {
-  text-decoration: underline;
-}
-
-.form {
-  display: grid;
-  gap: 14px;
-}
-
-.field {
-  display: grid;
-  gap: 8px;
-}
-.field__label {
-  color: $orange;
-  font-weight: 900;
-  font-size: 13px;
-}
-.field__input {
-  width: 100%;
+  justify-content: space-between;
+  gap: 0;
   box-sizing: border-box;
-  height: 48px; /* יותר נוח במובייל */
-  padding: 0 14px;
-  border-radius: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  background: rgba(31, 31, 31, 0.95);
-  color: rgba(255, 255, 255, 0.95);
-  font-size: 16px; /* 16 כדי למנוע zoom באייפון */
-  font-weight: 800;
-  outline: none;
-  text-align: right;
-}
-.field__input:focus {
-  border-color: rgba(255, 106, 0, 0.75);
-  box-shadow: 0 0 0 3px rgba(255, 106, 0, 0.14);
-  background: rgba(42, 42, 42, 0.95);
+  min-width: 0;
+  padding: 24px 16px;
+  padding-top: max(env(safe-area-inset-top, 32px), 32px);
+  padding-bottom: max(env(safe-area-inset-bottom, 4px), 4px);
+  min-height: 100dvh;
+
+  @media (min-width: 640px) {
+    padding: 32px 24px;
+    padding-top: 24px;
+    padding-bottom: 24px;
+    min-height: auto;
+    justify-content: flex-start;
+    gap: 32px;
+  }
 }
 
-.pass {
+// Hero Section
+.login__hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-bottom: 32px;
+  margin-top: 0;
+
+  @media (max-width: 640px) {
+    margin-bottom: 24px;
+  }
+
+  @media (min-width: 641px) {
+    margin-bottom: 32px;
+  }
+}
+
+.login__logoContainer {
+  position: relative;
+  width: 112px;
+  height: 112px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 0 15px rgba(242, 127, 13, 0.6))
+    drop-shadow(0 0 30px rgba(242, 127, 13, 0.4));
+
+  @media (max-width: 640px) {
+    width: 96px;
+    height: 96px;
+    margin-bottom: 12px;
+  }
+}
+
+.login__logo {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+  color: $primary;
+}
+
+.login__logoAura {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(242, 127, 13, 0.2);
+  filter: blur(24px);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.login__headline {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  @media (max-width: 640px) {
+    gap: 6px;
+  }
+}
+
+.login__title {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: $text;
+  text-shadow: 0 0 10px rgba(242, 127, 13, 0.5),
+    0 0 20px rgba(242, 127, 13, 0.3);
+  margin: 0;
+
+  @media (max-width: 640px) {
+    font-size: clamp(28px, 8vw, 32px);
+  }
+}
+
+.login__subtitle {
+  font-size: 18px;
+  color: rgba(242, 127, 13, 0.9);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  margin: 0;
+
+  @media (max-width: 640px) {
+    font-size: clamp(14px, 4vw, 16px);
+  }
+}
+
+// Login Card
+.login__card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: rgba(10, 10, 10, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+  margin-top: auto;
+  margin-bottom: 0;
+
+  @media (max-width: 640px) {
+    padding: 20px 18px;
+    gap: 20px;
+    border-radius: 20px;
+    margin-bottom: 0;
+    margin-top: auto;
+    padding-top: 60px;
+  }
+
+  @media (max-width: 420px) {
+    padding-top: 80px;
+  }
+
+  @media (min-width: 641px) {
+    padding: 32px;
+    margin-bottom: 32px;
+    margin-top: 0;
+  }
+}
+
+// Form
+.login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+
+  @media (max-width: 640px) {
+    gap: 16px;
+  }
+}
+
+// Input Groups
+.input-group {
   position: relative;
 }
-.pass__input {
-  padding-left: 52px;
-}
-.pass__toggle {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
+
+.input-wrapper {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.18);
-  cursor: pointer;
-  display: grid;
-  place-items: center;
+  height: 56px;
+  padding: 0 4px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  min-width: 0;
+
+  @media (max-width: 640px) {
+    height: 52px;
+  }
+
+  &:focus-within {
+    border-color: $primary;
+    box-shadow: 0 0 15px rgba(242, 127, 13, 0.3);
+  }
 }
 
-.btn {
-  height: 50px;
-  border-radius: 14px;
+.input-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: $primary;
+  flex-shrink: 0;
+
+  &--leading {
+    width: 48px;
+    padding-right: 16px;
+    padding-left: 4px;
+    border-left: 1px solid rgba(255, 255, 255, 0.05);
+
+    @media (max-width: 640px) {
+      width: 44px;
+      padding-right: 12px;
+    }
+  }
+
+  &--trailing {
+    width: 40px;
+    padding-left: 8px;
+    padding-right: 8px;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transition: color 0.2s ease;
+    background: transparent;
+  }
+
+  &--trailing:hover {
+    color: $text;
+  }
+
+  .material-symbols-outlined {
+    font-size: 24px;
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+
+    @media (max-width: 640px) {
+      font-size: 22px;
+    }
+  }
+
+  &--trailing .material-symbols-outlined {
+    font-size: 20px;
+
+    @media (max-width: 640px) {
+      font-size: 18px;
+    }
+  }
+}
+
+.input-field {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: transparent;
   border: none;
-  cursor: pointer;
-  font-weight: 1000;
+  color: $text;
+  padding: 0 16px;
+  height: 100%;
   font-size: 16px;
-}
-.btn--primary {
-  background: linear-gradient(135deg, $orange 0%, #ea580c 100%);
-  color: #0b0b0f;
-  box-shadow: 0 10px 24px rgba(255, 106, 0, 0.22);
-}
-.btn--primary:active {
-  transform: scale(0.99);
+  font-weight: 400;
+  font-family: inherit;
+  outline: none;
+  text-align: right;
+
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  &:read-only {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
 }
 
+// Forgot Password Wrapper
+.forgot-password-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: -4px;
+  gap: 16px;
+  flex-wrap: wrap;
+
+  @media (max-width: 420px) {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+}
+
+// Forgot Password
+.forgot-password {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0;
+
+  a {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.4);
+    text-decoration: none;
+    transition: all 0.2s ease;
+
+    @media (max-width: 640px) {
+      font-size: 13px;
+    }
+
+    &:hover {
+      color: $primary;
+      text-decoration: underline;
+      text-decoration-color: rgba(242, 127, 13, 0.5);
+      text-underline-offset: 4px;
+    }
+  }
+}
+
+// Login Button
+.login-btn {
+  margin-top: 8px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  height: 56px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 1);
+  border: 2px solid $primary;
+  color: $primary;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  box-shadow: 0 0 20px rgba(242, 127, 13, 0.25);
+  transition: all 0.3s ease;
+  transform: scale(1);
+  min-width: 0;
+
+  @media (max-width: 640px) {
+    height: 52px;
+    font-size: 16px;
+    margin-top: 4px;
+  }
+
+  &:hover {
+    background: $primary;
+    color: $text;
+    border-color: $primary;
+    box-shadow: 0 0 30px rgba(242, 127, 13, 0.6);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+// Biometric Auth
 .biometric-auth {
   margin: 16px 0;
+
+  @media (max-width: 640px) {
+    margin: 12px 0;
+  }
 }
 
-.btn--biometric {
+.biometric-btn {
   width: 100%;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 106, 0, 0.15) 0%,
-    rgba(255, 106, 0, 0.25) 100%
-  );
-  color: $orange;
-  border: 2px solid rgba(255, 106, 0, 0.5);
+  height: 56px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(242, 127, 13, 0.5);
+  color: $primary;
+  font-weight: 500;
+  font-size: 16px;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
   transition: all 0.3s ease;
+
+  @media (max-width: 640px) {
+    height: 52px;
+    font-size: 14px;
+    gap: 8px;
+  }
+
+  &:hover:not(:disabled) {
+    background: rgba(242, 127, 13, 0.1);
+    border-color: rgba(242, 127, 13, 0.7);
+    box-shadow: 0 0 20px rgba(242, 127, 13, 0.3);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .material-symbols-outlined {
+    font-size: 20px;
+
+    @media (max-width: 640px) {
+      font-size: 18px;
+    }
+  }
 }
 
-.btn--biometric:hover:not(:disabled) {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 106, 0, 0.25) 0%,
-    rgba(255, 106, 0, 0.35) 100%
-  );
-  border-color: rgba(255, 106, 0, 0.7);
-  box-shadow: 0 8px 20px rgba(255, 106, 0, 0.2);
-}
-
-.btn--biometric:active:not(:disabled) {
-  transform: scale(0.98);
-}
-
-.btn--biometric:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn--biometric svg {
-  font-size: 20px;
-}
-
-.forgotLink {
-  display: block;
-  text-align: center;
-  margin-top: 10px;
-  color: rgba(255, 106, 0, 0.85);
-  text-decoration: none;
-  font-weight: 900;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 106, 0, 0.28);
-}
-.forgotLink:hover {
-  background: rgba(255, 106, 0, 0.1);
-  border-color: rgba(255, 106, 0, 0.45);
-  color: rgba(255, 106, 0, 1);
-}
-
-.divider {
+// Social Divider
+.social-divider {
+  position: relative;
   display: flex;
   align-items: center;
-  text-align: center;
-  margin: 18px 0;
-  color: rgba(255, 255, 255, 0.55);
-  font-weight: 900;
-}
-.divider::before,
-.divider::after {
-  content: "";
-  flex: 1;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-}
-.divider span {
-  padding: 0 10px;
+  padding: 8px 0;
+
+  @media (max-width: 640px) {
+    padding: 6px 0;
+  }
+
+  &__line {
+    flex-grow: 1;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  &__text {
+    flex-shrink: 0;
+    margin: 0 16px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+
+    @media (max-width: 640px) {
+      margin: 0 12px;
+      font-size: 13px;
+    }
+  }
 }
 
-.social {
-  display: grid;
-  gap: 10px;
+// Social Buttons
+.social-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
 }
-.social__btn {
-  height: 48px;
-  border-radius: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  background: rgba(31, 31, 31, 0.95);
-  color: rgba(255, 255, 255, 0.92);
-  font-weight: 900;
-  font-size: 14px;
+
+.social-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-}
-.social__btn img {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-}
+  transition: all 0.3s ease;
+  color: rgba(255, 255, 255, 0.3);
 
-@media (max-width: 1024px) {
-  .login__wrap {
-    grid-template-columns: 1fr;
-    gap: 14px;
+  @media (max-width: 640px) {
+    width: 52px;
+    height: 52px;
   }
-  .login__side {
-    display: none;
-  }
-  .card__mobileHead {
-    display: flex;
-  }
-  .card {
-    max-width: 640px; /* במובייל/טאבלט זה מרגיש רחב */
-  }
-}
 
-@media (max-width: 520px) {
-  .login {
-    padding: 12px;
+  &:hover {
+    border-color: $primary;
+    color: $text;
+    box-shadow: 0 0 15px rgba(242, 127, 13, 0.4);
   }
-  .card {
-    max-width: none; /* הכי חשוב: שלא יישאר צר */
-    width: 100%;
-    padding: 18px 16px;
-  }
-  .registerTop {
-    margin-bottom: 10px;
+
+  &__icon {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+
+    @media (max-width: 640px) {
+      width: 22px;
+      height: 22px;
+    }
   }
 }
 
+// Footer (now inside card)
+.login__footer {
+  text-align: right;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  direction: rtl;
+
+  p {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.4);
+    margin: 0;
+    line-height: 1.4;
+    text-align: right;
+
+    @media (max-width: 640px) {
+      font-size: 12px;
+      line-height: 1.3;
+    }
+
+    a {
+      color: $text;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all 0.2s ease;
+
+      &:hover {
+        color: $primary;
+        text-shadow: 0 0 10px rgba(242, 127, 13, 0.4);
+      }
+    }
+  }
+}
+
+// Blocked Message
 .blocked-message {
   display: flex;
   align-items: center;
@@ -858,14 +1093,154 @@ $orange2: #ff8a2b;
   background: rgba(239, 68, 68, 0.15);
   border: 2px solid rgba(239, 68, 68, 0.5);
   color: #ef4444;
-  font-weight: 900;
+  font-weight: 500;
   font-size: 14px;
   margin-bottom: 16px;
   text-align: right;
+
+  .material-symbols-outlined {
+    font-size: 18px;
+    flex-shrink: 0;
+  }
 }
 
-.blocked-message svg {
-  font-size: 18px;
-  flex-shrink: 0;
+// Responsive
+@media (max-width: 640px) {
+  .login__wrap {
+    padding: 20px 16px;
+    padding-top: max(env(safe-area-inset-top, 24px), 24px);
+    padding-bottom: max(env(safe-area-inset-bottom, 24px), 24px);
+  }
+
+  .login__card {
+    margin-bottom: 20px;
+  }
+
+  .login__footer {
+    margin-bottom: 20px;
+  }
+}
+
+@media (max-width: 520px) {
+  .login__wrap {
+    padding: 16px 14px;
+    padding-top: max(env(safe-area-inset-top, 20px), 20px);
+    padding-bottom: max(env(safe-area-inset-bottom, 20px), 20px);
+  }
+
+  .login__logoContainer {
+    width: 88px;
+    height: 88px;
+    margin-bottom: 10px;
+  }
+
+  .login__title {
+    font-size: clamp(26px, 7vw, 30px);
+  }
+
+  .login__subtitle {
+    font-size: clamp(13px, 3.5vw, 15px);
+  }
+
+  .login__card {
+    padding: 18px 16px;
+    gap: 18px;
+    margin-bottom: 18px;
+  }
+
+  .login__form {
+    gap: 14px;
+  }
+
+  .login-btn {
+    height: 50px;
+    font-size: 15px;
+  }
+
+  .input-wrapper {
+    height: 50px;
+  }
+
+  .login__footer {
+    margin-bottom: 18px;
+  }
+}
+
+@media (max-width: 420px) {
+  .login__wrap {
+    padding: 14px 12px;
+    padding-top: max(env(safe-area-inset-top, 16px), 16px);
+    padding-bottom: max(env(safe-area-inset-bottom, 16px), 16px);
+  }
+
+  .login__logoContainer {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 8px;
+  }
+
+  .login__title {
+    font-size: clamp(24px, 6.5vw, 28px);
+  }
+
+  .login__subtitle {
+    font-size: clamp(12px, 3vw, 14px);
+  }
+
+  .login__card {
+    padding: 16px 14px;
+    gap: 16px;
+    border-radius: 18px;
+    margin-bottom: 16px;
+  }
+
+  .login__form {
+    gap: 12px;
+  }
+
+  .login-btn {
+    height: 48px;
+    font-size: 14px;
+  }
+
+  .input-wrapper {
+    height: 48px;
+  }
+
+  .input-icon--leading {
+    width: 40px;
+    padding-right: 10px;
+  }
+
+  .input-icon .material-symbols-outlined {
+    font-size: 20px;
+  }
+
+  .input-icon--trailing .material-symbols-outlined {
+    font-size: 16px;
+  }
+
+  .biometric-btn {
+    height: 48px;
+    font-size: 12px;
+  }
+
+  .social-btn {
+    width: 48px;
+    height: 48px;
+  }
+
+  .social-btn__icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .login__footer {
+    margin-bottom: 16px;
+  }
+
+  .login__hero {
+    padding-top: 16px;
+  }
 }
 </style>

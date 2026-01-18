@@ -909,9 +909,13 @@ function findAvailablePort(startPort) {
     }
 
     // Session configuration for Passport
+    const sessionSecret = process.env.SESSION_SECRET;
+    if (!sessionSecret) {
+      throw new Error("❌ SESSION_SECRET חובה להגדיר בקובץ .env");
+    }
     app.use(
       session({
-        secret: process.env.SESSION_SECRET || "hendiman-secret-key",
+        secret: sessionSecret,
         resave: true,
         saveUninitialized: true,
         name: "hendiman.session", // Custom session name
@@ -1497,7 +1501,36 @@ function findAvailablePort(startPort) {
           return res.json({ message: "Database not connected" });
         }
 
-        const { username, password, ifGoogleUser, googleId } = req.body;
+        const {
+          username,
+          password,
+          ifGoogleUser,
+          googleId,
+          ifFacebookUser,
+          facebookId,
+        } = req.body;
+
+        // בדוק אם זה פרטי Admin
+        const adminUsername = process.env.ADMIN_USER_NAME;
+        const adminPassword = process.env.ADMIN_PASS;
+
+        if (
+          username === adminUsername &&
+          password === adminPassword &&
+          !ifGoogleUser &&
+          !ifFacebookUser
+        ) {
+          return res.json({
+            message: "Success",
+            isAdmin: true,
+            user: {
+              _id: "admin-user",
+              username: adminUsername,
+              email: "admin@hendiman.local",
+              isHandyman: false,
+            },
+          });
+        }
 
         let user;
 
@@ -1507,6 +1540,11 @@ function findAvailablePort(startPort) {
             return res.json({ message: "NoUser" });
           }
           user = await collection.findOne({ googleId: googleId });
+        } else if (ifFacebookUser) {
+          if (!facebookId) {
+            return res.json({ message: "NoUser" });
+          }
+          user = await collection.findOne({ facebookId: facebookId });
         } else {
           // Regular user, find by username or email
           user = await collection.findOne({
@@ -1537,6 +1575,25 @@ function findAvailablePort(startPort) {
           return res.json({
             message: "Success",
             password: user.googleId,
+            user: {
+              _id: user._id ? user._id.toString() : user._id,
+              username: user.username,
+              email: user.email,
+              isHandyman: user.isHandyman,
+            },
+          });
+        } else if (ifFacebookUser) {
+          if (!user.facebookId) {
+            return res.json({ message: "NoUser" });
+          }
+
+          if (user.facebookId !== facebookId) {
+            return res.json({ message: "NoUser" });
+          }
+
+          return res.json({
+            message: "Success",
+            password: user.facebookId,
             user: {
               _id: user._id ? user._id.toString() : user._id,
               username: user.username,
@@ -1974,6 +2031,7 @@ function findAvailablePort(startPort) {
           logoUrl,
           isHandyman,
           googleId, // בדוק אם יש googleId נפרד
+          facebookId, // בדוק אם יש facebookId נפרד
           usingMyLocation, // הוסף את המשתנה מה-request body
         } = req.body;
 
@@ -2232,6 +2290,30 @@ function findAvailablePort(startPort) {
             });
           }
         }
+
+        // בדיקה אם משתמש Facebook כבר קיים (לפי facebookId)
+        if (facebookId) {
+          const existingUserByFacebookId = await collection.findOne({
+            facebookId: facebookId,
+          });
+
+          if (existingUserByFacebookId) {
+            if (
+              existingUserByFacebookId.IsBlocked === true ||
+              existingUserByFacebookId.isBlocked === true
+            ) {
+              return res.status(403).json({
+                success: false,
+                message: "Blocked",
+              });
+            }
+            return res.status(400).json({
+              success: false,
+              message:
+                "משתמש Facebook כבר קיים במערכת. אנא התחבר לחשבון הקיים.",
+            });
+          }
+        }
         // לא בודקים אם סיסמה רגילה כבר קיימת - כל אחד יכול להשתמש באותה סיסמה
         // Build user object based on type
         // For Google users, password might be the googleId
@@ -2268,6 +2350,11 @@ function findAvailablePort(startPort) {
         // אם יש googleId נפרד, שמור אותו
         if (googleId) {
           userData.googleId = googleId;
+        }
+
+        // אם יש facebookId נפרד, שמור אותו
+        if (facebookId) {
+          userData.facebookId = facebookId;
         }
 
         // Add handyman-specific fields only if isHandyman is true
@@ -12266,6 +12353,148 @@ function findAvailablePort(startPort) {
         const hasMoreRatings = ratingsWithDetails.length > limit;
         const ratings = ratingsWithDetails.slice(0, limit);
 
+        // --- Performance stats (real data) ---
+        const jobsCol = getCollectionJobs();
+        const paymentsCol = getCollectionPayments();
+
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const nextMonthStart = new Date(
+          now.getFullYear(),
+          now.getMonth() + 1,
+          1
+        );
+
+        // Aggregate ratings (count + average) across ALL ratings (not paginated)
+        const ratingAgg = await ratingsCol
+          .aggregate([
+            { $match: { handymanId: String(handymanId) } },
+            {
+              $group: {
+                _id: null,
+                ratingsCount: { $sum: 1 },
+                averageRating: { $avg: "$rating" },
+              },
+            },
+          ])
+          .toArray();
+
+        const ratingAggMonth = await ratingsCol
+          .aggregate([
+            {
+              $match: {
+                handymanId: String(handymanId),
+                createdAt: { $gte: monthStart, $lt: nextMonthStart },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                reviewsMonthCount: { $sum: 1 },
+                averageRatingMonth: { $avg: "$rating" },
+              },
+            },
+          ])
+          .toArray();
+
+        const ratingsCount = ratingAgg?.[0]?.ratingsCount || 0;
+        const averageRating = Number(ratingAgg?.[0]?.averageRating || 0);
+        const reviewsMonthCount = ratingAggMonth?.[0]?.reviewsMonthCount || 0;
+        const averageRatingMonth = Number(
+          ratingAggMonth?.[0]?.averageRatingMonth || 0
+        );
+
+        // Aggregate payments (earnings) for handyman
+        const earningsAgg = await paymentsCol
+          .aggregate([
+            {
+              $match: { handymanId: String(handymanId), status: "transferred" },
+            },
+            {
+              $addFields: {
+                effectiveDate: { $ifNull: ["$transferredAt", "$createdAt"] },
+              },
+            },
+            {
+              $facet: {
+                total: [
+                  {
+                    $group: {
+                      _id: null,
+                      totalEarnings: { $sum: { $ifNull: ["$spacious_H", 0] } },
+                    },
+                  },
+                ],
+                month: [
+                  {
+                    $match: {
+                      effectiveDate: { $gte: monthStart, $lt: nextMonthStart },
+                    },
+                  },
+                  {
+                    $group: {
+                      _id: null,
+                      monthlyEarnings: {
+                        $sum: { $ifNull: ["$spacious_H", 0] },
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          ])
+          .toArray();
+
+        const totalEarnings = Number(
+          earningsAgg?.[0]?.total?.[0]?.totalEarnings || 0
+        );
+        const monthlyEarnings = Number(
+          earningsAgg?.[0]?.month?.[0]?.monthlyEarnings || 0
+        );
+
+        // Jobs done counters
+        let handymanObjectId = null;
+        try {
+          handymanObjectId = new ObjectId(String(handymanId));
+        } catch (e) {
+          handymanObjectId = null;
+        }
+
+        const jobMatch = {
+          status: "done",
+          isDeleted: { $ne: true },
+        };
+        if (handymanObjectId) {
+          jobMatch.handymanId = handymanObjectId;
+        } else {
+          // Fallback: if handymanId is stored as string in some environments
+          jobMatch.handymanId = String(handymanId);
+        }
+
+        const jobsAgg = await jobsCol
+          .aggregate([
+            { $match: jobMatch },
+            {
+              $facet: {
+                total: [{ $count: "jobDoneTotal" }],
+                month: [
+                  {
+                    $match: {
+                      updatedAt: { $gte: monthStart, $lt: nextMonthStart },
+                    },
+                  },
+                  { $count: "jobDoneMonth" },
+                ],
+              },
+            },
+          ])
+          .toArray();
+
+        const jobDone = Number(jobsAgg?.[0]?.total?.[0]?.jobDoneTotal || 0);
+        const jobDoneMonth = Number(
+          jobsAgg?.[0]?.month?.[0]?.jobDoneMonth || 0
+        );
+
         return res.json({
           success: true,
           ratings,
@@ -12274,6 +12503,21 @@ function findAvailablePort(startPort) {
             limit,
             returned: ratings.length,
             hasMore: hasMoreRatings,
+          },
+          // Backward-compatible top-level stats
+          monthlyEarnings,
+          totalEarnings,
+          jobDone,
+          // Extended stats
+          stats: {
+            ratingsCount,
+            averageRating,
+            reviewsMonthCount,
+            averageRatingMonth,
+            monthlyEarnings,
+            totalEarnings,
+            jobDoneTotal: jobDone,
+            jobDoneMonth,
           },
         });
       } catch (error) {

@@ -360,6 +360,7 @@
         <!-- LEFT ~60% JOBS -->
         <JobsSection
           :isHendiman="isHendiman"
+          :isMobile="isMobile"
           :filteredJobs="pagedJobs"
           :jobsPagination="jobsPagination"
           :handymanCoords="
@@ -1309,6 +1310,32 @@
         <span class="mNav__txt">האזור האישי שלי</span>
       </button>
       <button class="mNav__item" type="button">
+        <span class="mNav__badge" aria-hidden="true"></span>
+        <font-awesome-icon :icon="['fas', 'comment']" class="mNav__ic" />
+        <span class="mNav__txt">צ'אט</span>
+      </button>
+      <button class="mNav__item" type="button" @click="onOpenProfile">
+        <font-awesome-icon :icon="['fas', 'circle-user']" class="mNav__ic" />
+        <span class="mNav__txt">חשבון</span>
+      </button>
+    </nav>
+
+    <!-- Mobile handyman: bottom nav (same style as client) -->
+    <nav
+      v-if="
+        isHendiman &&
+        isMobile &&
+        !isLoading &&
+        (!currentAssignedJob || isChatMinimized)
+      "
+      class="mNav"
+      aria-label="ניווט"
+    >
+      <button class="mNav__item" type="button" @click="onViewRatings">
+        <font-awesome-icon :icon="['fas', 'star']" class="mNav__ic" />
+        <span class="mNav__txt">האזור האישי שלי</span>
+      </button>
+      <button class="mNav__item" type="button" @click="onOpenHandymenChat">
         <span class="mNav__badge" aria-hidden="true"></span>
         <font-awesome-icon :icon="['fas', 'comment']" class="mNav__ic" />
         <span class="mNav__txt">צ'אט</span>
