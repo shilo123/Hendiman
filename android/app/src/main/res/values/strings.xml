@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">handiman</string>
+    <string name="title_activity_main">handiman</string>
+    <string name="package_name">hendiman.com</string>
+    <string name="custom_url_scheme">hendiman.com</string>
+</resources>

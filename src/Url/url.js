@@ -1,9 +1,17 @@
 // Base URL for API
-// In production, use the same origin (server serves client)
-// In development, use localhost
+// Check if running in Capacitor app (Android/iOS)
+import { Capacitor } from "@capacitor/core";
+
 let URL;
-if (process.env.NODE_ENV === "production") {
-  // In production, API is on the same origin
+
+// Check if running in Capacitor app
+const isCapacitor = Capacitor.isNativePlatform();
+
+if (isCapacitor) {
+  // In Capacitor app (Android/iOS), use Heroku server
+  URL = "https://handiman-98cc6d1f0a79.herokuapp.com";
+} else if (process.env.NODE_ENV === "production") {
+  // In production web, use the same origin (server serves client)
   URL = "";
 } else {
   // In development, use localhost

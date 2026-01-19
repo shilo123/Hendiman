@@ -1,13 +1,7 @@
 <template>
   <div class="dash" dir="rtl">
     <!-- Loading Overlay -->
-    <div v-if="isLoading" class="loading-overlay">
-      <div class="loading-spinner">
-        <div class="spinner"></div>
-        <p class="loading-text">טוען נתונים...</p>
-      </div>
-      <LoadingFactsDisplay />
-    </div>
+    <HendimanLoader v-if="isLoading" />
 
     <!-- TOP BAR - hidden when loading, chat is active, shown when minimized or no job, or when IncomeDetailModal is open -->
     <DashboardTopBar
@@ -381,6 +375,10 @@
             store.user?._id?.toString() || me?._id?.toString() || null
           "
           :hideFiltersOnDesktop="isHendiman && !isMobile"
+          :user-name="me?.name || me?.username || ''"
+          :user-plan="me?.subscriptionPlanType ? 'תוכנית פרימיום' : ''"
+          :user-avatar="me?.avatarUrl || ''"
+          :user-city="me?.city || store.user?.city || ''"
           @refresh="onRefresh"
           @pick-status="onPickStatus"
           @change-km="onChangeKm"
@@ -1362,7 +1360,7 @@ import ProfileSheet from "@/components/Dashboard/ProfileSheet.vue";
 import JobChat from "@/components/Dashboard/JobChat.vue";
 import JobChatMobile from "@/components/Dashboard/JobChatMobile.vue";
 import MinimizableNotification from "@/components/Global/MinimizableNotification.vue";
-import LoadingFactsDisplay from "@/components/Global/LoadingFactsDisplay.vue";
+import HendimanLoader from "@/components/Global/HendimanLoader.vue";
 import ProblemReportModal from "@/components/Dashboard/ProblemReportModal.vue";
 import IncomeDetailModal from "@/components/Dashboard/IncomeDetailModal.vue";
 import ClientQuotationsModal from "@/components/Dashboard/ClientQuotationsModal.vue";
@@ -1373,7 +1371,8 @@ import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
 import { getCurrentLocation } from "@/utils/geolocation";
 import { io } from "socket.io-client";
-import { messaging, VAPID_KEY, getToken, onMessage } from "@/firebase";
+import { messaging, VAPID_KEY, getToken, onMessage, isNative, isAndroid } from "@/firebase";
+import { Capacitor } from "@capacitor/core";
 import AddressAutocomplete from "@/components/Global/AddressAutocomplete.vue";
 import citiesData from "@/APIS/AdressFromIsrael.json";
 import { loadStripe } from "@stripe/stripe-js";
@@ -1393,7 +1392,7 @@ export default {
     JobChatMobile,
     AddressAutocomplete,
     MinimizableNotification,
-    LoadingFactsDisplay,
+    HendimanLoader,
     ProblemReportModal,
     IncomeDetailModal,
     ClientQuotationsModal,
@@ -3924,6 +3923,33 @@ export default {
     },
 
     async enablePushNotifications() {
+      // In Android native app, FCM tokens are handled automatically via google-services.json
+      // But we still need to get the token from Firebase
+      if (isNative && isAndroid) {
+        // For Android native app, get token directly without service worker
+        if (messaging) {
+          try {
+            // In Android, we can get token without VAPID key
+            const token = await getToken(messaging);
+            
+            if (token) {
+              await this.saveTokenToServer(token);
+            }
+          } catch (tokenError) {
+            // Token error - might be permission issue or Firebase not configured
+          }
+
+          // Set up message handler for when app is in foreground
+          onMessage(messaging, (payload) => {
+            // In Android, notifications are handled by the system
+            // But we can still show local notifications if needed
+            console.log("FCM message received:", payload);
+          });
+        }
+        return;
+      }
+
+      // For web platform, use service worker approach
       // Check if browser supports notifications
       if (!("Notification" in window) || !("serviceWorker" in navigator)) {
         return;
@@ -7378,10 +7404,13 @@ $r2: 26px;
   direction: rtl;
   text-align: right;
   margin-left: auto;
+  margin-right: auto;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
+  flex: 1;
+  min-width: 0;
 }
 
 .mHdr__kicker {
@@ -7389,6 +7418,9 @@ $r2: 26px;
   font-weight: 1000;
   color: rgba(249, 115, 22, 0.75);
   letter-spacing: 2px;
+  text-align: right;
+  width: 100%;
+  direction: rtl;
 }
 
 .mHdr__name {
@@ -7397,6 +7429,9 @@ $r2: 26px;
   letter-spacing: -0.4px;
   color: rgba(255, 255, 255, 0.95);
   line-height: 1;
+  text-align: right;
+  direction: rtl;
+  width: 100%;
 }
 
 .mHdr__avatar {

@@ -1,5 +1,53 @@
 <template>
-  <header class="top">
+  <header class="mHdr" v-if="isHendiman">
+    <!-- LEFT: Icons -->
+    <div class="mHdr__icons">
+      <!-- Return to job button (mobile) -->
+      <button
+        v-if="hasActiveJob && isChatMinimized"
+        class="mHdr__icon"
+        type="button"
+        aria-label="חזור לעבודה"
+        @click="$emit('return-to-job')"
+      >
+        <span>🔧</span>
+      </button>
+    </div>
+
+    <!-- CENTER: Name + Type -->
+    <div class="mHdr__center">
+      <div class="mHdr__kicker">
+        <span v-if="subscriptionTypeLabel">{{ subscriptionTypeLabel }}</span>
+        <span v-else>הנדימן</span>
+      </div>
+      <div class="mHdr__name">{{ me?.name || me?.username }}</div>
+    </div>
+
+    <!-- RIGHT: Avatar -->
+    <button
+      class="mHdr__avatar"
+      type="button"
+      aria-label="פרופיל"
+      @click="$emit('open-profile')"
+    >
+      <div class="mHdr__avatar-wrapper">
+        <img v-if="me?.avatarUrl" :src="me.avatarUrl" alt="" />
+        <span v-else class="mHdr__ph">👤</span>
+        <div
+          class="mHdr__status-indicator"
+          :title="isAvailable ? 'זמין' : 'לא זמין'"
+        >
+          <span
+            class="mHdr__status-dot"
+            :class="{ 'mHdr__status-dot--available': isAvailable }"
+          />
+        </div>
+      </div>
+    </button>
+  </header>
+
+  <!-- OLD DESIGN for non-handyman (keeping for backward compatibility) -->
+  <header class="top" v-else>
     <!-- LEFT: Profile -->
     <button class="me" type="button" @click="$emit('open-profile')">
       <div class="me__avatar-wrapper">
@@ -85,20 +133,6 @@
       >
         <span class="btn__icon">🔧</span>
         <span class="btn__text">חזור לעבודה שלך</span>
-        <span class="btn__spark" aria-hidden="true"></span>
-      </button>
-
-      <!-- Ratings (handyman) -->
-      <button
-        v-if="isHendiman"
-        class="btn btn--ratings"
-        type="button"
-        @click="$emit('view-ratings')"
-        aria-label="הדירוגים והביקורות שלי"
-        title="הדירוגים והביקורות שלי"
-      >
-        <span class="btn__icon">⭐</span>
-        <span class="btn__text">הדירוגים שלי</span>
         <span class="btn__spark" aria-hidden="true"></span>
       </button>
 
@@ -877,6 +911,150 @@ $shadowO: 0 18px 55px rgba(255, 106, 0, 0.2);
   * {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/* ===== Handyman Header (mHdr style) ===== */
+.mHdr {
+  position: sticky;
+  top: 0;
+  z-index: 2500;
+  direction: ltr;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  margin: -16px -16px 6px;
+  background: rgba(3, 3, 3, 0.9);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+  @media (max-width: 768px) {
+    margin: calc(-12px - env(safe-area-inset-top)) -10px 6px;
+    padding-top: calc(14px + env(safe-area-inset-top));
+  }
+}
+
+.mHdr__icons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mHdr__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  display: grid;
+  place-items: center;
+  position: relative;
+  cursor: pointer;
+  font-size: 18px;
+
+  &:active {
+    transform: scale(0.92);
+  }
+}
+
+.mHdr__center {
+  direction: rtl;
+  text-align: right;
+  margin-left: auto;
+  margin-right: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.mHdr__kicker {
+  font-size: 10px;
+  font-weight: 1000;
+  color: rgba(249, 115, 22, 0.75);
+  letter-spacing: 2px;
+  text-align: right;
+  width: 100%;
+  direction: rtl;
+}
+
+.mHdr__name {
+  font-size: 24px;
+  font-weight: 1100;
+  letter-spacing: -0.4px;
+  color: rgba(255, 255, 255, 0.95);
+  line-height: 1;
+  text-align: right;
+  direction: rtl;
+  width: 100%;
+}
+
+.mHdr__avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 2px solid rgba(249, 115, 22, 0.95);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 2px;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+
+  img {
+    width: 100%;
+    height: 100%;
+    border-radius: 999px;
+    object-fit: cover;
+    display: block;
+  }
+}
+
+.mHdr__avatar-wrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.mHdr__ph {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 24px;
+}
+
+.mHdr__status-indicator {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(3, 3, 3, 0.95);
+  background: rgba(0, 0, 0, 0.5);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.mHdr__status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transition: all 0.25s ease;
+
+  &--available {
+    background: $orange;
+    box-shadow: 0 0 0 2px rgba($orange, 0.3);
+    animation: dotPulse 1.6s ease-in-out infinite;
   }
 }
 </style>

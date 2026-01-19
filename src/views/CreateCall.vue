@@ -242,6 +242,20 @@
           <!-- STEP 2 -->
           <div v-if="currentStep === 2" class="ccStep ccStep--2">
             <div class="ccPad">
+              <!-- Split Notice - Show only if there are both quoted and fixed price jobs -->
+              <div
+                v-if="hasBothQuotedAndFixedJobs"
+                class="ccSplitNotice"
+              >
+                <div class="ccSplitNotice__icon">📋</div>
+                <div class="ccSplitNotice__content">
+                  <p class="ccSplitNotice__title">העבודה תתפצל</p>
+                  <p class="ccSplitNotice__text">
+                    העבודות עם הצעת מחיר יופיעו כעבודות נפרדות, והעבודות עם מחיר קבוע יופיעו ביחד
+                  </p>
+                </div>
+              </div>
+
               <!-- Loading Categories -->
               <section
                 v-if="isLoadingCategories"
@@ -280,7 +294,7 @@
                     class="ccLinkBtn"
                     @click="refineCategories"
                   >
-                    ערוך
+                    בחר מחדש
                   </button>
                 </div>
 
@@ -297,40 +311,36 @@
                     <div class="ccCatBody">
                       <div class="ccCatTop">
                         <span class="ccAIBadge">{{
-                          index === 0 ? "AI זיהוי גבוה" : "AI"
+                          category.isManual 
+                            ? "ידני" 
+                            : (index === 0 ? "AI זיהוי גבוה" : "AI")
                         }}</span>
                         <span class="ccCatName">
                           {{
-                            // ALWAYS prioritize subcategory (what AI found) over originalText
-                            // If subcategory exists, show it (even if same as originalText - it's what AI returned)
-                            // Only fallback to originalText if subcategory is empty
+                            // CRITICAL: Always show what AI found if it exists, otherwise show originalText
+                            // Priority order:
+                            // 1. category.subcategory (if exists) - this is what AI/server returned
+                            // 2. category.ai?.subcategory or category.aiResponse?.subcategory (if exists)
+                            // 3. category.originalText (fallback)
                             (() => {
-                              // Priority: AI work from ai/aiResponse > subcategory (if different from original) > originalText
-                              // Check if there's AI work that's different from original
-                              const aiWork = category.ai?.subcategory || category.aiResponse?.subcategory || "";
-                              const aiWorkTrimmed = aiWork ? aiWork.trim() : "";
-                              const originalTextTrimmed = category.originalText ? category.originalText.trim() : "";
-                              const subcategoryTrimmed = category.subcategory ? category.subcategory.trim() : "";
+                              // Get values - handle null/undefined properly
+                              const originalText = category?.originalText ? String(category.originalText).trim() : "";
+                              const subcategory = category?.subcategory ? String(category.subcategory).trim() : "";
+                              const aiWork = category?.ai?.subcategory || category?.aiResponse?.subcategory;
+                              const aiWorkStr = aiWork ? String(aiWork).trim() : "";
                               
-                              // Check if we have AI work OR if subcategory is different from original (meaning it's from server processing)
-                              const hasAiWork = Boolean(aiWorkTrimmed && aiWorkTrimmed !== originalTextTrimmed);
-                              const hasServerWork = Boolean(subcategoryTrimmed && subcategoryTrimmed !== originalTextTrimmed);
-                              
-                              // Priority: AI work > server work (subcategory) > originalText
-                              let displayValue = category.originalText || category.category;
-                              
-                              if (hasAiWork) {
-                                displayValue = aiWorkTrimmed;
-                              } else if (hasServerWork) {
-                                // subcategory is different from original - it's what server returned (possibly from AI processing)
-                                displayValue = subcategoryTrimmed;
-                              } else if (category.subcategory) {
-                                // Even if same as original, use subcategory (it's what was processed)
-                                displayValue = category.subcategory;
+                              // PRIORITY 1: If subcategory exists (even if same as original), use it - it's what AI/server returned
+                              if (subcategory) {
+                                return subcategory;
                               }
                               
-                              // Return the display value
-                              return displayValue;
+                              // PRIORITY 2: If AI work exists, use it
+                              if (aiWorkStr) {
+                                return aiWorkStr;
+                              }
+                              
+                              // PRIORITY 3: Fallback to originalText
+                              return originalText || category?.category || "עבודה";
                             })()
                           }}
                         </span>
@@ -344,20 +354,40 @@
                       </div>
 
                       <div
-                        v-if="
-                          category.needsRecommendation &&
-                          (() => {
-                            const aiWork = category.ai?.subcategory || category.aiResponse?.subcategory || '';
-                            const aiWorkTrimmed = aiWork ? aiWork.trim() : '';
-                            const originalTextTrimmed = category.originalText ? category.originalText.trim() : '';
-                            return Boolean(aiWorkTrimmed && aiWorkTrimmed !== originalTextTrimmed);
-                          })()
-                        "
+                        v-if="category.needsRecommendation"
                         class="ccCatMeta ccCatMeta--sub"
                       >
                         <span class="ccCatMetaLbl">מה המערכת מצאה:</span>
                         <span class="ccCatMetaVal">{{
-                          category.ai?.subcategory || category.aiResponse?.subcategory || category.subcategory
+                          (() => {
+                            // Show what AI found - prioritize ai/aiResponse, then subcategory, then fallback
+                            const aiWork = (category.ai?.subcategory || category.aiResponse?.subcategory || "").trim();
+                            const subcategory = (category.subcategory || "").trim();
+                            const originalText = (category.originalText || "").trim();
+                            
+                            // If AI work exists and is different from original, show it
+                            if (aiWork && aiWork !== originalText) {
+                              return aiWork;
+                            }
+                            
+                            // If subcategory exists and is different from original, show it
+                            if (subcategory && subcategory !== originalText) {
+                              return subcategory;
+                            }
+                            
+                            // If AI work exists (even if same as original), show it
+                            if (aiWork) {
+                              return aiWork;
+                            }
+                            
+                            // If subcategory exists (even if same as original), show it
+                            if (subcategory) {
+                              return subcategory;
+                            }
+                            
+                            // Fallback
+                            return "לא נמצאה התאמה";
+                          })()
                         }}</span>
                       </div>
 
@@ -372,8 +402,19 @@
                           class="ccCatPrice ccCatPrice--bid"
                           >הצעת מחיר</span
                         >
+                        
+                        <!-- אחוז התאמה - מתחת למחיר (מוצג רק אם לא ידני) -->
+                        <div v-if="!category.isManual" class="ccCatMatchPct">
+                          <span class="ccCatMatchPct__label">אחוז התאמה:</span>
+                          <span class="ccCatMatchPct__value">{{ getConfidencePct(category) }}%</span>
+                        </div>
                       </div>
+                    </div>
 
+                    <div class="ccCatThumb" aria-hidden="true"></div>
+
+                    <!-- Buttons row -->
+                    <div class="ccCatButtonsRow">
                       <button
                         type="button"
                         class="ccCatQuote"
@@ -385,9 +426,15 @@
                       >
                         פתח להצעת מחיר
                       </button>
-                    </div>
 
-                    <div class="ccCatThumb" aria-hidden="true"></div>
+                      <button
+                        type="button"
+                        class="ccCatNotRight"
+                        @click="openNotRightModal(index)"
+                      >
+                        זה לא מה שרציתי
+                      </button>
+                    </div>
 
                     <!-- Recommendation message for low confidence/uncertain match -->
                     <div
@@ -477,13 +524,70 @@
                 <div class="location-content">
                   <!-- Loading indicator -->
                   <div v-if="isLoadingLocation" class="location-loading">
-                    <div class="location-loading__spinner">
-                      <div class="spinner"></div>
+                    <div class="location-loading__container">
+                      <!-- גלי רדאר -->
+                      <div class="location-loading__radar-waves">
+                        <div
+                          v-for="i in 3"
+                          :key="i"
+                          class="location-loading__radar-wave"
+                          :style="{
+                            animationDelay: `${(i - 1) * 1}s`
+                          }"
+                        ></div>
+                      </div>
+
+                      <!-- מעגל GPS -->
+                      <div class="location-loading__gps-circle">
+                        <svg width="200" height="200" viewBox="0 0 200 200" class="location-loading__svg">
+                          <!-- מעגלים קונצנטריים -->
+                          <circle cx="100" cy="100" r="90" fill="none" stroke="#ff6a00" stroke-width="1" opacity="0.2" />
+                          <circle cx="100" cy="100" r="70" fill="none" stroke="#ff6a00" stroke-width="1" opacity="0.3" />
+                          <circle cx="100" cy="100" r="50" fill="none" stroke="#ff6a00" stroke-width="1" opacity="0.4" />
+                          
+                          <!-- קווי צלב -->
+                          <line x1="100" y1="10" x2="100" y2="40" stroke="#ff6a00" stroke-width="2" opacity="0.6" />
+                          <line x1="100" y1="160" x2="100" y2="190" stroke="#ff6a00" stroke-width="2" opacity="0.6" />
+                          <line x1="10" y1="100" x2="40" y2="100" stroke="#ff6a00" stroke-width="2" opacity="0.6" />
+                          <line x1="160" y1="100" x2="190" y2="100" stroke="#ff6a00" stroke-width="2" opacity="0.6" />
+                          
+                          <!-- נקודה מרכזית -->
+                          <circle cx="100" cy="100" r="8" fill="#ff6a00">
+                            <animate attributeName="r" values="8;12;8" dur="2s" repeatCount="indefinite" />
+                            <animate attributeName="opacity" values="1;0.5;1" dur="2s" repeatCount="indefinite" />
+                          </circle>
+                          
+                          <!-- קו סורק מסתובב -->
+                          <line x1="100" y1="100" x2="100" y2="30" stroke="#ff6a00" stroke-width="2" opacity="0.8">
+                            <animateTransform
+                              attributeName="transform"
+                              type="rotate"
+                              from="0 100 100"
+                              to="360 100 100"
+                              dur="3s"
+                              repeatCount="indefinite"
+                            />
+                          </line>
+                        </svg>
+                      </div>
+
+                      <!-- טקסט -->
+                      <div class="location-loading__text-container">
+                        <h2 class="location-loading__title">מאתר מיקום</h2>
+                        
+                        <!-- נקודות טעינה -->
+                        <div class="location-loading__dots">
+                          <div
+                            v-for="i in 3"
+                            :key="i"
+                            class="location-loading__dot"
+                            :class="{ 'location-loading__dot--active': pulse === (i - 1) }"
+                          ></div>
+                        </div>
+
+                        <p class="location-loading__subtext">מקבל נתוני GPS</p>
+                      </div>
                     </div>
-                    <p class="location-loading__text">מאתר מיקום מדויק...</p>
-                    <p class="location-loading__subtext">
-                      אנא המתן, זה עשוי לקחת מספר שניות
-                    </p>
                   </div>
 
                   <!-- Autocomplete -->
@@ -501,6 +605,8 @@
                       @update:modelValue="onLocationChange"
                       @update:englishName="onEnglishNameUpdate"
                       @update:selectedCity="onCitySelected"
+                      @focus="onLocationInputFocus"
+                      @blur="onLocationInputBlur"
                     />
                   </div>
 
@@ -518,6 +624,9 @@
                     <input
                       type="text"
                       v-model="call.houseNumber"
+                      @input="onHouseNumberInput"
+                      @focus="onHouseNumberFocus"
+                      @blur="onHouseNumberBlur"
                       placeholder="מספר בית\\בלוק"
                       class="ccInput"
                       :class="{ 'ccInput--error': errors.houseNumber }"
@@ -529,7 +638,7 @@
 
                   <!-- Actions -->
                   <div
-                    v-if="!isLoadingLocation && locationEmbedUrl"
+                    v-if="!isLoadingLocation"
                     class="ccLocPreview"
                   >
                     <div class="ccLocMap">
@@ -553,7 +662,7 @@
                       </div>
                     </div>
 
-                    <div v-if="isEditingLocation" class="ccLocBtns">
+                    <div class="ccLocBtns">
                       <button
                         class="ccLocBtn"
                         type="button"
@@ -848,7 +957,12 @@
             v-else-if="currentStep === 2"
             class="ccFooterRow ccFooterRow--two"
           >
-            <button class="ccPrimaryBtn" type="button" @click="nextStep">
+            <button 
+              class="ccPrimaryBtn" 
+              type="button" 
+              @click="nextStep"
+              :disabled="isLoadingLocation"
+            >
               המשך לשלב הבא
             </button>
             <button class="ccGhostBtn" type="button" @click="prevStep">
@@ -861,7 +975,12 @@
             v-else-if="currentStep === 3"
             class="ccFooterRow ccFooterRow--two"
           >
-            <button class="ccPrimaryBtn" type="button" @click="nextStep">
+            <button 
+              class="ccPrimaryBtn" 
+              type="button" 
+              @click="nextStep"
+              :disabled="isUploadingImage"
+            >
               המשך לשלב הבא
             </button>
             <button class="ccOutlineBtn" type="button" @click="prevStep">
@@ -984,8 +1103,29 @@
         </div>
 
         <div class="modal-body modal-body--scrollable">
+          <!-- Search and Filter -->
+          <div class="manual-search-section">
+            <div class="manual-search-row">
+              <input
+                type="text"
+                class="manual-search-input"
+                v-model="manualSearchQuery"
+                placeholder="חפש עבודה או קטגוריה..."
+                autofocus
+              />
+              <select
+                class="manual-search-select"
+                v-model="manualSearchType"
+              >
+                <option value="category">לפי קטגוריה</option>
+                <option value="work">לפי עבודה</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Categories List -->
           <div
-            v-for="category in allCategories"
+            v-for="category in filteredCategories"
             :key="category.name"
             class="category-section"
           >
@@ -997,7 +1137,20 @@
                 :key="subcategory.name"
                 class="subcategory-checkbox-label"
               >
+                <!-- Radio for step 2 (replacing work item) -->
                 <input
+                  v-if="isReplacingWorkItem"
+                  type="radio"
+                  name="selectedSubcategory"
+                  class="subcategory-radio"
+                  :checked="
+                    isSubcategorySelected(category.name, subcategory.name)
+                  "
+                  @change="selectSingleSubcategory(category.name, subcategory)"
+                />
+                <!-- Checkbox for step 1 (normal manual selection) -->
+                <input
+                  v-else
                   type="checkbox"
                   class="subcategory-checkbox"
                   :checked="
@@ -1018,6 +1171,11 @@
                 </span>
               </label>
             </div>
+          </div>
+          
+          <!-- No results message -->
+          <div v-if="filteredCategories.length === 0" class="no-results">
+            <p>לא נמצאו תוצאות</p>
           </div>
         </div>
 
@@ -1089,6 +1247,108 @@
         </div>
       </div>
     </div>
+
+    <!-- Not Right Modal - בחירה מחדש -->
+    <div
+      v-if="showNotRightModal"
+      class="modal-overlay"
+      @click.self="showNotRightModal = false"
+    >
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>זה לא מה שרציתי</h3>
+          <button
+            class="modal-close"
+            @click="showNotRightModal = false"
+            aria-label="סגור"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <p style="margin-bottom: 20px; color: rgba(255, 255, 255, 0.8);">
+            איך תרצה להמשיך?
+          </p>
+          
+          <div class="not-right-options">
+            <button
+              type="button"
+              class="not-right-option-btn"
+              @click="openManualSelectionForNotRight"
+            >
+              <span class="not-right-option-icon">📋</span>
+              <span class="not-right-option-text">
+                <strong>בחירה ידנית מהרשימה</strong>
+                <small>בחר עבודה מהקטלוג שלנו</small>
+              </span>
+            </button>
+            
+            <button
+              type="button"
+              class="not-right-option-btn"
+              @click="openQuotationModalForNotRight"
+            >
+              <span class="not-right-option-icon">💰</span>
+              <span class="not-right-option-text">
+                <strong>עבודה בהצעת מחיר</strong>
+                <small>הזן שם עבודה מותאם אישית</small>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn--secondary" @click="showNotRightModal = false">
+            ביטול
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quotation Modal - עבודה בהצעת מחיר -->
+    <div
+      v-if="showQuotationNameModal"
+      class="modal-overlay"
+      @click.self="showQuotationNameModal = false"
+    >
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>עבודה בהצעת מחיר</h3>
+          <button
+            class="modal-close"
+            @click="showQuotationNameModal = false"
+            aria-label="סגור"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="quotationJobName" class="form-label">שם העבודה:</label>
+            <input
+              id="quotationJobName"
+              type="text"
+              class="form-input"
+              v-model="quotationModalJobName"
+              placeholder="הזן את שם העבודה"
+              @keyup.enter="confirmQuotationJob"
+              autofocus
+            />
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn--secondary" @click="showQuotationNameModal = false">
+            ביטול
+          </button>
+          <button class="btn btn--primary" @click="confirmQuotationJob">
+            אישור
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1126,10 +1386,15 @@ export default {
       isEditingLocation: true,
       isImprovingLocation: false, // האם משפרים את המיקום
       detectedLocation: null, // הכתובת שנמצאה מ-reverse geocoding
+      locationInputTimeout: null, // Timer for auto-closing inputs after 2 seconds of no typing
+      isLocationInputFocused: false, // Track if location input has focus
+      isHouseNumberInputFocused: false, // Track if house number input has focus
+      pulse: 0, // For loading animation dots
+      pulseInterval: null, // Interval for pulse animation
       call: {
         requests: [""], // Array of requests
-        desc: "",
-        location: "המיקום שלי",
+        desc: "123456789078",
+        location: "", // Will be set in created() hook to user's city
         urgent: false,
         images: [], // Array of image files
         imageUrls: [], // Array of uploaded image URLs
@@ -1171,6 +1436,14 @@ export default {
       manuallySelectedSubcategories: [],
       aiMatchResult: null, // Store AI matching result with confidence
       showQuotationChoiceModal: false, // Modal for choosing between fixed price and quotation
+      showNotRightModal: false, // Modal for "זה לא מה שרציתי"
+      notRightModalIndex: -1, // Index of the work item being edited
+      showQuotationNameModal: false, // Modal for entering quotation job name
+      quotationModalJobName: "", // Temporary job name in the quotation modal
+      isReplacingWorkItem: false, // Flag to indicate we're replacing an existing work item
+      replacingWorkIndex: -1, // Index of work item being replaced
+      manualSearchQuery: "", // Search query for manual selection
+      manualSearchType: "category", // "category" or "work" - search by category or by work name
       creditCard: {
         cardNumber: "",
         cardName: "",
@@ -1183,7 +1456,6 @@ export default {
       isCreditCardValid: false, // Track credit card validation status
       savedPaymentMethod: null, // Saved payment method from DB
       showChangePaymentMethod: false, // Show option to change payment method
-      _checkingPaymentMethod: false, // Flag to prevent multiple simultaneous calls
       socket: null, // WebSocket connection for payment method details
       isLoadingPaymentMethod: false, // Loading state for payment method details
     };
@@ -1196,6 +1468,41 @@ export default {
       const total = Number(this.totalSteps) || 4;
       const step = Math.min(Math.max(Number(this.currentStep) || 0, 0), total);
       return Math.round((step / total) * 100);
+    },
+    filteredCategories() {
+      // Filter categories based on search query and search type
+      if (!this.manualSearchQuery.trim()) {
+        return this.allCategories;
+      }
+      
+      const query = this.manualSearchQuery.trim().toLowerCase();
+      
+      return this.allCategories
+        .map((category) => {
+          // Filter subcategories based on search type
+          let filteredSubcategories = category.subcategories || [];
+          
+          if (this.manualSearchType === "category") {
+            // Search by category name
+            const categoryMatches = category.name.toLowerCase().includes(query);
+            if (categoryMatches) {
+              // If category matches, show all subcategories
+              return { ...category, subcategories: filteredSubcategories };
+            }
+            // If category doesn't match, return null (will be filtered out)
+            return null;
+          } else {
+            // Search by work name (subcategory name)
+            filteredSubcategories = filteredSubcategories.filter((sub) =>
+              sub.name.toLowerCase().includes(query)
+            );
+            if (filteredSubcategories.length > 0) {
+              return { ...category, subcategories: filteredSubcategories };
+            }
+            return null;
+          }
+        })
+        .filter((cat) => cat !== null);
     },
     totalPrice() {
       // Calculate total price from all subcategories
@@ -1242,10 +1549,32 @@ export default {
         ? `${lat},${lng}`
         : (this.locationLabelText || "").trim();
 
-      if (!query || query === "המיקום שלי") return null;
+      if (!query || query === "המיקום שלי") {
+        // If no query but we have coordinates, use them
+        if (hasCoords) {
+          return `https://www.google.com/maps?q=${lat},${lng}&z=16&output=embed`;
+        }
+        return null;
+      }
       return `https://www.google.com/maps?q=${encodeURIComponent(
         query
       )}&z=16&output=embed`;
+    },
+    hasBothQuotedAndFixedJobs() {
+      // Check if there are both quoted jobs (price === 'bid') and fixed price jobs
+      if (!this.subcategoryInfoArray || this.subcategoryInfoArray.length === 0) {
+        return false;
+      }
+      
+      const hasQuoted = this.subcategoryInfoArray.some(
+        (subcat) => subcat.price === "bid" || subcat.price === "quoted"
+      );
+      
+      const hasFixed = this.subcategoryInfoArray.some(
+        (subcat) => subcat.price && subcat.price !== "bid" && subcat.price !== "quoted" && typeof subcat.price === "number"
+      );
+      
+      return hasQuoted && hasFixed;
     },
   },
   async created() {
@@ -1259,19 +1588,17 @@ export default {
         })
       : [];
 
+    // Set default location to user's city (residence location)
     const userCity = this.store?.user?.city;
     if (userCity && userCity.trim()) {
-      const cityExists = this.isValidCity(userCity.trim());
-      if (cityExists) {
-        this.call.location = userCity.trim();
-        this.usingMyLocation = false;
-      } else {
-        this.call.location = "המיקום שלי";
-        this.usingMyLocation = true;
-      }
+      // Use user's city as default location (their residence)
+      this.call.location = userCity.trim();
+      this.usingMyLocation = false;
     } else {
-      this.call.location = "המיקום שלי";
-      this.usingMyLocation = true;
+      // If no user city, default to empty (let user fill manually)
+      // Don't use "המיקום שלי" as default - that should be a button action
+      this.call.location = "";
+      this.usingMyLocation = false;
     }
 
     // Stripe is now handled by CreditCardForm component
@@ -1280,16 +1607,16 @@ export default {
     "store.user": {
       handler(newUser) {
         if (newUser && this.currentStep === 4) {
-          // Prevent multiple calls
-          if (this._checkingPaymentMethod) {
-            return;
-          }
-          this._checkingPaymentMethod = true;
           // User data loaded, check for saved payment method
           this.$nextTick(() => {
-            this.checkSavedPaymentMethod().finally(() => {
-              this._checkingPaymentMethod = false;
-            });
+            if (newUser.hasPaymentMethod) {
+              this.loadSavedPaymentMethod();
+            } else {
+              this.showChangePaymentMethod = false;
+              this.savedPaymentMethod = null;
+              this.paymentMethodId = null;
+              this.isCreditCardValid = false;
+            }
           });
         }
       },
@@ -1298,17 +1625,16 @@ export default {
     currentStep(newStep) {
       // When step changes to 4, check for saved payment method
       if (newStep === 4) {
-        // Prevent multiple calls
-        if (this._checkingPaymentMethod) {
-          return;
-        }
-        this._checkingPaymentMethod = true;
         this.$nextTick(() => {
-          setTimeout(() => {
-            this.checkSavedPaymentMethod().finally(() => {
-              this._checkingPaymentMethod = false;
-            });
-          }, 300);
+          // Check payment method from store.user.hasPaymentMethod
+          if (this.store?.user?.hasPaymentMethod) {
+            this.loadSavedPaymentMethod();
+          } else {
+            this.showChangePaymentMethod = false;
+            this.savedPaymentMethod = null;
+            this.paymentMethodId = null;
+            this.isCreditCardValid = false;
+          }
         });
       }
     },
@@ -1425,11 +1751,6 @@ export default {
 
         // When moving to step 4, check if user has saved payment method
         if (this.currentStep === 4) {
-          // Prevent multiple calls
-          if (this._checkingPaymentMethod) {
-            return;
-          }
-          this._checkingPaymentMethod = true;
           // Wait a bit for store to be ready, then check
           await this.$nextTick();
           // Try multiple times if user is not loaded yet
@@ -1438,12 +1759,26 @@ export default {
             await new Promise((resolve) => setTimeout(resolve, 200));
             attempts++;
           }
-          // Always try to check payment method, even if user is not in store
-          // (we can get userId from route params)
-          try {
-            await this.checkSavedPaymentMethod();
-          } finally {
-            this._checkingPaymentMethod = false;
+          // Check payment method from store.user.hasPaymentMethod
+          // If user is not loaded, try to load it
+          if (!this.store?.user && this.$route?.params?.id) {
+            try {
+              await this.store.fetchDashboardData(this.$route.params.id);
+            } catch (error) {
+              // Error loading user, continue anyway
+            }
+          }
+          
+          // Use hasPaymentMethod from store.user
+          if (this.store?.user?.hasPaymentMethod) {
+            // User has payment method - load it
+            await this.loadSavedPaymentMethod();
+          } else {
+            // No payment method - show form
+            this.showChangePaymentMethod = false;
+            this.savedPaymentMethod = null;
+            this.paymentMethodId = null;
+            this.isCreditCardValid = false;
           }
         }
       }
@@ -1467,12 +1802,14 @@ export default {
       this.showManualCategorySelector = true;
     },
     isSubcategorySelected(categoryName, subcategoryName) {
-      return this.manuallySelectedSubcategories.some(
+      const isSelected = this.manuallySelectedSubcategories.some(
         (sub) =>
-          sub.category === categoryName && sub.subcategory === subcategoryName
+          sub && sub.category === categoryName && sub.subcategory === subcategoryName
       );
+      return isSelected;
     },
     toggleSubcategory(categoryName, subcategory) {
+      // For step 1: Allow multiple selections (checkbox behavior)
       const index = this.manuallySelectedSubcategories.findIndex(
         (sub) =>
           sub.category === categoryName && sub.subcategory === subcategory.name
@@ -1488,39 +1825,83 @@ export default {
           subcategory: subcategory.name,
           price: subcategory.price || null,
           workType: subcategory.workType || null,
+          isManual: true, // Mark as manually selected
+          originalText: subcategory.name,
         });
       }
+    },
+    selectSingleSubcategory(categoryName, subcategory) {
+      // For step 2: Only one can be selected (radio behavior)
+      // Clear all previous selections (only one can be selected)
+      this.manuallySelectedSubcategories = [];
+      
+      // Add the selected one
+      this.manuallySelectedSubcategories.push({
+        category: categoryName,
+        subcategory: subcategory.name,
+        price: subcategory.price || null,
+        workType: subcategory.workType || null,
+        isManual: true, // Mark as manually selected
+        originalText: subcategory.name,
+      });
     },
     confirmManualSelection() {
       if (this.manuallySelectedSubcategories.length === 0) {
         this.toast?.showError("אנא בחר לפחות תת-קטגוריה אחת");
         return;
       }
+      
+      // Check if we're replacing an existing work item (from step 2)
+      if (this.isReplacingWorkItem && this.replacingWorkIndex >= 0) {
+        // Replace the work item at the specified index with the selected subcategory
+        // In step 2, only one can be selected (radio)
+        if (this.manuallySelectedSubcategories.length > 0) {
+          const selectedWork = {
+            ...this.manuallySelectedSubcategories[0],
+            isManual: true,
+            originalText: this.manuallySelectedSubcategories[0].subcategory,
+          };
+          
+          if (this.foundCategories[this.replacingWorkIndex]) {
+            this.foundCategories[this.replacingWorkIndex] = selectedWork;
+          }
+          if (this.subcategoryInfoArray[this.replacingWorkIndex]) {
+            this.subcategoryInfoArray[this.replacingWorkIndex] = selectedWork;
+          }
+          
+          this.toast?.showSuccess("העבודה עודכנה בהצלחה");
+        }
+        
+        // Reset replacement mode
+        this.isReplacingWorkItem = false;
+        this.replacingWorkIndex = -1;
+        this.manuallySelectedSubcategories = [];
+        this.manualSearchQuery = ""; // Clear search
+        this.manualSearchType = "category"; // Reset search type
+        this.showManualCategorySelector = false;
+        return;
+      }
+      
+      // Normal flow from step 1 - add all selected subcategories (can be multiple)
       this.showManualCategorySelector = false;
       // Move to step 2
       this.currentStep = 2;
       this.foundCategories = this.manuallySelectedSubcategories;
       this.subcategoryInfoArray = this.manuallySelectedSubcategories;
       this.isLoadingCategories = false;
+      this.manualSearchQuery = ""; // Clear search
+      this.manualSearchType = "category"; // Reset search type
       this.toast?.showSuccess(
         `נבחרו ${this.manuallySelectedSubcategories.length} תת-קטגוריות`
       );
     },
-    async checkSavedPaymentMethod() {
+    async loadSavedPaymentMethod() {
       try {
         // Try to get userId from multiple sources
         let userId = this.store?.user?._id || this.store?.user?.id;
 
-        // If not in store, try to get from route params (like Dashboard does)
         if (!userId && this.$route?.params?.id) {
           userId = this.$route.params.id;
-          // Load user data if not already loaded
-          if (!this.store?.user && userId) {
-            try {
-              await this.store.fetchDashboardData(userId);
-              userId = this.store?.user?._id || this.store?.user?.id || userId;
-            } catch (error) {}
-          }
         }
 
         if (!userId) {
@@ -1528,6 +1909,21 @@ export default {
           this.savedPaymentMethod = null;
           return;
         }
+
+        // Check if user has payment method (from store.user.hasPaymentMethod)
+        if (!this.store?.user?.hasPaymentMethod) {
+          // No payment method, show form
+          this.showChangePaymentMethod = false;
+          this.savedPaymentMethod = null;
+          this.paymentMethodId = null;
+          this.isCreditCardValid = false;
+          return;
+        }
+
+        // User has payment method - start loading and fetch card details from Stripe
+        this.showChangePaymentMethod = false;
+        this.isCreditCardValid = true;
+        this.isLoadingPaymentMethod = true;
 
         // Import URL dynamically
         const { URL } = await import("@/Url/url");
@@ -1538,111 +1934,41 @@ export default {
             timeout: 15000, // 15 second timeout
           });
 
-          if (response.data && response.data.success) {
-            if (response.data.hasPaymentMethod) {
-              this.paymentMethodId = response.data.paymentMethodId;
-              // Use saved payment method automatically, don't show form
-              this.showChangePaymentMethod = false;
-              this.isCreditCardValid = true; // Mark as valid since we have saved payment method
-
-              // If we have paymentMethodId, fetch card details via WebSocket
-              if (this.paymentMethodId) {
-                this.isLoadingPaymentMethod = true;
-                await this.fetchPaymentMethodDetailsViaWebSocket(
-                  userId,
-                  this.paymentMethodId
-                );
-              } else {
-                // Fallback to response data if no paymentMethodId
-                this.savedPaymentMethod = response.data;
-              }
-            } else {
-              // No saved payment method, show form to create one
-              this.showChangePaymentMethod = false;
-              this.savedPaymentMethod = null;
-            }
-          } else {
-            this.savedPaymentMethod = null;
-            this.showChangePaymentMethod = false;
-          }
-        } catch (axiosError) {
-          // Handle axios errors specifically
-          if (
-            axiosError.code === "ECONNREFUSED" ||
-            axiosError.code === "ERR_CONNECTION_REFUSED" ||
-            axiosError.code === "ECONNABORTED"
-          ) {
-            this.toast?.showError(" לא הצלחנו להתחבר לשרת. אנא ודא שהשרת רץ.");
-          } else if (axiosError.response) {
-            // Server responded with error status
-            if (axiosError.response.status === 404) {
-              this.toast?.showError("השרת לא מצא את המשתמש. אנא נסה שוב.");
-            } else if (axiosError.response.status === 500) {
-              this.toast?.showError("יש בעיה בשרת. אנא נסה שוב מאוחר יותר.");
-            }
-          } else if (axiosError.code === "ECONNABORTED") {
-            this.toast?.showError("הבקשה לשרת ארכה זמן רב מדי. אנא נסה שוב.");
-          }
-          // Error checking payment method, show form anyway
-          this.showChangePaymentMethod = false;
-          this.savedPaymentMethod = null;
-        }
-      } catch (error) {
-        // Error checking payment method, show form anyway
-        this.showChangePaymentMethod = false;
-        this.savedPaymentMethod = null;
-      }
-    },
-    async fetchPaymentMethodDetailsViaWebSocket(userId, paymentMethodId) {
-      return new Promise((resolve, reject) => {
-        // Initialize socket if not already initialized
-        if (!this.socket) {
-          this.socket = io(URL, { transports: ["websocket", "polling"] });
-        }
-
-        // Set timeout for the request
-        const timeout = setTimeout(() => {
-          this.isLoadingPaymentMethod = false;
-          // Fallback to default card details if timeout
-          this.savedPaymentMethod = {
-            paymentMethodId: paymentMethodId,
-            card: {
-              brand: "card",
-              last4: "****",
-              expMonth: null,
-              expYear: null,
-            },
-          };
-          reject(new Error("Timeout waiting for payment method details"));
-        }, 10000); // 10 second timeout
-
-        // Listen for payment method details response
-        const responseHandler = (data) => {
-          if (data.success && data.paymentMethodId === paymentMethodId) {
-            clearTimeout(timeout);
-            this.socket.off("payment-method-details", responseHandler);
-            this.isLoadingPaymentMethod = false;
+          if (response.data && response.data.success && response.data.hasPaymentMethod) {
+            // Set saved payment method from response (card details from Stripe)
+            this.paymentMethodId = response.data.paymentMethodId;
             this.savedPaymentMethod = {
-              paymentMethodId: data.paymentMethodId,
-              card: {
-                brand: data.card?.brand || "card",
-                last4: data.card?.last4 || "****",
-                expMonth: data.card?.expMonth || data.card?.exp_month || null,
-                expYear: data.card?.expYear || data.card?.exp_year || null,
+              paymentMethodId: response.data.paymentMethodId,
+              card: response.data.card || {
+                brand: "card",
+                last4: "****",
+                expMonth: null,
+                expYear: null,
               },
             };
-            resolve(data);
+          } else {
+            // Error - show form
+            this.showChangePaymentMethod = false;
+            this.savedPaymentMethod = null;
+            this.paymentMethodId = null;
+            this.isCreditCardValid = false;
           }
-        };
-
-        this.socket.on("payment-method-details", responseHandler);
-
-        // Emit request for payment method details
-        this.socket.emit("get-payment-method-details", {
-          userId: userId,
-          paymentMethodId: paymentMethodId,
-        });
-      });
+        } catch (error) {
+          // Error loading payment method details from Stripe, show form
+          this.toast?.showError("שגיאה בטעינת פרטי כרטיס האשראי. אנא נסה שוב.");
+          this.showChangePaymentMethod = false;
+          this.savedPaymentMethod = null;
+          this.paymentMethodId = null;
+          this.isCreditCardValid = false;
+        } finally {
+          this.isLoadingPaymentMethod = false;
+        }
+      } catch (error) {
+        // Error loading payment method, show form
+        this.showChangePaymentMethod = false;
+        this.savedPaymentMethod = null;
+        this.isLoadingPaymentMethod = false;
+      }
     },
     async savePaymentMethodToDB(paymentMethodId) {
       try {
@@ -1827,9 +2153,9 @@ export default {
       this.isLoadingLocation = true;
 
       try {
-        // Get improved location with duration for better accuracy (5 seconds)
+        // Simple location finding - just 5 seconds
         const { getImprovedLocation } = await import("@/utils/geolocation");
-        const improvedLocation = await getImprovedLocation(5000); // 5 seconds for good accuracy
+        const improvedLocation = await getImprovedLocation(5000); // 5 seconds
 
         if (
           !improvedLocation ||
@@ -1839,6 +2165,7 @@ export default {
           throw new Error("לא הצלחנו לקבל מיקום מדויק");
         }
 
+        // Store coordinates
         this.geoCoordinates = {
           lat: improvedLocation.lat,
           lon: improvedLocation.lon,
@@ -1848,9 +2175,7 @@ export default {
           lng: improvedLocation.lon,
         };
 
-        // Log the coordinates we're using
-
-        // Now do reverse geocoding to get the address
+        // Now do reverse geocoding to get the city name from coordinates
         try {
           const response = await axios.get(`${URL}/reverse-geocode`, {
             params: {
@@ -1860,58 +2185,49 @@ export default {
           });
 
           if (response.data && response.data.success) {
-            // Use fullAddress if available, otherwise use address or city
-            let address =
-              response.data.fullAddress ||
-              response.data.address ||
-              response.data.city ||
-              null;
-            const city = response.data.city || null;
-            const streetNumber = response.data.streetNumber || null;
-            const streetName = response.data.streetName || null;
-
-            if (address) {
-              // Clean the address - remove Plus Code patterns if present
-              let cleanedAddress = address;
-              cleanedAddress = cleanedAddress
-                .replace(/\s*[A-Z0-9]+\+[A-Z0-9]+\s*/g, "")
-                .trim();
-
-              this.detectedLocation = cleanedAddress;
-              this.call.location = cleanedAddress;
-              this.locationEnglishName = city || null;
-              this.clearError("location"); // Clear any validation errors
-              this.isEditingLocation = false;
-
-              // If we have street number separately, we can optionally show it
-              // But for now, we'll use the full address from the API
+            // Use city name if available, otherwise use address or fullAddress
+            const cityName = response.data.city;
+            const address = response.data.address || response.data.fullAddress;
+            
+            if (cityName) {
+              // Use the city name from reverse geocoding
+              this.call.location = cityName;
+              this.detectedLocation = cityName;
+            } else if (address) {
+              // Fallback to address if no city found
+              this.call.location = address;
+              this.detectedLocation = address;
             } else {
-              this.detectedLocation = "מיקום שנמצא";
-              this.call.location = "מיקום שנמצא";
-              this.clearError("location"); // Clear any validation errors
-              this.isEditingLocation = false;
+              // Fallback if no address data
+              this.detectedLocation = "מיקום נוכחי";
+              this.call.location = "מיקום נוכחי";
             }
+            this.toast?.showSuccess("מיקום נמצא בהצלחה");
           } else {
-            this.detectedLocation = "מיקום שנמצא";
-            this.call.location = "מיקום שנמצא";
-            this.clearError("location"); // Clear any validation errors
-            this.isEditingLocation = false;
+            // Fallback if reverse geocoding fails
+            this.detectedLocation = "מיקום נוכחי";
+            this.call.location = "מיקום נוכחי";
+            this.toast?.showSuccess("מיקום נמצא בהצלחה");
           }
         } catch (geocodeError) {
           logger.error("Error in reverse geocoding:", geocodeError);
-          this.detectedLocation = "מיקום שנמצא";
-          this.call.location = "מיקום שנמצא";
-          this.clearError("location"); // Clear any validation errors
-          this.isEditingLocation = false;
+          // Fallback if reverse geocoding fails
+          this.detectedLocation = "מיקום נוכחי";
+          this.call.location = "מיקום נוכחי";
+          this.toast?.showSuccess("מיקום נמצא בהצלחה");
         }
+
+        this.clearError("location");
+        this.isEditingLocation = false;
+
       } catch (error) {
         logger.error("Error getting location:", error);
         this.toast?.showError(
-          "לא הצלחנו לקבל את המיקום המדויק. אנא נסה שוב או בחר מיקום ידנית."
+          "לא הצלחנו לקבל את המיקום. אנא נסה שוב או בחר מיקום ידנית."
         );
         this.usingMyLocation = false;
         this.detectedLocation = null;
-        this.call.location = "המיקום שלי";
+        this.call.location = "";
       } finally {
         this.isLoadingLocation = false;
       }
@@ -2003,6 +2319,19 @@ export default {
     onLocationChange(value) {
       this.clearError("location");
 
+      // Only start timer if input doesn't have focus
+      if (!this.isLocationInputFocused) {
+        // Reset and restart the auto-close timer (2 seconds of no typing)
+        if (this.locationInputTimeout) {
+          clearTimeout(this.locationInputTimeout);
+        }
+        this.locationInputTimeout = setTimeout(() => {
+          if (this.isEditingLocation && !this.isLocationInputFocused && !this.isHouseNumberInputFocused) {
+            this.isEditingLocation = false;
+          }
+        }, 2000);
+      }
+
       if (!value || value.trim() === "" || value !== "המיקום שלי") {
         this.usingMyLocation = false;
         this.detectedLocation = null;
@@ -2037,11 +2366,72 @@ export default {
       if (city) {
         this.locationEnglishName =
           city.english_name || city.שם_ישוב_לועזי || null;
-        this.isEditingLocation = false;
+        // Don't close editing mode automatically - let user fill house number first
+        // isEditingLocation will be set to false when user clicks "סגור" button or after 2 seconds of no typing
       }
     },
     toggleLocationEdit() {
+      // Clear timer when manually toggling edit mode
+      if (this.locationInputTimeout) {
+        clearTimeout(this.locationInputTimeout);
+        this.locationInputTimeout = null;
+      }
       this.isEditingLocation = !this.isEditingLocation;
+    },
+    onHouseNumberInput() {
+      // Only start timer if input doesn't have focus
+      if (!this.isHouseNumberInputFocused) {
+        // Reset and restart the auto-close timer (2 seconds of no typing)
+        if (this.locationInputTimeout) {
+          clearTimeout(this.locationInputTimeout);
+        }
+        this.locationInputTimeout = setTimeout(() => {
+          if (this.isEditingLocation && !this.isLocationInputFocused && !this.isHouseNumberInputFocused) {
+            this.isEditingLocation = false;
+          }
+        }, 2000);
+      }
+      this.clearError("houseNumber");
+    },
+    onLocationInputFocus() {
+      // Clear timer when input gets focus
+      this.isLocationInputFocused = true;
+      if (this.locationInputTimeout) {
+        clearTimeout(this.locationInputTimeout);
+        this.locationInputTimeout = null;
+      }
+    },
+    onLocationInputBlur() {
+      // Start timer when input loses focus (2 seconds of no typing)
+      this.isLocationInputFocused = false;
+      if (this.locationInputTimeout) {
+        clearTimeout(this.locationInputTimeout);
+      }
+      this.locationInputTimeout = setTimeout(() => {
+        if (this.isEditingLocation && !this.isLocationInputFocused && !this.isHouseNumberInputFocused) {
+          this.isEditingLocation = false;
+        }
+      }, 2000);
+    },
+    onHouseNumberFocus() {
+      // Clear timer when input gets focus
+      this.isHouseNumberInputFocused = true;
+      if (this.locationInputTimeout) {
+        clearTimeout(this.locationInputTimeout);
+        this.locationInputTimeout = null;
+      }
+    },
+    onHouseNumberBlur() {
+      // Start timer when input loses focus (2 seconds of no typing)
+      this.isHouseNumberInputFocused = false;
+      if (this.locationInputTimeout) {
+        clearTimeout(this.locationInputTimeout);
+      }
+      this.locationInputTimeout = setTimeout(() => {
+        if (this.isEditingLocation && !this.isLocationInputFocused && !this.isHouseNumberInputFocused) {
+          this.isEditingLocation = false;
+        }
+      }, 2000);
     },
     isValidCity(cityName) {
       if (!cityName || cityName.trim() === "" || cityName === "המיקום שלי") {
@@ -2472,81 +2862,100 @@ export default {
           })
         );
 
-        // Check if this is a quoted job (any subcategory has price="bid")
-        const hasQuotedSubcategory = submitSubcategoryInfo.some(
+        // Split jobs: quoted jobs (bid) are separate, fixed price jobs are together
+        const quotedJobs = submitSubcategoryInfo.filter(
           (subcat) => subcat.price === "bid" || subcat.price === "quoted"
         );
+        const fixedPriceJobs = submitSubcategoryInfo.filter(
+          (subcat) => subcat.price && subcat.price !== "bid" && subcat.price !== "quoted" && typeof subcat.price === "number"
+        );
 
-        // If quoted job, use create-call-quoted endpoint
-        if (hasQuotedSubcategory) {
-          // Find the quoted subcategory (or first one if multiple)
-          const quotedSub =
-            submitSubcategoryInfo.find(
-              (sub) => sub.price === "bid" || sub.price === "quoted"
-            ) || submitSubcategoryInfo[0];
-
-          const quotedCallData = {
-            userId: this.$route.params.id || null,
-            subcategory: quotedSub.subcategory,
-            category: quotedSub.category || "כללי",
-            desc: this.call.desc || "",
-            location: finalLocation,
-            imageUrl: callData.imageUrls,
-            imageUrls: callData.imageUrls,
-            when: this.call.when || "asap",
-            urgent: this.call.urgent || false,
-            coordinates: callData.coordinates,
-            usingMyLocation: this.usingMyLocation,
-            locationEnglishName: this.locationEnglishName || null,
-            selectedCity: this.selectedCity || null,
-          };
-
+        // If there are quoted jobs, create each one separately
+        if (quotedJobs.length > 0) {
           // Start patience message interval
           this.requestStartTime = Date.now();
           this.startPatienceMessageInterval();
 
           try {
-            const response = await axios.post(
-              `${URL}/create-call-quoted`,
-              quotedCallData,
-              {
-                headers: { "Content-Type": "application/json" },
-              }
+            // Create each quoted job separately
+            const quotedPromises = quotedJobs.map(async (quotedSub) => {
+              const quotedCallData = {
+                userId: this.$route.params.id || null,
+                subcategory: quotedSub.subcategory,
+                category: quotedSub.category || "כללי",
+                desc: this.call.desc || "",
+                location: finalLocation,
+                imageUrl: callData.imageUrls,
+                imageUrls: callData.imageUrls,
+                when: this.call.when || "asap",
+                urgent: this.call.urgent || false,
+                coordinates: callData.coordinates,
+                usingMyLocation: this.usingMyLocation,
+                locationEnglishName: this.locationEnglishName || null,
+                selectedCity: this.selectedCity || null,
+              };
+
+              return axios.post(
+                `${URL}/create-call-quoted`,
+                quotedCallData,
+                {
+                  headers: { "Content-Type": "application/json" },
+                }
+              );
+            });
+
+            // Wait for all quoted jobs to be created
+            const quotedResponses = await Promise.all(quotedPromises);
+            const allQuotedSuccess = quotedResponses.every(
+              (response) => response.data.success
             );
 
             this.stopPatienceMessageInterval();
 
-            if (response.data.success) {
+            if (allQuotedSuccess && fixedPriceJobs.length === 0) {
+              // Only quoted jobs, all succeeded - redirect
               this.isLoading = false;
+              const quotedCount = quotedJobs.length;
               this.toast?.showSuccess(
-                "עבודה נוצרה במצב הצעת מחיר! ההנדימנים יוכלו להציע מחירים."
+                `${quotedCount} ${quotedCount === 1 ? "עבודה נוצרה" : "עבודות נוצרו"} במצב הצעת מחיר! ההנדימנים יוכלו להציע מחירים.`
               );
-              // Redirect to dashboard after short delay
               setTimeout(() => {
                 this.$router.push(`/Dashboard/${this.$route.params.id}`);
               }, 2000);
-            } else {
+              return; // Exit early if only quoted jobs
+            } else if (!allQuotedSuccess) {
+              // Some quoted jobs failed
               this.isLoading = false;
               this.toast?.showError(
-                response.data.message || "שגיאה ביצירת עבודה"
+                "חלק מהעבודות עם הצעת מחיר לא נוצרו. נסה שוב."
               );
+              return;
             }
+            // If there are also fixed price jobs, continue to create them
           } catch (error) {
             this.stopPatienceMessageInterval();
             this.isLoading = false;
             const errorMessage =
               error.response?.data?.message ||
               error.message ||
-              "לא הצלחנו ליצור עבודה. נסה שוב מאוחר יותר.";
+              "לא הצלחנו ליצור את העבודות עם הצעת מחיר. נסה שוב מאוחר יותר.";
             this.toast?.showError(errorMessage);
+            return;
           }
-
-          return; // Exit early for quoted jobs
         }
 
-        // Regular job creation - continue with existing flow
-        // Add subcategoryInfo array to callData (sanitized)
-        callData.subcategoryInfo = submitSubcategoryInfo;
+        // If there are fixed price jobs, create them together
+        if (fixedPriceJobs.length > 0) {
+          // Continue with regular job creation for fixed price jobs
+          // Add only fixed price subcategoryInfo array to callData
+          callData.subcategoryInfo = fixedPriceJobs;
+        } else {
+          // No fixed price jobs, only quoted jobs (already created above)
+          return;
+        }
+
+        // Continue with regular job creation flow for fixed price jobs
+        // (subcategoryInfo was already set above if there are fixed price jobs)
 
         // Create Payment Method with Stripe Elements before sending to server
         // This way we only send the paymentMethodId (token) to server, not card details
@@ -3250,7 +3659,8 @@ export default {
             const aiSubcategory = toText(matchResult.subcategory);
             // If matched=true, subcategory is what AI found (even if same as original)
             // If matched=false, only use if different from original (to avoid using user input)
-            if (aiSubcategory) {
+            // IMPORTANT: If subcategory is null/empty, it means AI didn't find anything - don't use it
+            if (aiSubcategory && aiSubcategory.trim() !== '') {
               if (matchResult.matched) {
                 // When matched=true, subcategory is what AI found - always use it
                 subcategoryName = aiSubcategory;
@@ -3300,19 +3710,23 @@ export default {
                 subcategory: aiSelection.subcategory || "⚠️ EMPTY",
               },
               willGoToCaseA: matchedValue && confidenceValue >= 0.7,
-              willGoToCaseB: confidenceValue >= 0.6 && confidenceValue < 0.7,
-              willGoToCaseC: !(matchedValue && confidenceValue >= 0.7) && !(confidenceValue >= 0.6 && confidenceValue < 0.7),
+              willGoToCaseB: confidenceValue >= 0.5 && confidenceValue < 0.7,
+              willGoToCaseC: !(matchedValue && confidenceValue >= 0.7) && !(confidenceValue >= 0.5 && confidenceValue < 0.7),
             }
           );
 
           // Case A: High confidence (>= 0.7) - Fixed price
           if (matchedValue && confidenceValue >= 0.7) {
+            // CRITICAL: subcategoryName contains what AI found (canonicalSubcategory or subcategory from AI)
+            // Always use subcategoryName if available, otherwise fallback to matchResult.subcategory
+            const displaySubcategory = subcategoryName || toText(matchResult.subcategory) || result.originalRequest;
+            
             const categoryObj = {
               category: categoryName,
-              subcategory: subcategoryName || toText(matchResult.subcategory) || result.originalRequest,
+              subcategory: displaySubcategory, // This is what AI found - will be displayed
               price: matchResult.price ?? null,
               workType: matchResult.workType || "קבלנות",
-              originalText: result.originalRequest, // Keep original text for display
+              originalText: result.originalRequest, // Keep original text for quotation option
               confidence: confidenceValue, // Store confidence for UI - CRITICAL: Must be stored here!
               needsRecommendation: false, // No recommendation needed
               showAiSelection: true,
@@ -3325,11 +3739,20 @@ export default {
                 confidence: confidenceValue, // Ensure confidence is in aiResponse object too
               },
             };
+            
+            logger.log(`[CreateCall] Case A - Created categoryObj:`, {
+              subcategoryName,
+              matchResultSubcategory: matchResult.subcategory,
+              displaySubcategory,
+              categoryObjSubcategory: categoryObj.subcategory,
+              originalText: result.originalRequest,
+            });
+            
             processedCategories.push(categoryObj);
           }
-          // Case B: Medium confidence (0.6-0.69) - Show recommendation on card, but still display AI work by default
-          // This includes cases where matched=false but confidence >= 0.6 (AI found something but not 100% sure)
-          else if (confidenceValue >= 0.6 && confidenceValue < 0.7) {
+          // Case B: Medium confidence (0.5-0.69) - Show recommendation on card, but still display AI work by default
+          // This includes cases where matched=false but confidence >= 0.5 (AI found something but not 100% sure)
+          else if (confidenceValue >= 0.5 && confidenceValue < 0.7) {
             // Store first low confidence match for tracking
             if (!firstLowConfidenceMatch) {
               firstLowConfidenceMatch = {
@@ -3342,10 +3765,24 @@ export default {
                 originalText: result.originalRequest,
               };
             }
-            // IMPORTANT: Always show AI subcategory as default display when matched=true
+            // IMPORTANT: Always show AI subcategory as default display - this is what AI found
             // subcategoryName should contain the AI work (canonicalSubcategory or subcategory from AI)
-            // If subcategoryName is empty, fallback to matchResult.subcategory (might be same as original but it's what AI returned)
-            const displaySubcategory = subcategoryName || toText(matchResult.subcategory) || result.originalRequest;
+            // If subcategoryName is empty, check matchResult.subcategory - if it exists and is different from original, use it
+            // Otherwise, use originalText (but this should rarely happen if AI found something)
+            let displaySubcategory = subcategoryName;
+            if (!displaySubcategory && matchResult.subcategory) {
+              const serverSubcategory = toText(matchResult.subcategory);
+              // Only use if it's different from original (to avoid showing user input when AI didn't find anything)
+              if (serverSubcategory && serverSubcategory.trim() !== result.originalRequest.trim()) {
+                displaySubcategory = serverSubcategory;
+                // Update aiSelection to include this work
+                aiSelection.subcategory = serverSubcategory;
+              }
+            }
+            // Fallback to originalText only if no AI work found
+            if (!displaySubcategory) {
+              displaySubcategory = result.originalRequest;
+            }
             
             logger.log(
               `[CreateCall] Case B - Building categoryObj for "${result.originalRequest}":`,
@@ -3355,6 +3792,7 @@ export default {
                 matchResultSubcategory: matchResult.subcategory,
                 displaySubcategory,
                 originalRequest: result.originalRequest,
+                aiSelectionSubcategory: aiSelection.subcategory,
               }
             );
             
@@ -3378,8 +3816,8 @@ export default {
             };
             processedCategories.push(categoryObj);
           }
-          // Case C: Low confidence/no match (< 0.6) - require user decision (3 buttons)
-          // BUT ALSO: confidence >= 0.6 but matched=false (AI found something but not confident enough)
+          // Case C: Low confidence/no match (< 0.7) - require user decision (3 buttons)
+          // BUT ALSO: confidence >= 0.5 but < 0.7 or matched=false (AI found something but not confident enough)
           else {
             // IMPORTANT: Case C handling
             // If matched=false AND confidence=0, there's no AI work to show - use originalText
@@ -3388,7 +3826,8 @@ export default {
             
             // CRITICAL: If we have subcategoryName (from AI), use it as display AND put it in aiSelection
             // Otherwise, check if matchResult.subcategory is different from original - if so, it might be from AI
-            let displaySubcategory = result.originalRequest; // Default to original
+            // IMPORTANT: If no AI work found, set displaySubcategory to null (not originalText) so template knows there's no AI work
+            let displaySubcategory = null; // Default to null (means no AI work)
             
             logger.log(
               `[CreateCall] 🔍 Case C - Before determining displaySubcategory for "${result.originalRequest}":`,
@@ -3420,12 +3859,15 @@ export default {
                 aiSelection.subcategory = serverSubcategory;
                 logger.log(`[CreateCall] ✅ Case C - Using matchResult.subcategory (different from original): "${displaySubcategory}", updated aiSelection.subcategory`);
               } else {
-                // Server returned originalText - no AI work to show
-                displaySubcategory = result.originalRequest;
-                logger.log(`[CreateCall] ❌ Case C - matchResult.subcategory equals originalText, using originalText: "${displaySubcategory}"`);
+                // Server returned originalText or same as original - no AI work found
+                // Keep displaySubcategory as null - template will use originalText
+                // Keep aiSelection.subcategory empty - no AI work found
+                logger.log(`[CreateCall] ⚠️ Case C - matchResult.subcategory equals originalText, no AI work found. displaySubcategory=null, aiSelection.subcategory remains empty`);
               }
             } else {
-              logger.log(`[CreateCall] ❌ Case C - Using originalRequest (fallback): "${displaySubcategory}"`);
+              // No subcategory from server - no AI work found
+              // Keep displaySubcategory as null - template will use originalText
+              logger.log(`[CreateCall] ⚠️ Case C - No matchResult.subcategory, displaySubcategory=null (template will use originalText), aiSelection.subcategory remains empty`);
             }
             
             logger.log(`[CreateCall] 🔍 Case C - After determining displaySubcategory:`, {
@@ -3442,7 +3884,9 @@ export default {
             
             const categoryObj = {
               category: categoryName || "כללי",
-              subcategory: displaySubcategory, // Default display: AI work if available, otherwise originalText
+              // IMPORTANT: If displaySubcategory is null, it means no AI work - template will use originalText
+              // If displaySubcategory exists, it's what AI found (even if same as original)
+              subcategory: displaySubcategory || null, // null if no AI work, otherwise AI's subcategory
               price: matchResult.price ?? null,
               workType: "קבלנות",
               originalText: result.originalRequest, // Keep original text for quotation option
@@ -3692,8 +4136,90 @@ export default {
       }
     },
 
+    openNotRightModal(index) {
+      // Open modal for choosing between manual selection or quotation
+      this.notRightModalIndex = index;
+      this.showNotRightModal = true;
+    },
+    async openManualSelectionForNotRight() {
+      // Close the "not right" modal
+      this.showNotRightModal = false;
+      
+      // Load categories if not already loaded
+      if (this.allCategories.length === 0) {
+        try {
+          const data = await loadCategories();
+          this.allCategories = data.categories || [];
+        } catch (error) {
+          this.toast?.showError("לא הצלחנו לטעון את הקטגוריות");
+          return;
+        }
+      }
+      
+      // Store that we're in "replace mode"
+      this.isReplacingWorkItem = true;
+      this.replacingWorkIndex = this.notRightModalIndex;
+      // Clear previous selections
+      this.manuallySelectedSubcategories = [];
+      
+      // Open manual category selector - when user selects, we'll replace the item at notRightModalIndex
+      this.showManualCategorySelector = true;
+    },
+    openQuotationModalForNotRight() {
+      // Close the "not right" modal and open quotation name modal
+      const category = this.foundCategories[this.notRightModalIndex];
+      // Initialize with current subcategory or originalText
+      this.quotationModalJobName = category?.subcategory || category?.originalText || "";
+      this.showNotRightModal = false;
+      this.showQuotationNameModal = true;
+    },
+    confirmQuotationJob() {
+      // Update the job with the new name and set price to "bid"
+      if (this.notRightModalIndex >= 0 && this.quotationModalJobName.trim()) {
+        const index = this.notRightModalIndex;
+        const newJobName = this.quotationModalJobName.trim();
+        
+        // Update both arrays
+        if (this.foundCategories[index]) {
+          this.foundCategories[index] = {
+            ...this.foundCategories[index],
+            subcategory: newJobName,
+            originalText: newJobName, // Also update originalText
+            price: "bid",
+            needsRecommendation: false,
+            isManual: true, // Mark as manual
+          };
+        }
+        
+        if (this.subcategoryInfoArray[index]) {
+          this.subcategoryInfoArray[index] = {
+            ...this.subcategoryInfoArray[index],
+            subcategory: newJobName,
+            originalText: newJobName,
+            price: "bid",
+            needsRecommendation: false,
+            isManual: true, // Mark as manual
+          };
+        }
+        
+        this.showQuotationNameModal = false;
+        this.notRightModalIndex = -1;
+        this.quotationModalJobName = "";
+      }
+    },
     getConfidencePct(category) {
-      // Try multiple sources for confidence value - check direct property first, then nested objects
+      // Try confidencePct first (from server) - already in percentage format
+      if (category?.confidencePct !== undefined && category?.confidencePct !== null) {
+        return Math.round(category.confidencePct);
+      }
+      if (category?.ai?.confidencePct !== undefined && category?.ai?.confidencePct !== null) {
+        return Math.round(category.ai.confidencePct);
+      }
+      if (category?.aiResponse?.confidencePct !== undefined && category?.aiResponse?.confidencePct !== null) {
+        return Math.round(category.aiResponse.confidencePct);
+      }
+      
+      // Fallback to confidence (0-1 range) and convert to percentage
       const raw =
         category?.confidence ??
         category?.ai?.confidence ??
@@ -3764,6 +4290,16 @@ export default {
   beforeUnmount() {
     // Clean up interval when component is destroyed
     this.stopPatienceMessageInterval();
+    // Clear location input timeout
+    if (this.locationInputTimeout) {
+      clearTimeout(this.locationInputTimeout);
+      this.locationInputTimeout = null;
+    }
+    // Clear pulse interval
+    if (this.pulseInterval) {
+      clearInterval(this.pulseInterval);
+      this.pulseInterval = null;
+    }
     // Disconnect WebSocket if connected
     if (this.socket) {
       this.socket.removeAllListeners();
@@ -3772,6 +4308,11 @@ export default {
     }
   },
   async mounted() {
+    // Start pulse animation interval
+    this.pulseInterval = setInterval(() => {
+      this.pulse = (this.pulse + 1) % 3;
+    }, 600);
+
     try {
       const loc = await this.getCurrentLocation();
       this.geoCoordinates = { lat: loc.lat, lon: loc.lon };
@@ -4068,6 +4609,52 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   font-weight: 600;
 }
 
+.ccSplitNotice {
+  margin-bottom: 20px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 106, 0, 0.12) 0%,
+    rgba(255, 140, 0, 0.08) 100%
+  );
+  border: 1px solid rgba(255, 106, 0, 0.2);
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  direction: rtl;
+  text-align: right;
+}
+
+.ccSplitNotice__icon {
+  font-size: 24px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.ccSplitNotice__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ccSplitNotice__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 900;
+  color: #ff6a00;
+  line-height: 1.3;
+}
+
+.ccSplitNotice__text {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.5;
+}
+
 .ccRow {
   display: flex;
   justify-content: flex-start;
@@ -4308,6 +4895,9 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
 .ccCats {
   display: grid;
   gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden; /* Prevent cards from overflowing */
 }
 
 .ccCatCard {
@@ -4321,6 +4911,10 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   background: rgba(26, 26, 26, 1);
   padding: 14px;
   opacity: 0.9;
+  width: 100%;
+  box-sizing: border-box;
+  max-width: 100%; /* Prevent overflow */
+  overflow: hidden; /* Prevent content from overflowing */
 }
 
 .ccCatCard--featured {
@@ -4332,12 +4926,18 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
 .ccCatBody {
   flex: 1 1 auto;
   min-width: 0;
+  max-width: 100%; /* Prevent overflow */
+  overflow: hidden; /* Prevent content from overflowing */
 }
 
 .ccCatTop {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0; /* Allow flex shrinking */
+  flex-wrap: wrap; /* Allow wrapping if needed */
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .ccAIBadge {
@@ -4357,9 +4957,11 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   line-height: 1.2;
   flex: 1 1 auto;
   min-width: 0;
+  max-width: 100%; /* Prevent overflow */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  word-break: break-word; /* Break long words if needed */
 }
 
 .ccCatMeta {
@@ -4388,6 +4990,10 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
 
 .ccCatPriceRow {
   margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
 .ccCatPrice {
@@ -4400,8 +5006,37 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   color: rgba(255, 140, 0, 0.75);
 }
 
+.ccCatMatchPct {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.2;
+}
+
+.ccCatMatchPct__label {
+  font-weight: 500;
+}
+
+.ccCatMatchPct__value {
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.ccCatButtonsRow {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
 .ccCatQuote {
-  margin-top: 10px;
+  flex: 1;
+  min-width: 0; /* Allow flex shrinking */
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.04);
   color: #fff;
@@ -4409,6 +5044,31 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   padding: 10px 12px;
   font-weight: 800;
   cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.ccCatQuote:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ccCatNotRight {
+  flex: 1;
+  min-width: 0; /* Allow flex shrinking */
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ccCatNotRight:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .ccCatThumb {
@@ -6314,38 +6974,104 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 34px 18px;
-  min-height: 200px;
-  gap: 14px;
+  padding: 60px 18px;
+  min-height: 400px;
+  background-color: #07070b;
+  position: relative;
 }
 
-.location-loading__spinner {
-  width: 62px;
-  height: 62px;
+.location-loading__container {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+}
 
-  .spinner {
-    width: 100%;
-    height: 100%;
-    border: 4px solid rgba($orange, 0.18);
-    border-top-color: $orange;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
+.location-loading__radar-waves {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.location-loading__radar-wave {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  border: 2px solid #ff6a00;
+  opacity: 0;
+  animation: radar 3s ease-out infinite;
+}
+
+@keyframes radar {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
   }
 }
 
-.location-loading__text {
-  font-size: 16px;
-  font-weight: 1200;
-  color: $text;
-  margin: 0;
+.location-loading__gps-circle {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.location-loading__svg {
+  transform: rotate(0deg);
+}
+
+.location-loading__text-container {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
   text-align: center;
 }
 
+.location-loading__title {
+  font-size: 30px;
+  font-weight: 1200;
+  color: #ff6a00;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.location-loading__dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.location-loading__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+  transform: scale(1);
+}
+
+.location-loading__dot--active {
+  background-color: #ff6a00;
+  transform: scale(1.3);
+}
+
 .location-loading__subtext {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 900;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(255, 106, 0, 0.6);
   margin: 0;
   text-align: center;
 }
@@ -7486,6 +8212,134 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   }
 }
 
+/* Card Search Loader (Payment Method Verification) */
+.card-search-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  margin-bottom: 24px;
+}
+
+.card-search-loader__container {
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border: 2px solid #ff6a00;
+  background-color: #07070b;
+  max-width: 400px;
+  width: 100%;
+  direction: rtl;
+}
+
+.card-search-loader__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.card-search-loader__card-wrapper {
+  position: relative;
+  width: 80px;
+  height: 56px;
+}
+
+.card-search-loader__scan-line {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background-color: #ff6a00;
+  opacity: 0.6;
+  box-shadow: 0 0 10px #ff6a00;
+  transition: top 0.03s linear;
+}
+
+.card-search-loader__card {
+  position: relative;
+  border-radius: 8px;
+  padding: 16px;
+  width: 80px;
+  height: 56px;
+  border: 2px solid #ff6a00;
+  background-color: #07070b;
+}
+
+.card-search-loader__stripes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card-search-loader__stripe {
+  height: 4px;
+  border-radius: 2px;
+  background-color: #ff6a00;
+}
+
+.card-search-loader__stripe--1 {
+  width: 48px;
+}
+
+.card-search-loader__stripe--2 {
+  width: 32px;
+  opacity: 0.6;
+}
+
+.card-search-loader__stripe--3 {
+  width: 40px;
+  opacity: 0.4;
+}
+
+.card-search-loader__chip {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  width: 16px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid #ff6a00;
+  opacity: 0.8;
+}
+
+.card-search-loader__spinner {
+  position: relative;
+  width: 32px;
+  height: 32px;
+}
+
+.card-search-loader__spinner-ring {
+  position: absolute;
+  inset: 0;
+  border: 4px solid #ff6a00;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.card-search-loader__text {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.card-search-loader__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ff6a00;
+  margin: 0;
+}
+
+.card-search-loader__subtitle {
+  font-size: 12px;
+  margin: 0;
+  margin-top: 4px;
+  opacity: 0.6;
+  color: #ff6a00;
+}
+
 .loading-spinner {
   width: 48px;
   height: 48px;
@@ -7872,7 +8726,7 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   width: 100%;
   max-width: 520px;
   max-height: 90vh;
-  overflow-y: auto;
+  overflow: hidden; /* Changed from overflow-y: auto to prevent cutting */
   display: flex;
   flex-direction: column;
   animation: slideUp 0.3s ease;
@@ -7936,6 +8790,8 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   padding: 18px 20px;
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0; /* Allow flex shrinking */
 
   p {
     margin: 0 0 14px 0;
@@ -8023,8 +8879,9 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
 
 /* Manual Category Selector */
 .modal-content--large {
-  max-width: 640px;
+  max-width: 90vw;
   max-height: 85vh;
+  overflow: hidden; /* Prevent content from being cut */
 }
 
 .modal-body--scrollable {
@@ -8076,7 +8933,8 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   }
 }
 
-.subcategory-checkbox {
+.subcategory-checkbox,
+.subcategory-radio {
   width: 20px;
   height: 20px;
   border: 2px solid $orange;
@@ -8087,26 +8945,49 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   flex-shrink: 0;
   appearance: none;
   position: relative;
-
+  
   &:hover {
     border-color: $orange2;
     box-shadow: 0 0 10px rgba($orange, 0.3);
   }
+}
 
+.subcategory-checkbox:checked {
+  border-color: $orange2;
+  background-color: $orange;
+  box-shadow: 0 0 14px rgba($orange, 0.35);
+
+  &::before {
+    content: "✓";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #000;
+    font-weight: 1200;
+    font-size: 14px;
+    z-index: 1;
+  }
+}
+
+.subcategory-radio {
+  border-radius: 50%;
+  
   &:checked {
     border-color: $orange2;
-    background-color: rgba($orange, 0.2);
     box-shadow: 0 0 14px rgba($orange, 0.35);
-
-    &::before {
-      content: "✓";
+    
+    &::after {
+      content: "";
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      color: $orange3;
-      font-weight: 1200;
-      font-size: 14px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: $orange;
+      z-index: 1;
     }
   }
 }
@@ -8498,6 +9379,116 @@ select:focus {
   background: $ccBg;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
+
+/* =========
+     Form Input in Modal
+     ========= */
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: -0.01em;
+}
+
+.form-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(26, 26, 26, 1);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 500;
+  outline: none;
+  transition: all 0.2s ease;
+  direction: rtl;
+  text-align: right;
+
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: 400;
+  }
+
+  &:focus {
+    border-color: rgba(255, 140, 0, 0.7);
+    background: rgba(26, 26, 26, 0.95);
+    box-shadow: 0 0 0 4px rgba(255, 140, 0, 0.2);
+  }
+
+  &:hover:not(:focus) {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(26, 26, 26, 0.9);
+  }
+}
+
+/* =========
+     Not Right Modal Options
+     ========= */
+.not-right-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.not-right-option-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(26, 26, 26, 0.6);
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: right;
+  direction: rtl;
+
+  &:hover {
+    border-color: rgba(255, 140, 0, 0.5);
+    background: rgba(26, 26, 26, 0.8);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.not-right-option-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.not-right-option-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: right;
+
+  strong {
+    font-size: 16px;
+    font-weight: 800;
+    color: rgba(255, 255, 255, 0.95);
+    letter-spacing: -0.01em;
+  }
+
+  small {
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.6);
+  }
+}
 </style>
 
 <style>
@@ -8536,5 +9527,100 @@ iframe[role="presentation"][src*="stripe.com"],
   padding: 0 !important;
   transform: scale(0) !important;
   overflow: hidden !important;
+}
+
+/* =========
+     Manual Search Section
+     ========= */
+.manual-search-section {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0; /* Prevent shrinking */
+}
+
+.manual-search-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.manual-search-input {
+  flex: 1;
+  min-width: 0; /* Allow flex shrinking */
+  padding: 12px 14px; /* Reduced padding */
+  border-radius: 16px; /* Slightly smaller */
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(26, 26, 26, 1);
+  color: #fff;
+  font-size: 14px; /* Slightly smaller font */
+  font-weight: 500;
+  outline: none;
+  transition: all 0.2s ease;
+  direction: rtl;
+  text-align: right;
+  box-sizing: border-box;
+
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: 400;
+    font-size: 13px;
+  }
+
+  &:focus {
+    border-color: rgba(255, 140, 0, 0.7);
+    background: rgba(26, 26, 26, 0.95);
+    box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.2); /* Smaller shadow */
+  }
+
+  &:hover:not(:focus) {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(26, 26, 26, 0.9);
+  }
+}
+
+.manual-search-select {
+  flex-shrink: 0;
+  padding: 12px 14px; /* Reduced padding */
+  border-radius: 16px; /* Slightly smaller */
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(26, 26, 26, 1);
+  color: #fff;
+  font-size: 14px; /* Slightly smaller font */
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  direction: rtl;
+  min-width: 120px; /* Reduced from 140px */
+  max-width: 120px; /* Added max-width */
+  box-sizing: border-box;
+
+  &:focus {
+    border-color: rgba(255, 140, 0, 0.7);
+    background: rgba(26, 26, 26, 0.95);
+    box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.2); /* Smaller shadow */
+  }
+
+  &:hover:not(:focus) {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(26, 26, 26, 0.9);
+  }
+
+  option {
+    background: rgba(26, 26, 26, 1);
+    color: #fff;
+    padding: 10px;
+  }
+}
+
+.no-results {
+  text-align: center;
+  padding: 40px 20px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 15px;
+  font-weight: 600;
 }
 </style>

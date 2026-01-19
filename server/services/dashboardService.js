@@ -164,7 +164,15 @@ async function fetchUser(userId, collection) {
     throw new Error("User not found");
   }
 
-  return user;
+  // Check if user has a payment method
+  // Convert to plain object to avoid issues with MongoDB ObjectId
+  const userObj = user.toObject ? user.toObject() : user;
+  // Check if paymentMethodId exists and is not empty
+  const hasPaymentMethodId = userObj.paymentMethodId && 
+    (typeof userObj.paymentMethodId === 'string' ? userObj.paymentMethodId.trim().length > 0 : true);
+  userObj.hasPaymentMethod = !!hasPaymentMethodId;
+
+  return userObj;
 }
 
 /**
@@ -184,32 +192,73 @@ async function fetchJobs(user, collectionJobs) {
   const pipeline = [];
 
   // Stage 1: Base match - exclude deleted/cancelled
-  const baseMatch = {
+  // Also exclude expired jobs that expired more than 1 hour ago
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  
+  // Base conditions that apply to all
+  const baseConditions = {
     isDeleted: { $ne: true },
     status: { $ne: "cancelled" },
+  };
+
+  // Expired jobs filter - exclude expired jobs that expired more than 1 hour ago
+  const expiredFilter = {
+    $or: [
+      // Not expired at all
+      { status: { $ne: "expired" } },
+      // Expired but within the last hour (use expiredAt if exists, otherwise updatedAt)
+      {
+        $and: [
+          { status: "expired" },
+          {
+            $or: [
+              { expiredAt: { $gte: oneHourAgo } },
+              {
+                $and: [
+                  { expiredAt: { $exists: false } },
+                  { updatedAt: { $gte: oneHourAgo } },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  // Combine base conditions with expired filter
+  const baseMatch = {
+    $and: [
+      baseConditions,
+      expiredFilter,
+    ],
   };
 
   // Stage 2: Filter by user type and status
   if (!user.isHandyman) {
     // For clients: exclude "done" jobs with ratingSubmitted, but keep "done" jobs that need approval
-    baseMatch.$or = [
-      { status: { $ne: "done" } },
-      {
-        $and: [
-          { status: "done" },
-          {
-            $or: [
-              { clientApproved: false },
-              { clientApproved: null },
-              { clientApproved: { $exists: false } },
-            ],
-          },
-        ],
-      },
-    ];
+    baseMatch.$and.push({
+      $or: [
+        { status: { $ne: "done" } },
+        {
+          $and: [
+            { status: "done" },
+            {
+              $or: [
+                { clientApproved: false },
+                { clientApproved: null },
+                { clientApproved: { $exists: false } },
+              ],
+            },
+          ],
+        },
+      ],
+    });
   } else {
     // For handymen: exclude "done" jobs
-    baseMatch.status = { $nin: ["done", "cancelled"] };
+    baseMatch.$and.push({
+      status: { $nin: ["done", "cancelled"] },
+    });
   }
 
   pipeline.push({ $match: baseMatch });

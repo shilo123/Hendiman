@@ -179,6 +179,7 @@
 import axios from "axios";
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
+import { Capacitor } from "@capacitor/core";
 import {
   startRegistration,
   startAuthentication,
@@ -237,11 +238,14 @@ export default {
   },
   methods: {
     checkIfMobile() {
+      // Check if running in Capacitor app (Android/iOS)
+      const isNative = Capacitor.isNativePlatform();
       const userAgent = navigator.userAgent || navigator.vendor || window.opera;
-      this.isMobile =
+      const isMobileDevice =
         /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
           userAgent
         );
+      this.isMobile = isNative || isMobileDevice;
     },
 
     async checkBiometricCredentials() {
@@ -250,13 +254,16 @@ export default {
         return;
       }
 
+      // In native app, WebAuthn should work, but check server support
       try {
         const { data } = await axios.post(`${URL}/webauthn/check`, {
           userId: this.currentUserId,
         });
         this.hasBiometricCredentials = data.success && data.hasCredentials;
       } catch (error) {
+        // In case of error, disable biometric option
         this.hasBiometricCredentials = false;
+        // Don't show error to user, just silently disable option
       }
     },
 
@@ -302,6 +309,8 @@ export default {
         }
 
         // Step 2: Start authentication
+        // In Capacitor app, WebAuthn should work if browser supports it
+        // Android WebView supports WebAuthn in recent versions
         const credential = await startAuthentication(optionsData.options);
 
         // Step 3: Verify authentication
@@ -327,6 +336,13 @@ export default {
           this.toast?.showError("האימות בוטל או נכשל");
         } else if (error.name === "InvalidStateError") {
           this.toast?.showError("טביעת האצבע לא רשומה במכשיר זה");
+        } else if (error.name === "NotSupportedError") {
+          this.toast?.showError("המכשיר שלך לא תומך בטביעת אצבע");
+        } else if (error.response?.status === 500 || error.response?.status === 400) {
+          const errorMessage =
+            error.response?.data?.message ||
+            "שגיאה בשרת, אנא נסה שוב";
+          this.toast?.showError(errorMessage);
         } else {
           const errorMessage =
             error.response?.data?.message ||

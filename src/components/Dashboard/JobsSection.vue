@@ -4,11 +4,11 @@
     <header class="jobs__header">
       <div class="jobs__header-content">
         <div>
-          <h1 class="jobs__header-title">העבודות שלי</h1>
+          <h1 class="jobs__header-title"> עבודות במערכת</h1>
           <p class="jobs__header-subtitle">
             {{ filteredJobs.length }} משימות ממתינות לטיפול
-          </p>
-        </div>
+        </p>
+      </div>
         <button
           v-if="isHendiman"
           class="jobs__filter-btn"
@@ -24,8 +24,8 @@
           @click="$emit('refresh')"
         >
           <span class="material-symbols-outlined">refresh</span>
-        </button>
-      </div>
+      </button>
+    </div>
     </header>
 
     <!-- Filters (handyman only) -->
@@ -205,188 +205,20 @@
       </div>
     </div>
 
-    <!-- Filter Modal -->
-    <div
-      v-if="showFilterModal"
-      class="filter-modal-overlay"
-      @click="closeFilterModal"
-    >
-      <div class="filter-modal" @click.stop>
-        <div class="filter-modal__header">
-          <div class="filter-modal__titleWrap">
-            <div class="filter-modal__badge">Filters</div>
-            <h3 class="filter-modal__title">סנן עבודות</h3>
-          </div>
-
-          <button
-            class="filter-modal__close"
-            @click="closeFilterModal"
-            aria-label="סגור"
-          >
-            ×
-          </button>
-        </div>
-
-        <div class="filter-modal__body">
-          <!-- Location Filter -->
-          <div class="filter-section">
-            <div class="filter-section__title">מיקום</div>
-            <div class="radio-group">
-              <label class="radio-item">
-                <input
-                  type="radio"
-                  name="locationFilter"
-                  value="myLocation"
-                  :checked="localFilters.locationType === 'myLocation'"
-                  @change="localFilters.locationType = 'myLocation'"
-                />
-                <span class="radio-label">המיקום שלי</span>
-              </label>
-              <label class="radio-item">
-                <input
-                  type="radio"
-                  name="locationFilter"
-                  value="residence"
-                  :checked="localFilters.locationType === 'residence'"
-                  @change="localFilters.locationType = 'residence'"
-                />
-                <span class="radio-label">מקום המגורים שלי</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Distance Filter -->
-          <div class="filter-section">
-            <div class="filter-section__title">
-              מרחק (ק"מ)
-              <button
-                class="link link--small"
-                type="button"
-                @click="resetKmRange"
-              >
-                איפוס
-              </button>
-            </div>
-
-            <div class="range-display">
-              <span class="range-value">עד {{ localFilters.maxKm }} ק״מ</span>
-            </div>
-
-            <input
-              class="range-input"
-              type="range"
-              min="1"
-              max="50"
-              step="1"
-              v-model.number="localFilters.maxKm"
-            />
-          </div>
-
-          <!-- Price Filter -->
-          <div class="filter-section">
-            <div class="filter-section__title">
-              מחיר (₪)
-              <button
-                class="link link--small"
-                type="button"
-                @click="resetPriceRange"
-              >
-                איפוס
-              </button>
-            </div>
-
-            <div class="price-range">
-              <div class="price-input-group">
-                <label class="price-label">מינימום:</label>
-                <input
-                  class="price-input"
-                  type="number"
-                  min="0"
-                  v-model.number="localFilters.minPrice"
-                  placeholder="0"
-                />
-              </div>
-
-              <div class="price-input-group">
-                <label class="price-label">מקסימום:</label>
-                <input
-                  class="price-input"
-                  type="number"
-                  min="0"
-                  v-model.number="localFilters.maxPrice"
-                  placeholder="ללא הגבלה"
-                />
-              </div>
-            </div>
-          </div>
-
-          <!-- Work Type Filter -->
-          <div class="filter-section">
-            <div class="filter-section__title">סוג קריאה</div>
-            <div class="radio-group">
-              <label class="radio-item">
-                <input
-                  type="radio"
-                  name="workTypeFilter"
-                  value=""
-                  :checked="localFilters.workType === ''"
-                  @change="localFilters.workType = ''"
-                />
-                <span class="radio-label">הכל</span>
-              </label>
-
-              <label class="radio-item">
-                <input
-                  type="radio"
-                  name="workTypeFilter"
-                  value="קלה"
-                  :checked="localFilters.workType === 'קלה'"
-                  @change="localFilters.workType = 'קלה'"
-                />
-                <span class="radio-label">קלה</span>
-              </label>
-
-              <label class="radio-item">
-                <input
-                  type="radio"
-                  name="workTypeFilter"
-                  value="מורכבת"
-                  :checked="localFilters.workType === 'מורכבת'"
-                  @change="localFilters.workType = 'מורכבת'"
-                />
-                <span class="radio-label">מורכבת</span>
-              </label>
-
-              <label class="radio-item">
-                <input
-                  type="radio"
-                  name="workTypeFilter"
-                  value="קשה"
-                  :checked="localFilters.workType === 'קשה'"
-                  @change="localFilters.workType = 'קשה'"
-                />
-                <span class="radio-label">קשה</span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div class="filter-modal__footer">
-          <button
-            class="filter-modal__btn filter-modal__btn--cancel"
-            @click="closeFilterModal"
-          >
-            ביטול
-          </button>
-          <button
-            class="filter-modal__btn filter-modal__btn--apply"
-            @click="applyFilters"
-          >
-            סנן
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- Filter Modal Component -->
+    <JobFilterModal
+      :is-open="showFilterModal"
+      :filters="localFilters"
+      :user-name="userName || ''"
+      :user-plan="userPlan || ''"
+      :user-avatar="userAvatar || ''"
+      :user-city="userCity || ''"
+      @close="closeFilterModal"
+      @apply="handleFilterApply"
+      @location-type-change="handleLocationTypeChange"
+      @reset-distance="resetKmRange"
+      @reset-price="resetPriceRange"
+    />
 
     <!-- Main Content -->
     <main class="jobs__main">
@@ -396,11 +228,12 @@
           <span class="jobs__section-dot"></span>
           <h2 class="jobs__section-title">דחיפות גבוהה</h2>
         </div>
-        <article
-          v-for="job in urgentJobs"
-          :key="job.id || job._id"
-          class="job job--urgent-card"
-        >
+        <div class="jobs__urgent-list" ref="urgentListRef" @scroll="handleUrgentScroll">
+          <article
+            v-for="job in urgentJobs"
+            :key="job.id || job._id"
+            class="job job--urgent-card"
+          >
           <div class="job__urgent-glow"></div>
           <div class="job__content">
             <div class="job__header">
@@ -423,7 +256,7 @@
               <div class="job__priority-badge">
                 <span class="material-symbols-outlined">priority_high</span>
               </div>
-            </div>
+          </div>
 
             <div class="job__tags" v-if="getJobChips(job).length">
               <span
@@ -433,24 +266,35 @@
               >
                 {{ chip.text }}
               </span>
-            </div>
+        </div>
 
             <div class="job__footer">
               <div class="job__time">
                 <span class="material-symbols-outlined">schedule</span>
                 <span>{{ getTimeAgo(job) || "לפני זמן מה" }}</span>
-              </div>
+            </div>
               <button
                 class="job__view-btn"
                 type="button"
                 @click="$emit('view', job)"
               >
-                <span>צפייה במשימה</span>
+                <span>צפייה בעבודה</span>
                 <span class="material-symbols-outlined">arrow_forward</span>
               </button>
             </div>
-          </div>
+            </div>
         </article>
+        <div class="jobs__urgent-spacer"></div>
+          </div>
+        <!-- Dots indicator for scroll -->
+        <div v-if="urgentJobs.length > 1" class="jobs__urgent-dots">
+          <span
+            v-for="(job, index) in urgentJobs"
+            :key="index"
+            class="jobs__urgent-dot"
+            :class="{ 'jobs__urgent-dot--active': currentUrgentIndex === index }"
+          ></span>
+        </div>
       </section>
 
       <!-- Regular Jobs Section -->
@@ -472,15 +316,15 @@
                     {{ getJobIcon(job) }}
                   </span>
                 </div>
-                <button
+              <button
                   v-if="!isHendiman && isClientJob(job)"
                   class="job__menu-btn"
-                  type="button"
+                type="button"
                   @click.stop="toggleJobMenu(job.id || job._id)"
-                >
+              >
                   <span class="material-symbols-outlined">more_horiz</span>
-                </button>
-              </div>
+              </button>
+            </div>
 
               <h3 class="job__title job__title--regular" :title="getJobDisplayName(job)">
                 {{ getJobDisplayName(job) }}
@@ -489,7 +333,7 @@
               <div class="job__location job__location--regular">
                 <span class="material-symbols-outlined">location_on</span>
                 <span class="job__location-text">{{ formatJobLocation(job) }}</span>
-              </div>
+          </div>
 
               <div class="job__tags job__tags--regular" v-if="getJobChips(job).length">
                 <span
@@ -499,61 +343,61 @@
                 >
                   {{ chip.text }}
                 </span>
-              </div>
+        </div>
 
               <div class="job__footer job__footer--regular">
                 <span class="job__time job__time--regular">
                   {{ getTimeAgo(job) || "לפני זמן מה" }}
                 </span>
-                <button
+          <button
                   class="job__view-btn job__view-btn--regular"
                   type="button"
                   @click="$emit('view', job)"
                 >
                   <span class="material-symbols-outlined">arrow_forward</span>
-                </button>
-              </div>
-            </div>
+          </button>
+      </div>
+    </div>
 
             <!-- Client job menu dropdown -->
-            <div
-              v-if="!isHendiman && isClientJob(job)"
-              class="job__menu"
-              :class="{
+          <div
+            v-if="!isHendiman && isClientJob(job)"
+            class="job__menu"
+            :class="{
                 'job__menu--open': openJobMenuId === job.id || openJobMenuId === job._id,
               }"
             >
-              <div
-                v-if="openJobMenuId === (job.id || job._id)"
-                class="job__menu-dropdown"
-                @click.stop
+            <div
+              v-if="openJobMenuId === (job.id || job._id)"
+              class="job__menu-dropdown"
+              @click.stop
+            >
+              <button
+                class="job__menu-item"
+                type="button"
+                @click="handleEditJob(job)"
               >
-                <button
-                  class="job__menu-item"
-                  type="button"
-                  @click="handleEditJob(job)"
-                >
-                  <span class="job__menu-icon">✏️</span>
-                  עריכה
-                </button>
-                <button
-                  class="job__menu-item"
-                  type="button"
-                  @click="handleDeleteJob(job)"
-                >
-                  <span class="job__menu-icon">🗑️</span>
-                  מחיקה
-                </button>
-                <button
-                  class="job__menu-item"
-                  type="button"
-                  @click="handleViewJob(job)"
-                >
-                  <span class="job__menu-icon">👁️</span>
-                  צפייה
-                </button>
-              </div>
+                <span class="job__menu-icon">✏️</span>
+                עריכה
+              </button>
+              <button
+                class="job__menu-item"
+                type="button"
+                @click="handleDeleteJob(job)"
+              >
+                <span class="job__menu-icon">🗑️</span>
+                מחיקה
+              </button>
+              <button
+                class="job__menu-item"
+                type="button"
+                @click="handleViewJob(job)"
+              >
+                <span class="job__menu-icon">👁️</span>
+                צפייה
+              </button>
             </div>
+          </div>
           </article>
           <div class="jobs__regular-spacer"></div>
         </div>
@@ -564,7 +408,7 @@
         <div class="empty__ic" aria-hidden="true">🧰</div>
         <div class="empty__title">אין עבודות להצגה כרגע</div>
         <div class="empty__sub">נסה לרענן או לשנות סינון.</div>
-      </div>
+          </div>
     </main>
 
         <!-- Client job menu dropdown -->
@@ -588,24 +432,24 @@
               <span class="job__menu-icon">✏️</span>
               עריכה
             </button>
-            <button
+          <button
               class="job__menu-item"
-              type="button"
+            type="button"
               @click="handleDeleteJob(job)"
-            >
+          >
               <span class="job__menu-icon">🗑️</span>
               מחיקה
-            </button>
-            <button
+          </button>
+          <button
               class="job__menu-item"
-              type="button"
+            type="button"
               @click="handleViewJob(job)"
-            >
+          >
               <span class="job__menu-icon">👁️</span>
-              צפייה
-            </button>
-          </div>
-        </div>
+            צפייה
+          </button>
+      </div>
+    </div>
 
 
     <!-- Pagination -->
@@ -656,8 +500,13 @@
 </template>
 
 <script>
+import JobFilterModal from "./JobFilterModal.vue";
+
 export default {
   name: "JobsSection",
+  components: {
+    JobFilterModal,
+  },
   props: {
     isHendiman: { type: Boolean, default: false },
     isMobile: { type: Boolean, default: false },
@@ -672,6 +521,10 @@ export default {
     handymanCoords: { type: Object, default: () => null },
     currentUserId: { type: String, default: null },
     hideFiltersOnDesktop: { type: Boolean, default: false },
+    userName: { type: String, default: "" },
+    userPlan: { type: String, default: "" },
+    userAvatar: { type: String, default: "" },
+    userCity: { type: String, default: "" },
   },
   emits: [
     "refresh",
@@ -696,6 +549,7 @@ export default {
       showFilterModal: false,
       openJobMenuId: null,
       jobCarouselIndex: 0,
+      currentUrgentIndex: 0,
       localFilters: {
         status: "all",
         locationType: "residence",
@@ -714,15 +568,31 @@ export default {
     },
     urgentJobs() {
       if (!this.filteredJobs) return [];
-      return this.filteredJobs.filter(
+      const urgent = this.filteredJobs.filter(
         (job) => job && (job.urgent || job.isUrgent)
       );
+      // מיין - עבודות פתוחות ראשונות
+      return urgent.sort((a, b) => {
+        const aIsOpen = a.status === "open";
+        const bIsOpen = b.status === "open";
+        if (aIsOpen && !bIsOpen) return -1;
+        if (!aIsOpen && bIsOpen) return 1;
+        return 0;
+      });
     },
     regularJobs() {
       if (!this.filteredJobs) return [];
-      return this.filteredJobs.filter(
+      const regular = this.filteredJobs.filter(
         (job) => job && !job.urgent && !job.isUrgent
       );
+      // מיין - עבודות פתוחות ראשונות
+      return regular.sort((a, b) => {
+        const aIsOpen = a.status === "open";
+        const bIsOpen = b.status === "open";
+        if (aIsOpen && !bIsOpen) return -1;
+        if (!aIsOpen && bIsOpen) return 1;
+        return 0;
+      });
     },
   },
   watch: {
@@ -802,7 +672,17 @@ export default {
         chips.push({ text: "הזמנה אישית", class: "job__cat--special" });
       }
       
-      if (job.status === "quoted") {
+      // בדוק אם יש מחיר "bid" ב-subcategoryInfo
+      const hasBidPrice = (() => {
+        if (Array.isArray(job.subcategoryInfo)) {
+          return job.subcategoryInfo.some((sub) => sub?.price === "bid" || sub?.price === "הצעת מחיר");
+        }
+        return job.subcategoryInfo?.price === "bid" || job.subcategoryInfo?.price === "הצעת מחיר" || job.price === "bid";
+      })();
+      
+      if (hasBidPrice) {
+        chips.push({ text: "הצעת מחיר", class: "job__cat--quoted" });
+      } else if (job.status === "quoted") {
         chips.push({ text: "הצעת מחיר", class: "job__cat--quoted" });
       } else if (job.status && job.status !== "open") {
         chips.push({
@@ -811,21 +691,53 @@ export default {
         });
       }
       
-      const workType =
-        job.subcategoryInfo?.typeWork || job.billingType || "קבלנות";
-      chips.push({
-        text: workType,
-        class: workType === "לשעה" ? "job__cat--hourly" : "job__cat--fixed",
-      });
+      // הוסף סוג תשלום (קבלנות/לשעה) או סוג עבודה (קלה/מורכבת/קשה)
+      const billingType = job.subcategoryInfo?.typeWork || job.billingType;
+      const workTypeText = job.subcategoryInfo?.workType || job.workType;
       
-      if (job.subcategoryInfo?.workType || job.workType) {
+      // אם יש billingType ו-workType זהה, נוסיף רק אחד
+      if (billingType && workTypeText && billingType === workTypeText) {
+        // שניהם אותו דבר - נוסיף רק אחד
         chips.push({
-          text: job.subcategoryInfo?.workType || job.workType,
-          class: "job__cat--work",
+          text: billingType,
+          class: billingType === "לשעה" ? "job__cat--hourly" : "job__cat--fixed",
         });
+      } else {
+        // הם שונים או אחד מהם חסר - נוסיף כל אחד בנפרד
+        if (billingType) {
+          chips.push({
+            text: billingType,
+            class: billingType === "לשעה" ? "job__cat--hourly" : "job__cat--fixed",
+          });
+        }
+        
+        if (workTypeText && workTypeText !== billingType) {
+          // אם workType הוא "קבלנות" או "לשעה", נשתמש ב-class המתאים
+          if (workTypeText === "לשעה" || workTypeText === "קבלנות") {
+            chips.push({
+              text: workTypeText,
+              class: workTypeText === "לשעה" ? "job__cat--hourly" : "job__cat--fixed",
+            });
+          } else {
+            // אחרת, זה workType אחר (קלה/מורכבת/קשה)
+            chips.push({
+              text: workTypeText,
+              class: "job__cat--work",
+            });
+          }
+        }
       }
       
       return chips;
+    },
+    handleUrgentScroll() {
+      if (!this.$refs.urgentListRef) return;
+      const container = this.$refs.urgentListRef;
+      const scrollLeft = container.scrollLeft;
+      const cardWidth = container.querySelector('.job--urgent-card')?.offsetWidth || 320;
+      const gap = 16;
+      const newIndex = Math.round(scrollLeft / (cardWidth + gap));
+      this.currentUrgentIndex = Math.min(newIndex, this.urgentJobs.length - 1);
     },
     handleClickOutside(e) {
       if (this.isStatusDropdownOpen && !e.target.closest(".selectWrap")) {
@@ -989,16 +901,20 @@ export default {
       this.localFilters.minPrice = null;
       this.localFilters.maxPrice = null;
     },
-    applyFilters() {
-      this.$emit("pick-status", this.localFilters.status);
-      this.$emit("change-location-type", this.localFilters.locationType);
-      this.$emit("change-km", this.localFilters.maxKm);
-      this.$emit("change-work-type", this.localFilters.workType);
+    handleFilterApply(filters) {
+      this.localFilters = { ...filters };
+      this.$emit("pick-status", filters.status || this.activeStatus);
+      this.$emit("change-location-type", filters.locationType);
+      this.$emit("change-km", filters.maxKm);
+      this.$emit("change-work-type", filters.workType);
       this.$emit("change-price-range", {
-        minPrice: this.localFilters.minPrice,
-        maxPrice: this.localFilters.maxPrice,
+        minPrice: filters.minPrice,
+        maxPrice: filters.maxPrice,
       });
       this.closeFilterModal();
+    },
+    handleLocationTypeChange(locationType) {
+      this.localFilters.locationType = locationType;
     },
   },
 };
@@ -1507,7 +1423,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 
 /* Section Headers */
 .jobs__section-header {
-  display: flex;
+    display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 16px;
@@ -1551,10 +1467,77 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 
 /* Urgent Section */
 .jobs__urgent-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.jobs__urgent-list {
+  display: flex;
+    overflow-x: auto;
+  gap: 16px;
+  padding: 0 20px 40px;
+    scroll-snap-type: x mandatory;
+  -ms-overflow-style: none;
+    scrollbar-width: none;
+  max-width: 100%;
+  box-sizing: border-box;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+
+  @media (max-width: 640px) {
+    padding: 0 16px 32px;
+    gap: 12px;
+  }
+}
+
+.jobs__urgent-spacer {
+  width: 1px;
+  flex-shrink: 0;
+}
+
+.jobs__urgent-dots {
+    display: flex;
+    justify-content: center;
+  align-items: center;
+    gap: 8px;
   padding: 16px 20px 0;
+  margin-top: -24px;
 
   @media (max-width: 640px) {
     padding: 12px 16px 0;
+    margin-top: -20px;
+    gap: 6px;
+  }
+}
+
+.jobs__urgent-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+    cursor: pointer;
+
+  @media (max-width: 640px) {
+    width: 6px;
+    height: 6px;
+  }
+
+  &--active {
+    background-color: #ff6a00;
+    width: 24px;
+    border-radius: 4px;
+
+    @media (max-width: 640px) {
+      width: 20px;
+    }
+  }
+
+  &:hover {
+    background-color: rgba(255, 106, 0, 0.5);
   }
 }
 
@@ -1569,12 +1552,19 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   box-shadow: 0 0 40px -5px rgba(249, 115, 22, 0.25);
   overflow: hidden;
   direction: rtl;
-  margin-bottom: 16px;
+  flex: 0 0 auto;
+  min-width: 300px;
+  width: 85%;
+  max-width: 400px;
+  box-sizing: border-box;
+  scroll-snap-align: start;
 
   @media (max-width: 640px) {
     padding: 20px;
     border-radius: 1.25rem;
-    margin-bottom: 12px;
+    min-width: 280px;
+    width: 85%;
+    max-width: 320px;
   }
 
   &::before {
@@ -1728,7 +1718,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 .job__tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+    gap: 8px;
   margin-bottom: 24px;
 
   @media (max-width: 640px) {
@@ -1761,10 +1751,12 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   border-top: 1px solid rgba(255, 255, 255, 0.05);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
+  gap: 12px;
 
   @media (max-width: 640px) {
     padding-top: 16px;
+    gap: 8px;
   }
 }
 
@@ -2680,7 +2672,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
     margin-bottom: 8px;
 
     @media (max-width: 640px) {
-      font-size: 14px;
+    font-size: 14px;
     }
   }
   .empty__sub {
@@ -2690,7 +2682,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
     font-weight: 400;
 
     @media (max-width: 640px) {
-      font-size: 12px;
+    font-size: 12px;
     }
   }
 }
@@ -2836,180 +2828,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   }
 }
 
-/* Filter Modal - Mobile Only */
-.filter-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.78);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-  padding: 18px;
-  direction: rtl;
-
-  @media (min-width: 769px) {
-    display: none;
-  }
-}
-
-.filter-modal {
-  background: $bg;
-  border-radius: 18px;
-  border: 1px solid rgba($primary, 0.22);
-  max-width: 450px;
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 26px 90px rgba(0, 0, 0, 0.6);
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  overflow: hidden;
-
-  &:before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(
-        600px 240px at 20% 0%,
-        rgba($primary, 0.18),
-        transparent 55%
-      ),
-      radial-gradient(
-        520px 220px at 110% 30%,
-        rgba($primary-dark, 0.12),
-        transparent 58%
-      );
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  @media (max-width: 450px) {
-    border-radius: 16px;
-  }
-}
-
-.filter-modal__header {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 18px 18px 14px;
-  border-bottom: 1px solid rgba($primary, 0.18);
-}
-.filter-modal__titleWrap {
-  display: grid;
-  gap: 4px;
-}
-.filter-modal__badge {
-  width: fit-content;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.22);
-  color: rgba(255, 255, 255, 0.72);
-  font-weight: 1100;
-  font-size: 11px;
-}
-.filter-modal__title {
-  font-size: 19px;
-  font-weight: 1100;
-  color: $primary-dark;
-  margin: 0;
-}
-
-.filter-modal__close {
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.08);
-  color: $text;
-  font-size: 24px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.18s ease, background 0.18s ease;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.14);
-    transform: rotate(2deg);
-  }
-  &:active {
-    transform: scale(0.98);
-  }
-}
-
-.filter-modal__body {
-  position: relative;
-  z-index: 1;
-  padding: 18px;
-  flex: 1;
-  overflow-y: auto;
-}
-
-.filter-section {
-  margin-bottom: 22px;
-}
-.filter-section__title {
-  font-size: 13px;
-  font-weight: 1100;
-  color: $text;
-  margin-bottom: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.filter-modal__footer {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  gap: 12px;
-  padding: 16px 18px;
-  border-top: 1px solid rgba($primary, 0.18);
-  background: rgba(0, 0, 0, 0.28);
-}
-.filter-modal__btn {
-  flex: 1;
-  padding: 12px 18px;
-  border-radius: 14px;
-  font-size: 14px;
-  font-weight: 1100;
-  cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
-  border: none;
-  font-family: inherit;
-
-  &:active {
-    transform: scale(0.99);
-  }
-
-  &--cancel {
-    background: rgba(255, 255, 255, 0.06);
-    color: $text;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    &:hover {
-      background: rgba(255, 255, 255, 0.1);
-    }
-  }
-  &--apply {
-    background: linear-gradient(135deg, $primary, $primary-dark);
-    color: #111;
-    box-shadow: 0 22px 70px rgba($primary, 0.2);
-    &:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 26px 80px rgba($primary, 0.25);
-    }
-  }
-}
+/* Filter Modal styles moved to JobFilterModal.vue component */
 
 /* A11y: reduced motion */
 @media (prefers-reduced-motion: reduce) {

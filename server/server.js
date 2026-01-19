@@ -4161,75 +4161,56 @@ function findAvailablePort(startPort) {
 
         // First, try to use paymentMethodId from DB if exists
         if (user.paymentMethodId) {
-          // Return payment method from DB immediately with default card details
-          // Card details will be fetched in background if needed (non-blocking)
-          const cardDetails = {
-            brand: "card",
-            last4: "****",
-            expMonth: null,
-            expYear: null,
-          };
+          try {
+            // Fetch card details from Stripe (wait for it)
+            const paymentMethod = await stripe.paymentMethods.retrieve(
+              user.paymentMethodId
+            );
 
-          // Return immediately without waiting for Stripe API
-          res.json({
-            success: true,
-            hasPaymentMethod: true,
-            paymentMethodId: user.paymentMethodId,
-            stripeCustomerId: customerId || user.stripeCustomerId || null,
-            card: cardDetails,
-          });
-
-          // Fetch card details from Stripe in background (non-blocking, don't wait)
-          // This improves response time while still getting card details if possible
-          stripe.paymentMethods
-            .retrieve(user.paymentMethodId)
-            .then((paymentMethod) => {
-              if (paymentMethod && paymentMethod.card) {
-                // Optionally update user with card details for future use
-                // But don't block the response
-              }
-            })
-            .catch((err) => {
-              // Ignore errors - not critical
-            });
-
-          return; // Exit early after sending response
-
-          // Payment method might be deleted in Stripe, try to find alternative (only if we have customerId and no paymentMethod yet)
-          if (customerId && !paymentMethod) {
-            try {
-              const customerPaymentMethods = await stripe.paymentMethods.list({
-                customer: customerId,
-                type: "card",
+            if (paymentMethod && paymentMethod.card) {
+              // Return payment method with card details from Stripe
+              return res.json({
+                success: true,
+                hasPaymentMethod: true,
+                paymentMethodId: user.paymentMethodId,
+                stripeCustomerId: customerId || user.stripeCustomerId || null,
+                card: {
+                  brand: paymentMethod.card.brand || "card",
+                  last4: paymentMethod.card.last4 || "****",
+                  expMonth: paymentMethod.card.exp_month || null,
+                  expYear: paymentMethod.card.exp_year || null,
+                },
               });
-
-              if (
-                customerPaymentMethods.data &&
-                customerPaymentMethods.data.length > 0
-              ) {
-                // Use the first available payment method
-                const alternativePaymentMethod = customerPaymentMethods.data[0];
-                // Update DB with the alternative payment method
-                await usersCol.updateOne(
-                  { _id: new ObjectId(userId) },
-                  { $set: { paymentMethodId: alternativePaymentMethod.id } }
-                );
-                return res.json({
-                  success: true,
-                  hasPaymentMethod: true,
-                  paymentMethodId: alternativePaymentMethod.id,
-                  stripeCustomerId: customerId,
-                  card: {
-                    brand: alternativePaymentMethod.card?.brand,
-                    last4: alternativePaymentMethod.card?.last4,
-                    expMonth: alternativePaymentMethod.card?.exp_month,
-                    expYear: alternativePaymentMethod.card?.exp_year,
-                  },
-                });
-              }
-            } catch (listError) {
-              // Error listing payment methods, continue
+            } else {
+              // Payment method exists but no card details
+              return res.json({
+                success: true,
+                hasPaymentMethod: true,
+                paymentMethodId: user.paymentMethodId,
+                stripeCustomerId: customerId || user.stripeCustomerId || null,
+                card: {
+                  brand: "card",
+                  last4: "****",
+                  expMonth: null,
+                  expYear: null,
+                },
+              });
             }
+          } catch (stripeError) {
+            // Error retrieving from Stripe, return with default
+            serverLogger.error("Error retrieving payment method from Stripe:", stripeError);
+            return res.json({
+              success: true,
+              hasPaymentMethod: true,
+              paymentMethodId: user.paymentMethodId,
+              stripeCustomerId: customerId || user.stripeCustomerId || null,
+              card: {
+                brand: "card",
+                last4: "****",
+                expMonth: null,
+                expYear: null,
+              },
+            });
           }
         }
 
@@ -14640,9 +14621,9 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           );
           const jobStatus = hasQuotedSubcategory ? "quoted" : "open";
 
-          // Set quotedUntil if job is quoted (60 minutes from now)
+          // Set quotedUntil if job is quoted (6 hours from now)
           const quotedUntil = hasQuotedSubcategory
-            ? new Date(Date.now() + 60 * 60 * 1000) // 60 minutes
+            ? new Date(Date.now() + 6 * 60 * 60 * 1000) // 6 hours
             : null;
 
           // Create job with subcategoryInfo as array
@@ -15487,29 +15468,20 @@ ${subcategoryList}
 
 ענה ב-JSON בלבד עם המבנה הבא:
 {
-  "matched": true/false,
-  "category": "שם הקטגוריה" או null,
-  "subcategory": "שם התת-קטגוריה המדויק מהרשימה" או "${shortText.trim()}",
-  "canonicalSubcategory": "שם התת-קטגוריה המדויק מהרשימה" או null,
+  "matched": true,
+  "category": "שם הקטגוריה מהרשימה",
+  "subcategory": "שם התת-קטגוריה המדויק מהרשימה",
+  "canonicalSubcategory": "שם התת-קטגוריה המדויק מהרשימה",
   "confidence": 0.0-1.0
 }
 
-כללים קריטיים ל-confidence (חובה להיות מדויק):
-- confidence 0.85-1.0: התאמה מושלמת ומדויקת - המילים זהות או כמעט זהות לתת-קטגוריה מהקטלוג
-- confidence 0.70-0.84: התאמה טובה - יש קשר ברור אבל המילים לא זהות בדיוק (לדוגמה: "תליית תמונה" = "תליית תמונות")
-- confidence 0.60-0.69: התאמה סבירה - יש קשר אבל לא בטוח שזה בדיוק אותו דבר (לדוגמה: "תיקון דלת" = "תיקון דלתות")
-- confidence 0.40-0.59: התאמה חלשה - יש קשר רופף, ייתכן שזה לא אותו דבר (לדוגמה: "תליית מדף" = "תליית תמונות")
-- confidence 0.20-0.39: התאמה מאוד חלשה - קשר רחוק, כנראה לא אותו דבר
-- confidence 0.0-0.19: אין התאמה - אין קשר ברור לקטלוג
-
-כללים נוספים:
-- matched=true רק אם confidence >= 0.60
-- matched=false אם confidence < 0.60
-- subcategory: אם matched=true, זה שם התת-קטגוריה מהרשימה. אם matched=false, זה הטקסט המקורי "${shortText.trim()}".
-- canonicalSubcategory: רק אם matched=true, זה שם התת-קטגוריה המדויק מהרשימה.
-- category: רק אם matched=true, זה שם הקטגוריה מהרשימה.
-
-חשוב מאוד: be strict עם ה-confidence. עדיף confidence נמוך מדי מאשר גבוה מדי.
+כללים קריטיים:
+- אתה חובה להחזיר תמיד matched=true ולבחור את ההתאמה הכי טובה מהרשימה
+- גם אם אין התאמה מושלמת, תמיד בחר את ההתאמה הכי קרובה מהרשימה לעיל
+- confidence: מדד 0-1 לגבי הדיוק של ההתאמה (0.5 = התאמה חלקית, 1 = התאמה מושלמת)
+- אתה חובה להחזיר את השמות המדויקים מהרשימה - אסור להמציא או לשנות שמות
+- אם יש כמה התאמות אפשריות, בחר את ההתאמה הכי מדויקת והכי רלוונטית
+- be strict עם ה-confidence - תן confidence נמוך אם ההתאמה חלקית, אבל תמיד תחזיר התאמה
 
 ענה רק ב-JSON ללא טקסט נוסף.`;
 
@@ -15562,82 +15534,121 @@ ${subcategoryList}
             Math.min(1, parseFloat(matchResult.confidence) || 0)
           );
 
-          // Confidence thresholds:
-          // >= 0.70: High confidence match (Case A: continue with fixed price)
-          // 0.60-0.69: Medium confidence match (Case B: show recommendation)
-          // < 0.60: Low confidence/no match (Case C: direct to quoted)
-          const matched = confidence >= 0.6;
-
+          // CRITICAL: AI should always return matched=true with a work item
+          // Even if confidence is low, AI should return the best match from catalog
+          // If AI returned matched=false, force it to true and use what it returned
+          const matched = matchResult.matched !== false; // Default to true if not explicitly false
+          
+          // Always try to use what AI returned (even if matched was false, use the values if they exist)
           const category = matchResult.category || null;
-          const canonicalSubcategory = matchResult.canonicalSubcategory || null;
-          const subcategory = matchResult.subcategory || shortText.trim();
+          const canonicalSubcategory = matchResult.canonicalSubcategory || matchResult.subcategory || null;
+          const subcategory = matchResult.subcategory || matchResult.canonicalSubcategory || null;
+          
+          // If we don't have a valid match, log warning but still try to find something
+          if (!category || !canonicalSubcategory) {
+            serverLogger.warn(
+              `[AI-MATCH] AI לא החזיר התאמה תקינה - matched=${matchResult.matched}, category="${category}", subcategory="${subcategory}"`
+            );
+          }
 
-          // If matched (confidence >= 0.60), verify the subcategory exists in our catalog
-          if (matched && canonicalSubcategory) {
+          // Always verify the subcategory exists in our catalog
+          // AI should always return a match, so we should always find something
+          if (canonicalSubcategory && category) {
             const foundSub = allSubcategories.find(
               (sub) =>
-                sub.subcategory === canonicalSubcategory &&
+                (sub.subcategory === canonicalSubcategory || sub.subcategory === subcategory) &&
                 sub.category === category
             );
 
-            if (!foundSub) {
-              // Invalid match - reset to unmatched
-              serverLogger.warn(
-                `[AI-MATCH] התאמה לא תקינה - לא נמצא בקטלוג: category="${category}", subcategory="${canonicalSubcategory}"`
-              );
-              return res.json({
+            if (foundSub) {
+              // Valid match found
+              const finalResult = {
                 success: true,
-                matched: false,
-                category: null,
-                subcategory: shortText.trim(),
-                canonicalSubcategory: null,
-                confidence: 0.1,
-              });
-            }
+                matched: true,
+                category: category,
+                subcategory: foundSub.subcategory, // Use from catalog to ensure exact match
+                canonicalSubcategory: foundSub.subcategory,
+                confidence: confidence,
+                confidencePct: Math.round(confidence * 100), // אחוז זיהוי (0-100)
+                price: foundSub.price,
+                workType: foundSub.workType,
+              };
 
+              serverLogger.log(
+                `[AI-MATCH] תוצאה סופית (matched): confidence=${confidence}, category="${category}", subcategory="${foundSub.subcategory}", price=${foundSub.price}, workType="${foundSub.workType}"`
+              );
+              
+              // Detailed logging for debugging
+              serverLogger.log(
+                `[AI-MATCH] Response payload to client: ${JSON.stringify(finalResult, null, 2)}`
+              );
+
+              return res.json(finalResult);
+            } else {
+              // Subcategory not found in catalog - try to find closest match
+              serverLogger.warn(
+                `[AI-MATCH] התאמה לא נמצאה בקטלוג - מחפש התאמה קרובה: category="${category}", subcategory="${canonicalSubcategory}"`
+              );
+              
+              // Try to find by category only
+              const categorySubs = allSubcategories.filter((sub) => sub.category === category);
+              if (categorySubs.length > 0) {
+                // Use first subcategory from category as fallback
+                const fallbackSub = categorySubs[0];
+                const fallbackConfidence = Math.max(0.3, confidence * 0.7); // Lower confidence for fallback
+                const finalResult = {
+                  success: true,
+                  matched: true,
+                  category: category,
+                  subcategory: fallbackSub.subcategory,
+                  canonicalSubcategory: fallbackSub.subcategory,
+                  confidence: fallbackConfidence,
+                  confidencePct: Math.round(fallbackConfidence * 100), // אחוז זיהוי (0-100)
+                  price: fallbackSub.price,
+                  workType: fallbackSub.workType,
+                };
+                
+                serverLogger.log(
+                  `[AI-MATCH] תוצאה סופית (fallback): confidence=${finalResult.confidence}, category="${category}", subcategory="${fallbackSub.subcategory}"`
+                );
+                
+                return res.json(finalResult);
+              }
+            }
+          }
+
+          // Last resort: if nothing found, use first available subcategory as generic match
+          // This should rarely happen if AI is working correctly
+          if (allSubcategories.length > 0) {
+            const genericSub = allSubcategories[0];
+            serverLogger.warn(
+              `[AI-MATCH] לא נמצאה התאמה - משתמש בהתאמה גנרית: "${genericSub.category} > ${genericSub.subcategory}"`
+            );
+            
             const finalResult = {
               success: true,
               matched: true,
-              category: category,
-              subcategory: canonicalSubcategory, // Use canonical for matched
-              canonicalSubcategory: canonicalSubcategory,
-              confidence: confidence,
-              price: foundSub.price,
-              workType: foundSub.workType,
+              category: genericSub.category,
+              subcategory: genericSub.subcategory,
+              canonicalSubcategory: genericSub.subcategory,
+              confidence: 0.2, // Very low confidence for generic match
+              confidencePct: 20, // אחוז זיהוי (0-100)
+              price: genericSub.price,
+              workType: genericSub.workType,
             };
-
+            
             serverLogger.log(
-              `[AI-MATCH] תוצאה סופית (matched): confidence=${confidence}, category="${category}", subcategory="${canonicalSubcategory}", price=${foundSub.price}, workType="${foundSub.workType}"`
+              `[AI-MATCH] Response payload to client (generic fallback): ${JSON.stringify(finalResult, null, 2)}`
             );
             
-            // Detailed logging for debugging
-            serverLogger.log(
-              `[AI-MATCH] Response payload to client: ${JSON.stringify(finalResult, null, 2)}`
-            );
-
             return res.json(finalResult);
           }
 
-          // Not matched
-          const finalResult = {
-            success: true,
-            matched: false,
-            category: null,
-            subcategory: shortText.trim(), // Keep original text
-            canonicalSubcategory: null,
-            confidence: confidence,
-          };
-
-          serverLogger.log(
-            `[AI-MATCH] תוצאה סופית (not matched): confidence=${confidence}, subcategory="${shortText.trim()}"`
-          );
-          
-          // Detailed logging for debugging
-          serverLogger.log(
-            `[AI-MATCH] Response payload to client (not matched): ${JSON.stringify(finalResult, null, 2)}`
-          );
-
-          return res.json(finalResult);
+          // This should never happen if catalog is loaded correctly
+          return res.status(500).json({
+            success: false,
+            message: "שגיאה: לא נמצאה התאמה בקטלוג",
+          });
         } catch (error) {
           serverLogger.error("Error in AI matching:", error);
           // Fallback: return unmatched
@@ -15648,6 +15659,7 @@ ${subcategoryList}
             subcategory: shortText.trim(),
             canonicalSubcategory: null,
             confidence: 0.1,
+            confidencePct: 10, // אחוז זיהוי (0-100)
           });
         }
       } catch (error) {
@@ -15835,9 +15847,9 @@ ${subcategoryList}
           },
         ];
 
-        // Set quotedUntil to 60 minutes from now
+        // Set quotedUntil to 6 hours from now
         const quotedUntil = new Date();
-        quotedUntil.setMinutes(quotedUntil.getMinutes() + 60);
+        quotedUntil.setHours(quotedUntil.getHours() + 6);
 
         // Create job with quoted status
         const jobData = {
@@ -19939,6 +19951,7 @@ ${imagesList}
           {
             $set: {
               status: "expired",
+              expiredAt: now, // Store when the job expired
               updatedAt: now,
             },
           }
@@ -19973,7 +19986,7 @@ ${imagesList}
                 await sendPushNotification(
                   client.fcmToken,
                   "פג תוקף הצעות המחיר",
-                  `תם הזמן לקבלת הצעות לעבודה: ${subcategoryText}`,
+                  "הקריאה ששלחת פגה תוקף - נסה ליצור קריאה חדשה",
                   {
                     type: "quotation_expired",
                     jobId: job._id.toString(),

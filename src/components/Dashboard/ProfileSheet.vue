@@ -38,11 +38,11 @@
                     ? { backgroundImage: `url(${userImageUrl})` }
                     : {}
                 "
-              >
+          >
                 <span v-if="!userImageUrl" class="ps__avatarPlaceholder">
                   {{ isHandyman ? '🧰' : '👤' }}
-                </span>
-              </div>
+          </span>
+        </div>
             </div>
             <!-- Rating badge (handyman only) -->
             <div v-if="isHandyman && userRating > 0" class="ps__ratingBadge">
@@ -71,11 +71,11 @@
                     : 'לקוח רשום'
                 }}
               </p>
-            </div>
+          </div>
             <p class="ps__profileDate">
               חבר בקהילה מאז {{ formatJoinDate(user?.createdAt) }}
             </p>
-          </div>
+              </div>
         </section>
 
         <!-- Stats Grid -->
@@ -90,12 +90,12 @@
               </div>
               <p class="ps__statValue">{{ completedJobs }}</p>
               <p class="ps__statLabel">עבודות שהושלמו</p>
-            </div>
+              </div>
             <div class="ps__statCard">
               <div class="ps__statIconWrapper">
                 <span class="material-symbols-outlined ps__statIcon">
                   timer
-                </span>
+                  </span>
               </div>
               <p class="ps__statValue">{{ averageResponseTime || '0 דק׳' }}</p>
               <p class="ps__statLabel">זמן תגובה ממוצע</p>
@@ -108,11 +108,11 @@
               <div class="ps__statIconWrapper">
                 <span class="material-symbols-outlined ps__statIcon">
                   shopping_cart
-                </span>
-              </div>
+              </span>
+            </div>
               <p class="ps__statValue">{{ totalOrders }}</p>
               <p class="ps__statLabel">סה״כ הזמנות</p>
-            </div>
+          </div>
             <div class="ps__statCard">
               <div class="ps__statIconWrapper">
                 <span
@@ -120,7 +120,7 @@
                 >
                   favorite
                 </span>
-              </div>
+            </div>
               <p class="ps__statValue">{{ favoriteHandymen }}</p>
               <p class="ps__statLabel">בעלי מקצוע מועדפים</p>
             </div>
@@ -149,9 +149,9 @@
             >
               <span class="material-symbols-outlined ps__chipIcon">
                 {{ getCategoryIcon(spec) }}
-              </span>
+            </span>
               <span class="ps__chipText">{{ spec.name || spec }}</span>
-            </div>
+          </div>
           </div>
           <div v-else class="ps__specialtiesEmpty">לא הוגדרו התמחויות</div>
 
@@ -186,10 +186,10 @@
           </button>
 
           <!-- Payment Methods -->
-          <button
+              <button
             v-if="isHandyman"
             class="ps__actionBtn"
-            type="button"
+                type="button"
             @click="handlePaymentClick"
           >
             <div class="ps__actionBtnLeft">
@@ -201,7 +201,7 @@
             <span class="material-symbols-outlined ps__actionChevron ltr:rotate-180">
               chevron_left
             </span>
-          </button>
+              </button>
 
           <!-- Active Orders (client) / Work History (handyman) -->
           <button
@@ -214,7 +214,7 @@
                 <span class="material-symbols-outlined">
                   {{ isHandyman ? 'history' : 'pending_actions' }}
                 </span>
-              </div>
+            </div>
               <span class="ps__actionTitle">
                 {{ isHandyman ? 'היסטוריית עבודות' : 'הזמנות פעילות' }}
               </span>
@@ -225,12 +225,12 @@
           </button>
 
           <!-- Address Management (client only) -->
-          <button
+              <button
             v-if="!isHandyman"
             class="ps__actionBtn"
-            type="button"
+                type="button"
             @click="openCityPicker"
-          >
+              >
             <div class="ps__actionBtnLeft">
               <div class="ps__actionIconWrapper">
                 <span class="material-symbols-outlined">home_pin</span>
@@ -240,7 +240,7 @@
             <span class="material-symbols-outlined ps__actionChevron ltr:rotate-180">
               chevron_left
             </span>
-          </button>
+              </button>
 
           <!-- Order History (client only) -->
           <button
@@ -252,7 +252,7 @@
             <div class="ps__actionBtnLeft">
               <div class="ps__actionIconWrapper">
                 <span class="material-symbols-outlined">history</span>
-              </div>
+            </div>
               <span class="ps__actionTitle">היסטוריית הזמנות</span>
             </div>
             <span class="material-symbols-outlined ps__actionChevron ltr:rotate-180">
@@ -261,22 +261,22 @@
           </button>
         </section>
 
-        <!-- Logout -->
+            <!-- Logout -->
         <div class="ps__logoutWrapper">
-          <button
+              <button
             class="ps__logoutBtn"
-            type="button"
-            @click="handleLogout"
-            :disabled="isLoggingOut"
-          >
+                type="button"
+                @click="handleLogout"
+                :disabled="isLoggingOut"
+              >
             <span class="material-symbols-outlined ps__logoutIcon">logout</span>
             <span class="ps__logoutText">
               {{ isLoggingOut ? 'מתנתק...' : 'התנתק מהמערכת' }}
             </span>
-          </button>
+              </button>
         </div>
       </main>
-    </div>
+            </div>
 
     <!-- Edit Profile Modal -->
     <div
@@ -288,14 +288,14 @@
       <div class="ps__editModalCard">
         <header class="ps__editModalHeader">
           <h2 class="ps__editModalTitle">ערוך פרופיל</h2>
-          <button
+              <button
             class="ps__editModalClose"
-            type="button"
+                type="button"
             @click="showEditModal = false"
             aria-label="סגור"
-          >
+              >
             <span class="material-symbols-outlined">close</span>
-          </button>
+              </button>
         </header>
 
         <div class="ps__editModalContent">
@@ -311,7 +311,7 @@
                   inputmode="text"
                   placeholder="השם שלך"
                 />
-              </div>
+            </div>
             </label>
 
             <label class="ps__editField">
@@ -325,7 +325,7 @@
                   inputmode="tel"
                   placeholder="05X-XXXXXXX"
                 />
-              </div>
+          </div>
             </label>
 
             <label class="ps__editField ps__editField--wide">
@@ -339,7 +339,7 @@
                   inputmode="email"
                   placeholder="name@email.com"
                 />
-              </div>
+      </div>
             </label>
 
             <div class="ps__editField ps__editField--wide">
@@ -368,16 +368,16 @@
             type="button"
             @click="showEditModal = false"
           >
-            בטל
-          </button>
+          בטל
+        </button>
           <button
             class="ps__editBtn ps__editBtn--primary"
             type="button"
             @click="onSave"
           >
-            שמור
-          </button>
-        </footer>
+          שמור
+        </button>
+      </footer>
       </div>
     </div>
 
@@ -1082,7 +1082,7 @@ $stroke: rgba(255, 255, 255, 0.1);
 
   &:hover {
     color: $primary;
-  }
+}
 
   .material-symbols-outlined {
     font-size: 24px;
@@ -1198,7 +1198,7 @@ $stroke: rgba(255, 255, 255, 0.1);
   font-size: 14px;
   color: rgba(255, 255, 255, 0.5);
   margin: 0;
-}
+  }
 
 // Stats Grid
 .ps__statsGrid {
@@ -1388,7 +1388,7 @@ $stroke: rgba(255, 255, 255, 0.1);
 
   .ps__actionBtn:hover & {
     color: $primary;
-  }
+}
 
   .material-symbols-outlined {
     font-size: 24px;
@@ -1628,7 +1628,7 @@ $stroke: rgba(255, 255, 255, 0.1);
   }
 
   &:focus-visible {
-    outline: none;
+  outline: none;
     box-shadow: 0 0 0 3px rgba($primary, 0.18);
     border-color: rgba($primary, 0.35);
   }
@@ -1687,7 +1687,7 @@ $stroke: rgba(255, 255, 255, 0.1);
   color: $text-light;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.1);
     border-color: rgba($primary, 0.18);
   }
 }
@@ -1936,8 +1936,8 @@ $stroke: rgba(255, 255, 255, 0.1);
   color: #ff8a8a;
 
   &:hover:not(:disabled) {
-    background: rgba($danger, 0.24);
-    border-color: rgba($danger, 0.55);
+  background: rgba($danger, 0.24);
+  border-color: rgba($danger, 0.55);
   }
 }
 

@@ -61,7 +61,7 @@ export default {
       default: true,
     },
   },
-  emits: ["update:modelValue", "update:englishName", "update:selectedCity"],
+  emits: ["update:modelValue", "update:englishName", "update:selectedCity", "focus", "blur"],
   data() {
     // סינון שורת הכותרת אם יש
     const filteredCities = Array.isArray(citiesData)
@@ -163,6 +163,8 @@ export default {
       this.filteredCities = [];
     },
     handleBlur() {
+      // Emit blur event to parent
+      this.$emit("blur");
       // Delay to allow click on suggestion
       setTimeout(() => {
         this.showSuggestions = false;
@@ -170,6 +172,8 @@ export default {
       }, 200);
     },
     handleFocus() {
+      // Emit focus event to parent
+      this.$emit("focus");
       if (this.modelValue && this.modelValue.length >= 1) {
         this.filterCities(this.modelValue);
         this.showSuggestions = true;
