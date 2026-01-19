@@ -1,517 +1,252 @@
 <template>
-  <Transition name="modal">
-    <div class="job-modal-overlay" @click.self="onClose" v-if="jobDetails">
-      <div class="job-modal-content">
-        <button class="close-button" @click="onClose">✕</button>
+  <Transition name="bottom-sheet">
+    <div
+      v-if="jobDetails"
+      class="job-bottom-sheet-overlay"
+      @click.self="onClose"
+      @touchstart="handleTouchStart"
+      @touchmove="handleTouchMove"
+      @touchend="handleTouchEnd"
+    >
+      <div
+        class="job-bottom-sheet"
+        :class="{ 'job-bottom-sheet--expanded': isExpanded }"
+        :style="{ transform: `translateY(${sheetOffset}px)` }"
+      >
+        <!-- Drag Handle -->
+        <div class="job-bottom-sheet__handle" @mousedown="handleDragStart">
+          <div class="job-bottom-sheet__handle-bar"></div>
+        </div>
 
-        <div v-if="jobDetails" class="job-content">
-          <!-- Step Indicator -->
-          <div class="step-indicator">
+        <!-- Step Indicator -->
+        <div class="job-bottom-sheet__header">
+          <div class="job-bottom-sheet__step-indicator">
             <div
-              class="step-item"
+              v-for="(step, index) in statusSteps"
+              :key="index"
+              class="step-indicator-item"
               :class="{
-                'step-item--active': jobDetails.status === 'open',
-                'step-item--completed': [
-                  'assigned',
-                  'on_the_way',
-                  'in_progress',
-                  'done',
-                ].includes(jobDetails.status),
+                'step-indicator-item--active': step.isActive,
+                'step-indicator-item--completed': step.isCompleted,
               }"
             >
-              <div class="step-circle">
-                <span
-                  v-if="
-                    ['assigned', 'on_the_way', 'in_progress', 'done'].includes(
-                      jobDetails.status
-                    )
-                  "
-                  >✓</span
-                >
-                <span v-else>1</span>
-              </div>
-              <span class="step-label">פתוחה</span>
-            </div>
-            <div
-              class="step-line"
-              :class="{
-                'step-line--active': [
-                  'assigned',
-                  'on_the_way',
-                  'in_progress',
-                  'done',
-                ].includes(jobDetails.status),
-              }"
-            ></div>
-            <div
-              class="step-item"
-              :class="{
-                'step-item--active': jobDetails.status === 'assigned',
-                'step-item--completed': [
-                  'on_the_way',
-                  'in_progress',
-                  'done',
-                ].includes(jobDetails.status),
-              }"
-            >
-              <div class="step-circle">
-                <span
-                  v-if="
-                    ['on_the_way', 'in_progress', 'done'].includes(
-                      jobDetails.status
-                    )
-                  "
-                  >✓</span
-                >
-                <span v-else-if="jobDetails.status === 'assigned'">2</span>
-                <span v-else>2</span>
-              </div>
-              <span class="step-label">שובצה</span>
-            </div>
-            <div
-              class="step-line"
-              :class="{
-                'step-line--active': [
-                  'on_the_way',
-                  'in_progress',
-                  'done',
-                ].includes(jobDetails.status),
-              }"
-            ></div>
-            <div
-              class="step-item"
-              :class="{
-                'step-item--active': jobDetails.status === 'on_the_way',
-                'step-item--completed': ['in_progress', 'done'].includes(
-                  jobDetails.status
-                ),
-              }"
-            >
-              <div class="step-circle">
-                <span v-if="['in_progress', 'done'].includes(jobDetails.status)"
-                  >✓</span
-                >
-                <span v-else-if="jobDetails.status === 'on_the_way'">3</span>
-                <span v-else>3</span>
-              </div>
-              <span class="step-label">בדרך</span>
-            </div>
-            <div
-              class="step-line"
-              :class="{
-                'step-line--active': ['in_progress', 'done'].includes(
-                  jobDetails.status
-                ),
-              }"
-            ></div>
-            <div
-              class="step-item"
-              :class="{
-                'step-item--active': jobDetails.status === 'in_progress',
-                'step-item--completed': jobDetails.status === 'done',
-              }"
-            >
-              <div class="step-circle">
-                <span v-if="jobDetails.status === 'done'">✓</span>
-                <span v-else-if="jobDetails.status === 'in_progress'">4</span>
-                <span v-else>4</span>
-              </div>
-              <span class="step-label">בביצוע</span>
-            </div>
-            <div
-              class="step-line"
-              :class="{ 'step-line--active': jobDetails.status === 'done' }"
-            ></div>
-            <div
-              class="step-item"
-              :class="{
-                'step-item--active': jobDetails.status === 'done',
-                'step-item--cancelled': jobDetails.status === 'cancelled',
-              }"
-            >
-              <div class="step-circle">
-                <span v-if="jobDetails.status === 'done'">✓</span>
-                <span v-else-if="jobDetails.status === 'cancelled'">✕</span>
-                <span v-else>5</span>
-              </div>
-              <span class="step-label">{{
-                jobDetails.status === "cancelled" ? "בוטלה" : "הושלמה"
-              }}</span>
+              <div class="step-indicator-dot"></div>
+              <div
+                v-if="index < statusSteps.length - 1"
+                class="step-indicator-line"
+                :class="{ 'step-indicator-line--active': step.isCompleted }"
+              ></div>
             </div>
           </div>
+          <p class="job-bottom-sheet__status-text">{{ getStatusText() }}</p>
+        </div>
 
-          <!-- Header with image -->
-          <div class="job-header">
-            <div class="job-header-content">
-              <div class="job-image-wrapper">
-                <!-- Single image (backward compatibility) -->
-                <template v-if="!Array.isArray(jobDetails.imageUrl)">
-                  <img
-                    class="job-image"
-                    :src="jobDetails.imageUrl || '/img/Hendima-logo.png'"
-                    :alt="getJobDisplayName()"
-                    @error="onImageError"
-                  />
-                </template>
-                <!-- Multiple images grid -->
-                <div
-                  v-else
-                  class="job-images-grid"
-                  :class="`job-images-grid--${jobDetails.imageUrl.length}`"
-                >
-                  <div
-                    v-for="(imgUrl, index) in jobDetails.imageUrl"
-                    :key="index"
-                    class="job-image-item"
-                  >
-                    <img
-                      class="job-image"
-                      :src="imgUrl || '/img/Hendima-logo.png'"
-                      :alt="`${getJobDisplayName()} - תמונה ${index + 1}`"
-                      @error="onImageError"
-                    />
-                  </div>
-                </div>
-                <span v-if="jobDetails.urgent" class="urgent-badge">דחוף</span>
+        <!-- Scrollable Content -->
+        <div class="job-bottom-sheet__content" ref="sheetContent">
+          <!-- Image Section -->
+          <div class="job-image-section">
+            <div
+              class="job-image-container"
+              :style="getImageStyle()"
+            >
+              <div class="job-image-overlay"></div>
+              
+              <!-- Urgent Badge -->
+              <div v-if="jobDetails.urgent || jobDetails.isUrgent" class="job-urgent-badge">
+                <span class="material-symbols-outlined">priority_high</span>
+                דחוף
               </div>
-              <div class="job-header-info">
-                <h1 class="job-title">
-                  {{ getJobDisplayName() }}
-                </h1>
-                <div class="job-tags">
-                  <span
-                    v-if="
-                      !Array.isArray(jobDetails.subcategoryInfo) ||
-                      jobDetails.subcategoryInfo.length === 1
-                    "
-                    class="tag"
-                    :class="
-                      (Array.isArray(jobDetails.subcategoryInfo) &&
-                      jobDetails.subcategoryInfo.length === 1
-                        ? jobDetails.subcategoryInfo[0].workType
-                        : jobDetails.subcategoryInfo?.typeWork ||
-                          jobDetails.billingType) === 'לשעה'
-                        ? 'tag--hourly'
-                        : 'tag--fixed'
-                    "
-                  >
-                    {{
-                      Array.isArray(jobDetails.subcategoryInfo) &&
-                      jobDetails.subcategoryInfo.length === 1
-                        ? jobDetails.subcategoryInfo[0].workType ||
-                          jobDetails.billingType ||
-                          "קבלנות"
-                        : jobDetails.subcategoryInfo?.typeWork ||
-                          jobDetails.billingType ||
-                          "קבלנות"
-                    }}
-                  </span>
-                  <span
-                    v-if="jobDetails.workType"
-                    class="tag tag--work-type"
-                    :class="{
-                      'tag--easy': jobDetails.workType === 'קלה',
-                      'tag--medium': jobDetails.workType === 'מורכבת',
-                      'tag--hard': jobDetails.workType === 'קשה',
-                    }"
-                  >
-                    {{ jobDetails.workType }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          <!-- Multiple Jobs Dropdown -->
-          <div
-            v-if="
-              Array.isArray(jobDetails.subcategoryInfo) &&
-              jobDetails.subcategoryInfo.length > 1
-            "
-            class="jobs-dropdown-section"
-          >
-            <div class="jobs-dropdown">
-              <button
-                class="jobs-dropdown__toggle"
-                :class="{ 'jobs-dropdown__toggle--open': isJobsDropdownOpen }"
-                @click="isJobsDropdownOpen = !isJobsDropdownOpen"
-              >
-                <span>{{ jobDetails.subcategoryInfo.length }} עבודות</span>
-                <i
-                  class="fas"
-                  :class="
-                    isJobsDropdownOpen ? 'fa-chevron-up' : 'fa-chevron-down'
-                  "
-                ></i>
-              </button>
-              <div v-if="isJobsDropdownOpen" class="jobs-dropdown__content">
+              <!-- Multiple Images Thumbnails -->
+              <div v-if="Array.isArray(jobDetails.imageUrl) && jobDetails.imageUrl.length > 1" class="job-images-thumbnails">
                 <div
-                  v-for="(subcat, index) in jobDetails.subcategoryInfo"
+                  v-for="(imgUrl, index) in jobDetails.imageUrl.slice(0, 3)"
                   :key="index"
-                  class="jobs-dropdown__item"
+                  class="job-thumbnail"
+                  :style="{ backgroundImage: `url(${imgUrl || '/img/Hendima-logo.png'})` }"
                 >
-                  <div class="jobs-dropdown__item-header">
-                    <span class="jobs-dropdown__item-name">
-                      {{
-                        subcat.subcategory ||
-                        subcat.category ||
-                        `עבודה ${index + 1}`
-                      }}
-                    </span>
-                    <span v-if="subcat.price" class="jobs-dropdown__item-price">
-                      {{ subcat.price }} ₪
-                    </span>
-                  </div>
-                  <div class="jobs-dropdown__item-details">
-                    <span
-                      v-if="subcat.category"
-                      class="jobs-dropdown__item-category"
-                    >
-                      קטגוריה: {{ subcat.category }}
-                    </span>
-                    <span
-                      v-if="subcat.workType"
-                      class="jobs-dropdown__item-work-type"
-                    >
-                      סוג: {{ subcat.workType }}
-                    </span>
+                  <div v-if="index === 2 && jobDetails.imageUrl.length > 3" class="job-thumbnail-overlay">
+                    <span>+{{ jobDetails.imageUrl.length - 3 }}</span>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Details Section -->
-          <div class="job-details">
-            <div class="detail-card">
-              <div class="detail-icon">
-                <i class="fas fa-user"></i>
-              </div>
-              <div class="detail-content">
-                <span class="detail-label">לקוח</span>
-                <span class="detail-value">{{
-                  jobDetails.clientName || "ללא שם"
-                }}</span>
+          <!-- Title and Price Section -->
+          <div class="job-title-section">
+            <h1 class="job-title">{{ getJobDisplayName() }}</h1>
+            <div class="job-price-badge">
+              <span class="job-price-amount">₪{{ getDisplayPrice() }}</span>
+            </div>
+            <div class="job-tags-row">
+              <span
+                v-if="getBillingType()"
+                class="job-tag"
+              >
+                {{ getBillingType() }}
+              </span>
+              <span
+                v-if="jobDetails.workType"
+                class="job-tag"
+              >
+                {{ jobDetails.workType }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Details Cards -->
+          <div class="job-details-section">
+            <!-- Client Card (only for handyman) -->
+            <div v-if="isHendiman" class="job-detail-card job-detail-card--client">
+              <div class="job-detail-card__content">
+                <div class="job-detail-card__left">
+                  <div
+                    class="job-detail-card__avatar"
+                    :style="getClientAvatarStyle()"
+                  ></div>
+                  <div class="job-detail-card__info">
+                    <span class="job-detail-card__label">לקוח</span>
+                    <span class="job-detail-card__value">{{
+                      jobDetails.clientName || "ללא שם"
+                    }}</span>
+                  </div>
+                </div>
+                <div v-if="getClientRating()" class="job-detail-card__rating">
+                  <span class="material-symbols-outlined">star</span>
+                  <span>{{ getClientRating() }}</span>
+                </div>
               </div>
             </div>
 
-            <div
-              v-if="
-                !Array.isArray(jobDetails.subcategoryInfo) ||
-                jobDetails.subcategoryInfo.length === 1
-              "
-              class="detail-card detail-card--price"
-            >
-              <div class="detail-icon">
-                <i class="fas fa-shekel-sign"></i>
+            <!-- Location Card -->
+            <div class="job-detail-card">
+              <div class="job-detail-card__icon">
+                <span class="material-symbols-outlined">location_on</span>
               </div>
-              <div class="detail-content">
-                <span class="detail-label">מחיר</span>
-                <span class="detail-value detail-value--price">
-                  {{
-                    Array.isArray(jobDetails.subcategoryInfo) &&
-                    jobDetails.subcategoryInfo.length === 1
-                      ? jobDetails.subcategoryInfo[0].price || 0
-                      : jobDetails.subcategoryInfo?.price ||
-                        jobDetails.price ||
-                        0
-                  }}
-                  שקלים
-                </span>
-              </div>
-            </div>
-            <div v-else class="detail-card detail-card--price">
-              <div class="detail-icon">
-                <i class="fas fa-shekel-sign"></i>
-              </div>
-              <div class="detail-content">
-                <span class="detail-label">סך הכל</span>
-                <span class="detail-value detail-value--price">
-                  {{ getTotalPrice() }} שקלים
-                </span>
-              </div>
-            </div>
-
-            <div class="detail-card">
-              <div class="detail-icon">
-                <i class="fas fa-map-marker-alt"></i>
-              </div>
-              <div class="detail-content">
-                <span class="detail-label">מיקום</span>
-                <span class="detail-value">{{
-                  jobDetails.locationText || "לא צוין"
-                }}</span>
-                <button
+              <div class="job-detail-card__content job-detail-card__content--location">
+                <div class="job-detail-card__info">
+                  <span class="job-detail-card__label">כתובת</span>
+                  <span class="job-detail-card__value">{{
+                    jobDetails.locationText || "לא צוין"
+                  }}</span>
+                  <a
+                    v-if="isHendiman && jobCoordinates"
+                    href="#"
+                    class="job-detail-card__link"
+                    @click.prevent="openLocation"
+                  >
+                    לחץ למפה
+                  </a>
+                </div>
+                <div
                   v-if="isHendiman && jobCoordinates"
-                  class="btn-link"
-                  type="button"
-                  @click="openLocation"
+                  class="job-detail-card__map-preview"
+                  :style="getMapPreviewStyle()"
                 >
-                  לחץ כאן למיקום
-                </button>
+                  <span class="material-symbols-outlined">location_on</span>
+                </div>
               </div>
             </div>
 
-            <div class="detail-card">
-              <div class="detail-icon">
-                <i class="fas fa-clock"></i>
+            <!-- Category Card -->
+            <div class="job-detail-card">
+              <div class="job-detail-card__icon">
+                <span class="material-symbols-outlined">category</span>
               </div>
-              <div class="detail-content">
-                <span class="detail-label">מתי</span>
-                <span class="detail-value">{{
-                  jobDetails.when === "asap"
-                    ? "כמה שיותר מהר"
-                    : jobDetails.whenLabel || jobDetails.when || "לא צוין"
+              <div class="job-detail-card__info">
+                <span class="job-detail-card__label">קטגוריה</span>
+                <span class="job-detail-card__value">{{
+                  getCategoryName() || "ללא קטגוריה"
                 }}</span>
               </div>
             </div>
 
-            <div
-              v-if="
-                !Array.isArray(jobDetails.subcategoryInfo) ||
-                jobDetails.subcategoryInfo.length === 1
-              "
-              class="detail-card"
-            >
-              <div class="detail-icon">
-                <i class="fas fa-folder"></i>
+            <!-- Created Date Card -->
+            <div v-if="jobDetails.createdAt" class="job-detail-card">
+              <div class="job-detail-card__icon">
+                <span class="material-symbols-outlined">calendar_today</span>
               </div>
-              <div class="detail-content">
-                <span class="detail-label">קטגוריה</span>
-                <span class="detail-value">{{
-                  Array.isArray(jobDetails.subcategoryInfo) &&
-                  jobDetails.subcategoryInfo.length === 1
-                    ? jobDetails.subcategoryInfo[0].category || "ללא קטגוריה"
-                    : jobDetails.subcategoryInfo?.category || "ללא קטגוריה"
-                }}</span>
-              </div>
-            </div>
-
-            <div
-              v-if="
-                !Array.isArray(jobDetails.subcategoryInfo) ||
-                jobDetails.subcategoryInfo.length === 1
-              "
-              class="detail-card"
-            >
-              <div class="detail-icon">
-                <i class="fas fa-tools"></i>
-              </div>
-              <div class="detail-content">
-                <span class="detail-label">סוג עבודה</span>
-                <span class="detail-value">{{
-                  Array.isArray(jobDetails.subcategoryInfo) &&
-                  jobDetails.subcategoryInfo.length === 1
-                    ? jobDetails.subcategoryInfo[0].workType ||
-                      jobDetails.billingType ||
-                      "קבלנות"
-                    : jobDetails.subcategoryInfo?.typeWork ||
-                      jobDetails.billingType ||
-                      "קבלנות"
-                }}</span>
-              </div>
-            </div>
-
-            <div class="detail-card" v-if="jobDetails.createdAt">
-              <div class="detail-icon">
-                <i class="fas fa-calendar-alt"></i>
-              </div>
-              <div class="detail-content">
-                <span class="detail-label">נוצר ב</span>
-                <span class="detail-value">{{
-                  formatDate(jobDetails.createdAt)
+              <div class="job-detail-card__info">
+                <span class="job-detail-card__label">תאריך יצירה</span>
+                <span class="job-detail-card__value">{{
+                  formatDateShort(jobDetails.createdAt)
                 }}</span>
               </div>
             </div>
           </div>
 
           <!-- Description -->
-          <div class="job-description" v-if="jobDetails.desc">
-            <h3 class="section-title">תיאור העבודה:</h3>
-            <p class="description-text">{{ jobDetails.desc }}</p>
+          <div v-if="jobDetails.desc" class="job-description-section">
+            <h3 class="job-description-title">תיאור</h3>
+            <p class="job-description-text">{{ jobDetails.desc }}</p>
           </div>
 
           <!-- Rating Section (for client, when job is done) -->
           <div
             v-if="!isHendiman && jobDetails.status === 'done' && rating"
-            class="job-rating"
+            class="job-rating-section"
           >
-            <h3 class="section-title">דירוג:</h3>
-            <div class="rating-display">
-              <div class="rating-stars">
+            <h3 class="job-description-title">דירוג:</h3>
+            <div class="job-rating-display">
+              <div class="job-rating-stars">
                 <template v-for="i in 5" :key="i">
                   <font-awesome-icon
                     v-if="i <= fullStars"
                     :icon="['fas', 'star']"
-                    class="rating-star rating-star--full"
+                    class="job-rating-star job-rating-star--full"
                   />
                   <font-awesome-icon
                     v-else-if="i === fullStars + 1 && hasHalfStar"
                     :icon="['fas', 'star-half-stroke']"
-                    class="rating-star rating-star--half"
+                    class="job-rating-star job-rating-star--half"
                   />
                   <font-awesome-icon
                     v-else
                     :icon="['fas', 'star']"
-                    class="rating-star rating-star--empty"
+                    class="job-rating-star job-rating-star--empty"
                   />
                 </template>
               </div>
-              <span class="rating-number">{{ rating.rating }}/5</span>
+              <span class="job-rating-number">{{ rating.rating }}/5</span>
             </div>
-            <div v-if="rating.review" class="rating-review">
-              <p class="review-text">{{ rating.review }}</p>
+            <div v-if="rating.review" class="job-rating-review">
+              <p class="job-rating-review-text">{{ rating.review }}</p>
             </div>
-            <div v-else class="rating-review rating-review--empty">
-              <p class="review-text">לא ניתנה ביקורת</p>
+            <div v-else class="job-rating-review job-rating-review--empty">
+              <p class="job-rating-review-text">לא ניתנה ביקורת</p>
             </div>
           </div>
+        </div>
 
-          <!-- Actions -->
-          <div class="job-actions">
-            <div class="job-actions-left">
-              <button
-                v-if="isHendiman && jobDetails.status === 'open'"
-                class="btn-action btn-action--primary"
-                @click="onAccept"
-                :disabled="isAccepting"
-              >
-                <span v-if="isAccepting">מעדכן...</span>
-                <span v-else>קבל עבודה</span>
-              </button>
-              <button class="btn-action btn-action--ghost" @click="onClose">
-                סגירה
-              </button>
-              <button
-                v-if="isHendiman && jobDetails.status === 'open'"
-                class="btn-action btn-action--ghost btn-action--skip"
-                @click="onSkip"
-              >
-                דלג
-              </button>
-            </div>
-            <div class="map-actions">
-              <button
-                v-if="isHendiman && jobCoordinates"
-                class="btn-action btn-action--map"
-                type="button"
-                dir="rtl"
-                @click="openGoogleMaps"
-              >
-                <i class="fas fa-map-marked-alt"></i>
-                <span>גוגל מפות</span>
-              </button>
-              <button
-                v-if="isHendiman && jobCoordinates"
-                class="btn-action btn-action--waze"
-                type="button"
-                dir="rtl"
-                @click="openWaze"
-              >
-                <i class="fas fa-location-arrow"></i>
-                <span>וויז</span>
-              </button>
-            </div>
+        <!-- Fixed Bottom Actions -->
+        <div class="job-bottom-sheet__actions">
+          <button
+            v-if="isHendiman && jobDetails.status === 'open'"
+            class="job-action-btn job-action-btn--primary"
+            @click="onAccept"
+            :disabled="isAccepting"
+          >
+            <span class="material-symbols-outlined">check_circle</span>
+            <span v-if="isAccepting">מעדכן...</span>
+            <span v-else>קבל עבודה</span>
+          </button>
+          <div class="job-action-buttons-row">
+            <button
+              class="job-action-btn job-action-btn--secondary"
+              @click="onClose"
+            >
+              <span class="material-symbols-outlined">close</span>
+              סגור
+            </button>
+            <button
+              v-if="isHendiman && jobDetails.status === 'open'"
+              class="job-action-btn job-action-btn--secondary"
+              @click="onSkip"
+            >
+              <span class="material-symbols-outlined">skip_next</span>
+              דלג
+            </button>
           </div>
         </div>
       </div>
@@ -548,6 +283,13 @@ export default {
       rating: null,
       isLoadingRating: false,
       isJobsDropdownOpen: false,
+      isExpanded: false,
+      sheetOffset: 0,
+      dragStartY: 0,
+      dragStartOffset: 0,
+      isDragging: false,
+      touchStartY: 0,
+      touchStartOffset: 0,
     };
   },
   watch: {
@@ -594,6 +336,18 @@ export default {
         return { lat: locArray[1], lng: locArray[0] };
       }
       return null;
+    },
+    statusSteps() {
+      if (!this.jobDetails) return [];
+      const status = this.jobDetails.status;
+      const steps = [
+        { status: 'open', label: 'פתוחה', isActive: status === 'open', isCompleted: ['assigned', 'on_the_way', 'in_progress', 'done'].includes(status) },
+        { status: 'assigned', label: 'שובצה', isActive: status === 'assigned', isCompleted: ['on_the_way', 'in_progress', 'done'].includes(status) },
+        { status: 'on_the_way', label: 'בדרך', isActive: status === 'on_the_way', isCompleted: ['in_progress', 'done'].includes(status) },
+        { status: 'in_progress', label: 'בביצוע', isActive: status === 'in_progress', isCompleted: status === 'done' },
+        { status: 'done', label: 'הושלמה', isActive: status === 'done', isCompleted: false },
+      ];
+      return steps;
     },
   },
   methods: {
@@ -702,40 +456,196 @@ export default {
         return String(date);
       }
     },
+    formatDateShort(date) {
+      if (!date) return "";
+      try {
+        const dateObj = date.$date ? new Date(date.$date) : new Date(date);
+        return new Intl.DateTimeFormat("he-IL", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(dateObj);
+      } catch (e) {
+        return String(date);
+      }
+    },
+    getStatusText() {
+      if (!this.jobDetails) return "";
+      const statusLabels = {
+        open: "פתוחה",
+        assigned: "שובצה",
+        on_the_way: "בדרך ליעד",
+        in_progress: "בביצוע",
+        done: "הושלמה",
+        cancelled: "בוטלה",
+      };
+      return statusLabels[this.jobDetails.status] || this.jobDetails.status;
+    },
+    getImageStyle() {
+      if (!this.jobDetails) return {};
+      const imageUrl = Array.isArray(this.jobDetails.imageUrl)
+        ? this.jobDetails.imageUrl[0]
+        : this.jobDetails.imageUrl;
+      return {
+        backgroundImage: `url(${imageUrl || '/img/Hendima-logo.png'})`,
+      };
+    },
+    getDisplayPrice() {
+      if (!this.jobDetails) return 0;
+      if (
+        Array.isArray(this.jobDetails.subcategoryInfo) &&
+        this.jobDetails.subcategoryInfo.length > 1
+      ) {
+        return this.getTotalPrice();
+      }
+      return (
+        (Array.isArray(this.jobDetails.subcategoryInfo) &&
+        this.jobDetails.subcategoryInfo.length === 1
+          ? this.jobDetails.subcategoryInfo[0].price
+          : this.jobDetails.subcategoryInfo?.price || this.jobDetails.price) || 0
+      );
+    },
+    getBillingType() {
+      if (!this.jobDetails) return null;
+      if (
+        Array.isArray(this.jobDetails.subcategoryInfo) &&
+        this.jobDetails.subcategoryInfo.length === 1
+      ) {
+        return (
+          this.jobDetails.subcategoryInfo[0].workType ||
+          this.jobDetails.billingType ||
+          null
+        );
+      }
+      return (
+        this.jobDetails.subcategoryInfo?.typeWork ||
+        this.jobDetails.billingType ||
+        null
+      );
+    },
+    getClientAvatarStyle() {
+      if (!this.jobDetails || !this.jobDetails.clientImage) return {};
+      return {
+        backgroundImage: `url(${this.jobDetails.clientImage})`,
+      };
+    },
+    getClientRating() {
+      if (!this.jobDetails || !this.jobDetails.clientRating) return null;
+      return this.jobDetails.clientRating;
+    },
+    getCategoryName() {
+      if (!this.jobDetails) return null;
+      if (
+        Array.isArray(this.jobDetails.subcategoryInfo) &&
+        this.jobDetails.subcategoryInfo.length === 1
+      ) {
+        return this.jobDetails.subcategoryInfo[0].category;
+      }
+      return this.jobDetails.subcategoryInfo?.category;
+    },
+    getMapPreviewStyle() {
+      if (!this.jobCoordinates) return {};
+      const { lat, lng } = this.jobCoordinates;
+      return {
+        backgroundImage: `url(https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s+ff7b00(${lng},${lat})/${lng},${lat},15,0/300x200@2x?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw)`,
+      };
+    },
+    openLocation() {
+      if (this.jobCoordinates) {
+        this.openGoogleMaps();
+      }
+    },
+    // Drag handlers
+    handleDragStart(e) {
+      this.isDragging = true;
+      this.dragStartY = e.clientY || e.touches?.[0]?.clientY;
+      this.dragStartOffset = this.sheetOffset;
+      document.addEventListener("mousemove", this.handleDragMove);
+      document.addEventListener("mouseup", this.handleDragEnd);
+      document.addEventListener("touchmove", this.handleDragMove);
+      document.addEventListener("touchend", this.handleDragEnd);
+    },
+    handleDragMove(e) {
+      if (!this.isDragging) return;
+      const currentY = e.clientY || e.touches?.[0]?.clientY;
+      const deltaY = currentY - this.dragStartY;
+      const newOffset = this.dragStartOffset + deltaY;
+      const maxOffset = 0;
+      const minOffset = window.innerHeight * 0.3;
+      this.sheetOffset = Math.max(minOffset, Math.min(maxOffset, newOffset));
+    },
+    handleDragEnd() {
+      if (!this.isDragging) return;
+      this.isDragging = false;
+      const threshold = window.innerHeight * 0.15;
+      if (this.sheetOffset > threshold) {
+        this.onClose();
+      } else {
+        this.sheetOffset = 0;
+      }
+      document.removeEventListener("mousemove", this.handleDragMove);
+      document.removeEventListener("mouseup", this.handleDragEnd);
+      document.removeEventListener("touchmove", this.handleDragMove);
+      document.removeEventListener("touchend", this.handleDragEnd);
+    },
+    handleTouchStart(e) {
+      if (e.target.closest('.job-bottom-sheet__content')) return;
+      this.touchStartY = e.touches[0].clientY;
+      this.touchStartOffset = this.sheetOffset;
+    },
+    handleTouchMove(e) {
+      if (e.target.closest('.job-bottom-sheet__content')) return;
+      const currentY = e.touches[0].clientY;
+      const deltaY = currentY - this.touchStartY;
+      const newOffset = this.touchStartOffset + deltaY;
+      const maxOffset = 0;
+      const minOffset = window.innerHeight * 0.3;
+      this.sheetOffset = Math.max(minOffset, Math.min(maxOffset, newOffset));
+    },
+    handleTouchEnd(e) {
+      if (e.target.closest('.job-bottom-sheet__content')) return;
+      const threshold = window.innerHeight * 0.15;
+      if (this.sheetOffset > threshold) {
+        this.onClose();
+      } else {
+        this.sheetOffset = 0;
+      }
+    },
+  },
+  mounted() {
+    // Reset sheet position when opened
+    this.sheetOffset = 0;
+  },
+  watch: {
+    jobDetails: {
+      handler() {
+        // Reset sheet position when job changes
+        this.sheetOffset = 0;
+        this.isExpanded = false;
+      },
+    },
   },
 };
 </script>
 
 <style lang="scss" scoped>
-$font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-  "Helvetica Neue", Arial, sans-serif;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 
-$bg: #0b0b0f;
-$bg2: #0f1016;
-$card: rgba(255, 255, 255, 0.06);
-$card2: rgba(255, 255, 255, 0.085);
-$stroke: rgba(255, 255, 255, 0.12);
+$primary: #ff7b00;
+$primary-dark: #e06c00;
+$background-dark: #1a1a1a;
+$card-dark: #262626;
 $text: rgba(255, 255, 255, 0.92);
-$muted: rgba(255, 255, 255, 0.62);
-
-$orange: #ff6a00;
-$orange2: #ff8a2b;
-$orange3: #ffb36b;
-
+$text-secondary: rgba(161, 161, 170, 1);
 $danger: #ff3b3b;
 
-$shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
-$shadowO: 0 18px 44px rgba(255, 106, 0, 0.18);
-
-$r: 18px;
-$r2: 26px;
-
-@mixin focusRing {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba($orange, 0.32);
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
 
-.job-modal-overlay {
+// Bottom Sheet Overlay
+.job-bottom-sheet-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -744,118 +654,329 @@ $r2: 26px;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  z-index: 100001;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  z-index: 100001; /* Higher than DashboardTopBar (100000) */
-  padding: 20px;
-  overflow-y: auto;
-  font-family: $font-family;
+  direction: rtl;
+  font-family: 'Inter', sans-serif;
 
-  @media (max-width: 768px) {
-    align-items: flex-start;
-    padding: 10px;
-    overflow-y: auto;
+  @media (min-width: 640px) {
+    align-items: center;
+    justify-content: center;
   }
 }
 
-/* Modal Animation */
-.modal-enter-active {
+// Bottom Sheet Animation
+.bottom-sheet-enter-active,
+.bottom-sheet-leave-active {
   transition: opacity 0.3s ease;
 }
 
-.modal-leave-active {
-  transition: opacity 0.25s ease;
+.bottom-sheet-enter-active .job-bottom-sheet,
+.bottom-sheet-leave-active .job-bottom-sheet {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.modal-enter-from,
-.modal-leave-to {
+.bottom-sheet-enter-from,
+.bottom-sheet-leave-to {
   opacity: 0;
 }
 
-.modal-enter-active .job-modal-content,
-.modal-leave-active .job-modal-content {
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-    opacity 0.3s ease;
+.bottom-sheet-enter-from .job-bottom-sheet,
+.bottom-sheet-leave-to .job-bottom-sheet {
+  transform: translateY(100%);
 }
 
-.modal-enter-from .job-modal-content,
-.modal-leave-to .job-modal-content {
-  opacity: 0;
-  transform: scale(0.9) translateY(-20px);
-}
-
-.modal-enter-to .job-modal-content {
-  opacity: 1;
-  transform: scale(1) translateY(0);
-}
-
-.job-modal-content {
-  background: linear-gradient(180deg, $card2, $card);
-  border: 1px solid $stroke;
-  border-radius: 16px;
-  box-shadow: $shadow;
-  width: 100%;
-  max-width: 900px;
-  max-height: 90vh;
-  padding: 24px;
+// Bottom Sheet Container
+.job-bottom-sheet {
   position: relative;
-  color: $text;
-  direction: rtl;
-  text-align: right;
-  overflow-y: auto;
+  width: 100%;
+  max-width: 448px;
+  height: 90vh;
+  max-height: 90vh;
+  background: $background-dark;
+  border-radius: 2rem 2rem 0 0;
   display: flex;
   flex-direction: column;
-  font-family: $font-family;
+  overflow: hidden;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 
-  @media (max-width: 768px) {
-    padding: 16px;
-    border-radius: 14px;
-    max-width: 100%;
-    max-height: calc(100vh - 20px);
-    margin-top: 0;
-    margin-bottom: 10px;
+  @media (min-width: 640px) {
+    border-radius: 2rem;
+    height: auto;
+    max-height: 90vh;
   }
 }
 
-.close-button {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  left: auto;
-  background: none;
-  border: none;
-  font-size: 20px;
-  color: $muted;
-  cursor: pointer;
-  transition: color 0.2s ease;
+.job-bottom-sheet__handle {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0 8px;
+  background: $background-dark;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: grab;
+  user-select: none;
   z-index: 10;
-  width: 32px;
-  height: 32px;
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.job-bottom-sheet__handle-bar {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(209, 213, 219, 0.3);
+
+  @media (prefers-color-scheme: dark) {
+    background: rgba(255, 255, 255, 0.2);
+  }
+}
+
+.job-bottom-sheet__header {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 32px 8px;
+  background: $background-dark;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  z-index: 10;
+}
+
+.job-bottom-sheet__step-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 0;
+}
+
+.step-indicator-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  position: relative;
+}
+
+.step-indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(107, 114, 128, 1);
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 10;
+
+  &--active {
+    width: 12px;
+    height: 12px;
+    background: $primary;
+    box-shadow: 0 0 10px rgba(255, 123, 0, 0.8);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  &--completed {
+    background: $primary;
+  }
+}
+
+.step-indicator-item--active .step-indicator-dot {
+  width: 12px;
+  height: 12px;
+  background: $primary;
+  box-shadow: 0 0 10px rgba(255, 123, 0, 0.8);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.step-indicator-item--completed .step-indicator-dot {
+  background: $primary;
+}
+
+.step-indicator-line {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  right: -50%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  z-index: 1;
+}
+
+.step-indicator-line--active {
+  background: $primary;
+}
+
+.job-bottom-sheet__status-text {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: $primary;
+  margin: 4px 0 0;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+// Scrollable Content
+.job-bottom-sheet__content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 128px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+// Image Section
+.job-image-section {
+  position: relative;
+  width: 100%;
+  height: 224px;
+  margin-top: 0;
+}
+
+.job-image-container {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.job-image-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, $background-dark, transparent, rgba(0, 0, 0, 0.3));
+}
+
+.job-urgent-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(220, 38, 38, 0.9);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(220, 38, 38, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 10;
+
+  .material-symbols-outlined {
+    font-size: 14px;
+  }
+}
+
+.job-images-thumbnails {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  display: flex;
+  gap: 8px;
+}
+
+.job-thumbnail {
+  width: 48px;
+  height: 48px;
+  border-radius: 0.5rem;
+  background-size: cover;
+  background-position: center;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.job-thumbnail-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
+  border-radius: 0.5rem;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+}
 
-  &:hover {
-    color: $text;
-    background: rgba(255, 255, 255, 0.05);
-  }
+// Title Section
+.job-title-section {
+  padding: 16px 24px 24px;
+  text-align: center;
+  margin-top: -24px;
+  position: relative;
+  z-index: 10;
+}
 
-  @media (max-width: 768px) {
-    font-size: 18px;
-    top: 10px;
-    right: 10px;
-    left: auto;
-    width: 28px;
-    height: 28px;
+.job-title {
+  margin: 0 0 8px;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: white;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  line-height: 1.4;
+
+  @media (max-width: 640px) {
+    font-size: 24px;
   }
 }
 
-.job-content {
+.job-price-badge {
+  display: inline-block;
+  background: rgba(255, 123, 0, 0.1);
+  padding: 4px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 123, 0, 0.2);
+  margin-bottom: 16px;
+}
+
+.job-price-amount {
+  font-size: 24px;
+  font-weight: 700;
+  color: $primary;
+}
+
+.job-tags-row {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.job-tag {
+  background: $card-dark;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: rgba(209, 213, 219, 1);
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 0.375rem;
 }
 
 /* Step Indicator */
@@ -913,10 +1034,10 @@ $r2: 26px;
 }
 
 .step-item--active .step-circle {
-  background: linear-gradient(135deg, $orange, $orange2);
-  border-color: $orange;
+  background: linear-gradient(135deg, $primary, $primary-dark);
+  border-color: $primary;
   color: #111;
-  box-shadow: 0 3px 10px rgba($orange, 0.4);
+  box-shadow: 0 3px 10px rgba($primary, 0.4);
   transform: scale(1.08);
 }
 
@@ -971,8 +1092,8 @@ $r2: 26px;
 }
 
 .step-line--active {
-  background: linear-gradient(90deg, $orange, $orange2);
-  box-shadow: 0 0 8px rgba($orange, 0.4);
+  background: linear-gradient(90deg, $primary, $primary-dark);
+  box-shadow: 0 0 8px rgba($primary, 0.4);
 }
 
 .job-header {
@@ -1011,7 +1132,7 @@ $r2: 26px;
   min-width: 160px;
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid rgba($orange, 0.18);
+  border: 1px solid rgba($primary, 0.18);
   background: rgba(0, 0, 0, 0.3);
   flex-shrink: 0;
   position: relative;
@@ -1096,7 +1217,7 @@ $r2: 26px;
   margin: 0 0 8px 0;
   font-size: 20px;
   font-weight: 1000;
-  color: $orange3;
+  color: $primary;
   line-height: 1.3;
 
   @media (max-width: 768px) {
@@ -1117,8 +1238,8 @@ $r2: 26px;
   padding: 4px 10px;
   font-weight: 1000;
   font-size: 11px;
-  border: 1px solid rgba($orange, 0.18);
-  background: rgba($orange, 0.12);
+  border: 1px solid rgba($primary, 0.18);
+  background: rgba($primary, 0.12);
   color: $text;
 
   @media (max-width: 768px) {
@@ -1138,13 +1259,13 @@ $r2: 26px;
     color: rgba(255, 255, 255, 0.84);
   }
   &--hourly {
-    border-color: rgba($orange2, 0.28);
-    background: rgba($orange2, 0.14);
+    border-color: rgba($primary-dark, 0.28);
+    background: rgba($primary-dark, 0.14);
   }
 
   &--fixed {
-    border-color: rgba($orange, 0.22);
-    background: rgba($orange, 0.12);
+    border-color: rgba($primary, 0.22);
+    background: rgba($primary, 0.12);
   }
 
   &--work-type {
@@ -1172,354 +1293,300 @@ $r2: 26px;
   }
 }
 
-.job-details {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  padding: 12px 0;
-  margin-bottom: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-
-  @media (max-width: 1024px) {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
-  @media (max-width: 768px) {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 6px;
-    padding: 10px 0;
-  }
-
-  @media (max-width: 480px) {
-    grid-template-columns: repeat(2, 1fr);
-  }
+// Details Section
+.job-details-section {
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.detail-card {
+.job-detail-card {
+  background: $card-dark;
+  padding: 16px;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
-  transition: all 0.2s ease;
+  gap: 12px;
+}
 
-  &:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba($orange, 0.2);
-  }
+.job-detail-card--client {
+  border-right: 4px solid $primary;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 
-  @media (max-width: 768px) {
-    padding: 8px;
-    gap: 8px;
-    border-radius: 8px;
+.job-detail-card__content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+.job-detail-card__content--location {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.job-detail-card__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.job-detail-card__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 0.5rem;
+  background-size: cover;
+  background-position: center;
+  background-color: rgba(107, 114, 128, 1);
+  border: 2px solid rgba(255, 123, 0, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+
+.job-detail-card__info {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+  flex: 1;
+  min-width: 0;
+}
+
+.job-detail-card__label {
+  font-size: 10px;
+  color: rgba(156, 163, 175, 1);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.job-detail-card__value {
+  font-size: 14px;
+  font-weight: 700;
+  color: white;
+}
+
+.job-detail-card__rating {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #fbbf24;
+  font-size: 14px;
+  font-weight: 700;
+
+  .material-symbols-outlined {
+    font-size: 16px;
+    color: #fbbf24;
   }
 }
 
-.detail-card--price {
-  border-color: rgba($orange, 0.2);
-  background: rgba($orange, 0.05);
-
-  &:hover {
-    background: rgba($orange, 0.08);
-    border-color: rgba($orange, 0.3);
-  }
-}
-
-.detail-icon {
-  width: 28px;
-  height: 28px;
+.job-detail-card__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 123, 0, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba($orange, 0.1);
-  border: 1px solid rgba($orange, 0.2);
-  border-radius: 8px;
-  color: $orange3;
-  font-size: 12px;
+  color: $primary;
   flex-shrink: 0;
 
-  @media (max-width: 768px) {
-    width: 24px;
-    height: 24px;
-    font-size: 11px;
-    border-radius: 6px;
+  .material-symbols-outlined {
+    font-size: 18px;
   }
 }
 
-.detail-card--price .detail-icon {
-  background: rgba($orange, 0.15);
-  border-color: rgba($orange, 0.3);
-  color: $orange;
+.job-detail-card__link {
+  font-size: 12px;
+  color: $primary;
+  text-decoration: underline;
+  margin-top: 4px;
+  display: inline-block;
+  cursor: pointer;
 }
 
-.detail-content {
+.job-detail-card__map-preview {
+  width: 100%;
+  height: 80px;
+  border-radius: 0.5rem;
+  background: #1a1a1a;
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  filter: grayscale(100%) brightness(0.7) contrast(1.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .material-symbols-outlined {
+    font-size: 48px;
+    color: $primary;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  }
+}
+
+// Description Section
+.job-description-section {
+  padding: 16px 20px 8px;
+}
+
+.job-description-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: white;
+  margin: 0 0 8px;
+}
+
+.job-description-text {
+  background: $card-dark;
+  padding: 16px;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: rgba(156, 163, 175, 1);
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+// Rating Section
+.job-rating-section {
+  padding: 16px 20px 8px;
+}
+
+.job-rating-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.job-rating-stars {
+  display: flex;
+  gap: 4px;
+  direction: ltr;
+}
+
+.job-rating-star {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.2);
+  transition: color 0.2s ease;
+
+  &--full {
+    color: #fbbf24;
+  }
+
+  &--half {
+    color: #fbbf24;
+  }
+
+  &--empty {
+    color: rgba(255, 255, 255, 0.2);
+  }
+}
+
+.job-rating-number {
+  font-weight: 700;
+  font-size: 16px;
+  color: white;
+}
+
+.job-rating-review {
+  margin-top: 8px;
+}
+
+.job-rating-review-text {
+  margin: 0;
+  font-size: 14px;
+  color: rgba(156, 163, 175, 1);
+  line-height: 1.6;
+}
+
+.job-rating-review--empty .job-rating-review-text {
+  font-style: italic;
+}
+
+// Bottom Actions
+.job-bottom-sheet__actions {
+  flex: none;
+  width: 100%;
+  background: rgba(24, 20, 17, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 20px 20px 32px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-
-  @media (max-width: 768px) {
-    gap: 2px;
-  }
+  gap: 12px;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+  z-index: 30;
 }
 
-.detail-label {
-  font-weight: 900;
-  color: $muted;
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  line-height: 1.2;
-
-  @media (max-width: 768px) {
-    font-size: 8px;
-  }
-}
-
-.detail-value {
-  font-weight: 1000;
-  color: $text;
-  font-size: 11px;
-  line-height: 1.2;
-  word-break: break-word;
-
-  @media (max-width: 768px) {
-    font-size: 10px;
-  }
-
-  &--price {
-    color: $orange3;
-    font-weight: 1100;
-    font-size: 12px;
-
-    @media (max-width: 768px) {
-      font-size: 11px;
-    }
-  }
-}
-
-.btn-link {
-  background: none;
-  border: none;
-  color: $orange3;
-  font-weight: 900;
-  font-size: 12px;
+.job-action-btn {
+  width: 100%;
+  padding: 16px;
+  border-radius: 0.75rem;
+  font-weight: 700;
+  font-size: 16px;
   cursor: pointer;
-  padding: 0;
-  margin-top: 4px;
-  align-self: flex-start;
-  text-decoration: underline;
+  transition: transform 0.2s ease;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: white;
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.job-action-btn--primary {
+  background: linear-gradient(135deg, #ff9100 0%, #ff7b00 100%);
+  box-shadow: 0 4px 15px rgba(255, 123, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+
+  .material-symbols-outlined {
+    font-size: 20px;
+  }
+}
+
+.job-action-btn--secondary {
+  background: rgba(42, 42, 42, 1);
+  border: 1px solid rgba(255, 123, 0, 0.3);
+  color: rgba(209, 213, 219, 1);
 
   &:hover {
-    color: lighten($orange3, 8%);
+    background: rgba(51, 51, 51, 1);
+    border-color: rgba(255, 123, 0, 0.6);
   }
 
-  @media (max-width: 768px) {
-    font-size: 11px;
-  }
-}
-
-.job-description {
-  padding: 12px 0;
-  margin-bottom: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-
-  @media (max-width: 768px) {
-    padding: 10px 0;
+  .material-symbols-outlined {
+    font-size: 18px;
+    color: $primary;
   }
 }
 
-.section-title {
-  margin: 0 0 8px 0;
-  font-size: 16px;
-  font-weight: 1000;
-  color: $orange;
-
-  @media (max-width: 768px) {
-    font-size: 14px;
-    margin-bottom: 6px;
-  }
-}
-
-.description-text {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 800;
-  color: $text;
-  line-height: 1.5;
-  white-space: pre-wrap;
-
-  @media (max-width: 768px) {
-    font-size: 12px;
-    line-height: 1.4;
-  }
-}
-
-.job-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  padding-top: 12px;
-  margin-top: 0;
-  flex-wrap: wrap;
-
-  @media (max-width: 768px) {
-    flex-direction: row;
-    gap: 6px;
-    padding-top: 10px;
-    flex-wrap: nowrap;
-  }
-}
-
-.job-actions-left {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-
-  @media (max-width: 768px) {
-    gap: 6px;
-    flex: 1;
-    min-width: 0;
-  }
-}
-
-.map-actions {
-  display: flex;
-  gap: 10px;
-  margin-inline-start: auto; /* ב-RTL יידחף שמאלה */
-  flex-wrap: wrap;
-
-  @media (max-width: 768px) {
-    gap: 4px;
-    margin-inline-start: 0;
-    flex-shrink: 0;
-  }
-}
-
-.btn-action {
-  border-radius: 12px;
-  padding: 10px 18px;
-  font-weight: 1000;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: none;
-  min-width: 120px;
-  flex-shrink: 0;
-  margin-inline-end: 20px;
-
-  @media (max-width: 768px) {
-    padding: 6px 10px;
-    font-size: 10px;
-    min-width: unset;
-    margin-inline-end: 0;
-    border-radius: 8px;
-    white-space: nowrap;
-    width: auto;
-  }
-
-  &.btn-action--skip {
-    @media (max-width: 768px) {
-      display: none;
-    }
-  }
-
-  &--primary {
-    background: linear-gradient(135deg, $orange, $orange2);
-    color: #111;
-    box-shadow: $shadowO;
-
-    &:hover {
-      transform: translateY(-2px);
-      box-shadow: $shadowO, 0 8px 20px rgba($orange, 0.3);
-    }
-  }
-
-  &--ghost {
-    background: rgba(0, 0, 0, 0.22);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: $text;
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(255, 255, 255, 0.2);
-    }
-  }
-
-  &--map {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: linear-gradient(135deg, #1a1f2e, #23324b);
-    border: 1px solid rgba($orange, 0.18);
-    color: $orange3;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
-
-    i {
-      font-size: 14px;
-    }
-
-    @media (max-width: 768px) {
-      padding: 6px 10px;
-      gap: 6px;
-      min-width: auto;
-      width: auto;
-      height: auto;
-
-      i {
-        font-size: 11px;
-      }
-
-      span {
-        font-size: 9px;
-      }
-    }
-
-    &:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4), 0 0 0 4px rgba($orange, 0.12);
-    }
-  }
-
-  &--waze {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: linear-gradient(135deg, #0c2c3a, #134a62);
-    border: 1px solid rgba(73, 196, 255, 0.25);
-    color: #c7ecff;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
-
-    i {
-      font-size: 14px;
-    }
-
-    @media (max-width: 768px) {
-      padding: 6px 10px;
-      gap: 6px;
-      min-width: auto;
-      width: auto;
-      height: auto;
-
-      i {
-        font-size: 11px;
-      }
-
-      span {
-        font-size: 9px;
-      }
-    }
-
-    &:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4),
-        0 0 0 4px rgba(73, 196, 255, 0.14);
-    }
-  }
+.job-action-buttons-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
 }
 
 .job-rating {
@@ -1599,7 +1666,7 @@ $r2: 26px;
 }
 
 .rating-review--empty .review-text {
-  color: $muted;
+  color: $text-secondary;
   font-style: italic;
 }
 
@@ -1625,10 +1692,10 @@ $r2: 26px;
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: rgba($orange, 0.1);
-  border: 1px solid rgba($orange, 0.2);
+  background: rgba($primary, 0.1);
+  border: 1px solid rgba($primary, 0.2);
   border-radius: 12px;
-  color: $orange3;
+  color: $primary;
   font-weight: 900;
   font-size: 14px;
   cursor: pointer;
@@ -1640,8 +1707,8 @@ $r2: 26px;
   }
 
   &:hover {
-    background: rgba($orange, 0.15);
-    border-color: rgba($orange, 0.3);
+    background: rgba($primary, 0.15);
+    border-color: rgba($primary, 0.3);
   }
 
   &--open {
@@ -1661,7 +1728,7 @@ $r2: 26px;
 
 .jobs-dropdown__content {
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba($orange, 0.2);
+  border: 1px solid rgba($primary, 0.2);
   border-top: none;
   border-radius: 0 0 12px 12px;
   padding: 8px;
@@ -1693,7 +1760,7 @@ $r2: 26px;
 
   &:hover {
     background: rgba(255, 255, 255, 0.05);
-    border-color: rgba($orange, 0.2);
+    border-color: rgba($primary, 0.2);
   }
 }
 
@@ -1724,7 +1791,7 @@ $r2: 26px;
 .jobs-dropdown__item-price {
   font-weight: 1000;
   font-size: 14px;
-  color: $orange3;
+  color: $primary;
   white-space: nowrap;
 
   @media (max-width: 768px) {
@@ -1748,7 +1815,7 @@ $r2: 26px;
 .jobs-dropdown__item-work-type {
   font-weight: 800;
   font-size: 11px;
-  color: $muted;
+  color: $text-secondary;
   padding: 4px 8px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -1771,11 +1838,12 @@ $r2: 26px;
 }
 
 .jobs-dropdown__content::-webkit-scrollbar-thumb {
-  background: rgba($orange, 0.3);
+  background: rgba($primary, 0.3);
   border-radius: 3px;
 
   &:hover {
-    background: rgba($orange, 0.5);
+    background: rgba($primary, 0.5);
   }
 }
 </style>
+

@@ -6,7 +6,8 @@
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
     "lint": "vue-cli-service lint",
-    "server": "cd server && nodemon server.js",
+    "server": "nodemon server/server.js",
+    "dev": "nodemon server/server.js",
     "start": "node server/server.js",
     "heroku-postbuild": "npm run build"
   },

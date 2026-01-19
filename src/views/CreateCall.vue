@@ -196,7 +196,7 @@
 
               <div
                 v-for="(request, index) in call.requests.slice(1)"
-                :key="index"
+                :key="`request-${index + 1}-${call.requests.length}`"
                 class="ccExtraReq"
               >
                 <input
@@ -301,9 +301,37 @@
                         }}</span>
                         <span class="ccCatName">
                           {{
-                            category.showAiSelection
-                              ? category.subcategory || category.category
-                              : category.originalText || category.subcategory
+                            // ALWAYS prioritize subcategory (what AI found) over originalText
+                            // If subcategory exists, show it (even if same as originalText - it's what AI returned)
+                            // Only fallback to originalText if subcategory is empty
+                            (() => {
+                              // Priority: AI work from ai/aiResponse > subcategory (if different from original) > originalText
+                              // Check if there's AI work that's different from original
+                              const aiWork = category.ai?.subcategory || category.aiResponse?.subcategory || "";
+                              const aiWorkTrimmed = aiWork ? aiWork.trim() : "";
+                              const originalTextTrimmed = category.originalText ? category.originalText.trim() : "";
+                              const subcategoryTrimmed = category.subcategory ? category.subcategory.trim() : "";
+                              
+                              // Check if we have AI work OR if subcategory is different from original (meaning it's from server processing)
+                              const hasAiWork = Boolean(aiWorkTrimmed && aiWorkTrimmed !== originalTextTrimmed);
+                              const hasServerWork = Boolean(subcategoryTrimmed && subcategoryTrimmed !== originalTextTrimmed);
+                              
+                              // Priority: AI work > server work (subcategory) > originalText
+                              let displayValue = category.originalText || category.category;
+                              
+                              if (hasAiWork) {
+                                displayValue = aiWorkTrimmed;
+                              } else if (hasServerWork) {
+                                // subcategory is different from original - it's what server returned (possibly from AI processing)
+                                displayValue = subcategoryTrimmed;
+                              } else if (category.subcategory) {
+                                // Even if same as original, use subcategory (it's what was processed)
+                                displayValue = category.subcategory;
+                              }
+                              
+                              // Return the display value
+                              return displayValue;
+                            })()
                           }}
                         </span>
                       </div>
@@ -317,14 +345,19 @@
 
                       <div
                         v-if="
-                          category.showAiSelection === false &&
-                          category.subcategory
+                          category.needsRecommendation &&
+                          (() => {
+                            const aiWork = category.ai?.subcategory || category.aiResponse?.subcategory || '';
+                            const aiWorkTrimmed = aiWork ? aiWork.trim() : '';
+                            const originalTextTrimmed = category.originalText ? category.originalText.trim() : '';
+                            return Boolean(aiWorkTrimmed && aiWorkTrimmed !== originalTextTrimmed);
+                          })()
                         "
                         class="ccCatMeta ccCatMeta--sub"
                       >
                         <span class="ccCatMetaLbl">מה המערכת מצאה:</span>
                         <span class="ccCatMetaVal">{{
-                          category.subcategory
+                          category.ai?.subcategory || category.aiResponse?.subcategory || category.subcategory
                         }}</span>
                       </div>
 
@@ -1285,7 +1318,16 @@ export default {
       return await getCurrentLocation();
     },
     addRequest() {
+      const newIndex = this.call.requests.length;
       this.call.requests.push("");
+      
+      // Focus on the new input after it's rendered
+      this.$nextTick(() => {
+        const allInputs = this.$el.querySelectorAll('.ccExtraReq .ccInput');
+        if (allInputs && allInputs[newIndex - 1]) {
+          allInputs[newIndex - 1].focus();
+        }
+      });
     },
     removeRequest(index) {
       if (this.call.requests.length > 1) {
@@ -3071,11 +3113,15 @@ export default {
       this.subcategoryInfoArray = [];
       this.aiMatchResult = null; // Reset AI match result
 
+      logger.log(`[CreateCall] 🚀 fetchCategoriesFromAI called - currentStep: ${this.currentStep}, isLoadingCategories: ${this.isLoadingCategories}`);
+      
       try {
         // Get all valid requests (filter out empty ones)
         const validRequests = this.call.requests.filter(
           (r) => r && r.trim().length > 0
         );
+
+        logger.log(`[CreateCall] 🚀 fetchCategoriesFromAI - validRequests: ${validRequests.length}`, { validRequests });
 
         if (validRequests.length === 0) {
           this.toast?.showError("יש למלא לפחות בקשה אחת");
@@ -3087,6 +3133,10 @@ export default {
         const matchPromises = validRequests.map(async (request) => {
           const trimmedRequest = request.trim();
           try {
+            logger.log(
+              `[CreateCall] Sending AI match request for: "${trimmedRequest}"`
+            );
+            
             const response = await axios.post(
               `${URL}/api/ai/match-subcategory`,
               { shortText: trimmedRequest },
@@ -3094,12 +3144,33 @@ export default {
                 headers: { "Content-Type": "application/json" },
               }
             );
+            
+            // Log what we received from server
+            logger.log(
+              `[CreateCall] Received response from server for "${trimmedRequest}":`,
+              {
+                success: response.data.success,
+                matched: response.data.matched,
+                confidence: response.data.confidence,
+                category: response.data.category,
+                subcategory: response.data.subcategory,
+                canonicalSubcategory: response.data.canonicalSubcategory,
+                price: response.data.price,
+                workType: response.data.workType,
+                fullResponse: response.data,
+              }
+            );
+            
             return {
               originalRequest: trimmedRequest,
               success: response.data.success,
               matchResult: response.data,
             };
           } catch (error) {
+            logger.error(
+              `[CreateCall] Error in AI match request for "${trimmedRequest}":`,
+              { error: error.message, stack: error.stack }
+            );
             return {
               originalRequest: trimmedRequest,
               success: false,
@@ -3153,15 +3224,46 @@ export default {
 
         results.forEach((result, index) => {
           if (!result.success || !result.matchResult) {
+            logger.warn(
+              `[CreateCall] Skipping result ${index}:`,
+              { success: result.success, matchResult: result.matchResult }
+            );
             return;
           }
 
           const matchResult = result.matchResult;
           const categoryName = toText(matchResult.category) || "כללי";
-          const subcategoryName =
-            toText(
-              matchResult.canonicalSubcategory || matchResult.subcategory
-            ) || "";
+          
+          // Extract AI subcategory - always use what AI found if available
+          // Priority: canonicalSubcategory > subcategory (if different from original)
+          // IMPORTANT: Even if matched=false, if canonicalSubcategory exists, AI found something!
+          let subcategoryName = "";
+          
+          // Extract AI subcategory - always prefer what AI returned
+          // Priority: canonicalSubcategory > subcategory (from matchResult)
+          // IMPORTANT: Even if subcategory equals originalText, if matched=true, it's what AI found!
+          if (matchResult.canonicalSubcategory) {
+            // canonicalSubcategory is always what AI found
+            subcategoryName = toText(matchResult.canonicalSubcategory);
+          } 
+          else if (matchResult.subcategory) {
+            const aiSubcategory = toText(matchResult.subcategory);
+            // If matched=true, subcategory is what AI found (even if same as original)
+            // If matched=false, only use if different from original (to avoid using user input)
+            if (aiSubcategory) {
+              if (matchResult.matched) {
+                // When matched=true, subcategory is what AI found - always use it
+                subcategoryName = aiSubcategory;
+              } else if (aiSubcategory.trim() !== result.originalRequest.trim()) {
+                // When matched=false, only use if different from original
+                subcategoryName = aiSubcategory;
+              }
+            }
+          }
+          
+          // If subcategoryName is still empty here, it means:
+          // - matched=false AND no canonicalSubcategory AND subcategory equals originalText
+          // In this case, we'll use originalText in the display logic below
 
           const confidenceValue = toConfidence(
             matchResult.confidence ?? matchResult.fullResponse?.confidence
@@ -3169,6 +3271,7 @@ export default {
           const matchedValue = Boolean(
             matchResult.matched ?? matchResult.fullResponse?.matched
           );
+
 
           const aiSelection = {
             category: categoryName,
@@ -3178,28 +3281,55 @@ export default {
             matched: matchedValue,
             confidence: confidenceValue,
           };
+          
+          // Log for debugging - check if AI subcategory is extracted correctly
+          logger.log(
+            `[CreateCall] 🔍 Extracted AI data for "${result.originalRequest}":`,
+            {
+              matched: matchedValue,
+              confidence: confidenceValue,
+              categoryName,
+              subcategoryName: subcategoryName || "⚠️ EMPTY",
+              originalRequest: result.originalRequest,
+              matchResultCanonical: matchResult.canonicalSubcategory || "⚠️ NULL",
+              matchResultSubcategory: matchResult.subcategory || "⚠️ NULL",
+              matchResultMatched: matchResult.matched,
+              matchResultConfidence: matchResult.confidence,
+              aiSelection: {
+                ...aiSelection,
+                subcategory: aiSelection.subcategory || "⚠️ EMPTY",
+              },
+              willGoToCaseA: matchedValue && confidenceValue >= 0.7,
+              willGoToCaseB: confidenceValue >= 0.6 && confidenceValue < 0.7,
+              willGoToCaseC: !(matchedValue && confidenceValue >= 0.7) && !(confidenceValue >= 0.6 && confidenceValue < 0.7),
+            }
+          );
 
           // Case A: High confidence (>= 0.7) - Fixed price
           if (matchedValue && confidenceValue >= 0.7) {
-            processedCategories.push({
+            const categoryObj = {
               category: categoryName,
-              subcategory: subcategoryName,
+              subcategory: subcategoryName || toText(matchResult.subcategory) || result.originalRequest,
               price: matchResult.price ?? null,
               workType: matchResult.workType || "קבלנות",
               originalText: result.originalRequest, // Keep original text for display
-              confidence: confidenceValue, // Store confidence for UI
+              confidence: confidenceValue, // Store confidence for UI - CRITICAL: Must be stored here!
               needsRecommendation: false, // No recommendation needed
               showAiSelection: true,
-              ai: aiSelection,
-              aiResponse: aiSelection,
-            });
+              ai: {
+                ...aiSelection,
+                confidence: confidenceValue, // Ensure confidence is in ai object too
+              },
+              aiResponse: {
+                ...aiSelection,
+                confidence: confidenceValue, // Ensure confidence is in aiResponse object too
+              },
+            };
+            processedCategories.push(categoryObj);
           }
-          // Case B: Medium confidence (0.6-0.69) - Show recommendation on card, but still display with original price
-          else if (
-            matchedValue &&
-            confidenceValue >= 0.6 &&
-            confidenceValue < 0.7
-          ) {
+          // Case B: Medium confidence (0.6-0.69) - Show recommendation on card, but still display AI work by default
+          // This includes cases where matched=false but confidence >= 0.6 (AI found something but not 100% sure)
+          else if (confidenceValue >= 0.6 && confidenceValue < 0.7) {
             // Store first low confidence match for tracking
             if (!firstLowConfidenceMatch) {
               firstLowConfidenceMatch = {
@@ -3212,41 +3342,221 @@ export default {
                 originalText: result.originalRequest,
               };
             }
-            // Add to categories for display with original price (not "bid") but with recommendation flag
-            processedCategories.push({
+            // IMPORTANT: Always show AI subcategory as default display when matched=true
+            // subcategoryName should contain the AI work (canonicalSubcategory or subcategory from AI)
+            // If subcategoryName is empty, fallback to matchResult.subcategory (might be same as original but it's what AI returned)
+            const displaySubcategory = subcategoryName || toText(matchResult.subcategory) || result.originalRequest;
+            
+            logger.log(
+              `[CreateCall] Case B - Building categoryObj for "${result.originalRequest}":`,
+              {
+                confidence: confidenceValue,
+                subcategoryName,
+                matchResultSubcategory: matchResult.subcategory,
+                displaySubcategory,
+                originalRequest: result.originalRequest,
+              }
+            );
+            
+            const categoryObj = {
               category: categoryName,
-              subcategory: subcategoryName,
+              subcategory: displaySubcategory, // Default: Show AI subcategory (what AI found)
               price: matchResult.price ?? null,
               workType: matchResult.workType || "קבלנות",
-              originalText: result.originalRequest, // Keep original text for display
-              confidence: confidenceValue, // Store confidence for UI
+              originalText: result.originalRequest, // Keep original text for quotation option
+              confidence: confidenceValue, // Store confidence for UI - CRITICAL: Must be stored here!
               needsRecommendation: true, // Show recommendation message on this card
-              showAiSelection: false,
-              ai: aiSelection,
-              aiResponse: aiSelection,
-            });
+              showAiSelection: false, // But still show AI subcategory in display
+              ai: {
+                ...aiSelection,
+                confidence: confidenceValue, // Ensure confidence is in ai object too
+              },
+              aiResponse: {
+                ...aiSelection,
+                confidence: confidenceValue, // Ensure confidence is in aiResponse object too
+              },
+            };
+            processedCategories.push(categoryObj);
           }
           // Case C: Low confidence/no match (< 0.6) - require user decision (3 buttons)
+          // BUT ALSO: confidence >= 0.6 but matched=false (AI found something but not confident enough)
           else {
-            processedCategories.push({
-              category: categoryName,
-              subcategory: subcategoryName || result.originalRequest,
+            // IMPORTANT: Case C handling
+            // If matched=false AND confidence=0, there's no AI work to show - use originalText
+            // But if confidence > 0 (even if matched=false), the server might have found something
+            // Priority: subcategoryName (from canonicalSubcategory) > matchResult.subcategory (if different from original) > originalText
+            
+            // CRITICAL: If we have subcategoryName (from AI), use it as display AND put it in aiSelection
+            // Otherwise, check if matchResult.subcategory is different from original - if so, it might be from AI
+            let displaySubcategory = result.originalRequest; // Default to original
+            
+            logger.log(
+              `[CreateCall] 🔍 Case C - Before determining displaySubcategory for "${result.originalRequest}":`,
+              {
+                subcategoryName: subcategoryName || "⚠️ EMPTY",
+                matchResultSubcategory: matchResult.subcategory || "⚠️ NULL",
+                matchResultCanonical: matchResult.canonicalSubcategory || "⚠️ NULL",
+                originalRequest: result.originalRequest,
+                matched: matchedValue,
+                confidence: confidenceValue,
+                aiSelectionBeforeUpdate: JSON.parse(JSON.stringify(aiSelection)),
+              }
+            );
+            
+            // Update aiSelection if we found AI work
+            if (subcategoryName) {
+              // subcategoryName was extracted from AI - use it
+              displaySubcategory = subcategoryName;
+              // Update aiSelection to include the AI work
+              aiSelection.subcategory = subcategoryName;
+              logger.log(`[CreateCall] ✅ Case C - Using subcategoryName: "${displaySubcategory}", updated aiSelection.subcategory`);
+            } else if (matchResult.subcategory) {
+              const serverSubcategory = toText(matchResult.subcategory);
+              // If server returned something different from original, it might be from AI processing
+              // Even if matched=false, if confidence > 0, the server processed it
+              if (serverSubcategory && serverSubcategory.trim() !== result.originalRequest.trim()) {
+                // Server returned something different - use it and put in aiSelection
+                displaySubcategory = serverSubcategory;
+                aiSelection.subcategory = serverSubcategory;
+                logger.log(`[CreateCall] ✅ Case C - Using matchResult.subcategory (different from original): "${displaySubcategory}", updated aiSelection.subcategory`);
+              } else {
+                // Server returned originalText - no AI work to show
+                displaySubcategory = result.originalRequest;
+                logger.log(`[CreateCall] ❌ Case C - matchResult.subcategory equals originalText, using originalText: "${displaySubcategory}"`);
+              }
+            } else {
+              logger.log(`[CreateCall] ❌ Case C - Using originalRequest (fallback): "${displaySubcategory}"`);
+            }
+            
+            logger.log(`[CreateCall] 🔍 Case C - After determining displaySubcategory:`, {
+              displaySubcategory,
+              aiSelectionAfterUpdate: JSON.parse(JSON.stringify(aiSelection)),
+            });
+            
+            // IMPORTANT: Case C should ALWAYS show recommendation (3 buttons) because:
+            // - If matched=false, AI didn't find a match - user needs to decide
+            // - If confidence < 0.6, AI is not confident - user needs to decide
+            // - Even if confidence=0, we still want to show the 3 buttons so user can choose
+            // The only exception: if confidence >= 0.7 and matched=true, that's Case A (handled above)
+            const shouldShowRecommendation = true; // ALWAYS show recommendation in Case C
+            
+            const categoryObj = {
+              category: categoryName || "כללי",
+              subcategory: displaySubcategory, // Default display: AI work if available, otherwise originalText
               price: matchResult.price ?? null,
               workType: "קבלנות",
-              originalText: result.originalRequest, // Keep original text for display
-              confidence: confidenceValue, // Store confidence for UI
-              needsRecommendation: true,
+              originalText: result.originalRequest, // Keep original text for quotation option
+              confidence: confidenceValue, // Store confidence for UI - CRITICAL: Must be stored here!
+              needsRecommendation: shouldShowRecommendation, // ALWAYS true in Case C - show 3 buttons
               showAiSelection: false,
-              ai: aiSelection,
-              aiResponse: aiSelection,
-            });
+              ai: {
+                ...aiSelection,
+                confidence: confidenceValue, // Ensure confidence is in ai object too
+              },
+              aiResponse: {
+                ...aiSelection,
+                confidence: confidenceValue, // Ensure confidence is in aiResponse object too
+              },
+            };
+            
+            logger.log(
+              `[CreateCall] Case C - Created categoryObj for "${result.originalRequest}":`,
+              {
+                categoryObj: JSON.parse(JSON.stringify(categoryObj)), // Deep copy for logging
+                displaySubcategory,
+                originalText: result.originalRequest,
+                categoryObjSubcategory: categoryObj.subcategory,
+                categoryObjOriginalText: categoryObj.originalText,
+                categoryObjAiSubcategory: categoryObj.ai?.subcategory,
+                categoryObjAiResponseSubcategory: categoryObj.aiResponse?.subcategory,
+                subcategoryEqualsOriginal: categoryObj.subcategory === categoryObj.originalText,
+                aiSubcategoryEmpty: !categoryObj.ai?.subcategory || categoryObj.ai.subcategory === "",
+                aiResponseSubcategoryEmpty: !categoryObj.aiResponse?.subcategory || categoryObj.aiResponse.subcategory === "",
+              }
+            );
+            
+            processedCategories.push(categoryObj);
           }
         });
 
-        // Set the results
+        // Log final processed categories with detailed info
+        logger.log(
+          `[CreateCall] Final processedCategories array:`,
+          processedCategories.map((cat, idx) => ({
+            index: idx,
+            category: cat.category,
+            subcategory: cat.subcategory,
+            originalText: cat.originalText,
+            confidence: cat.confidence,
+            needsRecommendation: cat.needsRecommendation,
+            showAiSelection: cat.showAiSelection,
+            subcategoryEqualsOriginal: cat.subcategory === cat.originalText,
+            subcategoryValue: cat.subcategory,
+            originalTextValue: cat.originalText,
+            fullCategory: cat,
+          }))
+        );
+        
+        // Set the results - CRITICAL POINT: This is where data is assigned
+        logger.log(`[CreateCall] ⚠️ BEFORE ASSIGNMENT - About to set foundCategories:`, {
+          processedCategoriesCount: processedCategories.length,
+          processedCategoriesDetails: processedCategories.map((cat, idx) => ({
+            index: idx,
+            subcategory: cat.subcategory,
+            originalText: cat.originalText,
+            aiSubcategory: cat.ai?.subcategory || "EMPTY",
+            aiResponseSubcategory: cat.aiResponse?.subcategory || "EMPTY",
+            confidence: cat.confidence,
+            needsRecommendation: cat.needsRecommendation,
+            subcategoryEqualsOriginal: cat.subcategory === cat.originalText,
+          })),
+        });
+        
         this.subcategoryInfoArray = processedCategories;
         // Always show categories now - recommendation will be shown on specific card
         this.foundCategories = processedCategories;
+        
+        // Log IMMEDIATELY AFTER ASSIGNMENT
+        logger.log(
+          `[CreateCall] ⚠️ IMMEDIATELY AFTER ASSIGNMENT - foundCategories:`,
+          {
+            foundCategoriesLength: this.foundCategories.length,
+            allCategoriesDetails: this.foundCategories.map((cat, idx) => ({
+              index: idx,
+              subcategory: cat.subcategory,
+              originalText: cat.originalText,
+              aiSubcategory: cat.ai?.subcategory || "EMPTY",
+              aiResponseSubcategory: cat.aiResponse?.subcategory || "EMPTY",
+              confidence: cat.confidence,
+              needsRecommendation: cat.needsRecommendation,
+              subcategoryEqualsOriginal: cat.subcategory === cat.originalText,
+            })),
+          }
+        );
+        
+        // Also log after nextTick to see if Vue reactivity changed anything
+        this.$nextTick(() => {
+          logger.log(
+            `[CreateCall] ⚠️ AFTER VUE REACTIVITY (nextTick) - foundCategories:`,
+            {
+              foundCategoriesLength: this.foundCategories.length,
+              currentStep: this.currentStep,
+              shouldShowBlock: this.currentStep === 2 && this.foundCategories.length > 0,
+              isLoadingCategories: this.isLoadingCategories,
+              allCategoriesDetails: this.foundCategories.map((cat, idx) => ({
+                index: idx,
+                subcategory: cat.subcategory,
+                originalText: cat.originalText,
+                aiSubcategory: cat.ai?.subcategory || "EMPTY",
+                aiResponseSubcategory: cat.aiResponse?.subcategory || "EMPTY",
+                confidence: cat.confidence,
+                needsRecommendation: cat.needsRecommendation,
+                subcategoryEqualsOriginal: cat.subcategory === cat.originalText,
+              })),
+            }
+          );
+        });
+        
         // Clear aiMatchResult - we don't need it anymore as recommendation is on card
         this.aiMatchResult = null;
       } catch (error) {
@@ -3278,7 +3588,9 @@ export default {
           // Quotation flow should show the original request text as the title
           showAiSelection: false,
           // Per requirement: category should become "כללי" when opening quotation
+          // And subcategory should be originalText for quotation
           category: "כללי",
+          subcategory: item.originalText || item.subcategory,
           price: "bid",
           needsRecommendation: false,
           ai: item.ai || ai,
@@ -3381,13 +3693,32 @@ export default {
     },
 
     getConfidencePct(category) {
+      // Try multiple sources for confidence value - check direct property first, then nested objects
       const raw =
         category?.confidence ??
         category?.ai?.confidence ??
         category?.aiResponse?.confidence ??
-        category?.aiResponse?.fullResponse?.confidence;
+        category?.aiResponse?.fullResponse?.confidence ??
+        category?.fullAIResponse?.confidence;
 
-      if (raw === null || raw === undefined) return 0;
+      // IMPORTANT: raw can be 0 (which is a valid confidence value), so check for null/undefined only
+      // If raw is 0, it means confidence is 0%, not missing!
+      if (raw === null || raw === undefined) {
+        logger.warn(
+          `[CreateCall] getConfidencePct - No confidence found for category:`,
+          {
+            categoryName: category?.subcategory || category?.originalText,
+            hasConfidence: category?.confidence !== null && category?.confidence !== undefined,
+            confidenceValue: category?.confidence,
+            hasAi: !!category?.ai,
+            aiConfidence: category?.ai?.confidence,
+            hasAiResponse: !!category?.aiResponse,
+            aiResponseConfidence: category?.aiResponse?.confidence,
+            categoryKeys: category ? Object.keys(category) : [],
+          }
+        );
+        return 0;
+      }
 
       let n;
       if (typeof raw === "string") {
@@ -3396,11 +3727,33 @@ export default {
       } else {
         n = Number(raw);
       }
-      if (!Number.isFinite(n)) return 0;
+      
+      if (!Number.isFinite(n)) {
+        logger.warn(
+          `[CreateCall] getConfidencePct - Invalid confidence value:`,
+          { raw, n, categoryName: category?.subcategory || category?.originalText }
+        );
+        return 0;
+      }
+      
+      // Handle both [0..1] and [0..100] formats
+      // If value is between 1 and 100, convert to 0-1 range
       if (n > 1 && n <= 100) n = n / 100;
       if (n < 0) n = 0;
       if (n > 1) n = 1;
-      return Math.round(n * 100);
+      
+      // Convert to percentage (0.75 -> 75)
+      const result = Math.round(n * 100);
+      
+      // Log for debugging when result seems wrong
+      if (result === 0 && raw !== null && raw !== undefined && raw !== 0) {
+        logger.warn(
+          `[CreateCall] getConfidencePct - Result is 0 but raw was not 0:`,
+          { raw, n, result, categoryName: category?.subcategory || category?.originalText }
+        );
+      }
+      
+      return result;
     },
     removeWorkByIndex(index) {
       // User clicked "הסר עבודה זו" - remove the work from both arrays

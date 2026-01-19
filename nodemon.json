@@ -1,0 +1,23 @@
+{
+  "watch": ["server"],
+  "ext": "js,json",
+  "ignore": [
+    "server/logs/**/*",
+    "server/node_modules/**/*",
+    "**/*.log",
+    "**/logs/**",
+    "server/logs",
+    "*.log",
+    "**/server/logs/**",
+    "server/logs/**"
+  ],
+  "ignoreRoot": [".git", "node_modules", "logs"],
+  "exec": "node server/server.js",
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "verbose": false,
+  "delay": 1000,
+  "legacyWatch": false
+}
+

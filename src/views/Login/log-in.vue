@@ -1,182 +1,177 @@
 <template>
   <div class="login" dir="rtl">
-    <!-- Background Effects -->
-    <div class="login__bg-gradient"></div>
-    <!-- Floating particles/embers (Abstract visual noise) -->
-    <div class="login__bg-pattern"></div>
-
-    <!-- Main Container -->
-    <div class="login__wrap">
-      <!-- Hero Section: Logo -->
-      <div class="login__hero">
-        <!-- Logo Graphic -->
-        <div class="login__logoContainer">
-          <svg
-            class="login__logo"
-            viewBox="0 0 100 100"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path d="M20 10 H35 V42 H65 V10 H80 V90 H65 V57 H35 V90 H20 V10 Z" />
-          </svg>
-          <!-- Inner fire pulse effect -->
-          <div class="login__logoAura"></div>
+    <!-- Top Half: Vibrant Orange Gradient -->
+    <div class="login__top-section">
+      <!-- Abstract pattern overlay for texture -->
+      <div class="login__pattern-overlay"></div>
+      <div class="login__top-content">
+        <!-- Logo Icon -->
+        <div class="login__logo-icon">
+          <span class="material-symbols-outlined">home_repair_service</span>
         </div>
-        <!-- Headline Text -->
-        <div class="login__headline">
-          <h1 class="login__title">התחברות</h1>
-          <p class="login__subtitle">כוח בידיים שלך</p>
-        </div>
-      </div>
-
-      <!-- Login Card -->
-      <div class="login__card">
-        <!-- Blocked User Message -->
-        <div v-if="isBlocked" class="blocked-message">
-          <span class="material-symbols-outlined">block</span>
-          <span>המשתמש הזה חסום על ידי הנהלת הנדימן</span>
-        </div>
-
-        <!-- Inputs Form -->
-        <form class="login__form" @submit.prevent="handleLogin">
-          <!-- Email Input -->
-          <div class="input-group">
-            <div class="input-wrapper">
-              <!-- Leading Icon -->
-              <div class="input-icon input-icon--leading">
-                <span class="material-symbols-outlined">bolt</span>
-              </div>
-              <!-- Input Field -->
-              <input
-                v-model="username"
-                class="input-field"
-                type="text"
-                placeholder="אימייל או נייד"
-                required
-                autocomplete="username"
-              />
-            </div>
-          </div>
-
-          <!-- Password Input -->
-          <div class="input-group">
-            <div class="input-wrapper">
-              <!-- Leading Icon -->
-              <div class="input-icon input-icon--leading">
-                <span class="material-symbols-outlined">lock</span>
-              </div>
-              <!-- Input Field -->
-              <input
-                v-if="!ifGoogleUser && !ifFacebookUser"
-                v-model="password"
-                class="input-field"
-                :type="showPassword ? 'text' : 'password'"
-                placeholder="סיסמה"
-                required
-                autocomplete="current-password"
-              />
-              <input
-                v-else
-                v-model="password"
-                class="input-field"
-                type="text"
-                :placeholder="
-                  ifGoogleUser ? 'סיסמה (Google)' : 'סיסמה (Facebook)'
-                "
-                required
-                autocomplete="current-password"
-                readonly
-              />
-              <!-- Trailing Action (Visibility) -->
-              <button
-                v-if="!ifGoogleUser && !ifFacebookUser"
-                type="button"
-                class="input-icon input-icon--trailing"
-                @click="showPassword = !showPassword"
-                :aria-label="showPassword ? 'הסתר סיסמה' : 'הראה סיסמה'"
-              >
-                <span class="material-symbols-outlined">{{
-                  showPassword ? "visibility_off" : "visibility"
-                }}</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Forgot Password Link and Register -->
-          <div class="forgot-password-wrapper">
-            <div class="forgot-password">
-              <a href="#" @click.prevent="handleForgotPassword">
-                שכחת סיסמה?
-              </a>
-            </div>
-            <div class="login__footer">
-              <p>
-                אין לך חשבון?
-                <a href="#" @click.prevent="goToRegister">הירשם עכשיו</a>
-              </p>
-            </div>
-          </div>
-
-          <!-- Main Action Button -->
-          <button type="submit" class="login-btn">
-            כניסה לאזור אישי
-          </button>
-        </form>
-
-        <!-- Biometric Authentication - Only on Mobile -->
-        <div
-          v-if="isMobile && hasBiometricCredentials"
-          class="biometric-auth"
-        >
-          <button
-            type="button"
-            class="biometric-btn"
-            @click="handleBiometricLogin"
-            :disabled="biometricLoading"
-          >
-            <span class="material-symbols-outlined">fingerprint</span>
-            <span>{{
-              biometricLoading ? "מתחבר..." : "התחבר עם טביעת אצבע"
-            }}</span>
-          </button>
-        </div>
-
-        <!-- Social Login Divider -->
-        <div class="social-divider">
-          <div class="social-divider__line"></div>
-          <span class="social-divider__text">או התחבר דרך</span>
-          <div class="social-divider__line"></div>
-        </div>
-
-        <!-- Social Buttons -->
-        <div class="social-buttons">
-          <!-- Google -->
-          <button
-            type="button"
-            class="social-btn"
-            @click="ConenectWithGoogle"
-          >
-            <svg class="social-btn__icon" fill="currentColor" viewBox="0 0 24 24">
-              <path
-                d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81z"
-              />
-            </svg>
-          </button>
-
-          <!-- Facebook -->
-          <button
-            type="button"
-            class="social-btn"
-            @click="ConenectWithFacebook"
-          >
-            <svg class="social-btn__icon" fill="currentColor" viewBox="0 0 24 24">
-              <path
-                d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.17 6 13 6c.88 0 1.63.02 2.25.07V8h-1.5c-1 0-1.33.5-1.33 1.47V12h2.5l-.33 3H12.2v6.8c4.56-.93 8-4.96 8-9.8z"
-              />
-            </svg>
-          </button>
-        </div>
+        <!-- Brand Name -->
+        <h1 class="login__brand-name">הנדימן</h1>
+        <!-- Tagline -->
+        <p class="login__tagline">תיקונים קטנים, פתרונות גדולים</p>
       </div>
     </div>
+
+    <!-- Bottom Half: Dark Charcoal Form Area -->
+    <div class="login__bottom-section">
+      <!-- Blocked User Message -->
+      <div v-if="isBlocked" class="blocked-message">
+        <span class="material-symbols-outlined">block</span>
+        <span>המשתמש הזה חסום על ידי הנהלת הנדימן</span>
+      </div>
+
+      <!-- Login Form -->
+      <form class="login__form" @submit.prevent="handleLogin">
+        <!-- Email/Mobile Input -->
+        <div class="input-group">
+          <label class="input-label" for="email">אימייל או נייד</label>
+          <div class="input-wrapper">
+            <span class="input-icon input-icon--leading">
+              <span class="material-symbols-outlined">person</span>
+            </span>
+            <input
+              id="email"
+              v-model="username"
+              class="input-field"
+              type="text"
+              placeholder="user@example.com"
+              required
+              autocomplete="username"
+            />
+          </div>
+        </div>
+
+        <!-- Password Input -->
+        <div class="input-group">
+          <label class="input-label" for="password">סיסמה</label>
+          <div class="input-wrapper">
+            <span class="input-icon input-icon--leading">
+              <span class="material-symbols-outlined">lock</span>
+            </span>
+            <input
+              v-if="!ifGoogleUser && !ifFacebookUser"
+              id="password"
+              v-model="password"
+              class="input-field"
+              :type="showPassword ? 'text' : 'password'"
+              placeholder="********"
+              required
+              autocomplete="current-password"
+            />
+            <input
+              v-else
+              id="password"
+              v-model="password"
+              class="input-field"
+              type="text"
+              :placeholder="
+                ifGoogleUser ? 'סיסמה (Google)' : 'סיסמה (Facebook)'
+              "
+              required
+              autocomplete="current-password"
+              readonly
+            />
+            <button
+              v-if="!ifGoogleUser && !ifFacebookUser"
+              type="button"
+              class="input-icon input-icon--trailing"
+              @click="showPassword = !showPassword"
+              :aria-label="showPassword ? 'הסתר סיסמה' : 'הראה סיסמה'"
+            >
+              <span class="material-symbols-outlined">{{
+                showPassword ? "visibility_off" : "visibility"
+              }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Forgot Password Link -->
+        <div class="forgot-password-wrapper">
+          <a href="#" @click.prevent="handleForgotPassword" class="forgot-password-link">
+            שכחת סיסמה?
+          </a>
+        </div>
+
+        <!-- Main Action Button -->
+        <button type="submit" class="login-btn">
+          <div class="login-btn__gloss"></div>
+          <span class="login-btn__content">
+            התחברות
+            <span class="material-symbols-outlined">arrow_back</span>
+          </span>
+        </button>
+      </form>
+
+      <!-- Biometric Authentication - Only on Mobile -->
+      <div
+        v-if="isMobile && hasBiometricCredentials"
+        class="biometric-auth"
+      >
+        <button
+          type="button"
+          class="biometric-btn"
+          @click="handleBiometricLogin"
+          :disabled="biometricLoading"
+        >
+          <span class="material-symbols-outlined">fingerprint</span>
+          <span>{{
+            biometricLoading ? "מתחבר..." : "התחבר עם טביעת אצבע"
+          }}</span>
+        </button>
+      </div>
+
+      <!-- Social Login Divider -->
+      <div class="social-divider">
+        <div class="social-divider__line"></div>
+        <span class="social-divider__text">או התחבר באמצעות</span>
+        <div class="social-divider__line"></div>
+      </div>
+
+      <!-- Social Buttons -->
+      <div class="social-buttons">
+        <!-- Google -->
+        <button
+          type="button"
+          class="social-btn"
+          @click="ConenectWithGoogle"
+        >
+          <svg class="social-btn__icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"></path>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path>
+          </svg>
+        </button>
+
+        <!-- Facebook -->
+        <button
+          type="button"
+          class="social-btn"
+          @click="ConenectWithFacebook"
+        >
+          <svg class="social-btn__icon social-btn__icon--facebook" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" fill="#1877F2"></path>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Sign Up Prompt -->
+      <div class="login__footer">
+        <p>
+          עדיין אין לך חשבון?
+          <a href="#" @click.prevent="goToRegister" class="login__footer-link">
+            הרשמה
+          </a>
+        </p>
+      </div>
+    </div>
+
+    <!-- Decorative background element for bottom -->
+    <div class="login__bg-decoration"></div>
   </div>
 </template>
 
@@ -506,178 +501,118 @@ export default {
 <style scoped lang="scss">
 // Color Variables
 $primary: #f27f0d;
-$primary-dark: #b35900;
-$background-dark: #050505;
+$primary-dark: #cc6300;
+$background-light: #f8f7f5;
+$background-dark: #1a1a1a;
+$surface-dark: #2a2a2a;
 $text: rgba(255, 255, 255, 0.92);
 $text-muted: rgba(255, 255, 255, 0.62);
 
-// Custom Styles for Glow Effects
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 0.2;
-  }
-  50% {
-    opacity: 0.4;
-  }
-}
+// Fonts
+$font-display: "Manrope", "Noto Sans Hebrew", sans-serif;
 
 .login {
-  min-height: 100dvh;
+  min-height: max(884px, 100dvh);
   position: relative;
   width: 100%;
   padding: 0;
-  font-family: "Space Grotesk", "Noto Sans", -apple-system, BlinkMacSystemFont,
-    "Segoe UI", Roboto, Arial, sans-serif;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
+  font-family: $font-display;
+  overflow: hidden;
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  background: $background-dark;
+  flex-direction: column;
+  background: $background-light;
   color: $text;
   box-sizing: border-box;
+}
 
-  @media (min-width: 640px) {
-    align-items: center;
-    padding: 24px;
+// Top Half: Vibrant Orange Gradient
+.login__top-section {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 45vh;
+  min-height: 300px;
+  width: 100%;
+  background: linear-gradient(to bottom right, #ff9a3d, $primary, $primary-dark);
+  padding: 24px;
+  text-align: center;
+
+  @media (max-width: 640px) {
+    height: 40vh;
+    min-height: 250px;
+    padding: 20px 16px;
   }
 }
 
-// Background Effects
-.login__bg-gradient {
-  position: fixed;
+.login__pattern-overlay {
+  position: absolute;
   inset: 0;
-  z-index: 0;
-  background: radial-gradient(
-    circle at 50% 30%,
-    #4a2503 0%,
-    #1a0e05 40%,
-    #000000 80%
-  );
-}
-
-.login__bg-pattern {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  opacity: 0.2;
-  background-image: url("https://www.transparenttextures.com/patterns/stardust.png");
+  opacity: 0.1;
+  background-image: url("https://www.transparenttextures.com/patterns/cubes.png");
+  mix-blend-mode: overlay;
   pointer-events: none;
 }
 
-// Main Container
-.login__wrap {
+.login__top-content {
   position: relative;
   z-index: 10;
-  width: 100%;
-  max-width: 448px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 0;
-  box-sizing: border-box;
-  min-width: 0;
-  padding: 24px 16px;
-  padding-top: max(env(safe-area-inset-top, 32px), 32px);
-  padding-bottom: max(env(safe-area-inset-bottom, 4px), 4px);
-  min-height: 100dvh;
+  gap: 16px;
 
-  @media (min-width: 640px) {
-    padding: 32px 24px;
-    padding-top: 24px;
-    padding-bottom: 24px;
-    min-height: auto;
-    justify-content: flex-start;
-    gap: 32px;
+  @media (max-width: 640px) {
+    gap: 12px;
   }
 }
 
-// Hero Section
-.login__hero {
+.login__logo-icon {
   display: flex;
-  flex-direction: column;
+  height: 80px;
+  width: 80px;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  margin-bottom: 32px;
-  margin-top: 0;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
 
   @media (max-width: 640px) {
-    margin-bottom: 24px;
+    height: 70px;
+    width: 70px;
   }
 
-  @media (min-width: 641px) {
-    margin-bottom: 32px;
-  }
-}
+  .material-symbols-outlined {
+    font-size: 48px;
+    color: white;
 
-.login__logoContainer {
-  position: relative;
-  width: 112px;
-  height: 112px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 16px;
-  filter: drop-shadow(0 0 15px rgba(242, 127, 13, 0.6))
-    drop-shadow(0 0 30px rgba(242, 127, 13, 0.4));
-
-  @media (max-width: 640px) {
-    width: 96px;
-    height: 96px;
-    margin-bottom: 12px;
+    @media (max-width: 640px) {
+      font-size: 40px;
+    }
   }
 }
 
-.login__logo {
-  width: 100%;
-  height: 100%;
-  fill: currentColor;
-  color: $primary;
-}
-
-.login__logoAura {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: rgba(242, 127, 13, 0.2);
-  filter: blur(24px);
-  animation: pulse 2s ease-in-out infinite;
-}
-
-.login__headline {
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-
-  @media (max-width: 640px) {
-    gap: 6px;
-  }
-}
-
-.login__title {
-  font-size: 36px;
-  font-weight: 700;
+.login__brand-name {
+  font-size: 48px;
+  font-weight: 800;
   letter-spacing: -0.02em;
-  color: $text;
-  text-shadow: 0 0 10px rgba(242, 127, 13, 0.5),
-    0 0 20px rgba(242, 127, 13, 0.3);
+  color: white;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   margin: 0;
 
   @media (max-width: 640px) {
-    font-size: clamp(28px, 8vw, 32px);
+    font-size: clamp(36px, 10vw, 42px);
   }
 }
 
-.login__subtitle {
+.login__tagline {
   font-size: 18px;
-  color: rgba(242, 127, 13, 0.9);
   font-weight: 500;
-  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.9);
   margin: 0;
 
   @media (max-width: 640px) {
@@ -685,42 +620,34 @@ $text-muted: rgba(255, 255, 255, 0.62);
   }
 }
 
-// Login Card
-.login__card {
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  background: rgba(10, 10, 10, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 24px;
-  padding: 24px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+// Bottom Half: Dark Charcoal Form Area
+.login__bottom-section {
+  position: relative;
+  z-index: 20;
   display: flex;
+  flex: 1;
   flex-direction: column;
-  gap: 24px;
-  min-width: 0;
-  margin-top: auto;
-  margin-bottom: 0;
+  justify-content: flex-start;
+  background: $background-dark;
+  padding: 32px 24px;
+  padding-top: 40px;
+  border-radius: 3rem 3rem 0 0;
+  margin-top: -32px;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.3);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 
   @media (max-width: 640px) {
-    padding: 20px 18px;
-    gap: 20px;
-    border-radius: 20px;
-    margin-bottom: 0;
-    margin-top: auto;
-    padding-top: 60px;
+    padding: 24px 20px;
+    padding-top: 32px;
+    margin-top: -24px;
+    border-radius: 2rem 2rem 0 0;
   }
 
   @media (max-width: 420px) {
-    padding-top: 80px;
-  }
-
-  @media (min-width: 641px) {
-    padding: 32px;
-    margin-bottom: 32px;
-    margin-top: 0;
+    padding: 20px 16px;
+    padding-top: 28px;
+    margin-top: -20px;
   }
 }
 
@@ -729,31 +656,46 @@ $text-muted: rgba(255, 255, 255, 0.62);
   display: flex;
   flex-direction: column;
   gap: 20px;
+  width: 100%;
+  padding-top: 16px;
 
   @media (max-width: 640px) {
-    gap: 16px;
+    gap: 18px;
+    padding-top: 12px;
   }
 }
 
 // Input Groups
 .input-group {
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.input-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  margin-right: 8px;
+
+  @media (max-width: 640px) {
+    font-size: 13px;
+  }
 }
 
 .input-wrapper {
+  position: relative;
   display: flex;
   align-items: center;
   width: 100%;
-  max-width: 100%;
   box-sizing: border-box;
   border-radius: 9999px;
-  background: rgba(0, 0, 0, 0.8);
+  background: $surface-dark;
   border: 1px solid rgba(255, 255, 255, 0.1);
   height: 56px;
-  padding: 0 4px;
+  padding: 0;
   overflow: hidden;
   transition: all 0.3s ease;
-  min-width: 0;
 
   @media (max-width: 640px) {
     height: 52px;
@@ -761,7 +703,7 @@ $text-muted: rgba(255, 255, 255, 0.62);
 
   &:focus-within {
     border-color: $primary;
-    box-shadow: 0 0 15px rgba(242, 127, 13, 0.3);
+    box-shadow: 0 0 0 1px $primary;
   }
 }
 
@@ -770,62 +712,61 @@ $text-muted: rgba(255, 255, 255, 0.62);
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: $primary;
   flex-shrink: 0;
+  transition: color 0.3s ease;
 
   &--leading {
-    width: 48px;
-    padding-right: 16px;
-    padding-left: 4px;
-    border-left: 1px solid rgba(255, 255, 255, 0.05);
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: rgba(255, 255, 255, 0.4);
+    pointer-events: none;
 
-    @media (max-width: 640px) {
-      width: 44px;
-      padding-right: 12px;
+    .material-symbols-outlined {
+      font-size: 20px;
     }
   }
 
   &--trailing {
-    width: 40px;
-    padding-left: 8px;
-    padding-right: 8px;
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
     color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
-    transition: color 0.2s ease;
     background: transparent;
-  }
+    border: none;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 
-  &--trailing:hover {
-    color: $text;
-  }
+    &:hover {
+      color: white;
+    }
 
-  .material-symbols-outlined {
-    font-size: 24px;
-    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
-
-    @media (max-width: 640px) {
-      font-size: 22px;
+    .material-symbols-outlined {
+      font-size: 20px;
     }
   }
+}
 
-  &--trailing .material-symbols-outlined {
-    font-size: 20px;
-
-    @media (max-width: 640px) {
-      font-size: 18px;
-    }
-  }
+.input-wrapper:focus-within .input-icon--leading {
+  color: $primary;
 }
 
 .input-field {
   flex: 1;
   min-width: 0;
-  max-width: 100%;
+  width: 100%;
   box-sizing: border-box;
   background: transparent;
   border: none;
-  color: $text;
+  color: white;
   padding: 0 16px;
+  padding-right: 48px;
+  padding-left: 48px;
   height: 100%;
   font-size: 16px;
   font-weight: 400;
@@ -841,6 +782,12 @@ $text-muted: rgba(255, 255, 255, 0.62);
     opacity: 0.7;
     cursor: not-allowed;
   }
+
+  @media (max-width: 640px) {
+    font-size: 15px;
+    padding-right: 44px;
+    padding-left: 44px;
+  }
 }
 
 // Forgot Password Wrapper
@@ -849,76 +796,82 @@ $text-muted: rgba(255, 255, 255, 0.62);
   justify-content: flex-end;
   align-items: center;
   margin-top: -4px;
-  gap: 16px;
-  flex-wrap: wrap;
 
-  @media (max-width: 420px) {
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 6px;
+  @media (max-width: 640px) {
+    margin-top: -2px;
   }
 }
 
-// Forgot Password
-.forgot-password {
-  display: flex;
-  justify-content: flex-end;
-  margin: 0;
+.forgot-password-link {
+  font-size: 14px;
+  font-weight: 600;
+  color: $primary;
+  text-decoration: none;
+  transition: color 0.2s ease;
 
-  a {
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.4);
-    text-decoration: none;
-    transition: all 0.2s ease;
+  @media (max-width: 640px) {
+    font-size: 13px;
+  }
 
-    @media (max-width: 640px) {
-      font-size: 13px;
-    }
-
-    &:hover {
-      color: $primary;
-      text-decoration: underline;
-      text-decoration-color: rgba(242, 127, 13, 0.5);
-      text-underline-offset: 4px;
-    }
+  &:hover {
+    color: #ff9a3d;
   }
 }
 
 // Login Button
 .login-btn {
+  position: relative;
   margin-top: 8px;
   width: 100%;
-  max-width: 100%;
   box-sizing: border-box;
   height: 56px;
   border-radius: 9999px;
-  background: rgba(0, 0, 0, 1);
-  border: 2px solid $primary;
+  background: black;
+  border: none;
   color: $primary;
   font-weight: 700;
   font-size: 18px;
-  letter-spacing: 0.05em;
   cursor: pointer;
-  box-shadow: 0 0 20px rgba(242, 127, 13, 0.25);
+  box-shadow: 0 4px 16px rgba(242, 127, 13, 0.2);
   transition: all 0.3s ease;
-  transform: scale(1);
-  min-width: 0;
+  overflow: hidden;
 
   @media (max-width: 640px) {
     height: 52px;
     font-size: 16px;
-    margin-top: 4px;
+    margin-top: 6px;
   }
 
   &:hover {
-    background: $primary;
-    color: $text;
-    border-color: $primary;
-    box-shadow: 0 0 30px rgba(242, 127, 13, 0.6);
+    box-shadow: 0 4px 20px rgba(242, 127, 13, 0.3);
   }
 
   &:active {
-    transform: scale(0.95);
+    transform: scale(0.98);
+  }
+}
+
+.login-btn__gloss {
+  position: absolute;
+  inset: 0;
+  top: 0;
+  height: 50%;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.1), transparent);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.login-btn__content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+
+  .material-symbols-outlined {
+    font-size: 20px;
   }
 }
 
@@ -935,8 +888,8 @@ $text-muted: rgba(255, 255, 255, 0.62);
   width: 100%;
   height: 56px;
   border-radius: 9999px;
-  background: rgba(0, 0, 0, 0.6);
-  border: 2px solid rgba(242, 127, 13, 0.5);
+  background: $surface-dark;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: $primary;
   font-weight: 500;
   font-size: 16px;
@@ -955,8 +908,7 @@ $text-muted: rgba(255, 255, 255, 0.62);
 
   &:hover:not(:disabled) {
     background: rgba(242, 127, 13, 0.1);
-    border-color: rgba(242, 127, 13, 0.7);
-    box-shadow: 0 0 20px rgba(242, 127, 13, 0.3);
+    border-color: rgba(242, 127, 13, 0.5);
   }
 
   &:active:not(:disabled) {
@@ -982,10 +934,10 @@ $text-muted: rgba(255, 255, 255, 0.62);
   position: relative;
   display: flex;
   align-items: center;
-  padding: 8px 0;
+  padding: 32px 0;
 
   @media (max-width: 640px) {
-    padding: 6px 0;
+    padding: 24px 0;
   }
 
   &__line {
@@ -997,11 +949,12 @@ $text-muted: rgba(255, 255, 255, 0.62);
     flex-shrink: 0;
     margin: 0 16px;
     color: rgba(255, 255, 255, 0.5);
-    font-size: 14px;
+    font-size: 12px;
+    font-weight: 500;
 
     @media (max-width: 640px) {
       margin: 0 12px;
-      font-size: 13px;
+      font-size: 11px;
     }
   }
 }
@@ -1010,76 +963,86 @@ $text-muted: rgba(255, 255, 255, 0.62);
 .social-buttons {
   display: flex;
   justify-content: center;
-  gap: 16px;
+  gap: 24px;
+  margin-bottom: 16px;
+
+  @media (max-width: 640px) {
+    gap: 20px;
+    margin-bottom: 12px;
+  }
 }
 
 .social-btn {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.6);
+  background: $surface-dark;
   border: 1px solid rgba(255, 255, 255, 0.1);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.3s ease;
-  color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 
   @media (max-width: 640px) {
-    width: 52px;
-    height: 52px;
+    width: 44px;
+    height: 44px;
   }
 
   &:hover {
-    border-color: $primary;
-    color: $text;
-    box-shadow: 0 0 15px rgba(242, 127, 13, 0.4);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.2);
   }
 
   &__icon {
     width: 24px;
     height: 24px;
-    fill: currentColor;
 
     @media (max-width: 640px) {
       width: 22px;
       height: 22px;
     }
+
+    &--facebook {
+      fill: #1877F2;
+    }
   }
 }
 
-// Footer (now inside card)
+// Footer
 .login__footer {
-  text-align: right;
-  width: auto;
-  margin: 0;
-  padding: 0;
-  direction: rtl;
+  margin-top: auto;
+  padding-top: 16px;
+  text-align: center;
+
+  @media (max-width: 640px) {
+    padding-top: 12px;
+  }
 
   p {
-    font-size: 13px;
+    font-size: 14px;
     color: rgba(255, 255, 255, 0.4);
     margin: 0;
-    line-height: 1.4;
-    text-align: right;
+    line-height: 1.5;
 
     @media (max-width: 640px) {
-      font-size: 12px;
-      line-height: 1.3;
+      font-size: 13px;
     }
+  }
+}
 
-    a {
-      color: $text;
-      font-weight: 700;
-      text-decoration: none;
-      transition: all 0.2s ease;
+.login__footer-link {
+  font-weight: 700;
+  color: white;
+  text-decoration: underline;
+  text-decoration-color: $primary;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+  transition: color 0.2s ease;
 
-      &:hover {
-        color: $primary;
-        text-shadow: 0 0 10px rgba(242, 127, 13, 0.4);
-      }
-    }
+  &:hover {
+    color: $primary;
   }
 }
 
@@ -1098,149 +1061,31 @@ $text-muted: rgba(255, 255, 255, 0.62);
   margin-bottom: 16px;
   text-align: right;
 
+  @media (max-width: 640px) {
+    font-size: 13px;
+    padding: 12px 14px;
+  }
+
   .material-symbols-outlined {
     font-size: 18px;
     flex-shrink: 0;
+
+    @media (max-width: 640px) {
+      font-size: 16px;
+    }
   }
 }
 
-// Responsive
-@media (max-width: 640px) {
-  .login__wrap {
-    padding: 20px 16px;
-    padding-top: max(env(safe-area-inset-top, 24px), 24px);
-    padding-bottom: max(env(safe-area-inset-bottom, 24px), 24px);
-  }
-
-  .login__card {
-    margin-bottom: 20px;
-  }
-
-  .login__footer {
-    margin-bottom: 20px;
-  }
-}
-
-@media (max-width: 520px) {
-  .login__wrap {
-    padding: 16px 14px;
-    padding-top: max(env(safe-area-inset-top, 20px), 20px);
-    padding-bottom: max(env(safe-area-inset-bottom, 20px), 20px);
-  }
-
-  .login__logoContainer {
-    width: 88px;
-    height: 88px;
-    margin-bottom: 10px;
-  }
-
-  .login__title {
-    font-size: clamp(26px, 7vw, 30px);
-  }
-
-  .login__subtitle {
-    font-size: clamp(13px, 3.5vw, 15px);
-  }
-
-  .login__card {
-    padding: 18px 16px;
-    gap: 18px;
-    margin-bottom: 18px;
-  }
-
-  .login__form {
-    gap: 14px;
-  }
-
-  .login-btn {
-    height: 50px;
-    font-size: 15px;
-  }
-
-  .input-wrapper {
-    height: 50px;
-  }
-
-  .login__footer {
-    margin-bottom: 18px;
-  }
-}
-
-@media (max-width: 420px) {
-  .login__wrap {
-    padding: 14px 12px;
-    padding-top: max(env(safe-area-inset-top, 16px), 16px);
-    padding-bottom: max(env(safe-area-inset-bottom, 16px), 16px);
-  }
-
-  .login__logoContainer {
-    width: 80px;
-    height: 80px;
-    margin-bottom: 8px;
-  }
-
-  .login__title {
-    font-size: clamp(24px, 6.5vw, 28px);
-  }
-
-  .login__subtitle {
-    font-size: clamp(12px, 3vw, 14px);
-  }
-
-  .login__card {
-    padding: 16px 14px;
-    gap: 16px;
-    border-radius: 18px;
-    margin-bottom: 16px;
-  }
-
-  .login__form {
-    gap: 12px;
-  }
-
-  .login-btn {
-    height: 48px;
-    font-size: 14px;
-  }
-
-  .input-wrapper {
-    height: 48px;
-  }
-
-  .input-icon--leading {
-    width: 40px;
-    padding-right: 10px;
-  }
-
-  .input-icon .material-symbols-outlined {
-    font-size: 20px;
-  }
-
-  .input-icon--trailing .material-symbols-outlined {
-    font-size: 16px;
-  }
-
-  .biometric-btn {
-    height: 48px;
-    font-size: 12px;
-  }
-
-  .social-btn {
-    width: 48px;
-    height: 48px;
-  }
-
-  .social-btn__icon {
-    width: 20px;
-    height: 20px;
-  }
-
-  .login__footer {
-    margin-bottom: 16px;
-  }
-
-  .login__hero {
-    padding-top: 16px;
-  }
+// Decorative background element for bottom
+.login__bg-decoration {
+  pointer-events: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 128px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.4), transparent);
+  z-index: 1;
 }
 </style>
+

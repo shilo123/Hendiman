@@ -1,24 +1,32 @@
 <template>
   <section class="jobs" id="jobs">
     <!-- Header -->
-    <div class="jobs__head">
-      <div class="jobs__headText">
-        <!-- <div class="jobs__kicker">HENDIMAN</div> -->
-        <h2 class="jobs__title">עבודות</h2>
-        <p class="jobs__sub">
-          {{
-            isHendiman
-              ? "עבודות לפי ההתמחויות שלך · סינון לפי סטטוס ומרחק"
-              : "כל הקריאות · צפייה וסטטוסים"
-          }}
-        </p>
+    <header class="jobs__header">
+      <div class="jobs__header-content">
+        <div>
+          <h1 class="jobs__header-title">העבודות שלי</h1>
+          <p class="jobs__header-subtitle">
+            {{ filteredJobs.length }} משימות ממתינות לטיפול
+          </p>
+        </div>
+        <button
+          v-if="isHendiman"
+          class="jobs__filter-btn"
+          type="button"
+          @click="openFilterModal"
+        >
+          <span class="material-symbols-outlined">filter_list</span>
+        </button>
+        <button
+          v-else
+          class="jobs__filter-btn"
+          type="button"
+          @click="$emit('refresh')"
+        >
+          <span class="material-symbols-outlined">refresh</span>
+        </button>
       </div>
-
-      <div class="refreshBtn" @click="$emit('refresh')">
-        <span class="refreshBtn__ic" aria-hidden="true">↻</span>
-        <span class="refreshBtn__txt">רענן</span>
-      </div>
-    </div>
+    </header>
 
     <!-- Filters (handyman only) -->
     <div
@@ -380,77 +388,184 @@
       </div>
     </div>
 
-    <!-- Jobs list -->
-    <div
-      ref="jobTrack"
-      class="jobs__list"
-      @scroll.passive="onJobTrackScroll"
-    >
-      <article
-        v-for="job in filteredJobs"
-        :key="job.id || job._id"
-        class="job"
-        :class="{
-          'job--urgent': job.urgent || job.isUrgent,
-          'job--special': job.handymanIdSpecial,
-        }"
-      >
-        <div class="job__sheen" aria-hidden="true"></div>
-
-        <div class="job__top">
-          <div class="job__who">
-            <div class="job__iconWrapper">
-              <span class="material-symbols-outlined job__icon">
-                {{ getJobIcon(job) }}
-              </span>
-              <span class="job__iconRing"></span>
-
-              <button
-                v-if="!isHendiman && isClientJob(job)"
-                class="job__iconBtn"
-                type="button"
-                aria-label="פרטים"
-                @click.stop="toggleJobMenu(job.id || job._id)"
-              >
-                <span class="material-symbols-outlined">info</span>
-              </button>
+    <!-- Main Content -->
+    <main class="jobs__main">
+      <!-- Urgent Jobs Section -->
+      <section v-if="urgentJobs.length > 0" class="jobs__urgent-section">
+        <div class="jobs__section-header">
+          <span class="jobs__section-dot"></span>
+          <h2 class="jobs__section-title">דחיפות גבוהה</h2>
+        </div>
+        <article
+          v-for="job in urgentJobs"
+          :key="job.id || job._id"
+          class="job job--urgent-card"
+        >
+          <div class="job__urgent-glow"></div>
+          <div class="job__content">
+            <div class="job__header">
+              <div class="job__header-left">
+                <div class="job__icon-box">
+                  <span class="material-symbols-outlined job__icon">
+                    {{ getJobIcon(job) }}
+                  </span>
+                </div>
+                <div class="job__info">
+                  <h3 class="job__title" :title="getJobDisplayName(job)">
+                    {{ getJobDisplayName(job) }}
+                  </h3>
+                  <div class="job__location">
+                    <span class="material-symbols-outlined">location_on</span>
+                    <span>{{ formatJobLocation(job) }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="job__priority-badge">
+                <span class="material-symbols-outlined">priority_high</span>
+              </div>
             </div>
 
-            <div class="job__info">
-              <h3 class="job__title" :title="getJobDisplayName(job)">
+            <div class="job__tags" v-if="getJobChips(job).length">
+              <span
+                v-for="chip in getJobChips(job)"
+                :key="chip.text"
+                class="job__tag"
+              >
+                {{ chip.text }}
+              </span>
+            </div>
+
+            <div class="job__footer">
+              <div class="job__time">
+                <span class="material-symbols-outlined">schedule</span>
+                <span>{{ getTimeAgo(job) || "לפני זמן מה" }}</span>
+              </div>
+              <button
+                class="job__view-btn"
+                type="button"
+                @click="$emit('view', job)"
+              >
+                <span>צפייה במשימה</span>
+                <span class="material-symbols-outlined">arrow_forward</span>
+              </button>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <!-- Regular Jobs Section -->
+      <section v-if="regularJobs.length > 0" class="jobs__regular-section">
+        <div class="jobs__section-header">
+          <h2 class="jobs__section-title">משימות נוספות</h2>
+        </div>
+        <div class="jobs__regular-list">
+          <article
+            v-for="job in regularJobs"
+            :key="job.id || job._id"
+            class="job job--regular-card"
+          >
+            <div class="job__hover-glow"></div>
+            <div class="job__content">
+              <div class="job__header">
+                <div class="job__icon-box job__icon-box--regular">
+                  <span class="material-symbols-outlined job__icon">
+                    {{ getJobIcon(job) }}
+                  </span>
+                </div>
+                <button
+                  v-if="!isHendiman && isClientJob(job)"
+                  class="job__menu-btn"
+                  type="button"
+                  @click.stop="toggleJobMenu(job.id || job._id)"
+                >
+                  <span class="material-symbols-outlined">more_horiz</span>
+                </button>
+              </div>
+
+              <h3 class="job__title job__title--regular" :title="getJobDisplayName(job)">
                 {{ getJobDisplayName(job) }}
               </h3>
 
-              <div class="job__meta">
-                <font-awesome-icon
-                  :icon="['fas', 'location-dot']"
-                  class="job__metaIc"
-                />
-                <span class="job__metaTxt">{{ formatJobLocation(job) }}</span>
+              <div class="job__location job__location--regular">
+                <span class="material-symbols-outlined">location_on</span>
+                <span class="job__location-text">{{ formatJobLocation(job) }}</span>
               </div>
 
-              <div class="job__status" v-if="getStatusLabel(job.status)">
-                <span class="job__statusText">{{
-                  getStatusLabel(job.status)
-                }}</span>
+              <div class="job__tags job__tags--regular" v-if="getJobChips(job).length">
+                <span
+                  v-for="chip in getJobChips(job)"
+                  :key="chip.text"
+                  class="job__tag job__tag--regular"
+                >
+                  {{ chip.text }}
+                </span>
               </div>
-              <div v-else class="job__status job__status--empty">
-                {{ job.status || "פתוחה" }}
+
+              <div class="job__footer job__footer--regular">
+                <span class="job__time job__time--regular">
+                  {{ getTimeAgo(job) || "לפני זמן מה" }}
+                </span>
+                <button
+                  class="job__view-btn job__view-btn--regular"
+                  type="button"
+                  @click="$emit('view', job)"
+                >
+                  <span class="material-symbols-outlined">arrow_forward</span>
+                </button>
               </div>
             </div>
-          </div>
 
-          <span class="job__spacer" aria-hidden="true"></span>
-
-          <button
-            class="job__detailsBtn"
-            type="button"
-            @click="$emit('view', job)"
-          >
-            פרטים
-            <span class="job__detailsArrow" aria-hidden="true">›</span>
-          </button>
+            <!-- Client job menu dropdown -->
+            <div
+              v-if="!isHendiman && isClientJob(job)"
+              class="job__menu"
+              :class="{
+                'job__menu--open': openJobMenuId === job.id || openJobMenuId === job._id,
+              }"
+            >
+              <div
+                v-if="openJobMenuId === (job.id || job._id)"
+                class="job__menu-dropdown"
+                @click.stop
+              >
+                <button
+                  class="job__menu-item"
+                  type="button"
+                  @click="handleEditJob(job)"
+                >
+                  <span class="job__menu-icon">✏️</span>
+                  עריכה
+                </button>
+                <button
+                  class="job__menu-item"
+                  type="button"
+                  @click="handleDeleteJob(job)"
+                >
+                  <span class="job__menu-icon">🗑️</span>
+                  מחיקה
+                </button>
+                <button
+                  class="job__menu-item"
+                  type="button"
+                  @click="handleViewJob(job)"
+                >
+                  <span class="job__menu-icon">👁️</span>
+                  צפייה
+                </button>
+              </div>
+            </div>
+          </article>
+          <div class="jobs__regular-spacer"></div>
         </div>
+      </section>
+
+      <!-- Empty State -->
+      <div v-if="filteredJobs.length === 0" class="empty">
+        <div class="empty__ic" aria-hidden="true">🧰</div>
+        <div class="empty__title">אין עבודות להצגה כרגע</div>
+        <div class="empty__sub">נסה לרענן או לשנות סינון.</div>
+      </div>
+    </main>
 
         <!-- Client job menu dropdown -->
         <div
@@ -492,76 +607,6 @@
           </div>
         </div>
 
-        <div class="job__cats" v-if="getJobChips(job).length" aria-label="תגיות">
-          <div class="job__catsTrack" role="list">
-            <span
-              v-for="chip in getJobChips(job)"
-              :key="chip.text"
-              class="job__cat"
-              :class="chip.class"
-              role="listitem"
-            >
-              {{ chip.text }}
-            </span>
-          </div>
-        </div>
-
-        <div class="job__actions">
-          <button
-            v-if="isHendiman && job.status === 'quoted'"
-            class="jobBtn jobBtn--primary"
-            type="button"
-            @click="$emit('quotation', job)"
-          >
-            <font-awesome-icon :icon="['fas', 'money-bill-wave']" class="jobBtn__ic" />
-            תציע מחיר
-          </button>
-          <button
-            v-else-if="isHendiman && job.status === 'open'"
-            class="jobBtn jobBtn--primary"
-            type="button"
-            @click="$emit('accept', job)"
-          >
-            <font-awesome-icon :icon="['fas', 'check']" class="jobBtn__ic" />
-            קבל
-          </button>
-          <button
-            v-else
-            class="jobBtn jobBtn--primary"
-            type="button"
-            @click="$emit('view', job)"
-          >
-            <font-awesome-icon :icon="['fas', 'eye']" class="jobBtn__ic" />
-            צפייה
-          </button>
-
-          <button
-            v-if="isHendiman && job.status === 'open'"
-            class="jobBtn jobBtn--skip"
-            type="button"
-            @click="$emit('skip', job)"
-          >
-            <font-awesome-icon :icon="['fas', 'forward']" class="jobBtn__ic" />
-            דלג
-          </button>
-          <button
-            v-else-if="!isHendiman && isClientJob(job)"
-            class="jobBtn jobBtn--edit"
-            type="button"
-            @click="handleEditJob(job)"
-          >
-            <font-awesome-icon :icon="['fas', 'edit']" class="jobBtn__ic" />
-            ערוך
-          </button>
-        </div>
-      </article>
-
-      <div v-if="!filteredJobs || filteredJobs.length === 0" class="empty">
-        <div class="empty__ic" aria-hidden="true">🧰</div>
-        <div class="empty__title">אין עבודות להצגה כרגע</div>
-        <div class="empty__sub">נסה לרענן או לשנות סינון.</div>
-      </div>
-    </div>
 
     <!-- Pagination -->
     <div
@@ -667,6 +712,18 @@ export default {
         ? this.localMaxKm
         : this.handymanFilters.maxKm;
     },
+    urgentJobs() {
+      if (!this.filteredJobs) return [];
+      return this.filteredJobs.filter(
+        (job) => job && (job.urgent || job.isUrgent)
+      );
+    },
+    regularJobs() {
+      if (!this.filteredJobs) return [];
+      return this.filteredJobs.filter(
+        (job) => job && !job.urgent && !job.isUrgent
+      );
+    },
   },
   watch: {
     "handymanFilters.maxKm"(newVal) {
@@ -690,6 +747,7 @@ export default {
       // no-op (carousel removed)
     },
     getJobDisplayName(job) {
+      if (!job) return "ללא שם";
       if (
         Array.isArray(job.subcategoryInfo) &&
         job.subcategoryInfo.length > 0
@@ -713,12 +771,14 @@ export default {
       );
     },
     getJobIcon(job) {
+      if (!job) return "construction";
       if (job.urgent || job.isUrgent) return "emergency";
       if (job.handymanIdSpecial) return "star";
       if (job.status === "quoted") return "attach_money";
       return "construction";
     },
     formatJobLocation(job) {
+      if (!job) return "לא צוין";
       const location = job.locationText || "";
       const distance = this.distanceLabel(job);
       
@@ -731,6 +791,7 @@ export default {
       return location || "לא צוין";
     },
     getJobChips(job) {
+      if (!job) return [];
       const chips = [];
       
       if (job.urgent || job.isUrgent) {
@@ -782,7 +843,7 @@ export default {
       }
     },
     isClientJob(job) {
-      if (!this.currentUserId || this.isHendiman) return false;
+      if (!job || !this.currentUserId || this.isHendiman) return false;
       return (
         job.clientId && String(job.clientId) === String(this.currentUserId)
       );
@@ -850,6 +911,7 @@ export default {
       return R * c;
     },
     distanceLabel(job) {
+      if (!job) return null;
       const d =
         job?.distanceKm ??
         (this.handymanCoords &&
@@ -882,7 +944,7 @@ export default {
       return labels[status] || status;
     },
     getTimeAgo(job) {
-      if (!job.createdAt) return null;
+      if (!job || !job.createdAt) return null;
       const createdAt = new Date(job.createdAt);
       const now = new Date();
       const diffMs = now - createdAt;
@@ -945,15 +1007,14 @@ export default {
 <style lang="scss" scoped>
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 
-$bg: #0b0b0f;
-$card: rgba(255, 255, 255, 0.06);
-$card2: rgba(255, 255, 255, 0.085);
-$stroke: rgba(255, 255, 255, 0.12);
+$bg: #050505;
+$card-dark: #121212;
+$card-highlight: #1E1E1E;
 $text: rgba(255, 255, 255, 0.92);
+$text-secondary: rgba(161, 161, 170, 1);
 $muted: rgba(255, 255, 255, 0.62);
-$orange: #ff6a00;
-$orange2: #ff8a2b;
-$orange3: #ffb36b;
+$primary: #F97316;
+$primary-dark: #C2410C;
 $danger: #ff3b3b;
 
 .material-symbols-outlined {
@@ -973,142 +1034,90 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   min-height: 0;
   isolation: isolate;
   box-sizing: border-box;
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0;
+  background: $bg;
+  color: white;
+  font-family: 'Heebo', sans-serif;
   min-width: 0;
-  
-  @media (max-width: 420px) {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-  }
+  min-height: 100vh;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Header */
-.jobs__head {
-  position: relative;
-  z-index: 1;
+.jobs__header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(5, 5, 5, 0.8);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: env(safe-area-inset-top, 0);
+  direction: rtl;
+}
+
+.jobs__header-content {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 0 16px 10px;
-  background: transparent !important;
-  border: none !important;
-  border-bottom: none !important;
-  direction: rtl;
-  text-align: right;
+  padding: 16px 20px;
 
-  @media (max-width: 768px) {
-    padding: 0 16px 10px;
-    background: transparent !important;
-    border: none !important;
-  }
-  
-  @media (max-width: 420px) {
-    padding: 0 12px 10px;
-    background: transparent !important;
-    border: none !important;
-    border-bottom: none !important;
+  @media (max-width: 640px) {
+    padding: 14px 16px;
   }
 }
 
-.jobs__headText {
-  min-width: 0;
-}
-.jobs__kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 1100;
-  letter-spacing: 0.18em;
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.55);
-  margin-bottom: 4px;
-
-  &:before {
-    content: "";
-    width: 10px;
-    height: 10px;
-    border-radius: 3px;
-    background: linear-gradient(135deg, $orange, $orange2);
-    box-shadow: 0 10px 26px rgba($orange, 0.35);
-  }
-}
-.jobs__title {
+.jobs__header-title {
   margin: 0;
-  font-size: 19px;
-  font-weight: 1100;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: white;
 
-  @media (max-width: 768px) {
-    font-size: 15.5px;
-  }
-  
-  @media (max-width: 420px) {
-    font-size: 16px;
+  @media (max-width: 640px) {
+    font-size: 20px;
   }
 }
-.jobs__sub {
-  margin: 6px 0 0;
-  color: $muted;
-  font-weight: 900;
+
+.jobs__header-subtitle {
+  margin: 0;
+  margin-top: 4px;
   font-size: 12px;
-  line-height: 1.25;
+  font-weight: 500;
+  color: rgba(156, 163, 175, 1);
 
-  @media (max-width: 768px) {
-    font-size: 10px;
-  }
-  
-  @media (max-width: 420px) {
-    font-size: 10px;
-    margin-top: 4px;
+  @media (max-width: 640px) {
+    font-size: 11px;
   }
 }
 
-/* Refresh Button - Simple orange div */
-.refreshBtn {
-  cursor: pointer;
-  display: inline-flex;
+.jobs__filter-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: rgba(209, 213, 219, 1);
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border-radius: 12px;
-  background: $orange;
-  color: #0b0b0f;
-  font-weight: 1100;
-  font-size: 13px;
-  transition: opacity 0.2s ease, transform 0.15s ease;
-  user-select: none;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
 
-  &:active {
-    transform: scale(0.98);
-    opacity: 0.9;
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
   }
-  
-  @media (max-width: 420px) {
-    padding: 8px 14px;
-    font-size: 12px;
-    gap: 6px;
-  }
-}
 
-.refreshBtn__ic {
-  font-size: 16px;
-  display: inline-block;
-  
-  @media (max-width: 420px) {
-    font-size: 14px;
+  .material-symbols-outlined {
+    font-size: 24px;
   }
-}
 
-.refreshBtn__txt {
-  @media (max-width: 430px) {
-    display: none;
+  @media (max-width: 640px) {
+    width: 36px;
+    height: 36px;
+
+    .material-symbols-outlined {
+      font-size: 20px;
+    }
   }
 }
 
@@ -1118,7 +1127,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   position: relative;
   border-radius: 14px;
   padding: 10px 12px;
-  border: 1px solid rgba($orange, 0.22);
+  border: 1px solid rgba($primary, 0.22);
   background: rgba(255, 255, 255, 0.06);
   color: $text;
   font-weight: 1100;
@@ -1141,16 +1150,16 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
     border-radius: inherit;
     scale: 0;
     z-index: -1;
-    background: rgba($orange, 0.2);
+    background: rgba($primary, 0.2);
     transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
   }
 
   &:hover {
     transform: translateY(-1px);
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35),
-      0 0 0 1px rgba($orange, 0.15) inset;
+      0 0 0 1px rgba($primary, 0.15) inset;
     background: rgba(255, 255, 255, 0.1);
-    border-color: rgba($orange, 0.35);
+    border-color: rgba($primary, 0.35);
   }
 
   &:hover::before {
@@ -1182,28 +1191,28 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   }
 
   &--primary {
-    color: $orange2;
-    border: 2px solid $orange2;
+    color: $primary-dark;
+    border: 2px solid $primary-dark;
     background: transparent;
-    box-shadow: 0 8px 24px rgba($orange, 0.15);
+    box-shadow: 0 8px 24px rgba($primary, 0.15);
 
     &::before {
-      background: linear-gradient(135deg, $orange, $orange2);
+      background: linear-gradient(135deg, $primary, $primary-dark);
     }
 
     &:hover {
       color: #0b0b0f;
       scale: 1.05;
-      box-shadow: 0 12px 32px rgba($orange, 0.4),
-        0 0 0 1px rgba($orange, 0.2) inset;
-      border-color: $orange;
+      box-shadow: 0 12px 32px rgba($primary, 0.4),
+        0 0 0 1px rgba($primary, 0.2) inset;
+      border-color: $primary;
       background: transparent;
     }
 
     .btn__ic {
-      background: rgba($orange, 0.15);
-      border-color: rgba($orange, 0.3);
-      color: $orange2;
+      background: rgba($primary, 0.15);
+      border-color: rgba($primary, 0.3);
+      color: $primary-dark;
     }
 
     &:hover .btn__ic {
@@ -1272,7 +1281,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 
 .panel {
   border-radius: 16px;
-  border: 1px solid rgba($orange, 0.18);
+  border: 1px solid rgba($primary, 0.18);
   background: rgba(0, 0, 0, 0.22);
   padding: 10px;
   box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
@@ -1303,7 +1312,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 .link {
   border: none;
   background: transparent;
-  color: $orange3;
+  color: $primary;
   font-weight: 1100;
   cursor: pointer;
   border-radius: 10px;
@@ -1312,12 +1321,12 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   &--small {
     font-size: 10px;
     padding: 6px 10px;
-    border: 1px solid rgba($orange, 0.22);
-    background: rgba($orange, 0.08);
+    border: 1px solid rgba($primary, 0.22);
+    background: rgba($primary, 0.08);
   }
 
   &:hover {
-    background: rgba($orange, 0.14);
+    background: rgba($primary, 0.14);
   }
   &:active {
     transform: scale(0.98);
@@ -1352,7 +1361,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 
   &:hover {
     background: rgba(255, 255, 255, 0.06);
-    border-color: rgba($orange, 0.25);
+    border-color: rgba($primary, 0.25);
     transform: translateY(-1px);
   }
   &:active {
@@ -1363,13 +1372,13 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
     width: 18px;
     height: 18px;
     cursor: pointer;
-    accent-color: $orange;
+    accent-color: $primary;
     margin: 0;
     flex-shrink: 0;
   }
 
   input[type="radio"]:checked + .radio-label {
-    color: $orange3;
+    color: $primary;
     font-weight: 1100;
   }
 }
@@ -1391,10 +1400,10 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 .range-value {
   font-size: 13px;
   font-weight: 1100;
-  color: $orange2;
+  color: $primary-dark;
   padding: 8px 14px;
-  background: rgba($orange, 0.14);
-  border: 1px solid rgba($orange, 0.24);
+  background: rgba($primary, 0.14);
+  border: 1px solid rgba($primary, 0.24);
   border-radius: 12px;
   display: inline-block;
 }
@@ -1415,19 +1424,19 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    background: linear-gradient(135deg, $orange, $orange2);
+    background: linear-gradient(135deg, $primary, $primary-dark);
     cursor: pointer;
     border: 2px solid $bg;
-    box-shadow: 0 8px 18px rgba($orange, 0.35);
+    box-shadow: 0 8px 18px rgba($primary, 0.35);
   }
   &::-moz-range-thumb {
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    background: linear-gradient(135deg, $orange, $orange2);
+    background: linear-gradient(135deg, $primary, $primary-dark);
     cursor: pointer;
     border: 2px solid $bg;
-    box-shadow: 0 8px 18px rgba($orange, 0.35);
+    box-shadow: 0 8px 18px rgba($primary, 0.35);
   }
 }
 
@@ -1460,7 +1469,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   flex: 1;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid rgba($orange, 0.26);
+  border: 1px solid rgba($primary, 0.26);
   background: rgba(255, 255, 255, 0.06);
   color: $text;
   font-size: 14px;
@@ -1471,8 +1480,8 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 
   &:focus {
     outline: none;
-    border-color: rgba($orange, 0.7);
-    box-shadow: 0 0 0 4px rgba($orange, 0.18);
+    border-color: rgba($primary, 0.7);
+    box-shadow: 0 0 0 4px rgba($primary, 0.18);
     background: rgba(255, 255, 255, 0.08);
   }
   &::placeholder {
@@ -1480,156 +1489,341 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   }
 }
 
-/* Jobs list - Similar to HandymenList */
-.jobs__list {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  box-sizing: border-box;
+/* Main Content */
+.jobs__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding-bottom: 40px;
+  padding-bottom: calc(40px + env(safe-area-inset-bottom, 0));
 
-  /* Base: use spacing like HandymenList track */
-  padding: 0 16px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
-  overflow-y: auto;
-  overflow-x: visible;
-  min-height: 0;
-
-  @media (min-width: 769px) {
-    flex: 1;
+  @media (max-width: 640px) {
+    gap: 24px;
+    padding-bottom: 32px;
+    padding-bottom: calc(32px + env(safe-area-inset-bottom, 0));
   }
+}
 
-  @media (max-width: 420px) {
-    padding: 0 12px;
-    gap: 12px;
-    overflow-x: visible;
-    grid-template-columns: minmax(0, 1fr);
-  }
+/* Section Headers */
+.jobs__section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 0 20px;
 
-  /* Mobile: not carousel */
-  @media (max-width: 768px) {
+  @media (max-width: 640px) {
     padding: 0 16px;
-    overflow-y: auto;
-    overflow-x: visible;
-    min-height: 0;
-    grid-template-columns: minmax(0, 1fr);
+    margin-bottom: 12px;
+  }
+}
+
+.jobs__section-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: $primary;
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.8);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.jobs__section-title {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(156, 163, 175, 1);
+
+  @media (max-width: 640px) {
+    font-size: 12px;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Urgent Section */
+.jobs__urgent-section {
+  padding: 16px 20px 0;
+
+  @media (max-width: 640px) {
+    padding: 12px 16px 0;
   }
 }
 
 /* (carousel wrappers removed) */
 
-/* Job card - Beautiful but different from HandymenList */
-.job {
-  direction: rtl;
-  flex: 0 0 auto;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  border-radius: 20px;
-  padding: 14px;
-  background: linear-gradient(
-    135deg,
-    rgba(30, 30, 50, 0.85),
-    rgba(15, 15, 25, 0.95)
-  );
-  border: 1.5px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 
-    0 8px 24px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+/* Urgent Job Card */
+.job--urgent-card {
   position: relative;
-  display: grid;
-  grid-template-rows: auto auto 1fr;
-  gap: 12px;
-  color: rgba(255, 255, 255, 0.92);
-  transition: transform 0.2s ease, border-color 0.2s ease,
-    box-shadow 0.2s ease;
-  box-sizing: border-box;
+  background: #121212;
+  border-radius: 1.5rem;
+  padding: 24px;
+  box-shadow: 0 0 40px -5px rgba(249, 115, 22, 0.25);
+  overflow: hidden;
+  direction: rtl;
+  margin-bottom: 16px;
 
-  &:hover {
-    transform: translateY(-1px);
-    border-color: rgba($orange, 0.3);
-    box-shadow: 
-      0 12px 32px rgba(0, 0, 0, 0.5),
-      inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  }
-
-  &--urgent {
-    border-bottom: 3px solid rgba($danger, 0.75);
-    animation: urgentBorderPulse 2s ease-in-out infinite;
-  }
-  &--special {
-    border-bottom: 3px solid rgba(255, 215, 0, 0.7);
-    animation: specialBorderPulse 2s ease-in-out infinite;
-  }
-  &--urgent.job--special {
-    border-bottom: 3px solid rgba(255, 140, 0, 0.8);
-    animation: urgentSpecialBorderPulse 2s ease-in-out infinite;
+  @media (max-width: 640px) {
+    padding: 20px;
+    border-radius: 1.25rem;
+    margin-bottom: 12px;
   }
 
   &::before {
     content: "";
     position: absolute;
-    inset: 0;
-    border-radius: 20px;
+    inset: -1px;
+    border-radius: 1.55rem;
+    padding: 2px;
+    background: linear-gradient(135deg, #F97316, rgba(249, 115, 22, 0.1), rgba(255, 255, 255, 0.05));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
     pointer-events: none;
-    background: radial-gradient(
-      circle at 85% 15%,
-      rgba(249, 115, 22, 0.08),
-      transparent 50%
-    );
-    opacity: 0.6;
+  }
+}
+
+.job__urgent-glow {
+  position: absolute;
+  right: -80px;
+  top: -80px;
+  width: 256px;
+  height: 256px;
+  background: rgba(249, 115, 22, 0.1);
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  transition: background 0.5s ease;
+}
+
+.job--urgent-card:hover .job__urgent-glow {
+  background: rgba(249, 115, 22, 0.15);
+}
+
+.job__content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Job Header */
+.job__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.job__header-left {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+
+  @media (max-width: 640px) {
+    gap: 12px;
+  }
+}
+
+.job__icon-box {
+  width: 56px;
+  height: 56px;
+  border-radius: 1rem;
+  background: linear-gradient(to bottom right, rgba(249, 115, 22, 0.2), rgba(249, 115, 22, 0.05));
+  border: 1px solid rgba(249, 115, 22, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(249, 115, 22, 0.05);
+  flex-shrink: 0;
+
+  @media (max-width: 640px) {
+    width: 48px;
+    height: 48px;
+  }
+}
+
+.job__icon {
+  font-size: 28px;
+  color: $primary;
+
+  @media (max-width: 640px) {
+    font-size: 24px;
+  }
+}
+
+.job__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.job__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: white;
+  margin-bottom: 6px;
+
+  @media (max-width: 640px) {
+    font-size: 18px;
+  }
+}
+
+.job__location {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: rgba(161, 161, 170, 1);
+
+  .material-symbols-outlined {
+    font-size: 16px;
+    color: $primary;
   }
 
-  /* Mobile responsive */
-  @media (max-width: 768px) {
-    padding: 12px;
-    border-radius: 18px;
-    gap: 10px;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    flex: 1 1 auto;
-    box-sizing: border-box;
+  @media (max-width: 640px) {
+    font-size: 13px;
   }
-  
-  /* Small mobile - 420px and below */
-  @media (max-width: 420px) {
-    padding: 12px;
-    border-radius: 16px;
-    gap: 10px;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-    
-    &::before {
-      border-radius: 16px;
+}
+
+.job__priority-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(249, 115, 22, 0.1);
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $primary;
+  flex-shrink: 0;
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+
+  @media (max-width: 640px) {
+    width: 28px;
+    height: 28px;
+
+    .material-symbols-outlined {
+      font-size: 16px;
     }
   }
 }
 
-.job__sheen {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  background: radial-gradient(
-      700px 200px at 20% 0%,
-      rgba($orange, 0.12),
-      transparent 60%
-    ),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 45%);
-  opacity: 0.85;
-  pointer-events: none;
-  z-index: 0;
+/* Job Tags */
+.job__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+
+  @media (max-width: 640px) {
+    gap: 6px;
+    margin-bottom: 20px;
+  }
 }
 
-.job__header,
-.job__meta,
-.chips,
+.job__tag {
+  padding: 6px 12px;
+  border-radius: 0.5rem;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(209, 213, 219, 1);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+
+  @media (max-width: 640px) {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+}
+
+/* Job Footer */
 .job__footer {
-  position: relative;
-  z-index: 1;
+  margin-top: auto;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  @media (max-width: 640px) {
+    padding-top: 16px;
+  }
+}
+
+.job__time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(107, 114, 128, 1);
+
+  .material-symbols-outlined {
+    font-size: 14px;
+  }
+
+  @media (max-width: 640px) {
+    font-size: 11px;
+  }
+}
+
+.job__view-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: $primary;
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 12px 24px;
+  border-radius: 0.75rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 15px -3px rgba(249, 115, 22, 0.15);
+
+  &:hover {
+    background: #ea580c;
+    box-shadow: 0 0 20px rgba(249, 115, 22, 0.4);
+  }
+
+  .material-symbols-outlined {
+    font-size: 18px;
+    transform: rotate(180deg);
+    transition: transform 0.2s ease;
+  }
+
+  &:hover .material-symbols-outlined {
+    transform: rotate(180deg) translateX(-4px);
+  }
+
+  @media (max-width: 640px) {
+    padding: 10px 20px;
+    font-size: 13px;
+    gap: 6px;
+
+    .material-symbols-outlined {
+      font-size: 16px;
+    }
+  }
 }
 
 @keyframes urgentBorderPulse {
@@ -1660,218 +1854,241 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   }
 }
 
-.job__top {
+/* Regular Jobs Section */
+.jobs__regular-section {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  min-width: 0;
-  width: 100%;
-  
-  @media (max-width: 420px) {
-    gap: 8px;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.jobs__regular-list {
+  display: flex;
+  overflow-x: auto;
+  gap: 16px;
+  padding: 0 20px 40px;
+  scroll-snap-type: x mandatory;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  @media (max-width: 640px) {
+    padding: 0 16px 32px;
+    gap: 12px;
   }
 }
 
-.job__who {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  
-  @media (max-width: 420px) {
-    gap: 10px;
-  }
+.jobs__regular-spacer {
+  width: 1px;
+  flex-shrink: 0;
 }
 
-.job__iconWrapper {
-  width: 50px;
-  height: 50px;
-  border-radius: 999px;
+/* Regular Job Card */
+.job--regular-card {
   position: relative;
-  flex: 0 0 auto;
+  flex-shrink: 0;
+  width: 85%;
+  max-width: 320px;
+  background: rgba(22, 22, 22, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.25rem;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  scroll-snap-align: center;
+  direction: rtl;
+
+  @media (max-width: 640px) {
+    padding: 16px;
+    border-radius: 1rem;
+  }
+}
+
+.job__hover-glow {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.05), transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.job--regular-card:hover .job__hover-glow {
+  opacity: 1;
+}
+
+.job__icon-box--regular {
+  width: 48px;
+  height: 48px;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(249, 115, 22, 0.1);
-  border: 1px solid rgba(249, 115, 22, 0.2);
-  
-  @media (max-width: 420px) {
+  color: rgba(209, 213, 219, 1);
+  flex-shrink: 0;
+
+  @media (max-width: 640px) {
     width: 44px;
     height: 44px;
   }
+
+  .job__icon {
+    font-size: 24px;
+    color: rgba(209, 213, 219, 1);
+
+    @media (max-width: 640px) {
+      font-size: 20px;
+    }
+  }
 }
 
-.job__iconRing {
-  position: absolute;
-  inset: -3px;
-  border-radius: 999px;
-  border: 2px solid rgba(249, 115, 22, 0.35);
-  pointer-events: none;
-}
+.job__menu-btn {
+  background: transparent;
+  border: none;
+  color: rgba(107, 114, 128, 1);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
 
-.job__icon {
-  font-size: 24px;
-  color: $orange;
-  
-  @media (max-width: 420px) {
+  &:hover {
+    color: white;
+  }
+
+  .material-symbols-outlined {
     font-size: 20px;
   }
 }
 
-.job__iconBtn {
-  position: absolute;
-  bottom: -4px;
-  left: -4px;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  border: 1px solid rgba(3, 3, 3, 0.8);
-  background: rgba(249, 115, 22, 0.95);
-  color: #0b0b0f;
-  display: grid;
-  place-items: center;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
-  cursor: pointer;
-  font-size: 12px;
+.job__title--regular {
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 4px;
+  line-height: 1.3;
 
-  &:active {
-    transform: scale(0.92);
+  @media (max-width: 640px) {
+    font-size: 16px;
+  }
+}
+
+.job__location--regular {
+  font-size: 14px;
+  color: rgba(161, 161, 170, 1);
+  margin-bottom: 16px;
+
+  .material-symbols-outlined {
+    font-size: 16px;
+    color: rgba(161, 161, 170, 1);
+  }
+
+  @media (max-width: 640px) {
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+}
+
+.job__location-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job__tags--regular {
+  margin-bottom: 24px;
+
+  @media (max-width: 640px) {
+    margin-bottom: 20px;
+  }
+}
+
+.job__tag--regular {
+  padding: 4px 10px;
+  border-radius: 0.375rem;
+  font-size: 11px;
+  color: rgba(156, 163, 175, 1);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+
+  @media (max-width: 640px) {
+    padding: 3px 8px;
+    font-size: 10px;
+  }
+}
+
+.job__footer--regular {
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  @media (max-width: 640px) {
+    padding-top: 12px;
+  }
+}
+
+.job__time--regular {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(75, 85, 99, 1);
+
+  @media (max-width: 640px) {
+    font-size: 10px;
+  }
+}
+
+.job__view-btn--regular {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+
+  &:hover {
+    background: $primary;
+    border-color: $primary;
   }
 
   .material-symbols-outlined {
-    font-size: 12px;
-  }
-}
-
-.job__info {
-  min-width: 0;
-  width: 100%;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.job__title {
-  margin: 0;
-  font-weight: 1100;
-  font-size: 20px;
-  letter-spacing: -0.2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: rgba(255, 255, 255, 0.95);
-
-  @media (max-width: 768px) {
-    font-size: 18px;
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-  
-  @media (max-width: 420px) {
-    font-size: 16px;
-    line-height: 1.3;
-  }
-}
-
-.job__spacer {
-  width: 1px;
-}
-
-.job__detailsBtn {
-  align-self: flex-start;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.92);
-  border-radius: 999px;
-  padding: 8px 12px;
-  font-weight: 1000;
-  font-size: 12px;
-  letter-spacing: 0.2px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease;
-  white-space: nowrap;
-
-  &:active {
-    transform: scale(0.98);
+    font-size: 20px;
+    transform: rotate(180deg);
   }
 
-  &:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba($orange, 0.22);
+  @media (max-width: 640px) {
+    width: 36px;
+    height: 36px;
+
+    .material-symbols-outlined {
+      font-size: 18px;
+    }
   }
-  
-  @media (max-width: 420px) {
-    padding: 6px 10px;
-    font-size: 11px;
-    gap: 5px;
-  }
-}
-
-.job__detailsArrow {
-  color: rgba(249, 115, 22, 0.95);
-  font-size: 16px;
-  line-height: 1;
-  margin-top: -1px;
-}
-
-.job__meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-  color: rgba(161, 161, 170, 0.95);
-  
-  @media (max-width: 420px) {
-    gap: 5px;
-    margin-top: 1px;
-  }
-}
-
-.job__metaIc {
-  font-size: 12px;
-  opacity: 0.9;
-}
-
-.job__metaTxt {
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  
-  @media (max-width: 420px) {
-    font-size: 11px;
-  }
-}
-
-.job__status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-  font-weight: 1000;
-}
-
-.job__status--empty {
-  color: rgba(161, 161, 170, 0.9);
-  font-weight: 800;
-}
-
-.job__statusText {
-  color: rgba(255, 255, 255, 0.95);
 }
 
 /* Job menu */
 .job__menu {
   position: relative;
   flex-shrink: 0;
+  z-index: 100;
 }
 
 .job__menu-btn {
@@ -1890,7 +2107,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 
   &:hover {
     background: rgba(255, 255, 255, 0.12);
-    border-color: rgba($orange, 0.22);
+    border-color: rgba($primary, 0.22);
     transform: translateY(-1px);
   }
   &:active {
@@ -1934,7 +2151,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   left: 0;
   z-index: 100;
   background: rgba(15, 16, 22, 0.98);
-  border: 1px solid rgba($orange, 0.25);
+  border: 1px solid rgba($primary, 0.25);
   border-radius: 14px;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.65);
   overflow: hidden;
@@ -1964,11 +2181,11 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   transition: background 0.18s ease, color 0.18s ease;
 
   &:hover {
-    background: rgba($orange, 0.16);
-    color: $orange3;
+    background: rgba($primary, 0.16);
+    color: $primary;
   }
   &:active {
-    background: rgba($orange, 0.25);
+    background: rgba($primary, 0.25);
   }
 
   @media (max-width: 768px) {
@@ -2009,15 +2226,15 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 }
 .price {
   font-weight: 1100;
-  color: $orange3;
+  color: $primary;
   white-space: nowrap;
 
   &--bid {
-    background: rgba($orange, 0.2);
-    border: 1px solid rgba($orange, 0.4);
+    background: rgba($primary, 0.2);
+    border: 1px solid rgba($primary, 0.4);
     padding: 4px 10px;
     border-radius: 8px;
-    color: $orange2;
+    color: $primary-dark;
     font-weight: 1000;
   }
 
@@ -2135,23 +2352,23 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
     color: #10b981;
   }
   &--quoted {
-    border-color: rgba($orange, 0.5);
+    border-color: rgba($primary, 0.5);
     background: linear-gradient(
       135deg,
-      rgba($orange, 0.2),
-      rgba($orange2, 0.15)
+      rgba($primary, 0.2),
+      rgba($primary-dark, 0.15)
     );
-    color: $orange2;
+    color: $primary-dark;
     font-weight: 1200;
-    box-shadow: 0 0 10px rgba($orange, 0.3);
+    box-shadow: 0 0 10px rgba($primary, 0.3);
   }
   &--hourly {
-    border-color: rgba($orange2, 0.28);
-    background: rgba($orange2, 0.14);
+    border-color: rgba($primary-dark, 0.28);
+    background: rgba($primary-dark, 0.14);
   }
   &--fixed {
-    border-color: rgba($orange, 0.22);
-    background: rgba($orange, 0.12);
+    border-color: rgba($primary, 0.22);
+    background: rgba($primary, 0.12);
   }
   &--work {
     border-color: rgba(255, 255, 255, 0.14);
@@ -2164,8 +2381,8 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   padding: 5px 11px;
   font-weight: 1100;
   font-size: 11px;
-  border: 1px solid rgba($orange, 0.18);
-  background: rgba($orange, 0.12);
+  border: 1px solid rgba($primary, 0.18);
+  background: rgba($primary, 0.12);
   color: $text;
   line-height: 1;
   transition: transform 0.18s ease;
@@ -2207,23 +2424,23 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
     color: #10b981;
   }
   &--quoted {
-    border-color: rgba($orange, 0.5);
+    border-color: rgba($primary, 0.5);
     background: linear-gradient(
       135deg,
-      rgba($orange, 0.2),
-      rgba($orange2, 0.15)
+      rgba($primary, 0.2),
+      rgba($primary-dark, 0.15)
     );
-    color: $orange2;
+    color: $primary-dark;
     font-weight: 1200;
-    box-shadow: 0 0 10px rgba($orange, 0.3);
+    box-shadow: 0 0 10px rgba($primary, 0.3);
   }
   &--hourly {
-    border-color: rgba($orange2, 0.28);
-    background: rgba($orange2, 0.14);
+    border-color: rgba($primary-dark, 0.28);
+    background: rgba($primary-dark, 0.14);
   }
   &--fixed {
-    border-color: rgba($orange, 0.22);
-    background: rgba($orange, 0.12);
+    border-color: rgba($primary, 0.22);
+    background: rgba($primary, 0.12);
   }
   &--work {
     border-color: rgba(255, 255, 255, 0.14);
@@ -2347,8 +2564,8 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   padding: 10px 24px;
   font-size: 15px;
   font-weight: 1100;
-  color: $orange2;
-  border: 2px solid $orange2;
+  color: $primary-dark;
+  border: 2px solid $primary-dark;
   border-radius: 34px;
   background-color: transparent;
   width: auto;
@@ -2361,7 +2578,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   overflow: hidden;
   z-index: 1;
   font-family: inherit;
-  box-shadow: 0 8px 24px rgba($orange, 0.15);
+  box-shadow: 0 8px 24px rgba($primary, 0.15);
 
   &::before {
     content: "";
@@ -2373,16 +2590,16 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
     border-radius: inherit;
     scale: 0;
     z-index: -1;
-    background: linear-gradient(135deg, $orange, $orange2);
+    background: linear-gradient(135deg, $primary, $primary-dark);
     transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
   }
 
   &:hover {
     color: #0b0b0f;
     scale: 1.05;
-    box-shadow: 0 12px 32px rgba($orange, 0.4),
-      0 0 0 1px rgba($orange, 0.2) inset;
-    border-color: $orange;
+    box-shadow: 0 12px 32px rgba($primary, 0.4),
+      0 0 0 1px rgba($primary, 0.2) inset;
+    border-color: $primary;
   }
 
   &:hover::before {
@@ -2391,7 +2608,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 
   &:active {
     scale: 1;
-    box-shadow: 0 8px 20px rgba($orange, 0.3);
+    box-shadow: 0 8px 20px rgba($primary, 0.3);
   }
 
   @media (max-width: 768px) {
@@ -2413,45 +2630,68 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 }
 
 .job__action--quotation {
-  background: linear-gradient(135deg, rgba($orange, 0.2), rgba($orange2, 0.15));
-  border-color: rgba($orange, 0.5);
-  color: $orange2;
-  box-shadow: 0 8px 24px rgba($orange, 0.25);
+  background: linear-gradient(135deg, rgba($primary, 0.2), rgba($primary-dark, 0.15));
+  border-color: rgba($primary, 0.5);
+  color: $primary-dark;
+  box-shadow: 0 8px 24px rgba($primary, 0.25);
 
   &:hover {
     background: linear-gradient(
       135deg,
-      rgba($orange, 0.3),
-      rgba($orange2, 0.2)
+      rgba($primary, 0.3),
+      rgba($primary-dark, 0.2)
     );
-    border-color: $orange;
-    box-shadow: 0 12px 32px rgba($orange, 0.35);
+    border-color: $primary;
+    box-shadow: 0 12px 32px rgba($primary, 0.35);
   }
 }
 
 /* Empty */
 .empty {
-  padding: 18px 14px;
-  border-radius: 16px;
-  border: 1px dashed rgba(255, 255, 255, 0.18);
+  padding: 40px 20px;
+  border-radius: 1rem;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.82);
   text-align: center;
-  font-weight: 1000;
-  background: rgba(0, 0, 0, 0.22);
+  font-weight: 500;
+  background: rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(10px);
+  margin: 0 20px;
+
+  @media (max-width: 640px) {
+    padding: 32px 16px;
+    margin: 0 16px;
+  }
 
   .empty__ic {
-    font-size: 26px;
-    margin-bottom: 6px;
+    font-size: 48px;
+    margin-bottom: 12px;
+    display: block;
+
+    @media (max-width: 640px) {
+      font-size: 40px;
+      margin-bottom: 10px;
+    }
   }
   .empty__title {
-    font-size: 14px;
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+    margin-bottom: 8px;
+
+    @media (max-width: 640px) {
+      font-size: 14px;
+    }
   }
   .empty__sub {
-    margin-top: 6px;
-    font-size: 12px;
-    color: $muted;
-    font-weight: 900;
+    margin-top: 8px;
+    font-size: 14px;
+    color: $text-secondary;
+    font-weight: 400;
+
+    @media (max-width: 640px) {
+      font-size: 12px;
+    }
   }
 }
 
@@ -2550,9 +2790,9 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   width: 100%;
   padding: 10px 16px;
   border-radius: 14px;
-  border: 1px solid rgba($orange, 0.32);
-  background: rgba($orange, 0.14);
-  color: $orange2;
+  border: 1px solid rgba($primary, 0.32);
+  background: rgba($primary, 0.14);
+  color: $primary-dark;
   font-weight: 1100;
   font-size: 14px;
   cursor: pointer;
@@ -2575,8 +2815,8 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 
   &:hover {
     transform: translateY(-1px);
-    background: rgba($orange, 0.22);
-    border-color: rgba($orange, 0.52);
+    background: rgba($primary, 0.22);
+    border-color: rgba($primary, 0.52);
   }
   &:active {
     transform: translateY(0px) scale(0.99);
@@ -2619,7 +2859,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 .filter-modal {
   background: $bg;
   border-radius: 18px;
-  border: 1px solid rgba($orange, 0.22);
+  border: 1px solid rgba($primary, 0.22);
   max-width: 450px;
   width: 100%;
   max-height: 90vh;
@@ -2636,12 +2876,12 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
     inset: 0;
     background: radial-gradient(
         600px 240px at 20% 0%,
-        rgba($orange, 0.18),
+        rgba($primary, 0.18),
         transparent 55%
       ),
       radial-gradient(
         520px 220px at 110% 30%,
-        rgba($orange2, 0.12),
+        rgba($primary-dark, 0.12),
         transparent 58%
       );
     pointer-events: none;
@@ -2660,7 +2900,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   justify-content: space-between;
   align-items: center;
   padding: 18px 18px 14px;
-  border-bottom: 1px solid rgba($orange, 0.18);
+  border-bottom: 1px solid rgba($primary, 0.18);
 }
 .filter-modal__titleWrap {
   display: grid;
@@ -2679,7 +2919,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 .filter-modal__title {
   font-size: 19px;
   font-weight: 1100;
-  color: $orange2;
+  color: $primary-dark;
   margin: 0;
 }
 
@@ -2734,7 +2974,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   display: flex;
   gap: 12px;
   padding: 16px 18px;
-  border-top: 1px solid rgba($orange, 0.18);
+  border-top: 1px solid rgba($primary, 0.18);
   background: rgba(0, 0, 0, 0.28);
 }
 .filter-modal__btn {
@@ -2761,12 +3001,12 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
     }
   }
   &--apply {
-    background: linear-gradient(135deg, $orange, $orange2);
+    background: linear-gradient(135deg, $primary, $primary-dark);
     color: #111;
-    box-shadow: 0 22px 70px rgba($orange, 0.2);
+    box-shadow: 0 22px 70px rgba($primary, 0.2);
     &:hover {
       transform: translateY(-1px);
-      box-shadow: 0 26px 80px rgba($orange, 0.25);
+      box-shadow: 0 26px 80px rgba($primary, 0.25);
     }
   }
 }
@@ -2789,3 +3029,4 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   }
 }
 </style>
+

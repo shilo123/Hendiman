@@ -22,7 +22,7 @@
         <div class="job-info-card">
           <div class="job-info-card__title">{{ getSubcategoryText() }}</div>
           <div class="job-info-card__location">
-            📍 {{ job.locationText || "מיקום" }}
+            📍 {{ (job && job.locationText) || "מיקום" }}
           </div>
         </div>
       </div>
@@ -114,7 +114,8 @@ export default {
     },
     job: {
       type: Object,
-      required: true,
+      required: false,
+      default: null,
     },
   },
   data() {
@@ -127,7 +128,7 @@ export default {
   },
   computed: {
     quotations() {
-      return Array.isArray(this.job.quotations) ? this.job.quotations : [];
+      return (this.job && Array.isArray(this.job.quotations)) ? this.job.quotations : [];
     },
     activeQuotation() {
       return this.quotations[this.activeTabIndex] || null;
@@ -149,6 +150,7 @@ export default {
     },
     getSubcategoryText() {
       if (
+        this.job &&
         this.job.subcategoryInfo &&
         Array.isArray(this.job.subcategoryInfo) &&
         this.job.subcategoryInfo.length > 0

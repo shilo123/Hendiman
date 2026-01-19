@@ -265,71 +265,13 @@ function findAvailablePort(startPort) {
     }
 
     // Middleware - CORS configuration
-    let allowedOrigins;
-    if (process.env.NODE_ENV === "production") {
-      // In production, allow requests from the same origin (server serves client)
-      // But also allow IP addresses for mobile access
-      app.use(
-        cors({
-          origin: function (origin, callback) {
-            // Allow requests with no origin (like mobile apps or curl requests)
-            if (!origin) return callback(null, true);
-
-            // Allow same origin
-            if (origin.includes(WEBAUTHN_RP_ID)) {
-              return callback(null, true);
-            }
-
-            // Allow IP addresses for mobile access
-            if (/^http:\/\/\d+\.\d+\.\d+\.\d+:\d+$/.test(origin)) {
-              return callback(null, true);
-            }
-
-            // Allow localhost for development
-            if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
-              return callback(null, true);
-            }
-
-            callback(new Error("Not allowed by CORS"));
-          },
-          credentials: true,
-        })
-      );
-    } else {
-      // In development, allow multiple localhost origins
-      allowedOrigins = [
-        URL_CLIENT,
-        "http://localhost:8080",
-        "http://localhost:8081",
-        "http://localhost:5173", // Vite default port
-        "http://localhost:3000",
-      ];
-
-      app.use(
-        cors({
-          origin: function (origin, callback) {
-            // Allow requests with no origin (like mobile apps or curl requests)
-            if (!origin) return callback(null, true);
-
-            if (allowedOrigins.indexOf(origin) !== -1) {
-              callback(null, true);
-            } else {
-              // In development, allow any localhost origin or IP address
-              if (
-                origin.includes("localhost") ||
-                origin.includes("127.0.0.1") ||
-                /^http:\/\/\d+\.\d+\.\d+\.\d+:\d+$/.test(origin)
-              ) {
-                callback(null, true);
-              } else {
-                callback(new Error("Not allowed by CORS"));
-              }
-            }
-          },
-          credentials: true, // Allow cookies to be sent
-        })
-      );
-    }
+    // Allow all origins including IP addresses
+    app.use(
+      cors({
+        origin: true, // Allow all origins
+        credentials: true,
+      })
+    );
 
     // Stripe Webhook endpoint - MUST be before bodyParser to receive raw body
     app.post(
@@ -15665,7 +15607,12 @@ ${subcategoryList}
             };
 
             serverLogger.log(
-              `[AI-MATCH] תוצאה סופית (matched): confidence=${confidence}, category="${category}", subcategory="${canonicalSubcategory}", price=${foundSub.price}`
+              `[AI-MATCH] תוצאה סופית (matched): confidence=${confidence}, category="${category}", subcategory="${canonicalSubcategory}", price=${foundSub.price}, workType="${foundSub.workType}"`
+            );
+            
+            // Detailed logging for debugging
+            serverLogger.log(
+              `[AI-MATCH] Response payload to client: ${JSON.stringify(finalResult, null, 2)}`
             );
 
             return res.json(finalResult);
@@ -15683,6 +15630,11 @@ ${subcategoryList}
 
           serverLogger.log(
             `[AI-MATCH] תוצאה סופית (not matched): confidence=${confidence}, subcategory="${shortText.trim()}"`
+          );
+          
+          // Detailed logging for debugging
+          serverLogger.log(
+            `[AI-MATCH] Response payload to client (not matched): ${JSON.stringify(finalResult, null, 2)}`
           );
 
           return res.json(finalResult);
@@ -20064,6 +20016,15 @@ ${imagesList}
 
     // Create HTTP server
     const httpServer = createServer(app);
+
+    // Define allowed origins for Socket.IO CORS
+    const allowedOrigins = [
+      URL_CLIENT,
+      "http://localhost:8080",
+      "http://localhost:8081",
+      "http://localhost:5173", // Vite default port
+      "http://localhost:3000",
+    ];
 
     // Initialize Socket.IO
     const { Server } = require("socket.io");
