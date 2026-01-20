@@ -273,26 +273,38 @@
                 <span class="material-symbols-outlined">schedule</span>
                 <span>{{ getTimeAgo(job) || "לפני זמן מה" }}</span>
             </div>
-              <button
-                class="job__view-btn"
-                type="button"
-                @click="$emit('view', job)"
-              >
-                <span>צפייה בעבודה</span>
-                <span class="material-symbols-outlined">arrow_forward</span>
-              </button>
+              <div class="job__footer-actions">
+                <button
+                  v-if="isHendiman && isQuotedJob(job)"
+                  class="job__quote-btn"
+                  type="button"
+                  @click="$emit('open-quotation-modal', job)"
+                >
+                  <span class="material-symbols-outlined">attach_money</span>
+                  <span>שלח הצעת מחיר</span>
+                </button>
+                <button
+                  class="job__view-btn"
+                  type="button"
+                  @click="$emit('view', job)"
+                >
+                  <span>צפייה בעבודה</span>
+                  <span class="material-symbols-outlined">arrow_forward</span>
+                </button>
+              </div>
             </div>
             </div>
         </article>
         <div class="jobs__urgent-spacer"></div>
           </div>
         <!-- Dots indicator for scroll -->
-        <div v-if="urgentJobs.length > 1" class="jobs__urgent-dots">
+        <div v-if="urgentJobs.length > 0" class="jobs__urgent-dots">
           <span
             v-for="(job, index) in urgentJobs"
             :key="index"
             class="jobs__urgent-dot"
             :class="{ 'jobs__urgent-dot--active': currentUrgentIndex === index }"
+            @click="scrollToUrgentJob(index)"
           ></span>
         </div>
       </section>
@@ -302,7 +314,7 @@
         <div class="jobs__section-header">
           <h2 class="jobs__section-title">משימות נוספות</h2>
         </div>
-        <div class="jobs__regular-list">
+        <div class="jobs__regular-list" ref="regularListRef" @scroll="handleRegularScroll">
           <article
             v-for="job in regularJobs"
             :key="job.id || job._id"
@@ -349,15 +361,25 @@
                 <span class="job__time job__time--regular">
                   {{ getTimeAgo(job) || "לפני זמן מה" }}
                 </span>
-          <button
-                  class="job__view-btn job__view-btn--regular"
-                  type="button"
-                  @click="$emit('view', job)"
-                >
-                  <span class="material-symbols-outlined">arrow_forward</span>
-          </button>
-      </div>
-    </div>
+                <div class="job__footer-actions job__footer-actions--regular">
+                  <button
+                    v-if="isHendiman && isQuotedJob(job)"
+                    class="job__quote-btn job__quote-btn--regular"
+                    type="button"
+                    @click="$emit('open-quotation-modal', job)"
+                  >
+                    <span class="material-symbols-outlined">attach_money</span>
+                  </button>
+                  <button
+                    class="job__view-btn job__view-btn--regular"
+                    type="button"
+                    @click="$emit('view', job)"
+                  >
+                    <span class="material-symbols-outlined">arrow_forward</span>
+                  </button>
+                </div>
+              </div>
+            </div>
 
             <!-- Client job menu dropdown -->
           <div
@@ -400,6 +422,16 @@
           </div>
           </article>
           <div class="jobs__regular-spacer"></div>
+        </div>
+        <!-- Dots indicator for scroll -->
+        <div v-if="regularJobs.length > 0" class="jobs__regular-dots">
+          <span
+            v-for="(job, index) in regularJobs"
+            :key="index"
+            class="jobs__regular-dot"
+            :class="{ 'jobs__regular-dot--active': currentRegularIndex === index }"
+            @click="scrollToRegularJob(index)"
+          ></span>
         </div>
       </section>
 
@@ -540,6 +572,9 @@ export default {
     "edit-job",
     "delete-job",
     "quotation",
+    "open-quotation-modal",
+    "open-filter-modal",
+    "close-filter-modal",
   ],
   data() {
     return {
@@ -550,6 +585,7 @@ export default {
       openJobMenuId: null,
       jobCarouselIndex: 0,
       currentUrgentIndex: 0,
+      currentRegularIndex: 0,
       localFilters: {
         status: "all",
         locationType: "residence",
@@ -672,59 +708,63 @@ export default {
         chips.push({ text: "הזמנה אישית", class: "job__cat--special" });
       }
       
-      // בדוק אם יש מחיר "bid" ב-subcategoryInfo
+      // בדוק אם יש מחיר "bid" או "quoted" ב-subcategoryInfo
       const hasBidPrice = (() => {
         if (Array.isArray(job.subcategoryInfo)) {
-          return job.subcategoryInfo.some((sub) => sub?.price === "bid" || sub?.price === "הצעת מחיר");
+          return job.subcategoryInfo.some((sub) => 
+            sub?.price === "bid" || 
+            sub?.price === "quoted" || 
+            sub?.price === "הצעת מחיר"
+          );
         }
-        return job.subcategoryInfo?.price === "bid" || job.subcategoryInfo?.price === "הצעת מחיר" || job.price === "bid";
+        return (
+          job.subcategoryInfo?.price === "bid" || 
+          job.subcategoryInfo?.price === "quoted" ||
+          job.subcategoryInfo?.price === "הצעת מחיר" || 
+          job.price === "bid" ||
+          job.price === "quoted"
+        );
       })();
       
-      if (hasBidPrice) {
-        chips.push({ text: "הצעת מחיר", class: "job__cat--quoted" });
-      } else if (job.status === "quoted") {
-        chips.push({ text: "הצעת מחיר", class: "job__cat--quoted" });
-      } else if (job.status && job.status !== "open") {
+      // הוסף סוג תשלום (קבלנות/לשעה) - רק אם אין הצעת מחיר
+      const billingType = Array.isArray(job.subcategoryInfo) 
+        ? job.subcategoryInfo[0]?.typeWork || job.billingType
+        : job.subcategoryInfo?.typeWork || job.billingType;
+      
+      const workTypeText = Array.isArray(job.subcategoryInfo)
+        ? job.subcategoryInfo[0]?.workType || job.workType
+        : job.subcategoryInfo?.workType || job.workType;
+      
+      // אם יש הצעת מחיר, נציג "עבודה בהצעת מחיר"
+      if (hasBidPrice || job.status === "quoted") {
+        chips.push({ text: "עבודה בהצעת מחיר", class: "job__cat--quoted" });
+      }
+      
+      // הצג את ה-step של העבודה (אם יש status ולא "open")
+      if (job.status && job.status !== "open" && !hasBidPrice && job.status !== "quoted") {
         chips.push({
           text: this.getStatusLabel(job.status),
           class: job.status === "done" ? "job__cat--done" : "job__cat--status",
         });
       }
       
-      // הוסף סוג תשלום (קבלנות/לשעה) או סוג עבודה (קלה/מורכבת/קשה)
-      const billingType = job.subcategoryInfo?.typeWork || job.billingType;
-      const workTypeText = job.subcategoryInfo?.workType || job.workType;
-      
-      // אם יש billingType ו-workType זהה, נוסיף רק אחד
-      if (billingType && workTypeText && billingType === workTypeText) {
-        // שניהם אותו דבר - נוסיף רק אחד
+      // הוסף סוג תשלום (קבלנות/לשעה) - רק אם זה לא הצעת מחיר
+      if (!hasBidPrice && job.status !== "quoted" && billingType) {
         chips.push({
           text: billingType,
           class: billingType === "לשעה" ? "job__cat--hourly" : "job__cat--fixed",
         });
-      } else {
-        // הם שונים או אחד מהם חסר - נוסיף כל אחד בנפרד
-        if (billingType) {
+      }
+      
+      // הוסף סוג עבודה (קלה/מורכבת/קשה) - רק אם זה שונה מ-billingType ולא הצעת מחיר
+      if (!hasBidPrice && job.status !== "quoted" && workTypeText && workTypeText !== billingType) {
+        // workType יכול להיות "קלה", "מורכבת", "קשה" - לא "קבלנות" או "לשעה"
+        // אם workType הוא "קבלנות" או "לשעה", זה כפילות - נדלג עליו
+        if (workTypeText !== "קבלנות" && workTypeText !== "לשעה" && workTypeText !== "hourly") {
           chips.push({
-            text: billingType,
-            class: billingType === "לשעה" ? "job__cat--hourly" : "job__cat--fixed",
+            text: workTypeText,
+            class: "job__cat--work",
           });
-        }
-        
-        if (workTypeText && workTypeText !== billingType) {
-          // אם workType הוא "קבלנות" או "לשעה", נשתמש ב-class המתאים
-          if (workTypeText === "לשעה" || workTypeText === "קבלנות") {
-            chips.push({
-              text: workTypeText,
-              class: workTypeText === "לשעה" ? "job__cat--hourly" : "job__cat--fixed",
-            });
-          } else {
-            // אחרת, זה workType אחר (קלה/מורכבת/קשה)
-            chips.push({
-              text: workTypeText,
-              class: "job__cat--work",
-            });
-          }
         }
       }
       
@@ -738,6 +778,37 @@ export default {
       const gap = 16;
       const newIndex = Math.round(scrollLeft / (cardWidth + gap));
       this.currentUrgentIndex = Math.min(newIndex, this.urgentJobs.length - 1);
+    },
+    scrollToUrgentJob(index) {
+      if (!this.$refs.urgentListRef) return;
+      const container = this.$refs.urgentListRef;
+      const cardWidth = container.querySelector('.job--urgent-card')?.offsetWidth || 320;
+      const gap = 16;
+      const scrollPosition = index * (cardWidth + gap);
+      container.scrollTo({
+        left: scrollPosition,
+        behavior: 'smooth'
+      });
+    },
+    handleRegularScroll() {
+      if (!this.$refs.regularListRef) return;
+      const container = this.$refs.regularListRef;
+      const scrollLeft = container.scrollLeft;
+      const cardWidth = container.querySelector('.job--regular-card')?.offsetWidth || 320;
+      const gap = 16;
+      const newIndex = Math.round(scrollLeft / (cardWidth + gap));
+      this.currentRegularIndex = Math.min(newIndex, this.regularJobs.length - 1);
+    },
+    scrollToRegularJob(index) {
+      if (!this.$refs.regularListRef) return;
+      const container = this.$refs.regularListRef;
+      const cardWidth = container.querySelector('.job--regular-card')?.offsetWidth || 320;
+      const gap = 16;
+      const scrollPosition = index * (cardWidth + gap);
+      container.scrollTo({
+        left: scrollPosition,
+        behavior: 'smooth'
+      });
     },
     handleClickOutside(e) {
       if (this.isStatusDropdownOpen && !e.target.closest(".selectWrap")) {
@@ -759,6 +830,15 @@ export default {
       return (
         job.clientId && String(job.clientId) === String(this.currentUserId)
       );
+    },
+    isQuotedJob(job) {
+      if (!job) return false;
+      // Job is a "quoted" job if status is "quoted" or if it has a bid price subcategory
+      if (job.status === "quoted") return true;
+      if (Array.isArray(job.subcategoryInfo)) {
+        return job.subcategoryInfo.some((sub) => sub.price === "bid");
+      }
+      return false;
     },
     toggleJobMenu(jobId) {
       this.openJobMenuId = this.openJobMenuId === jobId ? null : jobId;
@@ -890,9 +970,11 @@ export default {
     openFilterModal() {
       this.initializeLocalFilters();
       this.showFilterModal = true;
+      this.$emit('filter-opened');
     },
     closeFilterModal() {
       this.showFilterModal = false;
+      this.$emit('filter-closed');
     },
     resetKmRange() {
       this.localFilters.maxKm = 25;
@@ -915,6 +997,8 @@ export default {
     },
     handleLocationTypeChange(locationType) {
       this.localFilters.locationType = locationType;
+      // Emit the change so Dashboard can update coordinates
+      this.$emit('change-location-type', locationType);
     },
   },
 };
@@ -1503,12 +1587,14 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
     justify-content: center;
   align-items: center;
     gap: 8px;
-  padding: 16px 20px 0;
-  margin-top: -24px;
+  padding: 12px 20px 8px;
+  margin-top: -32px;
+  position: relative;
+  z-index: 5;
 
   @media (max-width: 640px) {
-    padding: 12px 16px 0;
-    margin-top: -20px;
+    padding: 8px 16px 6px;
+    margin-top: -28px;
     gap: 6px;
   }
 }
@@ -1818,6 +1904,84 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   }
 }
 
+.job__footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  &--regular {
+    gap: 8px;
+  }
+}
+
+.job__quote-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #a855f7, #7c3aed);
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 10px 18px;
+  border-radius: 0.75rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 15px -3px rgba(168, 85, 247, 0.3);
+
+  &:hover {
+    background: linear-gradient(135deg, #9333ea, #6d28d9);
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.5);
+    transform: translateY(-2px);
+  }
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+
+  @media (max-width: 640px) {
+    padding: 8px 14px;
+    font-size: 12px;
+    gap: 6px;
+
+    .material-symbols-outlined {
+      font-size: 16px;
+    }
+  }
+
+  &--regular {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(124, 58, 237, 0.1));
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    box-shadow: none;
+
+    &:hover {
+      background: linear-gradient(135deg, #a855f7, #7c3aed);
+      border-color: transparent;
+      box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
+    }
+
+    .material-symbols-outlined {
+      font-size: 20px;
+    }
+
+    @media (max-width: 640px) {
+      width: 36px;
+      height: 36px;
+
+      .material-symbols-outlined {
+        font-size: 18px;
+      }
+    }
+  }
+}
+
 @keyframes urgentBorderPulse {
   0%,
   100% {
@@ -1875,6 +2039,52 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 .jobs__regular-spacer {
   width: 1px;
   flex-shrink: 0;
+}
+
+.jobs__regular-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px 8px;
+  margin-top: -32px;
+  position: relative;
+  z-index: 5;
+
+  @media (max-width: 640px) {
+    padding: 8px 16px 6px;
+    margin-top: -28px;
+    gap: 6px;
+  }
+}
+
+.jobs__regular-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+  cursor: pointer;
+
+  @media (max-width: 640px) {
+    width: 6px;
+    height: 6px;
+  }
+
+  &--active {
+    background-color: #10b981; /* ירוק */
+    width: 24px;
+    border-radius: 4px;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+
+    @media (max-width: 640px) {
+      width: 20px;
+    }
+  }
+
+  &:hover {
+    background-color: rgba(16, 185, 129, 0.5);
+  }
 }
 
 /* Regular Job Card */

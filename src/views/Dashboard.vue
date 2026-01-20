@@ -394,6 +394,9 @@
           @quotation="onQuotation"
           @next-jobs-page="onJobsNextPage"
           @prev-jobs-page="onJobsPrevPage"
+          @filter-opened="isFilterModalOpen = true"
+          @filter-closed="isFilterModalOpen = false"
+          @open-quotation-modal="onOpenQuotationModal"
         />
 
         <!-- HANDYMAN: Tools section at the bottom -->
@@ -804,6 +807,8 @@
           :job="selectedQuotedJob"
           @close="showClientQuotationsModal = false"
           @accepted="onQuotationAccepted"
+          @rejected="onQuotationRejected"
+          @show-handyman-details="onShowHandymanDetailsFromQuotation"
         />
 
         <!-- Handyman Quotation Modal -->
@@ -1299,7 +1304,8 @@
         !isHendiman &&
         isMobile &&
         !isLoading &&
-        (!currentAssignedJob || isChatMinimized)
+        (!currentAssignedJob || isChatMinimized) &&
+        !isFilterModalOpen
       "
       class="mNav"
       aria-label="ניווט"
@@ -1325,7 +1331,8 @@
         isHendiman &&
         isMobile &&
         !isLoading &&
-        (!currentAssignedJob || isChatMinimized)
+        (!currentAssignedJob || isChatMinimized) &&
+        !isFilterModalOpen
       "
       class="mNav"
       aria-label="ניווט"
@@ -1356,6 +1363,7 @@ import ClientActions from "@/components/Dashboard/ClientActions.vue";
 import HandymanTools from "@/components/Dashboard/HandymanTools.vue";
 import HandymanDetailsSheet from "@/components/Dashboard/HandymanDetailsSheet.vue";
 import ViewJob from "@/components/Dashboard/ViewJob.vue";
+import HandymanQuotationModal from "@/components/Dashboard/HandymanQuotationModal.vue";
 import ProfileSheet from "@/components/Dashboard/ProfileSheet.vue";
 import JobChat from "@/components/Dashboard/JobChat.vue";
 import JobChatMobile from "@/components/Dashboard/JobChatMobile.vue";
@@ -1364,7 +1372,6 @@ import HendimanLoader from "@/components/Global/HendimanLoader.vue";
 import ProblemReportModal from "@/components/Dashboard/ProblemReportModal.vue";
 import IncomeDetailModal from "@/components/Dashboard/IncomeDetailModal.vue";
 import ClientQuotationsModal from "@/components/Dashboard/ClientQuotationsModal.vue";
-import HandymanQuotationModal from "@/components/Dashboard/HandymanQuotationModal.vue";
 import logger from "@/utils/logger";
 import axios from "axios";
 import { URL } from "@/Url/url";
@@ -1387,6 +1394,7 @@ export default {
     HandymanTools,
     HandymanDetailsSheet,
     ViewJob,
+    HandymanQuotationModal,
     ProfileSheet,
     JobChat,
     JobChatMobile,
@@ -1396,7 +1404,6 @@ export default {
     ProblemReportModal,
     IncomeDetailModal,
     ClientQuotationsModal,
-    HandymanQuotationModal,
   },
   data() {
     return {
@@ -1467,6 +1474,7 @@ export default {
       showClientQuotationsModal: false, // Show client quotations modal
       showHandymanQuotationModal: false, // Show handyman quotation modal
       selectedQuotedJob: null, // Selected job with quotations for client/handyman
+      quotationsPollingInterval: null, // Interval for polling quotations
       isMobile: window.innerWidth <= 768,
       // Rating for client
       pendingRatingValue: 0,
@@ -1488,6 +1496,8 @@ export default {
       isProcessingTrialPayment: false,
       showDeleteJobModal: false,
       isDeletingJob: false,
+      // Filter modal state
+      isFilterModalOpen: false,
       // Subscription required modal
       showSubscriptionModal: false,
       selectedSubscriptionPlan: "annual", // 'annual' or 'monthly'
@@ -2292,6 +2302,120 @@ export default {
       // Open HandymanQuotationModal for quoted job
       this.selectedQuotedJob = job;
       this.showHandymanQuotationModal = true;
+    },
+    onOpenQuotationModal(job) {
+      // Alias for onQuotation - opens HandymanQuotationModal
+      this.onQuotation(job);
+    },
+    onQuotationRejected(data) {
+      // Refresh the job data after rejection
+      this.toast?.showInfo("הצעת המחיר נדחתה");
+      // Re-fetch jobs to update the list
+      if (this.store && this.store.fetchDashboardData) {
+        const userId = this.store.user?._id || this.$route.params.id;
+        this.store.fetchDashboardData(userId);
+      }
+    },
+    async checkPendingQuotations() {
+      // Check for pending quotations for this client
+      logger.log("[checkPendingQuotations] Starting check...");
+      logger.log("[checkPendingQuotations] isHendiman:", this.isHendiman);
+      logger.log("[checkPendingQuotations] showClientQuotationsModal:", this.showClientQuotationsModal);
+      
+      try {
+        const userId = this.store.user?._id || this.me?._id || this.$route.params.id;
+        logger.log("[checkPendingQuotations] userId sources:", {
+          storeUser: this.store.user?._id,
+          me: this.me?._id,
+          routeParams: this.$route.params.id,
+          finalUserId: userId
+        });
+        
+        if (!userId) {
+          logger.warn("[checkPendingQuotations] No userId found");
+          logger.error("[checkPendingQuotations] ERROR: No userId found!");
+          return;
+        }
+        
+        if (this.isHendiman) {
+          logger.log("[checkPendingQuotations] User is handyman, skipping");
+          return;
+        }
+
+        logger.log(`[checkPendingQuotations] Checking for client ${userId}`);
+
+        const { URL } = await import("@/Url/url");
+        logger.log(`[checkPendingQuotations] API URL: ${URL}/api/clients/${userId}/pending-quotations`);
+
+        // First, check for expired quoted jobs and expire them
+        try {
+          await axios.post(`${URL}/api/jobs/check-expired-quoted`);
+          logger.log("[checkPendingQuotations] Expired jobs checked");
+        } catch (expiredCheckError) {
+          // Silent fail - not critical
+          logger.error("Error checking expired quoted jobs:", expiredCheckError);
+        }
+
+        // Then, check for pending quotations using new endpoint
+        logger.log("[checkPendingQuotations] Fetching pending quotations...");
+        const response = await axios.get(
+          `${URL}/api/clients/${userId}/pending-quotations`
+        );
+
+        logger.log("[checkPendingQuotations] Full response:", response);
+        logger.log("[checkPendingQuotations] Response data:", response.data);
+
+        if (
+          response.data.success &&
+          response.data.hasPendingQuotations &&
+          response.data.job
+        ) {
+          const jobWithQuotations = response.data.job;
+          logger.log("[checkPendingQuotations] ✅ Found job with quotations:", jobWithQuotations);
+          logger.log("[checkPendingQuotations] Job quotations count:", jobWithQuotations.quotations?.length);
+          
+          if (
+            jobWithQuotations.quotations &&
+            jobWithQuotations.quotations.length > 0
+          ) {
+            // Only open if modal is not already open
+            if (!this.showClientQuotationsModal) {
+              logger.log("[checkPendingQuotations] ✅✅✅ Opening quotations modal!");
+              this.selectedQuotedJob = jobWithQuotations;
+              this.showClientQuotationsModal = true;
+              logger.log("[checkPendingQuotations] Modal state after setting:", {
+                showClientQuotationsModal: this.showClientQuotationsModal,
+                selectedQuotedJob: this.selectedQuotedJob
+              });
+            } else {
+              logger.log("[checkPendingQuotations] Modal already open, updating job");
+              this.selectedQuotedJob = jobWithQuotations;
+            }
+          } else {
+            logger.warn("[checkPendingQuotations] ⚠️ Job found but no quotations:", jobWithQuotations);
+          }
+        } else {
+          logger.log("[checkPendingQuotations] ❌ No pending quotations found. Response:", {
+            success: response.data.success,
+            hasPendingQuotations: response.data.hasPendingQuotations,
+            job: response.data.job
+          });
+        }
+      } catch (quotationsError) {
+        logger.error("Error checking pending quotations:", quotationsError);
+        logger.error("[checkPendingQuotations] ❌ ERROR:", quotationsError);
+        logger.error("[checkPendingQuotations] Error details:", {
+          message: quotationsError.message,
+          response: quotationsError.response?.data,
+          status: quotationsError.response?.status
+        });
+      }
+    },
+    onShowHandymanDetailsFromQuotation({ handymanId, handymanName }) {
+      // Show handyman details sheet from quotation modal
+      if (handymanId) {
+        this.onViewHandymanDetails(handymanId);
+      }
     },
     onView(job) {
       this.jobDetails = job;
@@ -3250,12 +3374,23 @@ export default {
       // Listen for new quotations (for clients)
       if (!this.isHendiman) {
         this.socket.on("quotation:new", async (data) => {
+          logger.log("[WebSocket] Received quotation:new event:", data);
           try {
             const userId = this.store.user?._id || this.$route.params.id;
+            if (!userId) {
+              logger.error("[WebSocket] No userId found for quotation:new");
+              return;
+            }
+
             const { URL } = await import("@/Url/url");
+            
+            // Fetch the specific job with quotations
             const quotationsResponse = await axios.get(
               `${URL}/api/clients/${userId}/quoted-jobs-with-quotations`
             );
+            
+            logger.log("[WebSocket] Quotations response:", quotationsResponse.data);
+            
             if (
               quotationsResponse.data.success &&
               quotationsResponse.data.jobs &&
@@ -3265,20 +3400,23 @@ export default {
               const jobWithQuotations = quotationsResponse.data.jobs.find(
                 (j) => String(j._id) === String(data.jobId)
               );
+              
+              logger.log("[WebSocket] Found job with quotations:", jobWithQuotations);
+              
               if (
                 jobWithQuotations &&
                 jobWithQuotations.quotations &&
                 jobWithQuotations.quotations.length > 0
               ) {
                 // Open modal if not already open
-                if (!this.showClientQuotationsModal) {
-                  this.selectedQuotedJob = jobWithQuotations;
-                  this.showClientQuotationsModal = true;
-                } else {
-                  // Update selected job if modal is already open
-                  this.selectedQuotedJob = jobWithQuotations;
-                }
+                logger.log("[WebSocket] Opening quotations modal");
+                this.selectedQuotedJob = jobWithQuotations;
+                this.showClientQuotationsModal = true;
+              } else {
+                logger.warn("[WebSocket] Job found but no quotations");
               }
+            } else {
+              logger.warn("[WebSocket] No jobs with quotations found");
             }
           } catch (error) {
             logger.error("Error handling quotation:new event:", error);
@@ -3303,11 +3441,20 @@ export default {
       }
 
       this.socket.on("connect", () => {
-        // Join user's personal room (for receiving job-accepted events)
-        const userId = this.store.user?._id || this.me?.id;
+        logger.log("[WebSocket] Connected to server");
+        // Join user's personal room (for receiving job-accepted events and quotations)
+        const userId = this.store.user?._id || this.me?._id || this.$route.params.id;
         if (userId) {
           const userIdString = String(userId);
+          logger.log(`[WebSocket] Joining user room: user-${userIdString}`);
           this.socket.emit("join-user", userIdString);
+          
+          // For clients, also check for pending quotations immediately after joining
+          if (!this.isHendiman) {
+            setTimeout(() => {
+              this.checkPendingQuotations();
+            }, 500);
+          }
         }
 
         // Join all jobs that belong to this user
@@ -3950,6 +4097,12 @@ export default {
       }
 
       // For web platform, use service worker approach
+      // Check if browser supports notifications and messaging is available
+      if (!messaging) {
+        console.warn("Firebase Messaging is not available. This may be due to missing HTTPS or unsupported browser.");
+        return;
+      }
+
       // Check if browser supports notifications
       if (!("Notification" in window) || !("serviceWorker" in navigator)) {
         return;
@@ -4165,6 +4318,59 @@ export default {
         return;
       }
       try {
+        // אם זה עדכון כתובת בלבד (מהמודל של ניהול כתובות)
+        if (form.address && !form.name && !form.phone && !form.email && !form.specialties) {
+          const res = await axios.post(`${URL}/user/update-profile`, {
+            userId,
+            city: form.address,
+            cityEnglishName: form.cityEnglishName,
+          });
+          if (res.data?.success) {
+            // עדכן את המשתמש ב-store
+            if (res.data.user) {
+              this.store.user = res.data.user;
+            }
+            if (res.data.user?.city) {
+              this.me.city = res.data.user.city;
+            }
+            if (res.data.user?.coordinates) {
+              this.me.coordinates = res.data.user.coordinates;
+            }
+            if (res.data.user?.location) {
+              this.me.location = res.data.user.location;
+            }
+            
+            // עדכן את הקואורדינטות המקומיות
+            let newCoordinates = null;
+            if (res.data.user?.location?.coordinates) {
+              newCoordinates = {
+                lng: res.data.user.location.coordinates[0],
+                lat: res.data.user.location.coordinates[1],
+              };
+            } else if (res.data.user?.coordinates) {
+              newCoordinates = {
+                lng: res.data.user.coordinates.lng,
+                lat: res.data.user.coordinates.lat,
+              };
+            }
+            
+            if (newCoordinates) {
+              this.userCoordinates = newCoordinates;
+            }
+            
+            // Refresh dashboard data עם הקואורדינטות החדשות
+            if (newCoordinates) {
+              await this.store.fetchDashboardData(userId, newCoordinates);
+            } else {
+              await this.store.fetchDashboardData(userId);
+            }
+            
+            // לא נסגור את הפרופיל - רק נעדכן את הנתונים
+            return;
+          }
+        }
+
+        // עדכון פרופיל מלא (ממודל עריכת פרופיל)
         const res = await axios.post(`${URL}/user/update-profile`, {
           userId,
           username: form.name,
@@ -4190,10 +4396,40 @@ export default {
           if (res.data.user?.city) {
             this.me.city = res.data.user.city;
           }
+          if (res.data.user?.coordinates) {
+            this.me.coordinates = res.data.user.coordinates;
+          }
+          if (res.data.user?.location) {
+            this.me.location = res.data.user.location;
+          }
+          
+          // עדכן את הקואורדינטות המקומיות אם הכתובת השתנתה
+          let newCoordinates = null;
+          if (res.data.user?.location?.coordinates) {
+            newCoordinates = {
+              lng: res.data.user.location.coordinates[0],
+              lat: res.data.user.location.coordinates[1],
+            };
+          } else if (res.data.user?.coordinates) {
+            newCoordinates = {
+              lng: res.data.user.coordinates.lng,
+              lat: res.data.user.coordinates.lat,
+            };
+          }
+          
+          if (newCoordinates) {
+            this.userCoordinates = newCoordinates;
+          }
+          
           this.toast?.showSuccess("הפרופיל עודכן בהצלחה");
           this.showProfileSheet = false;
-          // Refresh user data to get updated coordinates
-          await this.store.fetchDashboardData(userId);
+          
+          // Refresh dashboard data עם הקואורדינטות החדשות (אם יש)
+          if (newCoordinates) {
+            await this.store.fetchDashboardData(userId, newCoordinates);
+          } else {
+            await this.store.fetchDashboardData(userId);
+          }
         } else {
           this.toast?.showError("לא הצלחנו לעדכן את הפרופיל");
         }
@@ -5071,48 +5307,6 @@ export default {
         return;
       }
 
-      // Check for quoted jobs with quotations (for clients only)
-      if (!data.User.isHandyman) {
-        try {
-          const userId = this.store.user?._id || this.$route.params.id;
-          const { URL } = await import("@/Url/url");
-
-          // First, check for expired quoted jobs and expire them
-          try {
-            await axios.post(`${URL}/api/jobs/check-expired-quoted`);
-          } catch (expiredCheckError) {
-            // Silent fail - not critical
-            logger.error(
-              "Error checking expired quoted jobs:",
-              expiredCheckError
-            );
-          }
-
-          // Then, get quoted jobs with quotations
-          const quotationsResponse = await axios.get(
-            `${URL}/api/clients/${userId}/quoted-jobs-with-quotations`
-          );
-          if (
-            quotationsResponse.data.success &&
-            quotationsResponse.data.jobs &&
-            quotationsResponse.data.jobs.length > 0
-          ) {
-            // Open modal with first job that has quotations
-            const firstJobWithQuotations = quotationsResponse.data.jobs[0];
-            if (
-              firstJobWithQuotations.quotations &&
-              firstJobWithQuotations.quotations.length > 0
-            ) {
-              this.selectedQuotedJob = firstJobWithQuotations;
-              this.showClientQuotationsModal = true;
-            }
-          }
-        } catch (quotationsError) {
-          logger.error("Error checking quoted jobs:", quotationsError);
-          // Silent fail - not critical
-        }
-      }
-
       // בדוק אם הנדימן צריך מנוי פעיל (באמצעות endpoint חדש)
       if (data.User.isHandyman === true) {
         try {
@@ -5180,6 +5374,19 @@ export default {
         this.me.trialExpiresAt = data.User.trialExpiresAt;
         this.me.billingStartDate = data.User.billingStartDate;
         this.isHendiman = data.User.isHandyman;
+
+        // Check for pending quotations (for clients only) - with 1 second delay after isHendiman is set
+        if (!this.isHendiman) {
+          logger.log("[Dashboard mounted] Scheduling checkPendingQuotations in 1 second");
+          logger.log("[Dashboard mounted] isHendiman:", this.isHendiman, "userId:", this.store.user?._id || this.me?._id || this.$route.params.id);
+          setTimeout(async () => {
+            logger.log("[Dashboard mounted] Timeout fired, calling checkPendingQuotations");
+            logger.log("[Dashboard mounted] Calling checkPendingQuotations");
+            await this.checkPendingQuotations();
+          }, 1000);
+        } else {
+          logger.log("[Dashboard mounted] User is handyman, skipping checkPendingQuotations");
+        }
 
         // עדכן את הקואורדינטות גם מה-User שנטען (למקרה שהן השתנו)
         if (data.User.location && data.User.location.coordinates) {
@@ -5628,6 +5835,16 @@ export default {
 
       // Enable Push Notifications
       this.enablePushNotifications();
+
+      // Start polling for quotations (fallback if WebSocket fails) - only for clients
+      if (!this.isHendiman) {
+        this.quotationsPollingInterval = setInterval(() => {
+          // Only check if modal is not already open
+          if (!this.showClientQuotationsModal) {
+            this.checkPendingQuotations();
+          }
+        }, 10000); // Check every 10 seconds
+      }
     } catch (error) {
       // אם יש שגיאה או שהמשתמש לא נמצא, החזר ל-דף הבית
       this.$router.push("/");
@@ -5637,6 +5854,11 @@ export default {
     window.removeEventListener("resize", this.handleResize);
     window.removeEventListener("scroll", this.handleFabScroll);
     this.disconnectWebSocket();
+    // Clear quotations polling interval
+    if (this.quotationsPollingInterval) {
+      clearInterval(this.quotationsPollingInterval);
+      this.quotationsPollingInterval = null;
+    }
   },
   watch: {
     "handymanFilters.maxKm"(newVal) {

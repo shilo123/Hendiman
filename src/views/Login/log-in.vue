@@ -40,7 +40,12 @@
               type="text"
               placeholder="user@example.com"
               required
-              autocomplete="username"
+              autocomplete="off"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              @compositionend="onUsernameCompositionEnd"
+              @blur="onUsernameBlur"
             />
           </div>
         </div>
@@ -60,7 +65,10 @@
               :type="showPassword ? 'text' : 'password'"
               placeholder="********"
               required
-              autocomplete="current-password"
+              autocomplete="off"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
             />
             <input
               v-else
@@ -72,7 +80,7 @@
                 ifGoogleUser ? 'סיסמה (Google)' : 'סיסמה (Facebook)'
               "
               required
-              autocomplete="current-password"
+              autocomplete="off"
               readonly
             />
             <button
@@ -204,6 +212,8 @@ export default {
       hasBiometricCredentials: false,
       biometricLoading: false,
       currentUserId: null,
+      // For Android IME handling
+      lastUsernameValue: "",
     };
   },
   async created() {
@@ -246,6 +256,28 @@ export default {
           userAgent
         );
       this.isMobile = isNative || isMobileDevice;
+    },
+
+    // Handle Android IME composition end event
+    onUsernameCompositionEnd(event) {
+      // When IME composition ends, ensure the value is captured
+      this.username = event.target.value;
+      this.lastUsernameValue = this.username;
+    },
+
+    // Handle blur event to preserve username value
+    onUsernameBlur(event) {
+      // On Android, when moving to password field, the value might get truncated
+      // This ensures we keep the correct value
+      const currentValue = event.target.value;
+      if (currentValue && currentValue.length > 0) {
+        this.username = currentValue;
+        this.lastUsernameValue = currentValue;
+      } else if (this.lastUsernameValue) {
+        // If the value was cleared incorrectly, restore it
+        this.username = this.lastUsernameValue;
+        event.target.value = this.lastUsernameValue;
+      }
     },
 
     async checkBiometricCredentials() {

@@ -181,7 +181,12 @@ export const useMainStore = defineStore("main", {
 
           // סינון לפי סטטוס
           if (status && status !== "all") {
-            list = list.filter((j) => j.status === status);
+            // אם status הוא "open", הצג גם "open" וגם "quoted" עבודות
+            if (status === "open") {
+              list = list.filter((j) => j.status === "open" || j.status === "quoted");
+            } else {
+              list = list.filter((j) => j.status === status);
+            }
           }
 
           // סינון לפי מרחק
@@ -237,14 +242,31 @@ export const useMainStore = defineStore("main", {
         list = list.filter((h) => h.jobsDone >= filters.minJobs);
       }
 
-      // מיין: הנדימנים החסומים יופיעו אחרונים
+      // מיין: לפי דירוג ואז לפי מרחק נסיעה, הנדימנים החסומים יופיעו אחרונים
       const sorted = [...list].sort((a, b) => {
         const aBlocked = a.isBlocked === true;
         const bBlocked = b.isBlocked === true;
         // אם אחד חסום והשני לא - החסום יופיע אחרון
         if (aBlocked && !bBlocked) return 1;
         if (!aBlocked && bBlocked) return -1;
-        // אם שניהם באותו מצב, שמור על הסדר המקורי
+        
+        // אם שניהם לא חסומים, מיין לפי דירוג (גבוה יותר קודם)
+        if (!aBlocked && !bBlocked) {
+          const aRating = Number(a?.rating) || 0;
+          const bRating = Number(b?.rating) || 0;
+          if (bRating !== aRating) {
+            return bRating - aRating; // דירוג גבוה יותר קודם
+          }
+          
+          // אם הדירוג זהה, מיין לפי מרחק נסיעה (קרוב יותר קודם)
+          const aTravelTime = Number(a?.travelTimeMinutes) ?? Infinity;
+          const bTravelTime = Number(b?.travelTimeMinutes) ?? Infinity;
+          if (aTravelTime !== bTravelTime) {
+            return aTravelTime - bTravelTime; // קרוב יותר קודם
+          }
+        }
+        
+        // אם כל השווים, שמור על הסדר המקורי
         return 0;
       });
 

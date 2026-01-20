@@ -1,5 +1,8 @@
 {
   "categories": [
+  {
+    "name": "כללי"
+  },
     {
       "name": "אינסטלציה",
       "subcategories": [

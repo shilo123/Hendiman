@@ -36,9 +36,20 @@
                 class="step-indicator-line"
                 :class="{ 'step-indicator-line--active': step.isCompleted }"
               ></div>
+              <!-- Vertical line connecting dot to text (only for active step) -->
+              <div 
+                v-if="step.isActive" 
+                class="step-indicator-vertical-line"
+              ></div>
+              <!-- Status text below active step -->
+              <div 
+                v-if="step.isActive" 
+                class="step-indicator-status-text"
+              >
+                {{ getStatusText() }}
+              </div>
             </div>
           </div>
-          <p class="job-bottom-sheet__status-text">{{ getStatusText() }}</p>
         </div>
 
         <!-- Scrollable Content -->
@@ -76,21 +87,27 @@
           <!-- Title and Price Section -->
           <div class="job-title-section">
             <h1 class="job-title">{{ getJobDisplayName() }}</h1>
-            <div class="job-price-badge">
+            <div v-if="!hasBidPrice()" class="job-price-badge">
               <span class="job-price-amount">₪{{ getDisplayPrice() }}</span>
             </div>
             <div class="job-tags-row">
               <span
-                v-if="getBillingType()"
+                v-if="hasBidPrice()"
+                class="job-tag job-tag--quoted"
+              >
+                עבודה בהצעת מחיר
+              </span>
+              <span
+                v-if="getBillingType() && !hasBidPrice()"
                 class="job-tag"
               >
                 {{ getBillingType() }}
               </span>
               <span
-                v-if="jobDetails.workType"
+                v-if="getWorkType() && getWorkType() !== getBillingType() && !hasBidPrice()"
                 class="job-tag"
               >
-                {{ jobDetails.workType }}
+                {{ getWorkType() }}
               </span>
             </div>
           </div>
@@ -341,11 +358,11 @@ export default {
       if (!this.jobDetails) return [];
       const status = this.jobDetails.status;
       const steps = [
-        { status: 'open', label: 'פתוחה', isActive: status === 'open', isCompleted: ['assigned', 'on_the_way', 'in_progress', 'done'].includes(status) },
+        { status: 'open', label: 'פתוחה', isActive: status === 'open' || status === 'quoted', isCompleted: ['assigned', 'on_the_way', 'in_progress', 'done'].includes(status) },
         { status: 'assigned', label: 'שובצה', isActive: status === 'assigned', isCompleted: ['on_the_way', 'in_progress', 'done'].includes(status) },
         { status: 'on_the_way', label: 'בדרך', isActive: status === 'on_the_way', isCompleted: ['in_progress', 'done'].includes(status) },
         { status: 'in_progress', label: 'בביצוע', isActive: status === 'in_progress', isCompleted: status === 'done' },
-        { status: 'done', label: 'הושלמה', isActive: status === 'done', isCompleted: false },
+        { status: 'done', label: status === 'cancelled' ? 'בוטלה' : 'הושלמה', isActive: status === 'done' || status === 'cancelled', isCompleted: false },
       ];
       return steps;
     },
@@ -381,13 +398,19 @@ export default {
     },
     getTotalPrice() {
       if (!Array.isArray(this.jobDetails.subcategoryInfo)) {
-        return (
-          this.jobDetails.subcategoryInfo?.price || this.jobDetails.price || 0
-        );
+        const price = this.jobDetails.subcategoryInfo?.price || this.jobDetails.price || 0;
+        if (price === "bid" || price === "quoted" || price === "הצעת מחיר") {
+          return 0;
+        }
+        return typeof price === "number" ? price : (parseFloat(price) || 0);
       }
       return this.jobDetails.subcategoryInfo.reduce((total, subcat) => {
         const price = subcat.price || 0;
-        return total + price;
+        // Skip bid/quoted prices
+        if (price === "bid" || price === "quoted" || price === "הצעת מחיר") {
+          return total;
+        }
+        return total + (typeof price === "number" ? price : (parseFloat(price) || 0));
       }, 0);
     },
     async loadRating(jobId) {
@@ -472,12 +495,13 @@ export default {
     getStatusText() {
       if (!this.jobDetails) return "";
       const statusLabels = {
-        open: "פתוחה",
-        assigned: "שובצה",
-        on_the_way: "בדרך ליעד",
-        in_progress: "בביצוע",
-        done: "הושלמה",
-        cancelled: "בוטלה",
+        open: "📝 פתחנו קריאה",
+        quoted: "📝 פתחנו קריאה",
+        assigned: "👷 הנדימן שובץ",
+        on_the_way: "🚗 הנדימן בדרך",
+        in_progress: "🔧 העבודה מתבצעת",
+        done: "✅ העבודה הושלמה",
+        cancelled: "❌ העבודה בוטלה",
       };
       return statusLabels[this.jobDetails.status] || this.jobDetails.status;
     },
@@ -491,18 +515,41 @@ export default {
       };
     },
     getDisplayPrice() {
-      if (!this.jobDetails) return 0;
+      if (!this.jobDetails || this.hasBidPrice()) return 0;
       if (
         Array.isArray(this.jobDetails.subcategoryInfo) &&
         this.jobDetails.subcategoryInfo.length > 1
       ) {
         return this.getTotalPrice();
       }
-      return (
-        (Array.isArray(this.jobDetails.subcategoryInfo) &&
+      const price = Array.isArray(this.jobDetails.subcategoryInfo) &&
         this.jobDetails.subcategoryInfo.length === 1
           ? this.jobDetails.subcategoryInfo[0].price
-          : this.jobDetails.subcategoryInfo?.price || this.jobDetails.price) || 0
+          : this.jobDetails.subcategoryInfo?.price || this.jobDetails.price;
+      
+      // Check if price is bid/quoted string
+      if (price === "bid" || price === "quoted" || price === "הצעת מחיר") {
+        return 0;
+      }
+      
+      return typeof price === "number" ? price : (parseFloat(price) || 0);
+    },
+    hasBidPrice() {
+      if (!this.jobDetails) return false;
+      if (Array.isArray(this.jobDetails.subcategoryInfo)) {
+        return this.jobDetails.subcategoryInfo.some((sub) => 
+          sub?.price === "bid" || 
+          sub?.price === "quoted" || 
+          sub?.price === "הצעת מחיר"
+        );
+      }
+      return (
+        this.jobDetails.subcategoryInfo?.price === "bid" || 
+        this.jobDetails.subcategoryInfo?.price === "quoted" ||
+        this.jobDetails.subcategoryInfo?.price === "הצעת מחיר" || 
+        this.jobDetails.price === "bid" ||
+        this.jobDetails.price === "quoted" ||
+        this.jobDetails.status === "quoted"
       );
     },
     getBillingType() {
@@ -512,7 +559,7 @@ export default {
         this.jobDetails.subcategoryInfo.length === 1
       ) {
         return (
-          this.jobDetails.subcategoryInfo[0].workType ||
+          this.jobDetails.subcategoryInfo[0].typeWork ||
           this.jobDetails.billingType ||
           null
         );
@@ -522,6 +569,19 @@ export default {
         this.jobDetails.billingType ||
         null
       );
+    },
+    getWorkType() {
+      if (!this.jobDetails) return null;
+      const workType = Array.isArray(this.jobDetails.subcategoryInfo) && this.jobDetails.subcategoryInfo.length === 1
+        ? this.jobDetails.subcategoryInfo[0].workType
+        : this.jobDetails.subcategoryInfo?.workType || this.jobDetails.workType;
+      
+      // אם workType הוא "קבלנות" או "לשעה", זה כפילות - נחזיר null
+      if (workType === "קבלנות" || workType === "לשעה" || workType === "hourly") {
+        return null;
+      }
+      
+      return workType;
     },
     getClientAvatarStyle() {
       if (!this.jobDetails || !this.jobDetails.clientImage) return {};
@@ -751,10 +811,15 @@ $danger: #ff3b3b;
 
 .job-bottom-sheet__step-indicator {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   width: 100%;
-  padding: 8px 0;
+  padding: 8px 0 60px;
+  position: relative;
+  
+  @media (max-width: 640px) {
+    padding-bottom: 50px;
+  }
 }
 
 .step-indicator-item {
@@ -764,6 +829,11 @@ $danger: #ff3b3b;
   gap: 4px;
   flex: 1;
   position: relative;
+  z-index: 1;
+}
+
+.step-indicator-item--active {
+  z-index: 2;
 }
 
 .step-indicator-dot {
@@ -814,13 +884,42 @@ $danger: #ff3b3b;
   background: $primary;
 }
 
-.job-bottom-sheet__status-text {
-  font-size: 10px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.step-indicator-vertical-line {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 40px;
+  background: linear-gradient(180deg, $primary 0%, rgba(255, 123, 0, 0.3) 100%);
+  z-index: 0;
+  
+  @media (max-width: 640px) {
+    height: 35px;
+    width: 1.5px;
+  }
+}
+
+.step-indicator-status-text {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 700;
   color: $primary;
-  margin: 4px 0 0;
+  padding: 6px 12px;
+  background: rgba(255, 123, 0, 0.1);
+  border: 1px solid rgba(255, 123, 0, 0.3);
+  border-radius: 8px;
+  z-index: 5;
+  
+  @media (max-width: 640px) {
+    font-size: 12px;
+    padding: 4px 10px;
+    top: calc(100% + 8px);
+  }
 }
 
 @keyframes pulse {
@@ -977,6 +1076,13 @@ $danger: #ff3b3b;
   font-size: 11px;
   padding: 4px 8px;
   border-radius: 0.375rem;
+}
+
+.job-tag--quoted {
+  border-color: rgba($primary, 0.5);
+  background: linear-gradient(135deg, rgba($primary, 0.2), rgba($primary-dark, 0.15));
+  color: $primary-dark;
+  font-weight: 700;
 }
 
 /* Step Indicator */

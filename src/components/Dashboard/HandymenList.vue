@@ -41,7 +41,23 @@
                     :icon="['fas', 'location-dot']"
                     class="hcCard__metaIc"
                   />
-                  <span class="hcCard__metaTxt">{{ formatCityTravel(h) }}</span>
+                  <span class="hcCard__metaTxt">{{ getCityText(h) }}</span>
+                </div>
+
+                <div class="hcCard__travel" v-if="isInSameCity(h)">
+                  <font-awesome-icon
+                    :icon="['fas', 'location-dot']"
+                    class="hcCard__travelIc"
+                  />
+                  <span class="hcCard__travelTxt">בעיר שלך</span>
+                </div>
+
+                <div class="hcCard__travel" v-else-if="hasTravelTime(h)">
+                  <font-awesome-icon
+                    :icon="['fas', 'car']"
+                    class="hcCard__travelIc"
+                  />
+                  <span class="hcCard__travelTxt">מרחק נסיעה: {{ formatTravelTime(h) }}</span>
                 </div>
 
                 <div class="hcCard__rating" v-if="hasRating(h)">
@@ -394,21 +410,28 @@ export default {
     },
     formatCityTravel(h) {
       const city = this.getCityText(h);
-
+      return city || "לא צוין";
+    },
+    isInSameCity(h) {
       const mins = Number(
         h?.travelTimeMinutes ?? h?.durationMinutes ?? h?.travelMinutes
       );
-      if (Number.isFinite(mins) && mins >= 0) {
-        return city
-          ? mins === 0
-            ? `${city} - בעיר שלך`
-            : `${city} - ${mins} דק'`
-          : mins === 0
-          ? "בעיר שלך"
-          : `${mins} דק'`;
+      return Number.isFinite(mins) && mins === 0;
+    },
+    hasTravelTime(h) {
+      const mins = Number(
+        h?.travelTimeMinutes ?? h?.durationMinutes ?? h?.travelMinutes
+      );
+      return Number.isFinite(mins) && mins > 0;
+    },
+    formatTravelTime(h) {
+      const mins = Number(
+        h?.travelTimeMinutes ?? h?.durationMinutes ?? h?.travelMinutes
+      );
+      if (Number.isFinite(mins) && mins > 0) {
+        return `${mins} דק'`;
       }
-
-      return city || "לא צוין";
+      return "";
     },
     getCategories(h) {
       const out = [];
@@ -765,6 +788,27 @@ $orange2: #ea580c;
 .hcCard__metaTxt {
   font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hcCard__travel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  color: rgba(249, 115, 22, 0.9);
+}
+
+.hcCard__travelIc {
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+.hcCard__travelTxt {
+  font-size: 11px;
+  font-weight: 800;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

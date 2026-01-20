@@ -8,7 +8,8 @@
   "android": {
     "allowMixedContent": true,
     "captureInput": true,
-    "webContentsDebuggingEnabled": true
+    "webContentsDebuggingEnabled": true,
+    "icon": "public/avatar.png"
   },
   "plugins": {
     "SplashScreen": {

@@ -239,19 +239,19 @@ async function fetchJobs(user, collectionJobs) {
     // For clients: exclude "done" jobs with ratingSubmitted, but keep "done" jobs that need approval
     baseMatch.$and.push({
       $or: [
-        { status: { $ne: "done" } },
-        {
-          $and: [
-            { status: "done" },
-            {
-              $or: [
-                { clientApproved: false },
-                { clientApproved: null },
-                { clientApproved: { $exists: false } },
-              ],
-            },
-          ],
-        },
+      { status: { $ne: "done" } },
+      {
+        $and: [
+          { status: "done" },
+          {
+            $or: [
+              { clientApproved: false },
+              { clientApproved: null },
+              { clientApproved: { $exists: false } },
+            ],
+          },
+        ],
+      },
       ],
     });
   } else {

@@ -155,7 +155,7 @@
         <!-- Price Filter -->
         <div class="job-filter-section">
           <div class="job-filter-section__header">
-            <h3 class="job-filter-section__title">טווח מחירים</h3>
+            <h3 class="job-filter-section__title">מחיר מינימלי</h3>
             <button
               class="job-filter-reset-btn"
               type="button"
@@ -164,36 +164,34 @@
               איפוס
             </button>
           </div>
-          <div class="job-filter-price-range">
-            <div class="job-filter-price-input-wrapper">
-              <label class="job-filter-price-label">מינימום</label>
-              <div class="job-filter-price-input-container">
-                <span class="job-filter-price-symbol">₪</span>
-                <input
-                  class="job-filter-price-input"
-                  type="number"
-                  min="0"
-                  :value="localFilters.minPrice || 0"
-                  @input="updateMinPrice($event.target.value)"
-                  placeholder="0"
-                  dir="ltr"
-                />
+          <div class="job-filter-range-container">
+            <div class="job-filter-range-display">
+              <div class="job-filter-range-value-large">
+                <span class="job-filter-range-number">{{ localFilters.minPrice || 0 }}</span>
+                <span class="job-filter-range-unit">₪</span>
               </div>
+              <span class="job-filter-range-max">מקסימום: 1000 ₪</span>
             </div>
-            <div class="job-filter-price-input-wrapper">
-              <label class="job-filter-price-label">מקסימום</label>
-              <div class="job-filter-price-input-container">
-                <span class="job-filter-price-symbol">₪</span>
-                <input
-                  class="job-filter-price-input"
-                  type="number"
-                  min="0"
-                  :value="localFilters.maxPrice || ''"
-                  @input="updateMaxPrice($event.target.value)"
-                  placeholder="5000"
-                  dir="ltr"
-                />
+            <div class="job-filter-range-slider-wrapper">
+              <div class="job-filter-range-track">
+                <div 
+                  class="job-filter-range-track-filled" 
+                  :style="{ width: `${((localFilters.minPrice || 0) / 1000) * 100}%` }"
+                ></div>
               </div>
+              <input
+                class="job-filter-range-input"
+                type="range"
+                min="0"
+                max="1000"
+                step="50"
+                :value="localFilters.minPrice || 0"
+                @input="updateMinPrice($event.target.value)"
+              />
+            </div>
+            <div class="job-filter-range-labels">
+              <span>0 ₪</span>
+              <span>1000 ₪</span>
             </div>
           </div>
         </div>
@@ -291,6 +289,7 @@ export default {
   methods: {
     updateLocationType(type) {
       this.localFilters.locationType = type;
+      // Emit the change so Dashboard can get current location if needed
       this.$emit("location-type-change", type);
     },
     updateMaxKm(value) {
@@ -398,7 +397,7 @@ $border-light: rgba(255, 255, 255, 0.05);
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  z-index: 10000;
+  z-index: 100010;
   direction: rtl;
   padding-bottom: 0;
   animation: fadeIn 0.3s ease-out;
@@ -424,11 +423,11 @@ $border-light: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border-top: 1px solid $border-light;
-  border-radius: 2.5rem 2.5rem 0 0;
+  border-radius: 24px 24px 0 0;
   width: 100%;
   max-width: 448px;
-  max-height: calc(85vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-  height: calc(85vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  max-height: calc(92vh - 60px);
+  height: calc(92vh - 60px);
   display: flex;
   flex-direction: column;
   box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
@@ -441,8 +440,12 @@ $border-light: rgba(255, 255, 255, 0.05);
     border-radius: 2rem;
     max-height: 85vh;
     height: auto;
+    max-width: 448px;
     animation: slideUpCenter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
+  
+  // Ensure it's above DashboardTopBar (z-index: 100000)
+  z-index: 100001;
 }
 
 @keyframes slideUp {
@@ -684,6 +687,11 @@ $border-light: rgba(255, 255, 255, 0.05);
   }
   -ms-overflow-style: none;
   scrollbar-width: none;
+  
+  // Add padding for safe area on mobile - enough to see footer buttons
+  @media (max-width: 768px) {
+    padding-bottom: calc(160px + env(safe-area-inset-bottom));
+  }
 }
 
 .job-filter-modal__title {
@@ -1005,11 +1013,17 @@ $border-light: rgba(255, 255, 255, 0.05);
 .job-filter-price-range {
   display: flex;
   gap: 16px;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 12px;
+  }
 }
 
 .job-filter-price-input-wrapper {
   position: relative;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .job-filter-price-label {
@@ -1025,6 +1039,9 @@ $border-light: rgba(255, 255, 255, 0.05);
 
 .job-filter-price-input-container {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   transition: transform 0.2s ease;
 
   &:focus-within {
@@ -1033,29 +1050,32 @@ $border-light: rgba(255, 255, 255, 0.05);
 }
 
 .job-filter-price-symbol {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
   font-weight: 900;
   color: $primary-500;
-  z-index: 1;
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-right: 4px;
+  
+  @media (max-width: 768px) {
+    font-size: 14px;
+  }
 }
 
 .job-filter-price-input {
   width: 100%;
+  box-sizing: border-box;
   background: $bg-900;
   border: 1px solid $border-light;
   border-radius: 12px;
-  padding: 14px 16px 14px 40px;
-  font-size: 16px;
+  padding: 12px 16px;
+  font-size: 14px;
   font-weight: 900;
   color: $text;
   font-family: inherit;
   outline: none;
   transition: all 0.2s ease;
-  text-align: left;
-  direction: ltr;
+  text-align: right;
+  direction: rtl;
 
   &::placeholder {
     color: rgba(113, 113, 122, 1);
@@ -1066,25 +1086,32 @@ $border-light: rgba(255, 255, 255, 0.05);
     box-shadow: 0 0 15px rgba(249, 115, 22, 0.15);
     background: rgba(5, 5, 5, 0.9);
   }
+  
+  @media (max-width: 768px) {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
 }
 
 .job-filter-modal__footer {
-  position: relative;
-  z-index: 1;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
   display: grid;
   grid-template-columns: 1fr 2fr;
   gap: 16px;
   padding: 24px;
   border-top: 1px solid $border-light;
-  background: rgba(24, 24, 27, 0.8);
+  background: rgba(10, 10, 10, 0.98);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   flex-shrink: 0;
   margin-top: auto;
   
-  @media (max-width: 480px) {
-    padding: 24px 16px;
-    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  @media (max-width: 768px) {
+    padding: 16px;
+    gap: 12px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
   }
 }
 
@@ -1150,40 +1177,164 @@ $border-light: rgba(255, 255, 255, 0.05);
 }
 
 // Mobile optimizations
-@media (max-width: 480px) {
+@media (max-width: 768px) {
   .job-filter-modal {
-    max-height: calc(85vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-    height: calc(85vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-    border-radius: 20px 20px 0 0;
+    max-height: calc(92vh - 60px);
+    height: calc(92vh - 60px);
+    border-radius: 24px 24px 0 0;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .job-filter-modal-overlay {
+    padding-bottom: 0;
+    align-items: flex-end;
   }
 
   .job-filter-modal__header {
-    padding: 16px 16px 12px;
+    padding: 12px 16px 12px;
+  }
+
+  .job-filter-modal__header-content {
+    gap: 12px;
+  }
+
+  .job-filter-modal__avatar {
+    width: 48px;
+    height: 48px;
+  }
+
+  .job-filter-modal__user-name {
+    font-size: 18px;
+  }
+
+  .job-filter-modal__user-plan {
+    font-size: 11px;
+  }
+
+  .job-filter-modal__close {
+    width: 36px;
+    height: 36px;
+    
+    .material-symbols-outlined {
+      font-size: 18px;
+    }
   }
 
   .job-filter-modal__content {
-    padding: 20px 16px;
-    // Add padding at bottom to ensure content doesn't get cut off
-    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    padding: 16px;
+    gap: 24px;
+    padding-bottom: calc(160px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    flex: 1;
+    min-height: 0;
+    overscroll-behavior: contain;
   }
+  
 
   .job-filter-modal__title {
-    font-size: 20px;
-    margin-bottom: 20px;
+    font-size: 24px;
+    margin-bottom: 8px;
   }
 
   .job-filter-section {
-    margin-bottom: 24px;
+    gap: 12px;
+  }
+
+  .job-filter-section__title {
+    font-size: 12px;
+  }
+
+  .job-filter-radio-content {
+    padding: 14px;
+  }
+
+  .job-filter-radio-icon {
+    width: 36px;
+    height: 36px;
+    margin-left: 12px;
+    
+    .material-symbols-outlined {
+      font-size: 18px;
+    }
+  }
+
+  .job-filter-radio-label {
+    font-size: 15px;
+  }
+
+  .job-filter-radio-desc {
+    font-size: 11px;
+  }
+
+  .job-filter-range-container {
+    padding: 16px;
+  }
+
+  .job-filter-range-number {
+    font-size: 32px;
+  }
+
+  .job-filter-range-unit {
+    font-size: 11px;
+  }
+
+  .job-filter-range-max {
+    font-size: 11px;
+  }
+
+  .job-filter-price-range {
+    gap: 12px;
+  }
+
+  .job-filter-price-input {
+    padding: 12px 14px 12px 36px;
+    font-size: 15px;
   }
 
   .job-filter-modal__footer {
-    // Add safe area padding for bottom
-    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    padding: 16px;
+    gap: 12px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    position: sticky;
+    bottom: 0;
+    background: rgba(10, 10, 10, 0.98);
+    border-top: 1px solid $border-light;
   }
 
   .job-filter-modal__btn {
-    padding: 12px 16px;
-    font-size: 15px;
+    padding: 14px 16px;
+    font-size: 14px;
+    border-radius: 14px;
+    
+    &--apply {
+      font-size: 15px;
+    }
+    
+    .material-symbols-outlined {
+      font-size: 18px;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .job-filter-modal__content {
+    padding: 14px;
+    gap: 20px;
+  }
+
+  .job-filter-modal__title {
+    font-size: 22px;
+  }
+
+  .job-filter-range-number {
+    font-size: 28px;
+  }
+
+  .job-filter-modal__footer {
+    padding: 14px;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
   }
 }
 

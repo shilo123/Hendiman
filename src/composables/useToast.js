@@ -2,56 +2,87 @@ import { createApp } from "vue";
 import ToastMessage from "@/components/Global/ToastMessage.vue";
 
 let toastContainer = null;
-let toastApp = null;
+let toastApps = []; // Array to hold multiple toast instances
 
-export function useToast() {
-  const showToast = (content, type = "success", duration = 3000) => {
-    // If there's an existing toast app, unmount it first
-    if (toastApp) {
-      try {
-        toastApp.unmount();
-      } catch (e) {
-        // Ignore errors if already unmounted
-      }
-      toastApp = null;
+// Ensure container exists
+function ensureContainer() {
+  if (!toastContainer) {
+    toastContainer = document.createElement("div");
+    toastContainer.id = "toast-container";
+    toastContainer.style.cssText = `
+      position: fixed;
+      top: 0;
+      right: 0;
+      z-index: 100002;
+      pointer-events: none;
+    `;
+    document.body.appendChild(toastContainer);
+  }
+  return toastContainer;
+}
+
+// Remove a specific toast
+function removeToast(id) {
+  const index = toastApps.findIndex((app) => app.id === id);
+  if (index !== -1) {
+    const app = toastApps[index];
+    try {
+      app.instance.unmount();
+    } catch (e) {
+      // Ignore errors
     }
+    toastApps.splice(index, 1);
 
-    // Remove existing container if it exists
-    if (toastContainer) {
+    // Remove container if no more toasts
+    if (toastApps.length === 0 && toastContainer) {
       if (toastContainer.parentNode) {
         toastContainer.parentNode.removeChild(toastContainer);
       }
       toastContainer = null;
     }
+  }
+}
 
-    // Create new container
-    toastContainer = document.createElement("div");
-    toastContainer.id = "toast-container";
-    document.body.appendChild(toastContainer);
+export function useToast() {
+  const showToast = (content, type = "success", duration = 4000) => {
+    ensureContainer();
+
+    const id = Date.now() + Math.random();
+    const container = document.createElement("div");
+    container.style.cssText = `
+      pointer-events: auto;
+      margin-bottom: 8px;
+    `;
+    toastContainer.appendChild(container);
+
+    // Calculate top position based on existing toasts
+    const topOffset = 24 + toastApps.length * 80; // 24px base + 80px per toast
+    container.style.top = `${topOffset}px`;
 
     // Create toast component instance
-    toastApp = createApp(ToastMessage, {
+    const toastApp = createApp(ToastMessage, {
       content,
       type,
       duration,
       onClose: () => {
-        if (toastApp) {
-          try {
-            toastApp.unmount();
-          } catch (e) {
-            // Ignore errors
-          }
-          toastApp = null;
-        }
-        if (toastContainer && toastContainer.parentNode) {
-          toastContainer.parentNode.removeChild(toastContainer);
-        }
-        toastContainer = null;
+        removeToast(id);
       },
     });
 
     // Mount toast
-    toastApp.mount(toastContainer);
+    toastApp.mount(container);
+
+    // Store the app instance
+    toastApps.push({
+      id,
+      instance: toastApp,
+      container,
+    });
+
+    // Auto-remove after duration
+    setTimeout(() => {
+      removeToast(id);
+    }, duration);
   };
 
   return {

@@ -1602,9 +1602,23 @@ function findAvailablePort(startPort) {
         // Get existing credentials for user
         const existingCredentials = user.webauthnCredentials || [];
 
+        // Detect if request is from Capacitor app
+        const originHeader = req.headers.origin || req.headers.referer || "";
+        const isCapacitorApp = originHeader.includes("capacitor://") || 
+                               originHeader.includes("ionic://") ||
+                               (originHeader.includes("https://localhost") && isMobileDevice(req));
+        
+        // Use appropriate rpID based on environment and app type
+        let rpID;
+        if (isCapacitorApp || process.env.NODE_ENV === "production") {
+          // For Capacitor apps or production, use the production domain
+          rpID = WEBAUTHN_RP_ID.replace("https://", "").replace("http://", "").split("/")[0];
+        } else {
+          // For local development web, use localhost
+          rpID = "localhost";
+        }
+
         const rpName = "Hendiman";
-        const rpID =
-          process.env.NODE_ENV === "production" ? WEBAUTHN_RP_ID : "localhost";
 
         const options = await generateRegistrationOptions({
           rpName,
@@ -1678,12 +1692,25 @@ function findAvailablePort(startPort) {
           });
         }
 
-        const rpID =
-          process.env.NODE_ENV === "production" ? WEBAUTHN_RP_ID : "localhost";
-        const origin =
-          process.env.NODE_ENV === "production"
-            ? `https://${WEBAUTHN_RP_ID}`
-            : URL_SERVER;
+        // Detect if request is from Capacitor app
+        const originHeader = req.headers.origin || req.headers.referer || "";
+        const isCapacitorApp = originHeader.includes("capacitor://") || 
+                               originHeader.includes("ionic://") ||
+                               (originHeader.includes("https://localhost") && isMobileDevice(req));
+        
+        // Use appropriate rpID and origin based on environment and app type
+        let rpID;
+        let origin;
+        if (isCapacitorApp || process.env.NODE_ENV === "production") {
+          // For Capacitor apps or production, use the production domain
+          const domain = WEBAUTHN_RP_ID.replace("https://", "").replace("http://", "").split("/")[0];
+          rpID = domain;
+          origin = `https://${domain}`;
+        } else {
+          // For local development web, use localhost
+          rpID = "localhost";
+          origin = URL_SERVER;
+        }
 
         const verification = await verifyRegistrationResponse({
           response: credential,
@@ -1769,8 +1796,21 @@ function findAvailablePort(startPort) {
           });
         }
 
-        const rpID =
-          process.env.NODE_ENV === "production" ? WEBAUTHN_RP_ID : "localhost";
+        // Detect if request is from Capacitor app
+        const origin = req.headers.origin || req.headers.referer || "";
+        const isCapacitorApp = origin.includes("capacitor://") || 
+                               origin.includes("ionic://") ||
+                               (origin.includes("https://localhost") && isMobileDevice(req));
+        
+        // Use appropriate rpID based on environment and app type
+        let rpID;
+        if (isCapacitorApp || process.env.NODE_ENV === "production") {
+          // For Capacitor apps or production, use the production domain
+          rpID = WEBAUTHN_RP_ID.replace("https://", "").replace("http://", "").split("/")[0];
+        } else {
+          // For local development web, use localhost
+          rpID = "localhost";
+        }
 
         const options = await generateAuthenticationOptions({
           rpID,
@@ -1851,12 +1891,25 @@ function findAvailablePort(startPort) {
           });
         }
 
-        const rpID =
-          process.env.NODE_ENV === "production" ? WEBAUTHN_RP_ID : "localhost";
-        const origin =
-          process.env.NODE_ENV === "production"
-            ? `https://${WEBAUTHN_RP_ID}`
-            : URL_SERVER;
+        // Detect if request is from Capacitor app
+        const originHeader = req.headers.origin || req.headers.referer || "";
+        const isCapacitorApp = originHeader.includes("capacitor://") || 
+                               originHeader.includes("ionic://") ||
+                               (originHeader.includes("https://localhost") && isMobileDevice(req));
+        
+        // Use appropriate rpID and origin based on environment and app type
+        let rpID;
+        let origin;
+        if (isCapacitorApp || process.env.NODE_ENV === "production") {
+          // For Capacitor apps or production, use the production domain
+          const domain = WEBAUTHN_RP_ID.replace("https://", "").replace("http://", "").split("/")[0];
+          rpID = domain;
+          origin = `https://${domain}`;
+        } else {
+          // For local development web, use localhost
+          rpID = "localhost";
+          origin = URL_SERVER;
+        }
 
         const verification = await verifyAuthenticationResponse({
           response: credential,
@@ -2531,7 +2584,12 @@ function findAvailablePort(startPort) {
 
         // Handle status filter
         if (status && status !== "all" && status !== "cancelled") {
-          baseMatch.status = status;
+          // If status is "open", include both "open" and "quoted" jobs for handyman
+          if (status === "open" && handymanId) {
+            baseMatch.status = { $in: ["open", "quoted"] };
+          } else {
+            baseMatch.status = status;
+          }
         } else if ((!status || status === "all") && handymanId) {
           // For handyman, exclude "done" jobs when status is "all" or not specified
           baseMatch.status = { $nin: ["done", "cancelled"] };
@@ -7627,7 +7685,10 @@ function findAvailablePort(startPort) {
         if (username !== undefined) update.username = username;
         if (phone !== undefined) update.phone = phone;
         if (email !== undefined) update.email = email;
-        if (city !== undefined) update.city = city;
+        if (city !== undefined) {
+          update.city = city;
+          update.address = city; // גם עדכון שדה address שקיים ב-DB
+        }
         if (Array.isArray(specialties)) {
           // Filter and format specialties - only full categories allowed
           update.specialties = specialties
@@ -7713,8 +7774,12 @@ function findAvailablePort(startPort) {
                     feature.geometry.coordinates) ||
                   [];
                 if (Number.isFinite(lng) && Number.isFinite(lat)) {
-                  // LOG: בדוק את הסדר
+                  // עדכן גם coordinates וגם location (GeoJSON format for MongoDB)
                   update.coordinates = { lng, lat };
+                  update.location = {
+                    type: "Point",
+                    coordinates: [lng, lat], // [longitude, latitude]
+                  };
                   coordinatesFound = true;
                 }
               }
@@ -19411,7 +19476,7 @@ ${subcategoryList}
     app.post("/api/jobs/:jobId/quotations", async (req, res) => {
       try {
         const { jobId } = req.params;
-        const { handymanId, handymanName, quotation, handymanText } = req.body;
+        const { handymanId, handymanName, quotation, handimanText, isAI } = req.body;
 
         if (
           !handymanId ||
@@ -19480,7 +19545,8 @@ ${subcategoryList}
           handymanId: new ObjectId(handymanId),
           handymanName: handymanName,
           quotation: quotation,
-          handymanText: handymanText || "",
+          handimanText: handimanText || "",
+          isAI: isAI === true,
           createdAt: new Date(),
         };
 
@@ -19502,8 +19568,21 @@ ${subcategoryList}
 
         // Send WebSocket event to client if connected
         if (io && job.clientId) {
-          io.to(`user-${job.clientId}`).emit("quotation:new", {
-            jobId: jobId,
+          // Convert clientId to string (handle both ObjectId and string)
+          let clientIdString = "";
+          if (job.clientId.toString) {
+            clientIdString = job.clientId.toString();
+          } else if (job.clientId._id) {
+            clientIdString = job.clientId._id.toString();
+          } else {
+            clientIdString = String(job.clientId);
+          }
+          
+          const roomName = `user-${clientIdString}`;
+          serverLogger.log(`[Quotation] Sending quotation:new to ${roomName} for job ${jobId}`);
+          
+          io.to(roomName).emit("quotation:new", {
+            jobId: String(jobId),
             quotationSummary: {
               handymanId: handymanId,
               handymanName: handymanName,
@@ -19511,6 +19590,18 @@ ${subcategoryList}
               quotationId: newQuotation._id.toString(),
             },
           });
+          
+          // Also log how many clients are in the room (for debugging)
+          const room = io.sockets.adapter.rooms.get(roomName);
+          const clientCount = room ? room.size : 0;
+          serverLogger.log(`[Quotation] Room ${roomName} has ${clientCount} connected clients`);
+        } else {
+          if (!io) {
+            serverLogger.warn("[Quotation] WebSocket io not available");
+          }
+          if (!job.clientId) {
+            serverLogger.warn(`[Quotation] Job ${jobId} has no clientId`);
+          }
         }
 
         // Send FCM push notification to client if not connected
@@ -19530,13 +19621,15 @@ ${subcategoryList}
 
               await sendPushNotification(
                 client.fcmToken,
-                "התקבלה הצעת מחיר חדשה! 💰",
+                `${handymanName} הציע ${quotation}₪ 💰`,
                 `קיבלת הצעת מחיר חדשה לעבודה: ${
                   subcategoryInfo.subcategory || "עבודה"
                 }`,
                 {
                   type: "new_quotation",
                   jobId: jobId,
+                  handymanName: handymanName,
+                  quotation: quotation,
                 }
               );
             }
@@ -19597,6 +19690,179 @@ ${subcategoryList}
           return res.status(500).json({
             success: false,
             message: "שגיאה בטעינת עבודות",
+            error: error.message,
+          });
+        }
+      }
+    );
+
+    // Endpoint: Check for pending quotations for client (used on dashboard load)
+    app.get(
+      "/api/clients/:clientId/pending-quotations",
+      async (req, res) => {
+        try {
+          const { clientId } = req.params;
+          serverLogger.log(`[Pending Quotations] Request for clientId: ${clientId} (type: ${typeof clientId})`);
+          
+          const jobsCollection = getCollectionJobs();
+          
+          // Try both ObjectId and string format for clientId
+          let clientIdQuery;
+          try {
+            clientIdQuery = new ObjectId(clientId);
+            serverLogger.log(`[Pending Quotations] Using ObjectId format: ${clientIdQuery}`);
+          } catch (e) {
+            clientIdQuery = clientId;
+            serverLogger.log(`[Pending Quotations] Using string format: ${clientIdQuery}`);
+          }
+
+          // Find jobs that:
+          // 1. Belong to this client
+          // 2. Have status "quoted" (not yet assigned)
+          // 3. Have at least one quotation
+          // 4. Are not expired
+          // 5. Are not yet assigned (handymanId is null or empty, chosenQuotation is null)
+          const now = new Date();
+          
+          // Simple check: Find jobs with quotations that are not assigned yet
+          
+          // First, check if there are ANY jobs for this client (try both formats)
+          let allClientJobs = await jobsCollection
+            .find({
+              clientId: clientIdQuery,
+            })
+            .limit(10)
+            .toArray();
+          
+          // If not found with ObjectId, try string format
+          if (allClientJobs.length === 0 && typeof clientIdQuery === 'object') {
+            serverLogger.log(`[Pending Quotations] No jobs found with ObjectId, trying string format`);
+            allClientJobs = await jobsCollection
+              .find({
+                clientId: clientId,
+              })
+              .limit(10)
+              .toArray();
+          }
+          
+          serverLogger.log(`[Pending Quotations] Total jobs for client ${clientId}: ${allClientJobs.length}`);
+          
+          // Check each job for quotations
+          allClientJobs.forEach((job, idx) => {
+            serverLogger.log(`[Pending Quotations] Job ${idx + 1}: _id=${job._id}, status=${job.status}, hasQuotations=${!!job.quotations}, quotationsCount=${job.quotations?.length || 0}, handymanId=${job.handymanId}, chosenQuotation=${!!job.chosenQuotation}`);
+          });
+          
+          // Get all jobs for this client that have quotations (try both formats)
+          let jobsWithQuotations = await jobsCollection
+            .find({
+              clientId: clientIdQuery,
+              quotations: { $exists: true, $ne: [], $not: { $size: 0 } },
+            })
+            .sort({ updatedAt: -1 })
+            .toArray();
+          
+          // If not found with ObjectId, try string format
+          if (jobsWithQuotations.length === 0 && typeof clientIdQuery === 'object') {
+            serverLogger.log(`[Pending Quotations] No jobs with quotations found with ObjectId, trying string format`);
+            jobsWithQuotations = await jobsCollection
+              .find({
+                clientId: clientId,
+                quotations: { $exists: true, $ne: [], $not: { $size: 0 } },
+              })
+              .sort({ updatedAt: -1 })
+              .toArray();
+          }
+          
+          serverLogger.log(`[Pending Quotations] Found ${jobsWithQuotations.length} jobs with quotations for client ${clientId}`);
+          
+          // Filter: not assigned, not chosen, not expired
+          const pendingJobs = jobsWithQuotations.filter((job) => {
+            // Check if assigned
+            if (job.handymanId && 
+                job.handymanId !== null && 
+                !(Array.isArray(job.handymanId) && job.handymanId.length === 0)) {
+              serverLogger.log(`[Pending Quotations] Job ${job._id} filtered out: already assigned (handymanId=${job.handymanId})`);
+              return false; // Already assigned
+            }
+            
+            // Check if quotation chosen
+            if (job.chosenQuotation) {
+              serverLogger.log(`[Pending Quotations] Job ${job._id} filtered out: quotation already chosen`);
+              return false; // Quotation already chosen
+            }
+            
+            // Check if expired
+            if (job.quotedUntil && new Date(job.quotedUntil) < now) {
+              serverLogger.log(`[Pending Quotations] Job ${job._id} filtered out: expired (quotedUntil=${job.quotedUntil}, now=${now})`);
+              return false; // Expired
+            }
+            
+            serverLogger.log(`[Pending Quotations] ✅ Job ${job._id} PASSED all filters!`);
+            return true; // All checks passed
+          });
+          
+          // Take only the most recent one
+          if (pendingJobs.length > 0) {
+            pendingJobs.splice(1); // Keep only first item
+          }
+          
+          serverLogger.log(
+            `[Pending Quotations] Found ${pendingJobs.length} pending jobs for client ${clientId}`
+          );
+          
+          if (pendingJobs.length > 0) {
+            const job = pendingJobs[0];
+            serverLogger.log(
+              `[Pending Quotations] ✅ Job details: status=${job.status}, quotations count=${job.quotations?.length || 0}, handymanId=${job.handymanId}, chosenQuotation=${job.chosenQuotation}, quotedUntil=${job.quotedUntil}`
+            );
+            serverLogger.log(`[Pending Quotations] Job ID: ${job._id}`);
+          } else {
+            // Log why no jobs were found
+            serverLogger.log(`[Pending Quotations] ❌ No pending jobs found after filtering`);
+            serverLogger.log(`[Pending Quotations] Total quoted jobs before filtering: ${allQuotedJobs.length}`);
+            
+            if (allQuotedJobs.length > 0) {
+              serverLogger.log(`[Pending Quotations] Analyzing why jobs were filtered out:`);
+              allQuotedJobs.forEach((job, idx) => {
+                serverLogger.log(`[Pending Quotations] Quoted job ${idx + 1} (${job._id}):`, {
+                  id: job._id,
+                  status: job.status,
+                  hasQuotations: !!job.quotations && job.quotations.length > 0,
+                  quotationsCount: job.quotations?.length || 0,
+                  handymanId: job.handymanId,
+                  handymanIdType: typeof job.handymanId,
+                  chosenQuotation: job.chosenQuotation,
+                  quotedUntil: job.quotedUntil,
+                  isExpired: job.quotedUntil ? new Date(job.quotedUntil) < now : false,
+                  now: now.toISOString()
+                });
+              });
+            } else {
+              serverLogger.log(`[Pending Quotations] No quoted jobs found at all for client ${clientId}`);
+            }
+          }
+
+          if (pendingJobs.length > 0) {
+            return res.json({
+              success: true,
+              hasPendingQuotations: true,
+              job: pendingJobs[0],
+            });
+          }
+
+          return res.json({
+            success: true,
+            hasPendingQuotations: false,
+            job: null,
+          });
+        } catch (error) {
+          serverLogger.error(
+            "Error in /api/clients/:clientId/pending-quotations:",
+            error
+          );
+          return res.status(500).json({
+            success: false,
+            message: "שגיאה בבדיקת הצעות מחיר",
             error: error.message,
           });
         }
@@ -19742,6 +20008,187 @@ ${imagesList}
         return res.status(500).json({
           success: false,
           message: "שגיאה ביצירת טקסט הצעת מחיר",
+          error: error.message,
+        });
+      }
+    });
+
+    // Endpoint: AI-generated quotation with PRICE and TEXT (streaming)
+    app.post("/api/quotations/ai-suggest", async (req, res) => {
+      try {
+        const { jobId, desc, subcategoryInfo, locationText, imageUrls, clientName } = req.body;
+
+        if (!jobId) {
+          return res.status(400).json({
+            success: false,
+            message: "jobId is required",
+          });
+        }
+
+        // Get job details from DB for more accurate pricing
+        const jobsCollection = getCollectionJobs();
+        const job = await jobsCollection.findOne({ _id: new ObjectId(jobId) });
+
+        // Build context from job or request body
+        const jobDesc = desc || job?.desc || "";
+        const jobSubcategoryInfo = subcategoryInfo || job?.subcategoryInfo || [];
+        const jobLocationText = locationText || job?.locationText || "";
+        const jobImageUrls = imageUrls || job?.imageUrl || [];
+        const jobClientName = clientName || job?.clientName || "";
+
+        // Find the quoted subcategory
+        const quotedSub = Array.isArray(jobSubcategoryInfo)
+          ? jobSubcategoryInfo.find((sub) => sub.price === "bid") || jobSubcategoryInfo[0]
+          : { category: "כללי", subcategory: "עבודה כללית" };
+
+        const category = quotedSub?.category || "כללי";
+        const subcategory = quotedSub?.subcategory || "עבודה כללית";
+
+        // Build images list
+        const imagesList = Array.isArray(jobImageUrls) && jobImageUrls.length > 0
+          ? jobImageUrls.map((url, idx) => `תמונה ${idx + 1}: ${url}`).join("\n")
+          : "אין תמונות";
+
+        // Get pricing reference from Categories.json
+        let priceReference = "";
+        try {
+          const categoriesPath = path.join(__dirname, "API", "Categorhs.json");
+          const categoriesData = JSON.parse(fs.readFileSync(categoriesPath, "utf8"));
+          
+          // Find the category and subcategory for price reference
+          const categoryData = categoriesData.find(cat => cat.category === category);
+          if (categoryData && Array.isArray(categoryData.subcategories)) {
+            const subData = categoryData.subcategories.find(sub => sub.name === subcategory);
+            if (subData && subData.price) {
+              priceReference = `מחיר עזר מהקטלוג: ${subData.price} ₪`;
+            }
+          }
+        } catch (e) {
+          // Ignore errors reading categories
+        }
+
+        const userContent = `פרטי העבודה להצעת מחיר:
+קטגוריה: ${category}
+תת-קטגוריה: ${subcategory}
+תיאור מהלקוח: ${jobDesc || "אין תיאור"}
+${priceReference ? priceReference : ""}
+מיקום: ${jobLocationText}
+תמונות:
+${imagesList}
+שם הלקוח: ${jobClientName || "לא צוין"}`;
+
+        // Initialize OpenAI
+        const apiKey = process.env.OPENAI_ACCESS_KEY;
+        if (!apiKey) {
+          return res.status(500).json({
+            success: false,
+            message: "שגיאה בהגדרת OpenAI",
+          });
+        }
+
+        const openai = new OpenAI({
+          apiKey: apiKey,
+        });
+
+        // Set up streaming response (SSE)
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+        res.setHeader("Access-Control-Allow-Origin", "*");
+
+        // System prompt for price range and text generation
+        const systemPrompt = `אתה עוזר להנדימן לנסח הצעת מחיר ללקוח עבור עבודה. 
+
+תפקידך:
+1. להציע טווח מחירים הוגן בהתאם לסוג העבודה, המיקום והתיאור
+2. לכתוב הסבר קצר ומקצועי למחיר (עד 4 שורות)
+
+כללים:
+- כתוב בעברית מקצועית וברורה
+- אל תבטיח הבטחות מוחלטות
+- אל תזכיר שאתה AI
+- התחשב במיקום ובמורכבות העבודה
+- אם יש מחיר עזר מהקטלוג, השתמש בו כבסיס אך התאם לפי התיאור
+- תן טווח מחירים (מינימום ומקסימום) שמשקף את אי הוודאות בעבודה
+
+החזר JSON במבנה הבא בלבד:
+{
+  "priceMin": [מספר - המחיר המינימלי בשקלים],
+  "priceMax": [מספר - המחיר המקסימלי בשקלים],
+  "text": "[טקסט ההסבר - עד 4 שורות]"
+}`;
+
+        try {
+          const completion = await openai.chat.completions.create({
+            model: "gpt-4.1-mini",
+            messages: [
+              {
+                role: "system",
+                content: systemPrompt,
+              },
+              {
+                role: "user",
+                content: userContent,
+              },
+            ],
+            temperature: 0.7,
+            max_tokens: 400,
+            response_format: { type: "json_object" },
+          });
+
+          const responseText = completion.choices[0]?.message?.content?.trim() || "{}";
+          let result;
+          try {
+            result = JSON.parse(responseText);
+          } catch (parseError) {
+            // Fallback
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              result = JSON.parse(jsonMatch[0]);
+            } else {
+              result = { price: 150, text: "הצעת מחיר כללית לעבודה זו." };
+            }
+          }
+
+          const priceMin = result.priceMin || result.price || 150;
+          const priceMax = result.priceMax || result.price || 200;
+          const text = result.text || "הצעת מחיר לעבודה.";
+
+          // Ensure min < max
+          const finalPriceMin = Math.min(priceMin, priceMax);
+          const finalPriceMax = Math.max(priceMin, priceMax);
+
+          // Track AI usage
+          if (completion.usage) {
+            await trackAIUsage(completion.usage, "gpt-4.1-mini");
+          }
+
+          // Stream the price range first
+          res.write(`data: ${JSON.stringify({ priceMin: finalPriceMin, priceMax: finalPriceMax })}\n\n`);
+
+          // Stream the text word by word for effect
+          const words = text.split(" ");
+          for (let i = 0; i < words.length; i++) {
+            const word = words[i] + (i < words.length - 1 ? " " : "");
+            res.write(`data: ${JSON.stringify({ text: word })}\n\n`);
+            // Small delay between words for streaming effect
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+
+          // Send completion signal
+          res.write(`data: [DONE]\n\n`);
+          res.end();
+
+        } catch (streamError) {
+          serverLogger.error("Error in AI quotation:", streamError);
+          res.write(`data: ${JSON.stringify({ error: "שגיאה ביצירת הצעת המחיר" })}\n\n`);
+          res.end();
+        }
+      } catch (error) {
+        serverLogger.error("Error in /api/quotations/ai-suggest:", error);
+        return res.status(500).json({
+          success: false,
+          message: "שגיאה ביצירת הצעת מחיר",
           error: error.message,
         });
       }
@@ -19916,6 +20363,130 @@ ${imagesList}
       }
     );
 
+    // Endpoint: Reject quotation (client rejects a specific quote)
+    app.post(
+      "/api/jobs/:jobId/quotations/:quotationId/reject",
+      async (req, res) => {
+        try {
+          const { jobId, quotationId } = req.params;
+          const jobsCollection = getCollectionJobs();
+          const collection = getCollection();
+
+          // Find job
+          const job = await jobsCollection.findOne({
+            _id: new ObjectId(jobId),
+          });
+          if (!job) {
+            return res.status(404).json({
+              success: false,
+              message: "עבודה לא נמצאה",
+            });
+          }
+
+          // Validate job status
+          if (job.status !== "quoted") {
+            return res.status(400).json({
+              success: false,
+              message: "עבודה לא במצב הצעת מחיר",
+            });
+          }
+
+          // Find quotation
+          const quotations = Array.isArray(job.quotations)
+            ? job.quotations
+            : [];
+          const rejectedQuotation = quotations.find(
+            (q) => String(q._id) === String(quotationId)
+          );
+
+          if (!rejectedQuotation) {
+            return res.status(404).json({
+              success: false,
+              message: "הצעת מחיר לא נמצאה",
+            });
+          }
+
+          const rejectedHandymanId = rejectedQuotation.handymanId;
+          const rejectedHandymanName = rejectedQuotation.handymanName;
+
+          // Remove the quotation from the job
+          const updateResult = await jobsCollection.updateOne(
+            { _id: new ObjectId(jobId) },
+            {
+              $pull: { quotations: { _id: new ObjectId(quotationId) } },
+              $set: { updatedAt: new Date() },
+            }
+          );
+
+          if (updateResult.matchedCount === 0) {
+            return res.status(404).json({
+              success: false,
+              message: "עבודה לא נמצאה",
+            });
+          }
+
+          // Send WebSocket event to rejected handyman
+          if (io) {
+            io.to(`user-${rejectedHandymanId}`).emit("quotation:rejected", {
+              jobId: jobId,
+              message: "הצעת המחיר שלך נדחתה",
+            });
+          }
+
+          // Send FCM push notification to rejected handyman
+          try {
+            const handyman = await collection.findOne({
+              _id: rejectedHandymanId,
+            });
+            if (handyman && handyman.fcmToken) {
+              // Find subcategory for message
+              const subcategoryInfo =
+                Array.isArray(job.subcategoryInfo) &&
+                job.subcategoryInfo.length > 0
+                  ? job.subcategoryInfo.find((sub) => sub.price === "bid") ||
+                    job.subcategoryInfo[0]
+                  : { subcategory: "עבודה" };
+
+              await sendPushNotification(
+                handyman.fcmToken,
+                "הצעת המחיר נדחתה 😔",
+                `הלקוח דחה את הצעת המחיר שלך לעבודה: ${
+                  subcategoryInfo.subcategory || "עבודה"
+                }. תוכל להציע הצעה חדשה.`,
+                {
+                  type: "quotation_rejected",
+                  jobId: jobId,
+                }
+              );
+            }
+          } catch (pushError) {
+            serverLogger.error(
+              "Error sending push notification to handyman:",
+              pushError
+            );
+          }
+
+          return res.json({
+            success: true,
+            message: "הצעת מחיר נדחתה",
+            jobId: jobId,
+            rejectedHandymanId: rejectedHandymanId.toString(),
+            rejectedHandymanName: rejectedHandymanName,
+          });
+        } catch (error) {
+          serverLogger.error(
+            "Error in /api/jobs/:jobId/quotations/:quotationId/reject:",
+            error
+          );
+          return res.status(500).json({
+            success: false,
+            message: "שגיאה בדחיית הצעת מחיר",
+            error: error.message,
+          });
+        }
+      }
+    );
+
     // ============================================================
     // QUOTATION SYSTEM - Timeout/Expired Jobs Checker
     // ============================================================
@@ -20053,8 +20624,9 @@ ${imagesList}
     io.on("connection", (socket) => {
       // Join user's personal room (for receiving job-accepted events)
       socket.on("join-user", (userId) => {
-        const roomName = `user-${userId}`;
+        const roomName = `user-${String(userId)}`;
         socket.join(roomName);
+        serverLogger.log(`[WebSocket] User ${userId} joined room ${roomName}`);
       });
 
       // Leave user's personal room

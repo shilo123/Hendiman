@@ -1,18 +1,26 @@
 <template>
   <Transition name="toast">
-    <div v-if="isVisible" :class="['toast', type]">
+    <div v-if="isVisible" :class="['toast', type]" dir="rtl">
       <div class="toast-content">
-        <span class="toast-icon">{{
-          type === "success"
-            ? "✓"
-            : type === "error"
-            ? "✕"
-            : type === "warning"
-            ? "⚠"
-            : "ℹ"
-        }}</span>
-        <span class="toast-message">{{ content }}</span>
-        <button class="toast-close" @click="hide" aria-label="סגור">✕</button>
+        <span class="toast-icon">
+          <span class="material-symbols-outlined">{{
+            type === "success"
+              ? "check_circle"
+              : type === "error"
+              ? "cancel"
+              : type === "warning"
+              ? "warning"
+              : "info"
+          }}</span>
+        </span>
+        <p class="toast-message">{{ content }}</p>
+        <button
+          class="toast-close"
+          @click="hide"
+          :aria-label="'סגור'"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
       </div>
     </div>
   </Transition>
@@ -60,63 +68,97 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .toast {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  min-width: 300px;
-  max-width: 500px;
-  padding: 16px 20px;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  position: relative;
   z-index: 100002;
-  animation: slideInDown 0.3s ease-out;
+  animation: fadeIn 0.3s ease-out;
+  min-width: 320px;
+  max-width: 500px;
+  right: 24px;
+
+  @media (max-width: 640px) {
+    right: 16px;
+    min-width: auto;
+    max-width: none;
+    width: calc(100vw - 32px);
+  }
 }
 
 .toast.success {
-  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-  border: 2px solid #f97316;
-  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.4);
+  background: #f27f0d; // bg-orange-500
+  border: 2px solid #fb923c; // border-orange-400
 }
 
 .toast.error {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  border: 2px solid #f97316;
-  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.3);
+  background: #000000; // bg-black
+  border: 2px solid #f27f0d; // border-orange-500
 }
 
 .toast.warning {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  border: 2px solid #f59e0b;
-  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4);
+  background: #ea580c; // bg-orange-600
+  border: 2px solid #fb923c; // border-orange-400
 }
 
 .toast.info {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  border: 2px solid #3b82f6;
-  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+  background: #3b82f6; // bg-blue-500
+  border: 2px solid #60a5fa; // border-blue-400
 }
 
 .toast-content {
   display: flex;
   align-items: center;
   gap: 12px;
-  color: #ffffff;
-  position: relative;
+  padding: 16px 20px;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+
+  @media (max-width: 640px) {
+    padding: 14px 18px;
+    gap: 10px;
+  }
 }
 
 .toast-icon {
-  font-size: 20px;
-  font-weight: bold;
-  width: 24px;
-  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 50%;
   flex-shrink: 0;
+
+  .material-symbols-outlined {
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+.toast.success .toast-icon .material-symbols-outlined {
+  color: #ffffff;
+}
+
+.toast.error .toast-icon .material-symbols-outlined {
+  color: #f27f0d;
+}
+
+.toast.warning .toast-icon .material-symbols-outlined {
+  color: #ffffff;
+}
+
+.toast.info .toast-icon .material-symbols-outlined {
+  color: #ffffff;
 }
 
 .toast-message {
@@ -124,44 +166,69 @@ export default {
   font-weight: 500;
   line-height: 1.5;
   flex: 1;
+  margin: 0;
+  text-align: right;
+
+  @media (max-width: 640px) {
+    font-size: 14px;
+  }
+}
+
+.toast.success .toast-message {
+  color: #ffffff;
+}
+
+.toast.error .toast-message {
+  color: #f27f0d;
+}
+
+.toast.warning .toast-message {
+  color: #ffffff;
+}
+
+.toast.info .toast-message {
+  color: #ffffff;
 }
 
 .toast-close {
-  background: rgba(255, 255, 255, 0.2);
+  background: transparent;
   border: none;
-  color: #ffffff;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
-  font-weight: bold;
   padding: 0;
   flex-shrink: 0;
-  transition: all 0.2s ease;
+  transition: opacity 0.2s ease;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.3);
-    transform: scale(1.1);
+    opacity: 0.7;
   }
 
-  &:active {
-    transform: scale(0.95);
+  .material-symbols-outlined {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 
-@keyframes slideInDown {
-  from {
-    transform: translateX(-50%) translateY(-100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(-50%) translateY(0);
-    opacity: 1;
-  }
+.toast.success .toast-close .material-symbols-outlined {
+  color: #ffffff;
+}
+
+.toast.error .toast-close .material-symbols-outlined {
+  color: #f27f0d;
+}
+
+.toast.warning .toast-close .material-symbols-outlined {
+  color: #ffffff;
+}
+
+.toast.info .toast-close .material-symbols-outlined {
+  color: #ffffff;
 }
 
 .toast-enter-active,
@@ -170,22 +237,13 @@ export default {
 }
 
 .toast-enter-from {
-  transform: translateX(-50%) translateY(-100%);
   opacity: 0;
+  transform: scale(0.9);
 }
 
 .toast-leave-to {
-  transform: translateX(-50%) translateY(-100%);
   opacity: 0;
-}
-
-@media (max-width: 480px) {
-  .toast {
-    left: 50%;
-    right: auto;
-    min-width: auto;
-    max-width: calc(100% - 40px);
-    width: calc(100% - 40px);
-  }
+  transform: scale(0.9);
 }
 </style>
+

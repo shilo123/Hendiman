@@ -157,6 +157,16 @@
 
           <div v-if="specOpen" class="ps__specEditor">
             <CategoryCheckboxSelector v-model="form.specialties" />
+            <div class="ps__specEditor__footer">
+              <button
+                class="ps__specEditor__saveBtn"
+                type="button"
+                @click="saveSpecialties"
+                :disabled="isSavingSpecialties"
+              >
+                {{ isSavingSpecialties ? 'שומר...' : 'שמור שינויים' }}
+              </button>
+            </div>
           </div>
         </section>
 
@@ -235,7 +245,7 @@
               <div class="ps__actionIconWrapper">
                 <span class="material-symbols-outlined">home_pin</span>
               </div>
-              <span class="ps__actionTitle">ניהול כתובות</span>
+              <span class="ps__actionTitle">שנה כתובת</span>
             </div>
             <span class="material-symbols-outlined ps__actionChevron ltr:rotate-180">
               chevron_left
@@ -375,7 +385,7 @@
             type="button"
             @click="onSave"
           >
-          שמור
+          שמור שינויים
         </button>
       </footer>
       </div>
@@ -417,13 +427,17 @@
             :key="c.name"
             type="button"
             class="pickerModal__item"
+            :class="{ 'pickerModal__item--selected': selectedCityAddress === c.name }"
             @click="selectCity(c.name)"
           >
             <span class="material-symbols-outlined pickerModal__itemIcon">
               location_on
             </span>
             <span class="pickerModal__itemTxt">{{ c.name }}</span>
-            <span class="material-symbols-outlined pickerModal__itemChev">
+            <span v-if="selectedCityAddress === c.name" class="material-symbols-outlined pickerModal__itemCheck icon-filled">
+              check_circle
+            </span>
+            <span v-else class="material-symbols-outlined pickerModal__itemChev">
               chevron_left
             </span>
           </button>
@@ -438,8 +452,17 @@
             class="btn btn--ghost"
             type="button"
             @click="closeCityPicker"
+            :disabled="isSavingAddress"
           >
-            סגור
+            בטל
+          </button>
+          <button
+            class="btn btn--primary"
+            type="button"
+            @click="saveAddress"
+            :disabled="!selectedCityAddress || isSavingAddress"
+          >
+            {{ isSavingAddress ? 'שומר...' : 'שמור' }}
           </button>
         </div>
       </div>
@@ -541,8 +564,11 @@ export default {
 
       cityPickerOpen: false,
       citySearch: '',
+      selectedCityAddress: null, // העיר שנבחרה במודל (לפני שמירה)
       specOpen: false,
       showEditModal: false,
+      isSavingAddress: false,
+      isSavingSpecialties: false,
 
       showDeleteConfirm: false,
       isDeleting: false,
@@ -719,22 +745,19 @@ export default {
     openCityPicker() {
       this.cityPickerOpen = true;
       this.citySearch = this.cityInput || '';
+      // אם יש עיר נוכחית, סמן אותה כברירת מחדל
+      this.selectedCityAddress = this.cityInput || null;
     },
     closeCityPicker() {
       this.cityPickerOpen = false;
       this.citySearch = '';
+      this.selectedCityAddress = null;
     },
     onCitySearch() {},
     selectCity(name) {
-      this.form.address = name;
-      this.cityInput = name;
-      this.cityError = '';
-      this.cityPickerOpen = false;
-
-      const foundCity = cities.find((c) => c.name === name);
-      this.cityEnglishName = foundCity
-        ? foundCity.english_name || foundCity.שם_ישוב_לועזי || null
-        : null;
+      // רק בוחר את העיר, לא סוגר את המודל
+      this.selectedCityAddress = name;
+      this.citySearch = name; // עדכן את החיפוש כדי להציג את העיר שנבחרה
     },
 
     validateCity() {
@@ -761,6 +784,100 @@ export default {
       this.form.specialties = this.form.specialties.filter(
         (s) => (s.name || s) !== (spec.name || spec)
       );
+    },
+
+    async saveAddress() {
+      if (!this.selectedCityAddress || this.isSavingAddress) return;
+
+      // מצא את העיר ב-JSON
+      const foundCity = cities.find((c) => c.name === this.selectedCityAddress);
+      if (!foundCity) {
+        this.toast?.showError('יש לבחור עיר מתוך הרשימה');
+        return;
+      }
+
+      const cityEnglishName = foundCity.english_name || foundCity.שם_ישוב_לועזי || null;
+
+      this.isSavingAddress = true;
+
+      try {
+        const userId = this.user?._id || this.user?.id;
+        if (!userId) {
+          this.toast?.showError('לא הצלחנו לזהות את המשתמש');
+          this.isSavingAddress = false;
+          return;
+        }
+
+        // שמור את הכתובת בשרת (השרת יעדכן את הקואורדינטות אוטומטית)
+        const res = await axios.post(`${URL}/user/update-profile`, {
+          userId,
+          city: this.selectedCityAddress,
+          cityEnglishName: cityEnglishName,
+        });
+
+        if (res.data?.success) {
+          // עדכן את המשתנים המקומיים
+          this.cityInput = this.selectedCityAddress;
+          this.form.address = this.selectedCityAddress;
+          this.cityEnglishName = cityEnglishName;
+
+          // עדכן את המשתמש ב-store דרך emit
+          this.$emit('save', {
+            address: this.selectedCityAddress,
+            cityEnglishName: cityEnglishName,
+            ...res.data.user, // שלח את כל הנתונים המעודכנים מהשרת
+          });
+
+          this.toast?.showSuccess('הכתובת עודכנה בהצלחה');
+          this.closeCityPicker();
+        } else {
+          this.toast?.showError('לא הצלחנו לעדכן את הכתובת');
+        }
+      } catch (error) {
+        logger.error('[ProfileSheet] Error saving address:', error);
+        this.toast?.showError('לא הצלחנו לעדכן את הכתובת');
+      } finally {
+        this.isSavingAddress = false;
+      }
+    },
+
+    async saveSpecialties() {
+      if (!this.isHandyman || this.isSavingSpecialties) return;
+
+      this.isSavingSpecialties = true;
+
+      try {
+        const userId = this.user?._id || this.user?.id;
+        if (!userId) {
+          this.toast?.showError('לא הצלחנו לזהות את המשתמש');
+          this.isSavingSpecialties = false;
+          return;
+        }
+
+        // שמור את תחומי ההתמחות בשרת
+        const res = await axios.post(`${URL}/user/update-profile`, {
+          userId,
+          specialties: this.form.specialties,
+        });
+
+        if (res.data?.success) {
+          // עדכן את המשתמש ב-store דרך emit
+          this.$emit('save', {
+            specialties: this.form.specialties,
+            ...res.data.user, // שלח את כל הנתונים המעודכנים מהשרת
+          });
+
+          this.toast?.showSuccess('תחומי ההתמחות עודכנו בהצלחה');
+          this.specOpen = false;
+        } else {
+          this.toast?.showError('לא הצלחנו לעדכן את תחומי ההתמחות');
+        }
+      } catch (error) {
+        logger.error('[ProfileSheet] Error saving specialties:', error);
+        this.toast?.showError('לא הצלחנו לעדכן את תחומי ההתמחות');
+      } finally {
+        this.isSavingSpecialties = false;
+      }
     },
 
     onSave() {
@@ -1326,6 +1443,37 @@ $stroke: rgba(255, 255, 255, 0.1);
   margin-top: 8px;
   padding-top: 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ps__specEditor__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+}
+
+.ps__specEditor__saveBtn {
+  padding: 12px 24px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, $primary, $primary-light);
+  color: $text-dark;
+  border: 1px solid rgba($primary, 0.55);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 4px 12px rgba(242, 127, 13, 0.22);
+
+  &:hover:not(:disabled) {
+    box-shadow: 0 6px 16px rgba(242, 127, 13, 0.28);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 }
 
 .ps__divider {
@@ -1486,12 +1634,15 @@ $stroke: rgba(255, 255, 255, 0.1);
 .ps__editModalCard {
   width: 100%;
   max-width: 440px;
+  max-height: calc(100vh - 32px);
   background: $surface-dark;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 22px;
   overflow: hidden;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.62);
   animation: popIn 0.22s ease-out;
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes popIn {
@@ -1511,6 +1662,7 @@ $stroke: rgba(255, 255, 255, 0.1);
   justify-content: space-between;
   padding: 22px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
 }
 
 .ps__editModalTitle {
@@ -1545,6 +1697,9 @@ $stroke: rgba(255, 255, 255, 0.1);
 
 .ps__editModalContent {
   padding: 22px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .ps__editGrid {
@@ -1670,6 +1825,8 @@ $stroke: rgba(255, 255, 255, 0.1);
   padding: 22px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
+  margin-top: auto;
 }
 
 .ps__editBtn {
@@ -1847,6 +2004,16 @@ $stroke: rgba(255, 255, 255, 0.1);
   border-color: rgba($primary, 0.22);
 }
 
+.pickerModal__item--selected {
+  background: rgba($primary, 0.2);
+  border-color: rgba($primary, 0.4);
+}
+
+.pickerModal__itemCheck {
+  color: $primary;
+  font-size: 20px;
+}
+
 .pickerModal__empty {
   padding: 18px 10px;
   text-align: center;
@@ -1858,6 +2025,8 @@ $stroke: rgba(255, 255, 255, 0.1);
   padding: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(0, 0, 0, 0.25);
+  display: flex;
+  gap: 10px;
 }
 
 // Unified modal styles
@@ -1960,9 +2129,30 @@ $stroke: rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.06);
   color: $text-light;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.1);
     border-color: rgba($primary, 0.18);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.btn--primary {
+  background: linear-gradient(135deg, $primary, $primary-light);
+  color: $text-dark;
+  border-color: rgba($primary, 0.55);
+  box-shadow: 0 18px 55px rgba(242, 127, 13, 0.22);
+
+  &:hover:not(:disabled) {
+    box-shadow: 0 22px 60px rgba(242, 127, 13, 0.25);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 }
 

@@ -45,15 +45,29 @@ const isIOS = Capacitor.getPlatform() === "ios";
 
 let messaging = null;
 if (typeof window !== "undefined") {
-  // For web platform, check for service worker support
-  // For Android/iOS, we'll use native FCM (configured via google-services.json)
-  // Firebase JS SDK can still work in native apps, but service worker is not available
-  if (!isNative || (isAndroid && typeof navigator !== "undefined" && "serviceWorker" in navigator)) {
+  // Check if browser supports required APIs for Firebase Messaging
+  const hasServiceWorker = typeof navigator !== "undefined" && "serviceWorker" in navigator;
+  const isSecureContext = typeof window !== "undefined" && 
+    (window.location.protocol === "https:" || 
+     window.location.hostname === "localhost" || 
+     window.location.hostname === "127.0.0.1");
+  
+  // For web platform, check for service worker support and secure context (HTTPS/localhost)
+  // For Android/iOS native apps, we'll use native FCM (configured via google-services.json)
+  const shouldInitMessaging = !isNative && hasServiceWorker && isSecureContext;
+  
+  if (shouldInitMessaging) {
     try {
       messaging = getMessaging(app);
     } catch (error) {
       // Messaging not supported or already initialized
+      console.warn("Firebase Messaging initialization failed:", error);
+      messaging = null;
     }
+  } else if (!isNative && !isSecureContext) {
+    console.warn("Firebase Messaging requires HTTPS or localhost. Current protocol:", window.location.protocol);
+  } else if (!isNative && !hasServiceWorker) {
+    console.warn("Firebase Messaging requires Service Worker support, which is not available in this browser.");
   }
 }
 

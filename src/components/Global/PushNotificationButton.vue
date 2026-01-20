@@ -37,6 +37,22 @@ export default {
     async enablePush() {
       if (this.isRequesting || this.isEnabled) return;
 
+      // Check if browser supports notifications
+      if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+        this.toast?.showError(
+          "הדפדפן שלך לא תומך בהתראות דחיפה. אנא השתמש בדפדפן מודרני."
+        );
+        return;
+      }
+
+      // Check if messaging is available (requires HTTPS)
+      if (!messaging) {
+        this.toast?.showError(
+          "Firebase Messaging לא זמין. זה דורש חיבור מאובטח (HTTPS) או localhost."
+        );
+        return;
+      }
+
       this.isRequesting = true;
 
       try {
@@ -54,11 +70,6 @@ export default {
         const registration = await navigator.serviceWorker.register(
           "/firebase-messaging-sw.js"
         );
-
-        // Get FCM token
-        if (!messaging) {
-          throw new Error("Firebase Messaging לא זמין");
-        }
 
         const token = await getToken(messaging, {
           vapidKey: VAPID_KEY,
