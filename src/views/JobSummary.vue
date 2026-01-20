@@ -139,10 +139,15 @@
                 </div>
                 <div class="financialItem__value financialItem__value--client">
                   {{
-                    paymentInfo?.amountWithVAT ||
-                    paymentInfo?.totalAmount ||
-                    jobInfo?.price ||
-                    0
+                    formatMoney(
+                      paymentInfo?.totalAmount ||
+                      paymentInfo?.amountWithVAT ||
+                      (paymentInfo?.amount && paymentInfo?.platformFee
+                        ? paymentInfo.amount + paymentInfo.platformFee
+                        : null) ||
+                      jobInfo?.price ||
+                      0
+                    )
                   }}
                   ₪
                 </div>

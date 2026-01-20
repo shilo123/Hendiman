@@ -141,10 +141,16 @@ export default {
     });
   },
   computed: {
+    // Base amount (what handyman receives before fee) - this is the job price
     totalAmount() {
-      return this.paymentInfo?.totalAmount || this.jobInfo?.price || 0;
+      // Use 'amount' field (base price) if available, otherwise fallback to totalAmount or job price
+      return this.paymentInfo?.amount || this.paymentInfo?.totalAmount || this.jobInfo?.price || 0;
     },
     commission() {
+      // Use platformFee from paymentInfo if available, otherwise calculate from totalAmount
+      if (this.paymentInfo?.platformFee !== undefined) {
+        return this.paymentInfo.platformFee;
+      }
       if (this.platformFeePercent === null) return 0; // Wait for API call
       const feeRate = this.platformFeePercent / 100;
       return Math.round(this.totalAmount * feeRate * 100) / 100;
@@ -153,6 +159,7 @@ export default {
       return this.jobInfo?.urgent ? 10 : 0;
     },
     totalEarned() {
+      // Use spacious_H (handyman revenue) if available
       if (this.paymentInfo && this.paymentInfo.spacious_H !== undefined) {
         return this.paymentInfo.spacious_H;
       }

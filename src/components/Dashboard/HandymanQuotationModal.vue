@@ -118,9 +118,9 @@
                     <span v-if="!isLoadingAI" class="ai-badge">AI</span>
                   </div>
 
-                  <!-- AI Generated Price Range -->
+                  <!-- AI Generated Price Range (Reference Only) -->
                   <div class="ai-price-display">
-                    <span class="ai-price-label">טווח מחיר מוצע:</span>
+                    <span class="ai-price-label">טווח מחיר מוצע (המלצה בלבד):</span>
                     <div class="ai-price-range">
                       <span class="ai-price-value">
                         {{ aiPriceMin || '---' }}
@@ -131,6 +131,22 @@
                         {{ aiPriceMax || '---' }}
                         <span v-if="aiPriceMax" class="ai-price-currency">₪</span>
                       </span>
+                    </div>
+                  </div>
+
+                  <!-- Price Input for AI Mode -->
+                  <div class="input-group">
+                    <label class="input-label">המחיר שלך (כולל מע״מ)</label>
+                    <div class="price-input-wrapper">
+                      <input
+                        v-model.number="price"
+                        type="number"
+                        class="price-input"
+                        placeholder="0"
+                        min="1"
+                        @input="validatePrice"
+                      />
+                      <span class="price-currency">₪</span>
                     </div>
                   </div>
 
@@ -261,9 +277,10 @@ export default {
   computed: {
     canSubmit() {
       if (this.inputMode === "manual") {
-        return this.price && this.price > 0;
+        return this.price && this.price > 0 && this.handimanText && this.handimanText.trim().length > 0;
       } else {
-        return this.aiPriceMin && this.aiPriceMin > 0 && !this.isLoadingAI;
+        // In AI mode, need both price and text
+        return this.price && this.price > 0 && this.aiText && this.aiText.trim().length > 0 && !this.isLoadingAI;
       }
     },
     existingQuotationsCount() {
@@ -273,13 +290,8 @@ export default {
       return 0;
     },
     finalPrice() {
-      if (this.inputMode === "ai") {
-        // Use average of min and max, or min if max not available
-        if (this.aiPriceMin && this.aiPriceMax) {
-          return Math.round((this.aiPriceMin + this.aiPriceMax) / 2);
-        }
-        return this.aiPriceMin || null;
-      }
+      // In AI mode, use the price from input (user entered it)
+      // In manual mode, use the price from input
       return this.price;
     },
     finalText() {
@@ -293,6 +305,20 @@ export default {
         document.body.style.overflow = "hidden";
       } else {
         document.body.style.overflow = "";
+      }
+    },
+    // Auto-scroll when AI text is being written
+    aiText() {
+      if (this.inputMode === "ai" && this.$refs.aiTextContainer) {
+        this.$nextTick(() => {
+          const container = this.$refs.aiTextContainer;
+          if (container) {
+            container.scrollTo({
+              top: container.scrollHeight,
+              behavior: 'smooth'
+            });
+          }
+        });
       }
     },
   },
@@ -350,14 +376,11 @@ export default {
     },
     switchToManual() {
       this.inputMode = "manual";
-      // Optionally copy AI values to manual fields
-      if (this.aiPriceMin) {
-        // Use average or min price
-        this.price = this.aiPriceMax ? Math.round((this.aiPriceMin + this.aiPriceMax) / 2) : this.aiPriceMin;
-      }
+      // Copy AI text to manual field
       if (this.aiText) {
         this.handimanText = this.aiText;
       }
+      // Price is already set by user in AI mode, so keep it
     },
     async requestAISuggestion() {
       this.isLoadingAI = true;
@@ -426,11 +449,15 @@ export default {
                 // Handle streaming text
                 if (parsed.text) {
                   this.aiText += parsed.text;
-                  // Auto-scroll to bottom
+                  // Auto-scroll to bottom with smooth scrolling
                   this.$nextTick(() => {
                     if (this.$refs.aiTextContainer) {
-                      this.$refs.aiTextContainer.scrollTop =
-                        this.$refs.aiTextContainer.scrollHeight;
+                      const container = this.$refs.aiTextContainer;
+                      // Smooth scroll to bottom
+                      container.scrollTo({
+                        top: container.scrollHeight,
+                        behavior: 'smooth'
+                      });
                     }
                   });
                 }
@@ -967,7 +994,36 @@ $font-family: "Inter", "Noto Sans Hebrew", -apple-system, BlinkMacSystemFont, "S
 .ai-section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
+}
+
+// Price input in AI mode
+.ai-section .input-group {
+  margin-top: 0;
+}
+
+.ai-section .price-input-wrapper {
+  margin-top: 0;
+}
+
+.ai-section .price-input {
+  font-size: 3rem; // Smaller than manual mode but still prominent
+  padding: 24px 24px 24px 56px;
+  
+  @media (max-width: 640px) {
+    font-size: 2.5rem;
+    padding: 20px 20px 20px 48px;
+  }
+}
+
+.ai-section .price-currency {
+  font-size: 2.5rem;
+  left: 24px;
+  
+  @media (max-width: 640px) {
+    font-size: 2rem;
+    left: 20px;
+  }
 }
 
 .ai-writing-container {
@@ -1052,7 +1108,7 @@ $font-family: "Inter", "Noto Sans Hebrew", -apple-system, BlinkMacSystemFont, "S
   padding: 14px 16px;
   border-radius: 12px;
   background: rgba($ai-purple, 0.15);
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .ai-price-label {
@@ -1109,6 +1165,28 @@ $font-family: "Inter", "Noto Sans Hebrew", -apple-system, BlinkMacSystemFont, "S
   line-height: 1.7;
   max-height: 150px;
   overflow-y: auto;
+  scroll-behavior: smooth;
+  
+  // Hide scrollbar but keep functionality
+  scrollbar-width: thin;
+  scrollbar-color: rgba($ai-purple, 0.3) transparent;
+  
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: rgba($ai-purple, 0.3);
+    border-radius: 3px;
+    
+    &:hover {
+      background: rgba($ai-purple, 0.5);
+    }
+  }
 }
 
 .ai-text-stream {

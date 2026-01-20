@@ -114,9 +114,9 @@
         </button>
       </form>
 
-      <!-- Biometric Authentication - Only on Mobile -->
+      <!-- Biometric Authentication - Only on Native App (not web) -->
       <div
-        v-if="isMobile && hasBiometricCredentials"
+        v-if="isNativeApp && hasBiometricCredentials"
         class="biometric-auth"
       >
         <button
@@ -193,6 +193,47 @@ import {
   startAuthentication,
 } from "@simplewebauthn/browser";
 
+// Conditional imports for native-only plugins
+// Using dynamic imports to avoid build errors when plugins aren't installed
+let Preferences = null;
+let Biometric = null;
+
+// Helper function to load native plugins dynamically at runtime
+// This prevents webpack from trying to bundle them during build
+const loadNativePlugins = async () => {
+  if (typeof window === "undefined" || !Capacitor.isNativePlatform()) {
+    return;
+  }
+  
+  try {
+    // Load Preferences plugin using dynamic import
+    if (!Preferences) {
+      try {
+        const PrefsModule = await import(/* webpackIgnore: true */ "@capacitor/preferences");
+        Preferences = PrefsModule.Preferences;
+      } catch (e) {
+        // Plugin not available - will handle gracefully
+        console.log("Preferences plugin not available");
+      }
+    }
+    
+    // Try to load biometric plugin - it might not exist
+    // If it doesn't exist, we'll use WebAuthn as fallback
+    if (!Biometric) {
+      try {
+        const BiometricModule = await import(/* webpackIgnore: true */ "@capacitor-community/biometric");
+        Biometric = BiometricModule.Biometric;
+      } catch (e) {
+        // Plugin not installed or not available - will use WebAuthn
+        console.log("Biometric plugin not available, will use WebAuthn fallback");
+      }
+    }
+  } catch (error) {
+    // Silently fail - plugins will be null and code will handle it gracefully
+    console.log("Native plugins check failed:", error.message);
+  }
+};
+
 export default {
   name: "logIn",
   data() {
@@ -209,6 +250,7 @@ export default {
       isBlocked: false,
       useVideo: false, // שנה ל-true אם יש לך קובץ וידאו
       isMobile: false,
+      isNativeApp: false,
       hasBiometricCredentials: false,
       biometricLoading: false,
       currentUserId: null,
@@ -221,6 +263,12 @@ export default {
     this.checkIfMobile();
     this.handleGoogleCallback();
     this.handleFacebookCallback();
+    
+    // Check for saved biometric credentials in native app
+    if (Capacitor.isNativePlatform()) {
+      await this.checkNativeBiometricSupport();
+    }
+    
     // בדוק אם המשתמש הועבר לכאן כי הוא חסום
     if (this.$route.query.blocked === "true") {
       this.isBlocked = true;
@@ -256,6 +304,8 @@ export default {
           userAgent
         );
       this.isMobile = isNative || isMobileDevice;
+      // Only set isNativeApp to true if actually running in native app (not web)
+      this.isNativeApp = isNative;
     },
 
     // Handle Android IME composition end event
@@ -280,26 +330,68 @@ export default {
       }
     },
 
+    async checkNativeBiometricSupport() {
+      // Check if native biometric is available
+      try {
+        if (!Capacitor.isNativePlatform()) {
+          this.hasBiometricCredentials = false;
+          return;
+        }
+
+        // Load plugins if not already loaded
+        if (!Preferences || !Biometric) {
+          await loadNativePlugins();
+        }
+
+        if (!Biometric) {
+          this.hasBiometricCredentials = false;
+          return;
+        }
+
+        const available = await Biometric.checkBiometry({
+          reason: 'אנא זהה את עצמך',
+          title: 'אימות ביומטרי',
+          subtitle: 'השתמש בטביעת אצבע להתחברות',
+          description: 'אנא השתמש בטביעת האצבע שלך כדי להתחבר',
+        });
+
+        // Check if we have saved credentials
+        const savedUsername = await Preferences.get({ key: 'biometric_username' });
+        const savedUserId = await Preferences.get({ key: 'biometric_userId' });
+
+        this.hasBiometricCredentials = 
+          available.isAvailable && 
+          savedUsername.value && 
+          savedUserId.value;
+        
+        if (this.hasBiometricCredentials) {
+          // Auto-fill username if available
+          this.username = savedUsername.value;
+        }
+      } catch (error) {
+        this.hasBiometricCredentials = false;
+      }
+    },
+
     async checkBiometricCredentials() {
-      if (!this.isMobile || !this.currentUserId) {
+      // Only check for biometric in native apps, not in web
+      if (!this.isNativeApp || !this.currentUserId) {
         this.hasBiometricCredentials = false;
         return;
       }
 
-      // In native app, WebAuthn should work, but check server support
-      try {
-        const { data } = await axios.post(`${URL}/webauthn/check`, {
-          userId: this.currentUserId,
-        });
-        this.hasBiometricCredentials = data.success && data.hasCredentials;
-      } catch (error) {
-        // In case of error, disable biometric option
-        this.hasBiometricCredentials = false;
-        // Don't show error to user, just silently disable option
-      }
+      // For native apps only, use Capacitor Biometric
+      await this.checkNativeBiometricSupport();
     },
 
     async handleBiometricLogin() {
+      // For native apps, use Capacitor Biometric
+      if (Capacitor.isNativePlatform()) {
+        await this.handleNativeBiometricLogin();
+        return;
+      }
+
+      // For web, use WebAuthn
       if (!this.currentUserId) {
         // First, try to find user by username/email
         try {
@@ -381,6 +473,120 @@ export default {
             error.message ||
             "שגיאה באימות טביעת אצבע";
           this.toast?.showError(errorMessage);
+        }
+      } finally {
+        this.biometricLoading = false;
+      }
+    },
+
+    async handleNativeBiometricLogin() {
+      // Load plugins if not already loaded
+      if (!Preferences || !Biometric) {
+        await loadNativePlugins();
+      }
+
+      if (!Preferences || !Biometric) {
+        this.toast?.showError("טביעת אצבע לא זמינה במכשיר זה");
+        return;
+      }
+
+      this.biometricLoading = true;
+
+      try {
+        // Get saved username and userId
+        const savedUsername = await Preferences.get({ key: 'biometric_username' });
+        const savedUserId = await Preferences.get({ key: 'biometric_userId' });
+
+        if (!savedUsername.value || !savedUserId.value) {
+          this.toast?.showError("לא נמצאו פרטי התחברות שמורים");
+          this.biometricLoading = false;
+          return;
+        }
+
+        // Authenticate with biometric
+        const result = await Biometric.authenticate({
+          reason: 'אנא זהה את עצמך להתחברות',
+          title: 'אימות ביומטרי',
+          subtitle: 'התחברות מהירה',
+          description: 'השתמש בטביעת האצבע שלך כדי להתחבר',
+          negativeButtonText: 'ביטול',
+        });
+
+        if (!result.succeeded) {
+          this.toast?.showError("האימות בוטל");
+          this.biometricLoading = false;
+          return;
+        }
+
+        // Use saved credentials to login
+        const username = savedUsername.value;
+        const userId = savedUserId.value;
+        const savedPassword = await Preferences.get({ key: 'biometric_password' });
+
+        if (!savedPassword.value) {
+          // No saved password, user needs to login normally first
+          this.toast?.showError("אנא התחבר פעם אחת עם שם משתמש וסיסמה כדי להפעיל טביעת אצבע");
+          await Preferences.remove({ key: 'biometric_username' });
+          await Preferences.remove({ key: 'biometric_userId' });
+          this.hasBiometricCredentials = false;
+          return;
+        }
+
+        // Login with saved credentials
+        try {
+          const { data } = await axios.post(`${URL}/login-user`, {
+            username: username,
+            password: savedPassword.value,
+          });
+
+          if (data.message === "Success" && data.user) {
+            this.toast.showSuccess("התחברות עם טביעת אצבע בוצעה בהצלחה");
+            
+            // Update saved password if changed
+            if (data.password) {
+              await Preferences.set({ 
+                key: 'biometric_password', 
+                value: data.password 
+              });
+            }
+            
+            // Save auth token if provided
+            if (data.token) {
+              await Preferences.set({ 
+                key: 'auth_token', 
+                value: data.token 
+              });
+            }
+            
+            this.$router.push({
+              name: "Dashboard",
+              params: { id: data.user._id },
+            });
+          } else {
+            // Login failed, clear saved credentials
+            await Preferences.remove({ key: 'biometric_username' });
+            await Preferences.remove({ key: 'biometric_userId' });
+            await Preferences.remove({ key: 'biometric_password' });
+            this.hasBiometricCredentials = false;
+            this.toast?.showError("שגיאה בהתחברות. אנא התחבר עם שם משתמש וסיסמה");
+          }
+        } catch (error) {
+          // Login failed, clear saved credentials
+          await Preferences.remove({ key: 'biometric_username' });
+          await Preferences.remove({ key: 'biometric_userId' });
+          await Preferences.remove({ key: 'biometric_password' });
+          this.hasBiometricCredentials = false;
+          this.toast?.showError("שגיאה בהתחברות. אנא התחבר עם שם משתמש וסיסמה");
+        }
+      } catch (error) {
+        if (error.code === 'USER_CANCEL' || error.message?.includes('cancel')) {
+          // User cancelled - don't show error
+        } else if (error.code === 'BIOMETRIC_NOT_AVAILABLE') {
+          this.toast?.showError("טביעת אצבע לא זמינה במכשיר זה");
+        } else if (error.code === 'BIOMETRIC_NOT_ENROLLED') {
+          this.toast?.showError("לא רשומה טביעת אצבע במכשיר. אנא הוסף טביעת אצבע בהגדרות המכשיר");
+        } else {
+          this.toast?.showError("שגיאה באימות טביעת אצבע. נסה שוב");
         }
       } finally {
         this.biometricLoading = false;
@@ -481,10 +687,61 @@ export default {
 
           if (data.user && data.user._id) {
             this.currentUserId = data.user._id;
-            // Check if user has biometric credentials
-            if (this.isMobile) {
-              await this.checkBiometricCredentials();
+            
+            // Save credentials for biometric login in native app only (not web)
+            if (this.isNativeApp) {
+              try {
+                // Load plugins if not already loaded
+                if (!Preferences || !Biometric) {
+                  await loadNativePlugins();
+                }
+
+                if (!Biometric || !Preferences) {
+                  return; // Plugins not available
+                }
+
+                // Check if biometric is available
+                const available = await Biometric.checkBiometry({
+                  reason: 'שמירת פרטי התחברות',
+                  title: 'אימות ביומטרי',
+                  subtitle: 'הפעלת התחברות מהירה',
+                  description: 'האם תרצה להפעיל התחברות מהירה עם טביעת אצבע?',
+                });
+
+                if (available.isAvailable && !this.ifGoogleUser && !this.ifFacebookUser) {
+                  // Save username and userId for biometric login
+                  await Preferences.set({ 
+                    key: 'biometric_username', 
+                    value: this.username 
+                  });
+                  await Preferences.set({ 
+                    key: 'biometric_userId', 
+                    value: data.user._id 
+                  });
+                  
+                  // Save password securely (encrypted by Capacitor Preferences)
+                  // We'll use this for future biometric logins
+                  await Preferences.set({ 
+                    key: 'biometric_password', 
+                    value: this.password 
+                  });
+                  
+                  // Save auth token if provided by server
+                  if (data.token) {
+                    await Preferences.set({ 
+                      key: 'auth_token', 
+                      value: data.token 
+                    });
+                  }
+                  
+                  this.hasBiometricCredentials = true;
+                }
+              } catch (error) {
+                // Silently fail - biometric not available or user declined
+                console.log('Biometric setup failed:', error);
+              }
             }
+            
             this.$router.push({
               name: "Dashboard",
               params: { id: data.user._id },

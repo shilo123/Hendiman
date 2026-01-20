@@ -10,11 +10,13 @@
     "dev": "nodemon server/server.js",
     "start": "node server/server.js",
     "heroku-postbuild": "npm run build",
+    "postinstall": "patch-package",
     "cap:sync": "npx cap sync",
     "cap:copy": "npx cap copy",
     "cap:update": "npx cap update",
     "cap:android": "npx cap open android",
-    "cap:build": "npm run build && npx cap sync"
+    "cap:build": "npm run build && npx cap sync",
+    "cap:assets": "npx capacitor-assets generate --iconBackgroundColor '#f27f0d' --iconBackgroundColorDark '#f27f0d'"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.700.0",
@@ -24,6 +26,7 @@
     "@capacitor/core": "^8.0.1",
     "@capacitor/haptics": "^8.0.0",
     "@capacitor/keyboard": "^8.0.0",
+    "@capacitor/preferences": "^8.0.0",
     "@capacitor/splash-screen": "^8.0.0",
     "@capacitor/status-bar": "^8.0.0",
     "@fortawesome/fontawesome-svg-core": "^7.1.0",
@@ -63,6 +66,7 @@
   "devDependencies": {
     "@babel/core": "^7.12.16",
     "@babel/eslint-parser": "^7.12.16",
+    "@capacitor/assets": "^3.0.5",
     "@vue/cli-plugin-babel": "~5.0.0",
     "@vue/cli-plugin-eslint": "~5.0.0",
     "@vue/cli-plugin-pwa": "~5.0.0",
@@ -74,6 +78,7 @@
     "eslint-plugin-prettier": "^4.0.0",
     "eslint-plugin-vue": "^8.0.3",
     "nodemon": "^3.1.11",
+    "patch-package": "^8.0.1",
     "prettier": "^2.4.1",
     "sass": "^1.32.7",
     "sass-loader": "^12.0.0"

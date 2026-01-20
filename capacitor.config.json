@@ -9,7 +9,8 @@
     "allowMixedContent": true,
     "captureInput": true,
     "webContentsDebuggingEnabled": true,
-    "icon": "public/avatar.png"
+    "icon": "public/avatar.png",
+    "iconBackgroundColor": "#f27f0d"
   },
   "plugins": {
     "SplashScreen": {

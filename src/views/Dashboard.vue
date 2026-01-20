@@ -4076,6 +4076,12 @@ export default {
         // For Android native app, get token directly without service worker
         if (messaging) {
           try {
+            // Request notification permission explicitly for Android
+            // This ensures the permission dialog appears when app is installed
+            if ("Notification" in window && Notification.permission === "default") {
+              await Notification.requestPermission();
+            }
+            
             // In Android, we can get token without VAPID key
             const token = await getToken(messaging);
             
@@ -4084,13 +4090,14 @@ export default {
             }
           } catch (tokenError) {
             // Token error - might be permission issue or Firebase not configured
+            logger.error("Error getting FCM token in Android:", tokenError);
           }
 
           // Set up message handler for when app is in foreground
           onMessage(messaging, (payload) => {
             // In Android, notifications are handled by the system
             // But we can still show local notifications if needed
-            console.log("FCM message received:", payload);
+            logger.log("FCM message received:", payload);
           });
         }
         return;

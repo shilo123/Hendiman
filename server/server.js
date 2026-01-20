@@ -1392,17 +1392,42 @@ function findAvailablePort(startPort) {
                   : jobData.subcategoryInfo || {};
               const jobSubcategoryName =
                 firstSubcategory.subcategory || jobData.subcategoryName || "";
-              const jobLocation = jobData.locationText || "מיקום לא צוין";
+              
+              // Calculate distance
+              const handymanLng =
+                handyman.location?.coordinates?.[0] || handyman.coordinates?.lng;
+              const handymanLat =
+                handyman.location?.coordinates?.[1] || handyman.coordinates?.lat;
+              let distanceText = "";
+              if (handymanLng && handymanLat && jobLng && jobLat) {
+                const distanceKm = calculateDistanceKm(
+                  jobLng,
+                  jobLat,
+                  handymanLng,
+                  handymanLat
+                );
+                if (distanceKm !== null) {
+                  distanceText = ` • ${Math.round(distanceKm)} ק״מ`;
+                }
+              }
+
+              const shortText = jobSubcategoryName || "עבודה";
+              
+              // Check if urgent - use different message for urgent jobs
+              const isUrgent = jobData.urgent === true;
+              const title = isUrgent ? "דחוף 🚨 קריאה חדשה" : "קריאה חדשה";
+              const body = `${shortText}${distanceText}`;
 
               await sendPushNotification(
                 handyman.fcmToken,
-                "עבודה חדשה באזור שלך! 🔧",
-                `${jobSubcategoryName} - ${jobLocation}`,
+                title,
+                body,
                 {
                   type: "new_job",
                   jobId: jobId.toString(),
                   subcategoryName: jobSubcategoryName,
-                  location: jobLocation,
+                  location: jobData.locationText || "מיקום לא צוין",
+                  urgent: isUrgent ? "true" : "false",
                 }
               );
             } catch (error) {}
@@ -4887,7 +4912,12 @@ function findAvailablePort(startPort) {
         // Calculate VAT (MAAM)
         const maamPercent = getMaamPercent();
         const amountILS = amountAgorot / 100;
-        const vatCalculation = calculateVAT(amountILS, maamPercent);
+        const platformFeeILS = platformFeeAgorot / 100;
+        // Total amount client pays = price + platform fee
+        const totalAmountClientPays = amountILS + platformFeeILS;
+        
+        // Calculate VAT on the total amount client pays
+        const vatCalculation = calculateVAT(totalAmountClientPays, maamPercent);
 
         // Save payment record
         const paymentRecord = {
@@ -4896,14 +4926,15 @@ function findAvailablePort(startPort) {
           clientId: new ObjectId(job.clientId),
           handymanId: new ObjectId(handymanId),
           paymentIntentId: paymentIntentId,
-          amount: amountILS, // Total amount with VAT
+          amount: amountILS, // Base price (what handyman receives before fee)
+          totalAmount: totalAmountClientPays, // Total amount client pays (price + platform fee)
           originalPrice: amountILS, // Initial price (will be updated if price changes)
           priceChangePercent: 0, // No change initially
           amountWithoutVAT: vatCalculation.amountWithoutVAT,
           amountWithVAT: vatCalculation.amountWithVAT,
           vatAmount: vatCalculation.vatAmount,
           vatPercent: maamPercent,
-          platformFee: platformFeeAgorot / 100,
+          platformFee: platformFeeILS,
           currency: "ils",
           status: status, // Usually "requires_payment_method" or "requires_confirmation"
           createdAt: new Date(),
@@ -8080,8 +8111,8 @@ function findAvailablePort(startPort) {
                   // Send notification about job acceptance
                   const pushResult = await sendPushNotification(
                     client.fcmToken,
-                    "עבודה שובצה! 🎉",
-                    `קבלו את העבודה שלך - ${handymanName}`,
+                    "הנדימן קיבל ✅",
+                    `${handymanName} קיבל את הקריאה. נפתח צ'אט.`,
                     {
                       type: "job_accepted",
                       jobId: jobId.toString(),
@@ -8193,8 +8224,13 @@ function findAvailablePort(startPort) {
               // Calculate VAT (MAAM) for payment record
               const maamPercentForPayment = getMaamPercent();
               const amountILSForPayment = amountAgorot / 100;
+              const platformFeeILS = platformFeeAgorot / 100;
+              // Total amount client pays = price + platform fee
+              const totalAmountClientPays = amountILSForPayment + platformFeeILS;
+              
+              // Calculate VAT on the total amount client pays
               const vatCalculationForPayment = calculateVAT(
-                amountILSForPayment,
+                totalAmountClientPays,
                 maamPercentForPayment
               );
 
@@ -8206,14 +8242,15 @@ function findAvailablePort(startPort) {
                 clientId: new ObjectId(job.clientId),
                 handymanId: new ObjectId(handymanId),
                 paymentIntentId: paymentIntentId,
-                amount: amountILSForPayment,
-                originalPrice: amountILSForPayment,
+                amount: amountILSForPayment, // Base price (what handyman receives before fee)
+                totalAmount: totalAmountClientPays, // Total amount client pays (price + platform fee)
+                originalPrice: amountILSForPayment, // Initial price (will be updated if price changes)
                 priceChangePercent: 0,
                 amountWithoutVAT: vatCalculationForPayment.amountWithoutVAT,
                 amountWithVAT: vatCalculationForPayment.amountWithVAT,
                 vatAmount: vatCalculationForPayment.vatAmount,
                 vatPercent: maamPercentForPayment,
-                platformFee: platformFeeAgorot / 100,
+                platformFee: platformFeeILS,
                 currency: "ils",
                 status: status,
                 createdAt: new Date(),
@@ -8730,11 +8767,12 @@ function findAvailablePort(startPort) {
           });
         }
 
-        // If client cancelled, notify handyman via WebSocket
+        // If client cancelled, notify handyman via WebSocket and Push
         if (personCancel === "customer" && job.handymanId) {
           const handymanIds = Array.isArray(job.handymanId)
             ? job.handymanId
             : [job.handymanId];
+          const usersCol = getCollection();
 
           for (const handymanId of handymanIds) {
             const handymanIdStr = String(handymanId);
@@ -8743,6 +8781,69 @@ function findAvailablePort(startPort) {
               message:
                 "אנחנו מצטערים אך הלקוח ביטל את העבודה במידת הצורך תקבל פיצוי",
             });
+
+            // Send Push Notification to handyman
+            try {
+              const handyman = await usersCol.findOne({
+                _id: new ObjectId(handymanIdStr),
+              });
+              if (handyman?.fcmToken) {
+                const pushResult = await sendPushNotification(
+                  handyman.fcmToken,
+                  "הקריאה בוטלה",
+                  "הלקוח ביטל את הקריאה",
+                  {
+                    type: "job_cancelled",
+                    jobId: jobId.toString(),
+                  }
+                );
+
+                if (pushResult.shouldRemove) {
+                  await usersCol.updateOne(
+                    { _id: new ObjectId(handymanIdStr) },
+                    { $unset: { fcmToken: "" } }
+                  );
+                }
+              }
+            } catch (pushError) {
+              // Don't fail the request if push notification fails
+              serverLogger.error("Error sending push to handyman on cancel:", pushError);
+            }
+          }
+        }
+
+        // Send Push Notification to client if handyman cancelled
+        if (personCancel === "handyman" && job.clientId) {
+          try {
+            const usersCol = getCollection();
+            const clientObjectId =
+              job.clientId instanceof ObjectId
+                ? job.clientId
+                : new ObjectId(job.clientId);
+            const client = await usersCol.findOne({ _id: clientObjectId });
+
+            if (client?.fcmToken) {
+              const pushResult = await sendPushNotification(
+                client.fcmToken,
+                "עדכון על הקריאה",
+                "ההנדימן ביטל את הקריאה.",
+                {
+                  type: "job_cancelled",
+                  jobId: jobId.toString(),
+                  cancelledBy: "handyman",
+                }
+              );
+
+              if (pushResult.shouldRemove) {
+                await usersCol.updateOne(
+                  { _id: clientObjectId },
+                  { $unset: { fcmToken: "" } }
+                );
+              }
+            }
+          } catch (pushError) {
+            // Don't fail the request if push notification fails
+            serverLogger.error("Error sending push to client on cancel:", pushError);
           }
         }
 
@@ -9311,14 +9412,18 @@ function findAvailablePort(startPort) {
                   ? job.handymanName[0]
                   : "ההנדימן";
 
+              // ETA can be passed in request body if available
+              const eta = req.body?.eta || "";
+
               const pushResult = await sendPushNotification(
                 client.fcmToken,
-                "עדכון סטטוס",
-                `${handymanName} בדרך אליך`,
+                "הנדימן בדרך 🚗",
+                eta ? `הגעה משוערת: ${eta}` : `${handymanName} בדרך אליך`,
                 {
                   type: "status_update",
                   jobId: jobId.toString(),
                   status: "on_the_way",
+                  eta: eta || "",
                 }
               );
 
@@ -9400,8 +9505,8 @@ function findAvailablePort(startPort) {
 
               const pushResult = await sendPushNotification(
                 client.fcmToken,
-                "עדכון סטטוס",
-                `${handymanName} הגיע`,
+                "הנדימן הגיע 📍",
+                `${handymanName} הגיע למיקום.`,
                 {
                   type: "status_update",
                   jobId: jobId.toString(),
@@ -10222,9 +10327,15 @@ function findAvailablePort(startPort) {
                 paymentIntent.transfer_data.destination;
 
               // Calculate amounts from the already-captured payment
-              const totalAmount = paymentIntent.amount / 100; // Convert from agorot to ILS
+              // In Stripe Connect, when application_fee_amount is set, client pays: amount + application_fee_amount
+              const baseAmount = paymentIntent.amount / 100; // Base price (what handyman receives before fee)
+              const applicationFee = paymentIntent.application_fee_amount
+                ? paymentIntent.application_fee_amount / 100
+                : 0;
+              // Total amount client actually paid = base amount + platform fee
+              const totalAmount = baseAmount + applicationFee;
 
-              // Calculate VAT (MAAM) for payment record
+              // Calculate VAT (MAAM) for payment record - על הסכום הכולל שהלקוח שילם
               const maamPercentForSucceeded = getMaamPercent();
               const vatCalculationForSucceeded = calculateVAT(
                 totalAmount,
@@ -10232,10 +10343,12 @@ function findAvailablePort(startPort) {
               );
 
               const urgentFee = job.urgent ? 10 : 0;
-              const platformFee = paymentIntent.application_fee_amount
-                ? paymentIntent.application_fee_amount / 100
-                : totalAmount * (getPlatformFeePercent() / 100);
-              const handymanRevenue = totalAmount - platformFee;
+              const platformFee = applicationFee || baseAmount * (getPlatformFeePercent() / 100);
+              // Handyman revenue = base amount - platform fee (calculated on amount without VAT)
+              const amountWithoutVAT = vatCalculationForSucceeded.amountWithoutVAT;
+              const commissionRate = getPlatformFeePercent() / 100;
+              const commission = Math.round(amountWithoutVAT * commissionRate * 100) / 100;
+              const handymanRevenue = amountWithoutVAT - commission;
 
               // Get handyman ID
               const handymanIdForPayment =
@@ -10280,15 +10393,17 @@ function findAvailablePort(startPort) {
                   handymanId: new ObjectId(handymanIdForPayment),
                   clientId: new ObjectId(clientIdForPayment),
                   paymentIntentId: job.paymentIntentId,
-                  amount: totalAmount,
-                  originalPrice: totalAmount,
+                  amount: baseAmount, // Base price (what handyman receives before fee)
+                  totalAmount: totalAmount, // Total amount client pays (price + platform fee)
+                  originalPrice: baseAmount,
                   priceChangePercent: 0,
                   amountWithoutVAT: vatCalculationForSucceeded.amountWithoutVAT,
                   amountWithVAT: vatCalculationForSucceeded.amountWithVAT,
                   vatAmount: vatCalculationForSucceeded.vatAmount,
                   vatPercent: maamPercentForSucceeded,
                   platformFee: platformFee,
-                  handymanRevenue: handymanRevenue,
+                  spacious_H: handymanRevenue,
+                  spacious_M: commission,
                   currency: "ils",
                   status: "succeeded",
                   handymanReceivedPayment: true,
@@ -10346,9 +10461,13 @@ function findAvailablePort(startPort) {
             }
 
             // Calculate amounts
-            const totalAmount = capturedPayment.amount / 100; // Convert from agorot to ILS
+            // In Stripe Connect, when application_fee_amount is set, client pays: amount + application_fee_amount
+            const baseAmount = capturedPayment.amount / 100; // Base price (what handyman receives before fee)
+            const applicationFee = (capturedPayment.application_fee_amount || 0) / 100;
+            // Total amount client actually paid = base amount + platform fee
+            const totalAmount = baseAmount + applicationFee;
 
-            // Calculate VAT (MAAM) for payment record
+            // Calculate VAT (MAAM) for payment record - על הסכום הכולל שהלקוח שילם
             const maamPercentForCaptured = getMaamPercent();
             const vatCalculationForCaptured = calculateVAT(
               totalAmount,
@@ -10364,9 +10483,12 @@ function findAvailablePort(startPort) {
 
             if (isConnectPayment) {
               // Stripe Connect payment - Stripe handles the split automatically
-              const platformFee =
-                (capturedPayment.application_fee_amount || 0) / 100;
-              const handymanRevenue = totalAmount - platformFee;
+              const platformFee = applicationFee;
+              // Handyman revenue = base amount - platform fee (calculated on amount without VAT)
+              const amountWithoutVAT = vatCalculationForCaptured.amountWithoutVAT;
+              const commissionRate = getPlatformFeePercent() / 100;
+              const commission = Math.round(amountWithoutVAT * commissionRate * 100) / 100;
+              const handymanRevenue = amountWithoutVAT - commission;
 
               // Update or create payment record
               const existingPayment = await paymentsCol.findOne({
@@ -10378,8 +10500,9 @@ function findAvailablePort(startPort) {
                 handymanId: handymanIdForPayment,
                 clientId: clientIdForPayment,
                 paymentIntentId: job.paymentIntentId,
-                amount: totalAmount,
-                originalPrice: existingPayment?.originalPrice || totalAmount,
+                amount: baseAmount, // Base price (what handyman receives before fee)
+                totalAmount: totalAmount, // Total amount client pays (price + platform fee)
+                originalPrice: existingPayment?.originalPrice || baseAmount,
                 priceChangePercent: existingPayment?.priceChangePercent || 0,
                 amountWithoutVAT:
                   existingPayment?.amountWithoutVAT ||
@@ -10393,7 +10516,8 @@ function findAvailablePort(startPort) {
                 vatPercent:
                   existingPayment?.vatPercent || maamPercentForCaptured,
                 platformFee: platformFee,
-                handymanRevenue: handymanRevenue,
+                spacious_H: handymanRevenue,
+                spacious_M: commission,
                 currency: "ils",
                 status: "captured",
                 createdAt: existingPayment?.createdAt || new Date(),
@@ -11750,6 +11874,45 @@ function findAvailablePort(startPort) {
         (async () => {
           try {
             const usersCol = getCollection();
+            const io = req.app.get("io");
+            
+            // Rate limiting: Store last push notification time per user per job
+            // Using a simple in-memory Map (for production, use Redis or similar)
+            if (!global.chatPushRateLimit) {
+              global.chatPushRateLimit = new Map();
+            }
+            
+            // Helper function to check if user is in chat room
+            const isUserInChatRoom = (userId, jobIdStr) => {
+              if (!io) return false;
+              const roomName = `job-${jobIdStr}`;
+              const userRoomName = `user-${String(userId)}`;
+              
+              // Check if user is in the job chat room
+              const room = io.sockets.adapter.rooms.get(roomName);
+              if (!room || room.size === 0) return false;
+              
+              // Check if any socket in the room belongs to this user
+              // We'll check by seeing if user's personal room exists (they're online)
+              // For more accurate check, we'd need to track userId in socket data
+              // For now, we'll check if user has joined the room (simplified check)
+              return true; // Simplified - always send if room exists
+            };
+            
+            // Helper function to check rate limit (max 1 push per 30 seconds per user per job)
+            const checkRateLimit = (userId, jobIdStr) => {
+              const key = `${userId}-${jobIdStr}`;
+              const now = Date.now();
+              const lastPush = global.chatPushRateLimit.get(key);
+              
+              if (lastPush && (now - lastPush) < 30000) { // 30 seconds
+                return false; // Rate limited
+              }
+              
+              global.chatPushRateLimit.set(key, now);
+              return true; // OK to send
+            };
+            
             if (senderIsHandyman) {
               // Handyman sent message, notify client
               if (customerId) {
@@ -11760,6 +11923,22 @@ function findAvailablePort(startPort) {
                 const client = await usersCol.findOne({ _id: clientObjectId });
 
                 if (client?.fcmToken) {
+                  // Check if client is in chat room - if yes, skip push
+                  const jobIdStr = jobId.toString();
+                  if (isUserInChatRoom(customerId, jobIdStr)) {
+                    return; // User is in chat, don't send push
+                  }
+                  
+                  // Check silent mode (if exists in user settings)
+                  if (client.chatSilentMode === true) {
+                    return; // User has silent mode enabled
+                  }
+                  
+                  // Check rate limit
+                  if (!checkRateLimit(customerId, jobIdStr)) {
+                    return; // Rate limited
+                  }
+
                   const handymanName =
                     Array.isArray(job.handymanName) &&
                     job.handymanName.length > 0
@@ -11780,7 +11959,7 @@ function findAvailablePort(startPort) {
                     messagePreview,
                     {
                       type: "new_message",
-                      jobId: jobId.toString(),
+                      jobId: jobIdStr,
                       senderId: senderId.toString(),
                     }
                   );
@@ -11796,15 +11975,34 @@ function findAvailablePort(startPort) {
             } else {
               // Client sent message, notify handyman(s)
               // If handymanId is array, send to all handymen
+              const jobIdStr = jobId.toString();
+              
               if (Array.isArray(handymanId)) {
                 // Send to all handymen
                 for (const hId of handymanId) {
                   const handymanObjectId =
                     hId instanceof ObjectId ? hId : new ObjectId(hId);
+                  const handymanIdStr = String(hId);
                   const handyman = await usersCol.findOne({
                     _id: handymanObjectId,
                   });
+                  
                   if (handyman?.fcmToken) {
+                    // Check if handyman is in chat room - if yes, skip push
+                    if (isUserInChatRoom(handymanIdStr, jobIdStr)) {
+                      continue; // User is in chat, skip push
+                    }
+                    
+                    // Check silent mode (if exists in user settings)
+                    if (handyman.chatSilentMode === true) {
+                      continue; // User has silent mode enabled
+                    }
+                    
+                    // Check rate limit
+                    if (!checkRateLimit(handymanIdStr, jobIdStr)) {
+                      continue; // Rate limited
+                    }
+
                     const clientName = job.clientName || "הלקוח";
                     const messagePreview = text
                       ? text.substring(0, 50) + (text.length > 50 ? "..." : "")
@@ -11820,7 +12018,7 @@ function findAvailablePort(startPort) {
                       messagePreview,
                       {
                         type: "new_message",
-                        jobId: jobId.toString(),
+                        jobId: jobIdStr,
                         senderId: senderId.toString(),
                       }
                     );
@@ -11839,11 +12037,27 @@ function findAvailablePort(startPort) {
                   handymanId instanceof ObjectId
                     ? handymanId
                     : new ObjectId(handymanId);
+                const handymanIdStr = String(handymanId);
                 const handyman = await usersCol.findOne({
                   _id: handymanObjectId,
                 });
 
                 if (handyman?.fcmToken) {
+                  // Check if handyman is in chat room - if yes, skip push
+                  if (isUserInChatRoom(handymanIdStr, jobIdStr)) {
+                    return; // User is in chat, don't send push
+                  }
+                  
+                  // Check silent mode (if exists in user settings)
+                  if (handyman.chatSilentMode === true) {
+                    return; // User has silent mode enabled
+                  }
+                  
+                  // Check rate limit
+                  if (!checkRateLimit(handymanIdStr, jobIdStr)) {
+                    return; // Rate limited
+                  }
+
                   const clientName = job.clientName || "הלקוח";
                   const messagePreview = text
                     ? text.substring(0, 50) + (text.length > 50 ? "..." : "")
@@ -11859,7 +12073,7 @@ function findAvailablePort(startPort) {
                     messagePreview,
                     {
                       type: "new_message",
-                      jobId: jobId.toString(),
+                      jobId: jobIdStr,
                       senderId: senderId.toString(),
                     }
                   );
@@ -14889,17 +15103,28 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                       }
                     );
                   } else {
-                    await sendPushNotification(
-                      handyman.fcmToken,
-                      handymanIdSpecial
-                        ? "הזמנה אישית עבורך! 🔧"
-                        : "עבודה חדשה באזור שלך! 🔧",
-                      `${subcategoryNames} - ${location || "מיקום"}`,
-                      {
-                        type: "new_job",
-                        jobId: savedJobId.toString(),
-                      }
-                    );
+                    // Different push for special (personal) request
+                    if (handymanIdSpecial) {
+                      await sendPushNotification(
+                        handyman.fcmToken,
+                        "נבחרת 🎯",
+                        "לקוח רוצה דווקא אותך.",
+                        {
+                          type: "personal_request",
+                          jobId: savedJobId.toString(),
+                        }
+                      );
+                    } else {
+                      await sendPushNotification(
+                        handyman.fcmToken,
+                        "עבודה חדשה באזור שלך! 🔧",
+                        `${subcategoryNames} - ${location || "מיקום"}`,
+                        {
+                          type: "new_job",
+                          jobId: savedJobId.toString(),
+                        }
+                      );
+                    }
                   }
                 }
               }
@@ -16427,9 +16652,15 @@ ${subcategoryList}
         }
 
         // Calculate amounts
-        const totalAmount = capturedPayment.amount / 100; // Convert from agorot to ILS (basePrice + urgentFee if any) - זה המחיר שהלקוח שילם כולל מע"מ
+        // In Stripe Connect, when application_fee_amount is set, client pays: amount + application_fee_amount
+        const baseAmount = capturedPayment.amount / 100; // Base price (what handyman receives before fee)
+        const applicationFee = capturedPayment.application_fee_amount 
+          ? capturedPayment.application_fee_amount / 100 
+          : 0;
+        // Total amount client actually paid = base amount + platform fee
+        const totalAmount = baseAmount + applicationFee;
 
-        // Calculate VAT (MAAM) - המע"מ נגבה מהלקוח
+        // Calculate VAT (MAAM) - המע"מ נגבה מהלקוח על הסכום הכולל
         const maamPercent = getMaamPercent();
         const vatCalculation = calculateVAT(totalAmount, maamPercent);
 
@@ -16439,8 +16670,7 @@ ${subcategoryList}
         const commissionRate = getPlatformFeePercent() / 100; // Read from dry-data.json
         // העמלה מחושבת על המחיר בלי מע"מ (כי המע"מ נגבה מהלקוח)
         // ה-urgentFee משולם על ידי הלקוח, לא מופחת מההנדימן
-        const commission =
-          Math.round(amountWithoutVAT * commissionRate * 100) / 100;
+        const commission = applicationFee || Math.round(amountWithoutVAT * commissionRate * 100) / 100;
         // המערכת מקבלת רק את העמלה, ה-urgentFee נשאר ללקוח (לא מופחת מההנדימן)
         const systemRevenue = commission;
         // הנדימן מקבל: המחיר בלי מע"מ פחות עמלה (ה-urgentFee לא מופחת כי הלקוח שילם אותו)
@@ -19511,9 +19741,11 @@ ${subcategoryList}
           });
         }
 
-        // Check if quotedUntil has passed
-        if (job.quotedUntil && new Date(job.quotedUntil) < new Date()) {
-          // Auto-expire job
+        // Check if quotedUntil has passed - BUT only if job has NO quotations
+        // If job has at least one quotation, it should NOT expire
+        const hasQuotations = Array.isArray(job.quotations) && job.quotations.length > 0;
+        if (job.quotedUntil && new Date(job.quotedUntil) < new Date() && !hasQuotations) {
+          // Auto-expire job only if it has no quotations
           await jobsCollection.updateOne(
             { _id: new ObjectId(jobId) },
             { $set: { status: "expired", updatedAt: new Date() } }
@@ -19672,9 +19904,17 @@ ${subcategoryList}
             .limit(10)
             .toArray();
 
-          // Filter out expired jobs
+          // Filter out expired jobs - BUT keep jobs that have quotations
+          // A job should NOT be considered expired if it has at least one quotation
           const validJobs = quotedJobs.filter((job) => {
+            // If job has quotations, it's always valid (doesn't expire)
+            const hasQuotations = Array.isArray(job.quotations) && job.quotations.length > 0;
+            if (hasQuotations) return true;
+            
+            // If no quotedUntil, job is valid
             if (!job.quotedUntil) return true;
+            
+            // Only check quotedUntil if job has NO quotations
             return new Date(job.quotedUntil) >= new Date();
           });
 
@@ -19791,10 +20031,12 @@ ${subcategoryList}
               return false; // Quotation already chosen
             }
             
-            // Check if expired
-            if (job.quotedUntil && new Date(job.quotedUntil) < now) {
-              serverLogger.log(`[Pending Quotations] Job ${job._id} filtered out: expired (quotedUntil=${job.quotedUntil}, now=${now})`);
-              return false; // Expired
+            // Check if expired - BUT only if job has NO quotations
+            // If job has at least one quotation, it should NOT expire
+            const hasQuotations = Array.isArray(job.quotations) && job.quotations.length > 0;
+            if (job.quotedUntil && new Date(job.quotedUntil) < now && !hasQuotations) {
+              serverLogger.log(`[Pending Quotations] Job ${job._id} filtered out: expired (quotedUntil=${job.quotedUntil}, now=${now}, hasQuotations=${hasQuotations})`);
+              return false; // Expired (only if no quotations)
             }
             
             serverLogger.log(`[Pending Quotations] ✅ Job ${job._id} PASSED all filters!`);
@@ -20313,17 +20555,15 @@ ${imagesList}
               _id: selectedHandymanId,
             });
             if (handyman && handyman.fcmToken) {
-              await sendPushNotification(
-                handyman.fcmToken,
-                "הצעת המחיר שלך נבחרה! 🎉",
-                `הלקוח בחר בהצעת המחיר שלך לעבודה: ${
-                  job.subcategoryInfo?.[0]?.subcategory || "עבודה"
-                }`,
-                {
-                  type: "quotation_accepted",
-                  jobId: jobId,
-                }
-              );
+                  await sendPushNotification(
+                    handyman.fcmToken,
+                    "הצעה אושרה ✅",
+                    "הצעת המחיר שלך אושרה",
+                    {
+                      type: "quotation_accepted",
+                      jobId: jobId.toString(),
+                    }
+                  );
             }
           } catch (pushError) {
             serverLogger.error(
@@ -20339,6 +20579,31 @@ ${imagesList}
               handymanId: selectedHandymanId.toString(),
               handymanName: selectedHandymanName,
             });
+          }
+
+          // Send FCM push notification to client when handyman accepts quotation
+          try {
+            const client = await collection.findOne({
+              _id: job.clientId instanceof ObjectId ? job.clientId : new ObjectId(job.clientId),
+            });
+            if (client && client.fcmToken) {
+              await sendPushNotification(
+                client.fcmToken,
+                "הנדימן קיבל ✅",
+                `${selectedHandymanName} קיבל את הקריאה. נפתח צ'אט.`,
+                {
+                  type: "quotation_accepted",
+                  jobId: jobId.toString(),
+                  handymanId: selectedHandymanId.toString(),
+                  handymanName: selectedHandymanName,
+                }
+              );
+            }
+          } catch (pushError) {
+            serverLogger.error(
+              "Error sending push notification to client on quotation accept:",
+              pushError
+            );
           }
 
           return res.json({
@@ -20449,13 +20714,11 @@ ${imagesList}
 
               await sendPushNotification(
                 handyman.fcmToken,
-                "הצעת המחיר נדחתה 😔",
-                `הלקוח דחה את הצעת המחיר שלך לעבודה: ${
-                  subcategoryInfo.subcategory || "עבודה"
-                }. תוכל להציע הצעה חדשה.`,
+                "הצעה נדחתה",
+                "הצעת המחיר שלך נדחתה",
                 {
                   type: "quotation_rejected",
-                  jobId: jobId,
+                  jobId: jobId.toString(),
                 }
               );
             }
@@ -20498,14 +20761,14 @@ ${imagesList}
         const now = new Date();
 
         // Find all quoted jobs that passed quotedUntil
-        const expiredJobs = await jobsCollection
+        const candidateJobs = await jobsCollection
           .find({
             status: "quoted",
             quotedUntil: { $exists: true, $lt: now },
           })
           .toArray();
 
-        if (expiredJobs.length === 0) {
+        if (candidateJobs.length === 0) {
           return {
             success: true,
             expiredCount: 0,
@@ -20513,11 +20776,39 @@ ${imagesList}
           };
         }
 
-        // Update all expired jobs to "expired" status
+        // Filter out jobs that have at least one quotation
+        // A job should NOT expire if it has quotations
+        const expiredJobs = [];
+        for (const job of candidateJobs) {
+          // Check if job has quotations array with at least one quotation
+          const hasQuotations = 
+            Array.isArray(job.quotations) && 
+            job.quotations.length > 0;
+          
+          if (!hasQuotations) {
+            // Only expire jobs that have NO quotations
+            expiredJobs.push(job);
+          } else {
+            serverLogger.log(
+              `[QUOTATION-EXPIRY] Job ${job._id} has ${job.quotations.length} quotation(s), skipping expiry`
+            );
+          }
+        }
+
+        if (expiredJobs.length === 0) {
+          return {
+            success: true,
+            expiredCount: 0,
+            message: "אין עבודות שפג תוקפן (כל העבודות יש להן הצעות מחיר)",
+          };
+        }
+
+        // Update only jobs without quotations to "expired" status
+        const jobIdsToExpire = expiredJobs.map(job => job._id);
         const updateResult = await jobsCollection.updateMany(
           {
+            _id: { $in: jobIdsToExpire },
             status: "quoted",
-            quotedUntil: { $exists: true, $lt: now },
           },
           {
             $set: {
