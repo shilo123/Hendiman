@@ -80,39 +80,48 @@ export default {
 }
 
 .toast {
-  position: relative;
+  position: fixed;
   z-index: 100002;
   animation: fadeIn 0.3s ease-out;
   min-width: 320px;
   max-width: 500px;
   right: 24px;
+  top: 24px;
+  margin-top: 0;
 
   @media (max-width: 640px) {
-    right: 16px;
+    right: auto;
+    left: 50%;
+    top: 16px;
     min-width: auto;
     max-width: none;
-    width: calc(100vw - 32px);
+    width: 75%;
+    transform: translateX(-50%);
   }
 }
 
 .toast.success {
-  background: #f27f0d; // bg-orange-500
-  border: 2px solid #fb923c; // border-orange-400
+  background: linear-gradient(135deg, #f27f0d 0%, #ff9800 100%);
+  border: 2px solid #ffb74d;
+  box-shadow: 0 4px 20px rgba(242, 127, 13, 0.3);
 }
 
 .toast.error {
-  background: #000000; // bg-black
-  border: 2px solid #f27f0d; // border-orange-500
+  background: linear-gradient(135deg, #1a1a1a 0%, #000000 100%);
+  border: 2px solid #f27f0d;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
 .toast.warning {
-  background: #ea580c; // bg-orange-600
-  border: 2px solid #fb923c; // border-orange-400
+  background: linear-gradient(135deg, #ea580c 0%, #ff6d00 100%);
+  border: 2px solid #ff9800;
+  box-shadow: 0 4px 20px rgba(234, 88, 12, 0.3);
 }
 
 .toast.info {
-  background: #3b82f6; // bg-blue-500
-  border: 2px solid #60a5fa; // border-blue-400
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  border: 2px solid #60a5fa;
+  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
 }
 
 .toast-content {
@@ -120,12 +129,13 @@ export default {
   align-items: center;
   gap: 12px;
   padding: 16px 20px;
-  border-radius: 8px;
+  border-radius: 14px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
 
   @media (max-width: 640px) {
     padding: 14px 18px;
     gap: 10px;
+    border-radius: 12px;
   }
 }
 
@@ -239,11 +249,19 @@ export default {
 .toast-enter-from {
   opacity: 0;
   transform: scale(0.9);
+  
+  @media (max-width: 640px) {
+    transform: translateX(-50%) scale(0.9);
+  }
 }
 
 .toast-leave-to {
   opacity: 0;
   transform: scale(0.9);
+  
+  @media (max-width: 640px) {
+    transform: translateX(-50%) scale(0.9);
+  }
 }
 </style>
 

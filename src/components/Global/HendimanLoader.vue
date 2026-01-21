@@ -114,14 +114,17 @@ export default {
       this.currentTip = Math.floor(Math.random() * this.tips.length);
     }
 
-    // Start interval to change tip every 7 seconds with fade animation
-    this.intervalId = setInterval(() => {
-      this.fadeIn = false;
-      
-      setTimeout(() => {
-        this.currentTip = (this.currentTip + 1) % this.tips.length;
-        this.fadeIn = true;
-      }, 500);
+    // First tip should be visible for 7 seconds, then start interval
+    setTimeout(() => {
+      // Start interval to change tip every 7 seconds with fade animation
+      this.intervalId = setInterval(() => {
+        this.fadeIn = false;
+        
+        setTimeout(() => {
+          this.currentTip = (this.currentTip + 1) % this.tips.length;
+          this.fadeIn = true;
+        }, 500);
+      }, 7000);
     }, 7000);
   },
   beforeUnmount() {
@@ -183,6 +186,11 @@ export default {
 
 <style scoped lang="scss">
 .hendiman-loader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -191,6 +199,8 @@ export default {
   padding: 24px;
   background-color: #07070b;
   direction: rtl;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .hendiman-loader__header {

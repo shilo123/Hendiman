@@ -1,22 +1,20 @@
 <template>
   <div class="login" dir="rtl">
-    <!-- Top Half: Vibrant Orange Gradient -->
-    <div class="login__top-section">
-      <!-- Abstract pattern overlay for texture -->
-      <div class="login__pattern-overlay"></div>
-      <div class="login__top-content">
-        <!-- Logo Icon -->
-        <div class="login__logo-icon">
-          <span class="material-symbols-outlined">home_repair_service</span>
-        </div>
-        <!-- Brand Name -->
-        <h1 class="login__brand-name">הנדימן</h1>
-        <!-- Tagline -->
-        <p class="login__tagline">תיקונים קטנים, פתרונות גדולים</p>
-      </div>
-    </div>
+    <!-- Background Effects -->
+    <div class="login__noise-overlay"></div>
+    <div class="login__radial-gradient"></div>
 
-    <!-- Bottom Half: Dark Charcoal Form Area -->
+    <!-- Main Content -->
+    <main class="login__main">
+      <!-- Top Section with H Logo -->
+      <div class="login__top-section">
+        <div class="login__logo-letter">H</div>
+        <h1 class="login__title">התחברות</h1>
+        <p class="login__tagline">כוח בידיים שלך</p>
+      </div>
+    </main>
+
+    <!-- Form Section -->
     <div class="login__bottom-section">
       <!-- Blocked User Message -->
       <div v-if="isBlocked" class="blocked-message">
@@ -28,17 +26,16 @@
       <form class="login__form" @submit.prevent="handleLogin">
         <!-- Email/Mobile Input -->
         <div class="input-group">
-          <label class="input-label" for="email">אימייל או נייד</label>
           <div class="input-wrapper">
-            <span class="input-icon input-icon--leading">
-              <span class="material-symbols-outlined">person</span>
-            </span>
+            <div class="input-icon-wrapper">
+              <span class="material-icons-round">bolt</span>
+            </div>
             <input
               id="email"
               v-model="username"
               class="input-field"
               type="text"
-              placeholder="user@example.com"
+              placeholder="אימייל או נייד"
               required
               autocomplete="off"
               autocapitalize="off"
@@ -52,18 +49,17 @@
 
         <!-- Password Input -->
         <div class="input-group">
-          <label class="input-label" for="password">סיסמה</label>
           <div class="input-wrapper">
-            <span class="input-icon input-icon--leading">
-              <span class="material-symbols-outlined">lock</span>
-            </span>
+            <div class="input-icon-wrapper">
+              <span class="material-icons-round">lock_outline</span>
+            </div>
             <input
               v-if="!ifGoogleUser && !ifFacebookUser"
               id="password"
               v-model="password"
               class="input-field"
               :type="showPassword ? 'text' : 'password'"
-              placeholder="********"
+              placeholder="סיסמה"
               required
               autocomplete="off"
               autocapitalize="off"
@@ -86,11 +82,11 @@
             <button
               v-if="!ifGoogleUser && !ifFacebookUser"
               type="button"
-              class="input-icon input-icon--trailing"
+              class="input-toggle-password"
               @click="showPassword = !showPassword"
               :aria-label="showPassword ? 'הסתר סיסמה' : 'הראה סיסמה'"
             >
-              <span class="material-symbols-outlined">{{
+              <span class="material-icons-round">{{
                 showPassword ? "visibility_off" : "visibility"
               }}</span>
             </button>
@@ -106,11 +102,7 @@
 
         <!-- Main Action Button -->
         <button type="submit" class="login-btn">
-          <div class="login-btn__gloss"></div>
-          <span class="login-btn__content">
-            התחברות
-            <span class="material-symbols-outlined">arrow_back</span>
-          </span>
+          כניסה לאזור אישי
         </button>
       </form>
 
@@ -134,9 +126,9 @@
 
       <!-- Social Login Divider -->
       <div class="social-divider">
-        <div class="social-divider__line"></div>
-        <span class="social-divider__text">או התחבר באמצעות</span>
-        <div class="social-divider__line"></div>
+        <div class="social-divider__line social-divider__line--left"></div>
+        <span class="social-divider__text">או התחבר דרך</span>
+        <div class="social-divider__line social-divider__line--right"></div>
       </div>
 
       <!-- Social Buttons -->
@@ -177,9 +169,6 @@
         </p>
       </div>
     </div>
-
-    <!-- Decorative background element for bottom -->
-    <div class="login__bg-decoration"></div>
   </div>
 </template>
 
@@ -343,11 +332,23 @@ export default {
           await loadNativePlugins();
         }
 
-        if (!Biometric) {
+        if (!Biometric || !Preferences) {
+          console.log('[checkNativeBiometricSupport] Biometric or Preferences plugin not available');
           this.hasBiometricCredentials = false;
           return;
         }
 
+        // Check if we have saved credentials first (before checking biometry)
+        const savedUsername = await Preferences.get({ key: 'biometric_username' });
+        const savedUserId = await Preferences.get({ key: 'biometric_userId' });
+
+        if (!savedUsername.value || !savedUserId.value) {
+          console.log('[checkNativeBiometricSupport] No saved credentials found');
+          this.hasBiometricCredentials = false;
+          return;
+        }
+
+        // Now check if biometric is available
         const available = await Biometric.checkBiometry({
           reason: 'אנא זהה את עצמך',
           title: 'אימות ביומטרי',
@@ -355,20 +356,17 @@ export default {
           description: 'אנא השתמש בטביעת האצבע שלך כדי להתחבר',
         });
 
-        // Check if we have saved credentials
-        const savedUsername = await Preferences.get({ key: 'biometric_username' });
-        const savedUserId = await Preferences.get({ key: 'biometric_userId' });
+        console.log('[checkNativeBiometricSupport] Biometric available:', available.isAvailable);
 
-        this.hasBiometricCredentials = 
-          available.isAvailable && 
-          savedUsername.value && 
-          savedUserId.value;
+        this.hasBiometricCredentials = available.isAvailable;
         
         if (this.hasBiometricCredentials) {
           // Auto-fill username if available
           this.username = savedUsername.value;
+          console.log('[checkNativeBiometricSupport] Biometric credentials found, button will be shown');
         }
       } catch (error) {
+        console.error('[checkNativeBiometricSupport] Error:', error);
         this.hasBiometricCredentials = false;
       }
     },
@@ -689,59 +687,64 @@ export default {
             this.currentUserId = data.user._id;
             
             // Save credentials for biometric login in native app only (not web)
+            // Do this in background without blocking the navigation
             if (this.isNativeApp) {
-              try {
-                // Load plugins if not already loaded
-                if (!Preferences || !Biometric) {
-                  await loadNativePlugins();
-                }
-
-                if (!Biometric || !Preferences) {
-                  return; // Plugins not available
-                }
-
-                // Check if biometric is available
-                const available = await Biometric.checkBiometry({
-                  reason: 'שמירת פרטי התחברות',
-                  title: 'אימות ביומטרי',
-                  subtitle: 'הפעלת התחברות מהירה',
-                  description: 'האם תרצה להפעיל התחברות מהירה עם טביעת אצבע?',
-                });
-
-                if (available.isAvailable && !this.ifGoogleUser && !this.ifFacebookUser) {
-                  // Save username and userId for biometric login
-                  await Preferences.set({ 
-                    key: 'biometric_username', 
-                    value: this.username 
-                  });
-                  await Preferences.set({ 
-                    key: 'biometric_userId', 
-                    value: data.user._id 
-                  });
-                  
-                  // Save password securely (encrypted by Capacitor Preferences)
-                  // We'll use this for future biometric logins
-                  await Preferences.set({ 
-                    key: 'biometric_password', 
-                    value: this.password 
-                  });
-                  
-                  // Save auth token if provided by server
-                  if (data.token) {
-                    await Preferences.set({ 
-                      key: 'auth_token', 
-                      value: data.token 
-                    });
+              // Run async without awaiting to not block navigation
+              (async () => {
+                try {
+                  // Load plugins if not already loaded
+                  if (!Preferences || !Biometric) {
+                    await loadNativePlugins();
                   }
-                  
-                  this.hasBiometricCredentials = true;
+
+                  if (!Biometric || !Preferences) {
+                    return; // Plugins not available
+                  }
+
+                  // Check if biometric is available
+                  const available = await Biometric.checkBiometry({
+                    reason: 'שמירת פרטי התחברות',
+                    title: 'אימות ביומטרי',
+                    subtitle: 'הפעלת התחברות מהירה',
+                    description: 'האם תרצה להפעיל התחברות מהירה עם טביעת אצבע?',
+                  });
+
+                  if (available.isAvailable && !this.ifGoogleUser && !this.ifFacebookUser) {
+                    // Save username and userId for biometric login
+                    await Preferences.set({ 
+                      key: 'biometric_username', 
+                      value: this.username 
+                    });
+                    await Preferences.set({ 
+                      key: 'biometric_userId', 
+                      value: data.user._id 
+                    });
+                    
+                    // Save password securely (encrypted by Capacitor Preferences)
+                    // We'll use this for future biometric logins
+                    await Preferences.set({ 
+                      key: 'biometric_password', 
+                      value: this.password 
+                    });
+                    
+                    // Save auth token if provided by server
+                    if (data.token) {
+                      await Preferences.set({ 
+                        key: 'auth_token', 
+                        value: data.token 
+                      });
+                    }
+                    
+                    this.hasBiometricCredentials = true;
+                  }
+                } catch (error) {
+                  // Silently fail - biometric not available or user declined
+                  console.log('Biometric setup failed:', error);
                 }
-              } catch (error) {
-                // Silently fail - biometric not available or user declined
-                console.log('Biometric setup failed:', error);
-              }
+              })();
             }
             
+            // Navigate immediately without waiting for biometric setup
             this.$router.push({
               name: "Dashboard",
               params: { id: data.user._id },
@@ -804,155 +807,150 @@ export default {
 </script>
 
 <style scoped lang="scss">
-// Color Variables
-$primary: #f27f0d;
-$primary-dark: #cc6300;
-$background-light: #f8f7f5;
-$background-dark: #1a1a1a;
-$surface-dark: #2a2a2a;
-$text: rgba(255, 255, 255, 0.92);
-$text-muted: rgba(255, 255, 255, 0.62);
+// Color Variables - Dark Mode Only
+$primary: #F27C0E;
+$primary-hover: #D96B00;
+$background-dark: #0F0C08;
+$surface-dark: #161616;
+$input-dark: #050505;
+$text-primary: rgba(255, 255, 255, 0.92);
+$text-muted: rgba(255, 255, 255, 0.4);
+$text-secondary: rgba(255, 255, 255, 0.6);
+$border-color: rgba(255, 255, 255, 0.1);
 
 // Fonts
-$font-display: "Manrope", "Noto Sans Hebrew", sans-serif;
+$font-display: "Heebo", "Noto Sans Hebrew", sans-serif;
 
 .login {
   min-height: max(884px, 100dvh);
   position: relative;
   width: 100%;
+  max-width: 100vw;
   padding: 0;
+  margin: 0;
   font-family: $font-display;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  background: $background-light;
-  color: $text;
+  background: $background-dark;
+  color: $text-primary;
   box-sizing: border-box;
+  transition: background-color 0.3s;
 }
 
-// Top Half: Vibrant Orange Gradient
-.login__top-section {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 45vh;
-  min-height: 300px;
-  width: 100%;
-  background: linear-gradient(to bottom right, #ff9a3d, $primary, $primary-dark);
-  padding: 24px;
-  text-align: center;
-
-  @media (max-width: 640px) {
-    height: 40vh;
-    min-height: 250px;
-    padding: 20px 16px;
-  }
-}
-
-.login__pattern-overlay {
-  position: absolute;
+// Background Effects
+.login__noise-overlay {
+  position: fixed;
   inset: 0;
-  opacity: 0.1;
-  background-image: url("https://www.transparenttextures.com/patterns/cubes.png");
-  mix-blend-mode: overlay;
   pointer-events: none;
+  opacity: 0.3;
+  z-index: 0;
+  background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuALvVpouoeckKl4c6gg4_4XnyhstIYTdZiGw_aBPhK0qgnfUbwW19DDj8yFVBIHq9e9e8YE-JspZN8tGYP1m_S0tbN1nK3BtP7mgnwR00gc7O5NCFO_WdkY144h-krP86_LJjFkjdsW9ZTvBJrQWGLVU8RSSRQD4oIs6C_rbSvKIyHC4eixoPJm6Bg0LJqkk6Ce7HJnmGUDNhBnR92mRwzJwWk3Prx7AOBSb-LpY6qdDhfXVa4udxx3of8c6pERxZnGTnGNm0yms8o');
+  mix-blend-mode: overlay;
 }
 
-.login__top-content {
+.login__radial-gradient {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.2;
+  background: radial-gradient(circle at 50% 30%, $primary, transparent 60%);
+}
+
+// Main Content Area
+.login__main {
   position: relative;
   z-index: 10;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 16px;
-
-  @media (max-width: 640px) {
-    gap: 12px;
-  }
+  flex-grow: 1;
+  width: 100%;
+  max-width: 448px;
+  margin: 0 auto;
+  padding: 48px 24px 0;
+  padding-top: max(env(safe-area-inset-top, 48px), 48px);
+  box-sizing: border-box;
 }
 
-.login__logo-icon {
+// Top Section with H Logo
+.login__top-section {
   display: flex;
-  height: 80px;
-  width: 80px;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  margin-top: 40px;
+  margin-bottom: auto;
+  text-align: center;
+  gap: 8px;
+}
 
+.login__logo-letter {
+  font-size: 120px;
+  font-weight: 900;
+  line-height: 1;
+  color: $primary;
+  text-shadow: 0 0 20px rgba(242, 124, 14, 0.5);
+  user-select: none;
+  
   @media (max-width: 640px) {
-    height: 70px;
-    width: 70px;
-  }
-
-  .material-symbols-outlined {
-    font-size: 48px;
-    color: white;
-
-    @media (max-width: 640px) {
-      font-size: 40px;
-    }
+    font-size: 100px;
   }
 }
 
-.login__brand-name {
-  font-size: 48px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: white;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+.login__title {
+  font-size: 36px;
+  font-weight: 900;
+  color: $text-primary;
+  text-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+  letter-spacing: 0.05em;
   margin: 0;
-
+  
   @media (max-width: 640px) {
-    font-size: clamp(36px, 10vw, 42px);
+    font-size: 32px;
   }
 }
 
 .login__tagline {
   font-size: 18px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
+  color: $primary;
+  letter-spacing: 0.05em;
+  opacity: 0.9;
   margin: 0;
-
+  
   @media (max-width: 640px) {
-    font-size: clamp(14px, 4vw, 16px);
+    font-size: 16px;
   }
 }
 
-// Bottom Half: Dark Charcoal Form Area
+// Bottom Section with Form
 .login__bottom-section {
   position: relative;
   z-index: 20;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  justify-content: flex-start;
-  background: $background-dark;
-  padding: 32px 24px;
-  padding-top: 40px;
-  border-radius: 3rem 3rem 0 0;
-  margin-top: -32px;
-  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.3);
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 448px;
+  margin: 0 auto;
+  background: $surface-dark;
+  border-radius: 35px 35px 0 0;
+  padding: 32px;
+  padding-bottom: max(env(safe-area-inset-bottom, 40px), 40px);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+  border-top: 1px solid $border-color;
+  transition: background-color 0.3s;
+  box-sizing: border-box;
+  margin-top: auto;
 
   @media (max-width: 640px) {
     padding: 24px 20px;
-    padding-top: 32px;
-    margin-top: -24px;
-    border-radius: 2rem 2rem 0 0;
+    padding-bottom: max(env(safe-area-inset-bottom, 32px), 32px);
+    border-radius: 28px 28px 0 0;
   }
 
   @media (max-width: 420px) {
     padding: 20px 16px;
-    padding-top: 28px;
-    margin-top: -20px;
+    padding-bottom: max(env(safe-area-inset-bottom, 28px), 28px);
   }
 }
 
@@ -962,30 +960,15 @@ $font-display: "Manrope", "Noto Sans Hebrew", sans-serif;
   flex-direction: column;
   gap: 20px;
   width: 100%;
-  padding-top: 16px;
 
   @media (max-width: 640px) {
     gap: 18px;
-    padding-top: 12px;
   }
 }
 
 // Input Groups
 .input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.input-label {
-  font-size: 14px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.7);
-  margin-right: 8px;
-
-  @media (max-width: 640px) {
-    font-size: 13px;
-  }
+  position: relative;
 }
 
 .input-wrapper {
@@ -994,71 +977,27 @@ $font-display: "Manrope", "Noto Sans Hebrew", sans-serif;
   align-items: center;
   width: 100%;
   box-sizing: border-box;
-  border-radius: 9999px;
-  background: $surface-dark;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  height: 56px;
-  padding: 0;
-  overflow: hidden;
-  transition: all 0.3s ease;
-
-  @media (max-width: 640px) {
-    height: 52px;
-  }
-
-  &:focus-within {
-    border-color: $primary;
-    box-shadow: 0 0 0 1px $primary;
-  }
 }
 
-.input-icon {
+.input-icon-wrapper {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding-right: 16px;
+  padding-left: 12px;
+  pointer-events: none;
+  z-index: 10;
   height: 100%;
-  flex-shrink: 0;
-  transition: color 0.3s ease;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
 
-  &--leading {
-    position: absolute;
-    right: 16px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: rgba(255, 255, 255, 0.4);
-    pointer-events: none;
-
-    .material-symbols-outlined {
-      font-size: 20px;
-    }
+  .material-icons-round {
+    font-size: 24px;
+    color: $primary;
   }
-
-  &--trailing {
-    position: absolute;
-    left: 16px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: rgba(255, 255, 255, 0.5);
-    cursor: pointer;
-    background: transparent;
-    border: none;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    &:hover {
-      color: white;
-    }
-
-    .material-symbols-outlined {
-      font-size: 20px;
-    }
-  }
-}
-
-.input-wrapper:focus-within .input-icon--leading {
-  color: $primary;
 }
 
 .input-field {
@@ -1066,21 +1005,28 @@ $font-display: "Manrope", "Noto Sans Hebrew", sans-serif;
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
-  background: transparent;
-  border: none;
-  color: white;
-  padding: 0 16px;
-  padding-right: 48px;
-  padding-left: 48px;
-  height: 100%;
+  display: block;
+  padding: 16px;
+  padding-right: 64px;
+  padding-left: 16px;
   font-size: 16px;
-  font-weight: 400;
+  background: $input-dark;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: $text-primary;
   font-family: inherit;
   outline: none;
   text-align: right;
+  transition: all 0.2s;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
 
   &::placeholder {
-    color: rgba(255, 255, 255, 0.5);
+    color: $text-muted;
+  }
+
+  &:focus {
+    border-color: $primary;
+    box-shadow: 0 0 0 1px $primary, inset 0 1px 2px rgba(0, 0, 0, 0.3);
   }
 
   &:read-only {
@@ -1090,8 +1036,33 @@ $font-display: "Manrope", "Noto Sans Hebrew", sans-serif;
 
   @media (max-width: 640px) {
     font-size: 15px;
-    padding-right: 44px;
-    padding-left: 44px;
+    padding: 14px;
+    padding-right: 60px;
+  }
+}
+
+.input-toggle-password {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 16px;
+  padding-right: 12px;
+  background: transparent;
+  border: none;
+  color: $text-muted;
+  cursor: pointer;
+  transition: color 0.2s;
+
+  &:hover {
+    color: $text-secondary;
+  }
+
+  .material-icons-round {
+    font-size: 20px;
   }
 }
 
@@ -1100,83 +1071,56 @@ $font-display: "Manrope", "Noto Sans Hebrew", sans-serif;
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  margin-top: -4px;
 
   @media (max-width: 640px) {
-    margin-top: -2px;
+    justify-content: flex-start;
   }
 }
 
 .forgot-password-link {
   font-size: 14px;
-  font-weight: 600;
-  color: $primary;
+  font-weight: 500;
+  color: $text-muted;
   text-decoration: none;
-  transition: color 0.2s ease;
+  transition: color 0.2s;
+
+  &:hover {
+    color: $primary;
+  }
 
   @media (max-width: 640px) {
     font-size: 13px;
-  }
-
-  &:hover {
-    color: #ff9a3d;
   }
 }
 
 // Login Button
 .login-btn {
-  position: relative;
-  margin-top: 8px;
   width: 100%;
-  box-sizing: border-box;
-  height: 56px;
+  padding: 16px 24px;
   border-radius: 9999px;
-  background: black;
-  border: none;
+  border: 2px solid $primary;
+  background: transparent;
   color: $primary;
   font-weight: 700;
   font-size: 18px;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(242, 127, 13, 0.2);
-  transition: all 0.3s ease;
-  overflow: hidden;
-
-  @media (max-width: 640px) {
-    height: 52px;
-    font-size: 16px;
-    margin-top: 6px;
-  }
+  transition: all 0.3s;
+  box-shadow: 0 0 15px rgba(242, 124, 14, 0.15);
+  margin-top: 16px;
 
   &:hover {
-    box-shadow: 0 4px 20px rgba(242, 127, 13, 0.3);
+    background: $primary;
+    color: $background-dark;
+    box-shadow: 0 0 25px rgba(242, 124, 14, 0.4);
   }
 
   &:active {
     transform: scale(0.98);
   }
-}
 
-.login-btn__gloss {
-  position: absolute;
-  inset: 0;
-  top: 0;
-  height: 50%;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.1), transparent);
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-.login-btn__content {
-  position: relative;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 100%;
-
-  .material-symbols-outlined {
-    font-size: 20px;
+  @media (max-width: 640px) {
+    font-size: 16px;
+    padding: 14px 20px;
   }
 }
 
@@ -1194,7 +1138,7 @@ $font-display: "Manrope", "Noto Sans Hebrew", sans-serif;
   height: 56px;
   border-radius: 9999px;
   background: $surface-dark;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid $border-color;
   color: $primary;
   font-weight: 500;
   font-size: 16px;
@@ -1236,35 +1180,44 @@ $font-display: "Manrope", "Noto Sans Hebrew", sans-serif;
 
 // Social Divider
 .social-divider {
-  position: relative;
   display: flex;
   align-items: center;
-  padding: 32px 0;
+  gap: 16px;
+  margin-top: 32px;
+  opacity: 0.6;
 
   @media (max-width: 640px) {
-    padding: 24px 0;
+    margin-top: 24px;
   }
 
   &__line {
     flex-grow: 1;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    height: 1px;
+
+    &--left {
+      background: linear-gradient(to left, transparent, rgba(255, 255, 255, 0.2));
+    }
+
+    &--right {
+      background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.2));
+    }
   }
 
   &__text {
     flex-shrink: 0;
-    margin: 0 16px;
-    color: rgba(255, 255, 255, 0.5);
-    font-size: 12px;
-    font-weight: 500;
+    white-space: nowrap;
+    padding: 0 8px;
+    color: $text-muted;
+    font-size: 14px;
 
     @media (max-width: 640px) {
-      margin: 0 12px;
-      font-size: 11px;
+      font-size: 12px;
+      padding: 0 6px;
     }
   }
 }
 
-// Social Buttons
+// Social Buttons (keeping existing style, as not shown in new design)
 .social-buttons {
   display: flex;
   justify-content: center;
@@ -1282,13 +1235,13 @@ $font-display: "Manrope", "Noto Sans Hebrew", sans-serif;
   height: 48px;
   border-radius: 50%;
   background: $surface-dark;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid $border-color;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 
   @media (max-width: 640px) {
     width: 44px;
@@ -1327,7 +1280,7 @@ $font-display: "Manrope", "Noto Sans Hebrew", sans-serif;
 
   p {
     font-size: 14px;
-    color: rgba(255, 255, 255, 0.4);
+    color: $text-muted;
     margin: 0;
     line-height: 1.5;
 
@@ -1339,7 +1292,7 @@ $font-display: "Manrope", "Noto Sans Hebrew", sans-serif;
 
 .login__footer-link {
   font-weight: 700;
-  color: white;
+  color: $text-primary;
   text-decoration: underline;
   text-decoration-color: $primary;
   text-decoration-thickness: 2px;
@@ -1371,7 +1324,8 @@ $font-display: "Manrope", "Noto Sans Hebrew", sans-serif;
     padding: 12px 14px;
   }
 
-  .material-symbols-outlined {
+  .material-symbols-outlined,
+  .material-icons-round {
     font-size: 18px;
     flex-shrink: 0;
 
@@ -1381,16 +1335,18 @@ $font-display: "Manrope", "Noto Sans Hebrew", sans-serif;
   }
 }
 
-// Decorative background element for bottom
-.login__bg-decoration {
-  pointer-events: none;
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 128px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.4), transparent);
-  z-index: 1;
+// Spacer after divider
+.login__bottom-section > div:last-child {
+  height: 24px;
+}
+
+// Additional spacing for biometric button if present
+.biometric-auth {
+  margin-top: 16px;
+  
+  @media (max-width: 640px) {
+    margin-top: 12px;
+  }
 }
 </style>
 

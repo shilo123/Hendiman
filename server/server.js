@@ -196,22 +196,40 @@ async function reverseGeocodeCoordinates(lat, lng) {
   try {
     const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${process.env.GOOGLE_MAPS_API_KEY}&language=he&region=il`;
 
+    serverLogger.log(`[reverseGeocodeCoordinates] Calling Google Maps API for lat: ${lat}, lng: ${lng}`);
+    
     const response = await axios.get(url, { timeout: 10000 });
 
-    if (
-      response.data &&
-      response.data.status === "OK" &&
-      response.data.results &&
-      response.data.results.length > 0
-    ) {
+    if (!response.data) {
+      serverLogger.warn(`[reverseGeocodeCoordinates] No response data from Google Maps API`);
+      return null;
+    }
+
+    const status = response.data.status;
+    serverLogger.log(`[reverseGeocodeCoordinates] Google Maps API status: ${status}`);
+
+    if (status === "OK" && response.data.results && response.data.results.length > 0) {
       const result = {
         formatted_address: response.data.results[0].formatted_address,
         address_components: response.data.results[0].address_components,
         results: response.data.results,
       };
 
+      serverLogger.log(`[reverseGeocodeCoordinates] Successfully got ${response.data.results.length} results`);
       return result;
     } else {
+      // Log different status codes for debugging
+      if (status === "ZERO_RESULTS") {
+        serverLogger.warn(`[reverseGeocodeCoordinates] No results found for lat: ${lat}, lng: ${lng}`);
+      } else if (status === "OVER_QUERY_LIMIT") {
+        serverLogger.error(`[reverseGeocodeCoordinates] Over query limit for Google Maps API`);
+      } else if (status === "REQUEST_DENIED") {
+        serverLogger.error(`[reverseGeocodeCoordinates] Request denied by Google Maps API - check API key`);
+      } else if (status === "INVALID_REQUEST") {
+        serverLogger.error(`[reverseGeocodeCoordinates] Invalid request to Google Maps API`);
+      } else {
+        serverLogger.warn(`[reverseGeocodeCoordinates] Unexpected status: ${status}`);
+      }
       return null;
     }
   } catch (error) {
@@ -219,6 +237,10 @@ async function reverseGeocodeCoordinates(lat, lng) {
       "❌ [Reverse Geocoding] Error in Google Maps reverse geocoding:",
       error.message
     );
+    if (error.response) {
+      serverLogger.error(`[reverseGeocodeCoordinates] Response status: ${error.response.status}`);
+      serverLogger.error(`[reverseGeocodeCoordinates] Response data:`, error.response.data);
+    }
     return null;
   }
 }
@@ -14170,6 +14192,8 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
         // Use Google Maps Geocoding API for reverse geocoding
         if (process.env.GOOGLE_MAPS_API_KEY) {
           try {
+            serverLogger.log(`[reverse-geocode] Calling reverseGeocodeCoordinates for lat: ${parsedLat}, lng: ${parsedLng}`);
+            
             const reverseGeocodeResult = await reverseGeocodeCoordinates(
               parsedLat,
               parsedLng
@@ -14183,6 +14207,8 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
               const result = reverseGeocodeResult.results[0];
               const addressComponents = result.address_components || [];
 
+              serverLogger.log(`[reverse-geocode] Received ${addressComponents.length} address components`);
+
               // Extract city name from address components
               let cityName = null;
               for (const component of addressComponents) {
@@ -14191,6 +14217,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                   component.types.includes("administrative_area_level_2")
                 ) {
                   cityName = component.long_name;
+                  serverLogger.log(`[reverse-geocode] Found city name from locality/level_2: ${cityName}`);
                   break;
                 }
               }
@@ -14203,6 +14230,23 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                     component.types.includes("sublocality")
                   ) {
                     cityName = component.long_name;
+                    serverLogger.log(`[reverse-geocode] Found city name from level_3/sublocality: ${cityName}`);
+                    break;
+                  }
+                }
+              }
+
+              // If still no city found, try postal_town or political types
+              if (!cityName) {
+                for (const component of addressComponents) {
+                  if (
+                    component.types.includes("postal_town") ||
+                    (component.types.includes("political") && 
+                     !component.types.includes("country") && 
+                     !component.types.includes("administrative_area_level_1"))
+                  ) {
+                    cityName = component.long_name;
+                    serverLogger.log(`[reverse-geocode] Found city name from postal_town/political: ${cityName}`);
                     break;
                   }
                 }
@@ -14244,6 +14288,8 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                 fullAddress = cityName;
               }
 
+              serverLogger.log(`[reverse-geocode] Returning: city=${cityName}, fullAddress=${fullAddress}`);
+
               // Return the full address (with street name and number if available)
               return res.json({
                 success: true,
@@ -14254,10 +14300,16 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                 streetNumber: streetNumber || null,
                 streetName: streetName || null,
               });
+            } else {
+              serverLogger.warn(`[reverse-geocode] No results from Google Maps API for lat: ${parsedLat}, lng: ${parsedLng}`);
             }
           } catch (googleError) {
+            serverLogger.error(`[reverse-geocode] Error in Google Maps reverse geocoding:`, googleError.message);
+            serverLogger.error(`[reverse-geocode] Error stack:`, googleError.stack);
             // Fall through to fallback
           }
+        } else {
+          serverLogger.error(`[reverse-geocode] GOOGLE_MAPS_API_KEY not configured`);
         }
 
         // Fallback: return coordinates if geocoding fails
