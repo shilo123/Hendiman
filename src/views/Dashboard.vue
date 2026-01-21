@@ -4176,134 +4176,84 @@ export default {
     },
 
     async enablePushNotifications() {
-      // In Android native app, FCM tokens are handled automatically via google-services.json
-      // But we still need to get the token from Firebase and request permissions
-      if (isNative && isAndroid) {
+      // Check platform directly using Capacitor (not imported values)
+      const isNativePlatform = Capacitor.isNativePlatform();
+      const platform = Capacitor.getPlatform();
+      
+      console.log("[PushNotifications] Starting enablePushNotifications");
+      console.log("[PushNotifications] isNativePlatform:", isNativePlatform);
+      console.log("[PushNotifications] platform:", platform);
+
+      // For native apps (Android/iOS), use Capacitor Push Notifications plugin
+      if (isNativePlatform) {
         try {
-          // For Android native app, use Capacitor Push Notifications plugin
-          // Try to load the plugin dynamically
-          let PushNotificationsPlugin = null;
-          try {
-            const PushNotificationsModule = await import("@capacitor/push-notifications");
-            PushNotificationsPlugin = PushNotificationsModule.PushNotifications;
-          } catch (e) {
-            logger.error("Failed to load PushNotifications plugin:", e);
+          console.log("[PushNotifications] Native platform detected, loading plugin...");
+          
+          // Import the plugin
+          const { PushNotifications } = await import("@capacitor/push-notifications");
+          
+          if (!PushNotifications) {
+            console.error("[PushNotifications] Plugin not available after import");
             return;
           }
+          
+          console.log("[PushNotifications] Plugin loaded successfully");
 
-          if (!PushNotificationsPlugin) {
-            logger.error("PushNotifications plugin not available");
-            return;
-          }
-
-          // Use Capacitor Push Notifications plugin
           // Check current permission status
-          const permissionStatus = await PushNotificationsPlugin.checkPermissions();
+          const permissionStatus = await PushNotifications.checkPermissions();
+          console.log("[PushNotifications] Current permission status:", JSON.stringify(permissionStatus));
           
           if (permissionStatus.receive !== 'granted') {
-            // Request permission - THIS IS THE KEY PART!
-            const requestResult = await PushNotificationsPlugin.requestPermissions();
+            console.log("[PushNotifications] Permission not granted, requesting...");
+            
+            // Request permission - THIS WILL SHOW THE PERMISSION DIALOG!
+            const requestResult = await PushNotifications.requestPermissions();
+            console.log("[PushNotifications] Permission request result:", JSON.stringify(requestResult));
             
             if (requestResult.receive !== 'granted') {
+              console.log("[PushNotifications] Permission denied by user");
               this.toast?.showError("הרשאות התראות נדחו. אנא הפעל אותן בהגדרות האפליקציה.");
               return;
             }
           }
 
-          // Register for push notifications
-          await PushNotificationsPlugin.register();
+          console.log("[PushNotifications] Permission granted, registering...");
 
-          // Listen for registration
-          PushNotificationsPlugin.addListener('registration', async (token) => {
-            logger.log("Push notification token received:", token.value);
+          // Register for push notifications
+          await PushNotifications.register();
+          console.log("[PushNotifications] Registration called");
+
+          // Listen for registration success
+          PushNotifications.addListener('registration', async (token) => {
+            console.log("[PushNotifications] Token received:", token.value);
             if (token.value) {
               await this.saveTokenToServer(token.value);
+              console.log("[PushNotifications] Token saved to server");
             }
           });
 
           // Listen for registration errors
-          PushNotificationsPlugin.addListener('registrationError', (error) => {
-            logger.error("Push notification registration error:", error);
-            this.toast?.showError("שגיאה ברישום להתראות: " + error.error);
+          PushNotifications.addListener('registrationError', (error) => {
+            console.error("[PushNotifications] Registration error:", JSON.stringify(error));
+            this.toast?.showError("שגיאה ברישום להתראות: " + (error.error || error.message || "שגיאה לא ידועה"));
           });
 
-          // Listen for push notifications
-          PushNotificationsPlugin.addListener('pushNotificationReceived', (notification) => {
-            logger.log("Push notification received:", notification);
+          // Listen for push notifications when app is open
+          PushNotifications.addListener('pushNotificationReceived', (notification) => {
+            console.log("[PushNotifications] Notification received:", JSON.stringify(notification));
+            // Show in-app notification
+            this.toast?.showInfo(notification.title || notification.body || "התראה חדשה");
           });
 
-          // Listen for push notification actions
-          PushNotificationsPlugin.addListener('pushNotificationActionPerformed', (action) => {
-            logger.log("Push notification action:", action);
+          // Listen for push notification taps
+          PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+            console.log("[PushNotifications] Action performed:", JSON.stringify(action));
           });
+
+          console.log("[PushNotifications] All listeners set up successfully");
         } catch (error) {
-          logger.error("Error enabling push notifications in Android:", error);
-          this.toast?.showError("שגיאה בהפעלת התראות: " + error.message);
-        }
-        return;
-      }
-
-      // For iOS native app
-      if (isNative && Capacitor.getPlatform() === "ios") {
-        try {
-          // For iOS native app, use Capacitor Push Notifications plugin
-          // Try to load the plugin dynamically
-          let PushNotificationsPlugin = null;
-          try {
-            const PushNotificationsModule = await import("@capacitor/push-notifications");
-            PushNotificationsPlugin = PushNotificationsModule.PushNotifications;
-          } catch (e) {
-            logger.error("Failed to load PushNotifications plugin for iOS:", e);
-            return;
-          }
-
-          if (!PushNotificationsPlugin) {
-            logger.error("PushNotifications plugin not available for iOS");
-            return;
-          }
-
-          // Check current permission status
-          const permissionStatus = await PushNotificationsPlugin.checkPermissions();
-          
-          if (permissionStatus.receive !== 'granted') {
-            // Request permission - THIS IS THE KEY PART!
-            const requestResult = await PushNotificationsPlugin.requestPermissions();
-            
-            if (requestResult.receive !== 'granted') {
-              this.toast?.showError("הרשאות התראות נדחו. אנא הפעל אותן בהגדרות האפליקציה.");
-              return;
-            }
-          }
-
-          // Register for push notifications
-          await PushNotificationsPlugin.register();
-
-          // Listen for registration
-          PushNotificationsPlugin.addListener('registration', async (token) => {
-            logger.log("Push notification token received:", token.value);
-            if (token.value) {
-              await this.saveTokenToServer(token.value);
-            }
-          });
-
-          // Listen for registration errors
-          PushNotificationsPlugin.addListener('registrationError', (error) => {
-            logger.error("Push notification registration error:", error);
-            this.toast?.showError("שגיאה ברישום להתראות: " + error.error);
-          });
-
-          // Listen for push notifications
-          PushNotificationsPlugin.addListener('pushNotificationReceived', (notification) => {
-            logger.log("Push notification received:", notification);
-          });
-
-          // Listen for push notification actions
-          PushNotificationsPlugin.addListener('pushNotificationActionPerformed', (action) => {
-            logger.log("Push notification action:", action);
-          });
-        } catch (error) {
-          logger.error("Error enabling push notifications in iOS:", error);
-          this.toast?.showError("שגיאה בהפעלת התראות: " + error.message);
+          console.error("[PushNotifications] Error in native push setup:", error);
+          this.toast?.showError("שגיאה בהפעלת התראות: " + (error.message || "שגיאה לא ידועה"));
         }
         return;
       }
@@ -4423,13 +4373,20 @@ export default {
     async saveTokenToServer(token) {
       try {
         const userId = this.store.user?._id || this.me?.id;
-        if (!userId) return;
+        if (!userId) {
+          console.log("[PushNotifications] saveTokenToServer - No userId available");
+          return;
+        }
 
-        await axios.post(`${URL}/save-fcm-token`, {
+        console.log("[PushNotifications] Saving token to server for user:", userId);
+        const response = await axios.post(`${URL}/save-fcm-token`, {
           userId: userId,
           fcmToken: token,
         });
-      } catch (error) {}
+        console.log("[PushNotifications] Token saved successfully:", response.data);
+      } catch (error) {
+        console.error("[PushNotifications] Error saving token to server:", error.message);
+      }
     },
 
     onBlockHandyman(id, isBlocked) {
@@ -5240,6 +5197,15 @@ export default {
     },
   },
   async mounted() {
+    // ⚠️ CRITICAL: Enable Push Notifications FIRST, before anything else
+    // This ensures it runs even if other code fails
+    try {
+      console.log("[Dashboard] Mounted - initializing push notifications first");
+      this.enablePushNotifications();
+    } catch (pushError) {
+      console.error("[Dashboard] Push notification initialization error:", pushError);
+    }
+
     // Fast check for active job (runs in parallel with dashboard data loading)
     const userId = this.$route.params.id;
     let activeJobCheckPromise = null;
@@ -6045,8 +6011,7 @@ export default {
       // Initialize WebSocket for real-time updates
       this.initWebSocket();
 
-      // Enable Push Notifications
-      this.enablePushNotifications();
+      // Push notifications already initialized at the start of mounted()
 
       // Start polling for quotations (fallback if WebSocket fails) - only for clients
       if (!this.isHendiman) {

@@ -85,10 +85,16 @@ function initializeFirebaseAdmin() {
  * @returns {Promise}
  */
 async function sendPushNotification(fcmToken, title, body, data = {}) {
+  console.log("[PushNotification] Sending notification:");
+  console.log("[PushNotification] - Token:", fcmToken ? fcmToken.substring(0, 20) + "..." : "NO TOKEN");
+  console.log("[PushNotification] - Title:", title);
+  console.log("[PushNotification] - Body:", body);
+  
   try {
     try {
       initializeFirebaseAdmin();
     } catch (initError) {
+      console.error("[PushNotification] Firebase init error:", initError.message);
       // Don't fail the request - just log and return silently
       // This allows the app to work even if Firebase is not configured
       return { success: false, error: initError.message, silent: true };
@@ -96,6 +102,7 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
 
     // Check if Firebase is actually initialized and has project ID
     if (!admin.apps.length || admin.apps.length === 0) {
+      console.error("[PushNotification] Firebase not initialized");
       return {
         success: false,
         error: "Firebase not initialized",
@@ -107,12 +114,15 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
     const app = admin.app();
     const projectId = app?.options?.projectId;
     if (!projectId) {
+      console.error("[PushNotification] Firebase project ID not configured");
       return {
         success: false,
         error: "Firebase project ID not configured",
         silent: true,
       };
     }
+    
+    console.log("[PushNotification] Firebase ready, project:", projectId);
 
     // ⚠️ CRITICAL: Payload structure for both Web and Native apps
     // For native Android apps with Capacitor Push Notifications:
@@ -188,14 +198,19 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
       },
     };
 
+    console.log("[PushNotification] Sending message...");
     const response = await admin.messaging().send(message);
+    console.log("[PushNotification] SUCCESS! Message ID:", response);
     return { success: true, messageId: response };
   } catch (error) {
+    console.error("[PushNotification] ERROR:", error.code, error.message);
+    
     // Handle invalid token error
     if (
       error.code === "messaging/invalid-registration-token" ||
       error.code === "messaging/registration-token-not-registered"
     ) {
+      console.log("[PushNotification] Invalid token - should be removed from DB");
       // Token is invalid, should be removed from database
       return { success: false, error: "invalid_token", shouldRemove: true };
     }
