@@ -4179,81 +4179,60 @@ export default {
       // Check platform directly using Capacitor (not imported values)
       const isNativePlatform = Capacitor.isNativePlatform();
       const platform = Capacitor.getPlatform();
-      
-      console.log("[PushNotifications] Starting enablePushNotifications");
-      console.log("[PushNotifications] isNativePlatform:", isNativePlatform);
-      console.log("[PushNotifications] platform:", platform);
 
       // For native apps (Android/iOS), use Capacitor Push Notifications plugin
       if (isNativePlatform) {
         try {
-          console.log("[PushNotifications] Native platform detected, loading plugin...");
-          
           // Import the plugin
           const { PushNotifications } = await import("@capacitor/push-notifications");
           
           if (!PushNotifications) {
-            console.error("[PushNotifications] Plugin not available after import");
+            this.toast?.showError("❌ תוסף התראות לא נטען");
             return;
           }
-          
-          console.log("[PushNotifications] Plugin loaded successfully");
 
           // Check current permission status
           const permissionStatus = await PushNotifications.checkPermissions();
-          console.log("[PushNotifications] Current permission status:", JSON.stringify(permissionStatus));
           
           if (permissionStatus.receive !== 'granted') {
-            console.log("[PushNotifications] Permission not granted, requesting...");
-            
             // Request permission - THIS WILL SHOW THE PERMISSION DIALOG!
             const requestResult = await PushNotifications.requestPermissions();
-            console.log("[PushNotifications] Permission request result:", JSON.stringify(requestResult));
             
             if (requestResult.receive !== 'granted') {
-              console.log("[PushNotifications] Permission denied by user");
-              this.toast?.showError("הרשאות התראות נדחו. אנא הפעל אותן בהגדרות האפליקציה.");
+              this.toast?.showError("❌ הרשאות התראות נדחו");
               return;
             }
           }
 
-          console.log("[PushNotifications] Permission granted, registering...");
-
           // Register for push notifications
           await PushNotifications.register();
-          console.log("[PushNotifications] Registration called");
 
           // Listen for registration success
           PushNotifications.addListener('registration', async (token) => {
-            console.log("[PushNotifications] Token received:", token.value);
             if (token.value) {
+              this.toast?.showSuccess("✅ נרשמת להתראות! טוקן: " + token.value.substring(0, 15) + "...");
               await this.saveTokenToServer(token.value);
-              console.log("[PushNotifications] Token saved to server");
             }
           });
 
           // Listen for registration errors
           PushNotifications.addListener('registrationError', (error) => {
-            console.error("[PushNotifications] Registration error:", JSON.stringify(error));
-            this.toast?.showError("שגיאה ברישום להתראות: " + (error.error || error.message || "שגיאה לא ידועה"));
+            this.toast?.showError("❌ שגיאה ברישום: " + (error.error || error.message || "שגיאה"));
           });
 
           // Listen for push notifications when app is open
           PushNotifications.addListener('pushNotificationReceived', (notification) => {
-            console.log("[PushNotifications] Notification received:", JSON.stringify(notification));
             // Show in-app notification
-            this.toast?.showInfo(notification.title || notification.body || "התראה חדשה");
+            this.toast?.showInfo("🔔 " + (notification.title || notification.body || "התראה חדשה"));
           });
 
           // Listen for push notification taps
           PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-            console.log("[PushNotifications] Action performed:", JSON.stringify(action));
+            this.toast?.showInfo("📲 לחצת על התראה");
           });
 
-          console.log("[PushNotifications] All listeners set up successfully");
         } catch (error) {
-          console.error("[PushNotifications] Error in native push setup:", error);
-          this.toast?.showError("שגיאה בהפעלת התראות: " + (error.message || "שגיאה לא ידועה"));
+          this.toast?.showError("❌ שגיאה: " + (error.message || "שגיאה לא ידועה"));
         }
         return;
       }
@@ -4374,18 +4353,22 @@ export default {
       try {
         const userId = this.store.user?._id || this.me?.id;
         if (!userId) {
-          console.log("[PushNotifications] saveTokenToServer - No userId available");
+          this.toast?.showError("❌ אין userId - לא ניתן לשמור טוקן");
           return;
         }
 
-        console.log("[PushNotifications] Saving token to server for user:", userId);
         const response = await axios.post(`${URL}/save-fcm-token`, {
           userId: userId,
           fcmToken: token,
         });
-        console.log("[PushNotifications] Token saved successfully:", response.data);
+        
+        if (response.data?.success) {
+          this.toast?.showSuccess("✅ טוקן נשמר בשרת!");
+        } else {
+          this.toast?.showError("❌ השרת לא שמר את הטוקן");
+        }
       } catch (error) {
-        console.error("[PushNotifications] Error saving token to server:", error.message);
+        this.toast?.showError("❌ שגיאה בשמירת טוקן: " + (error.message || ""));
       }
     },
 

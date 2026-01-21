@@ -1402,10 +1402,16 @@ function findAvailablePort(startPort) {
         }
 
         // Send push notifications to all relevant handymen
-        const notificationPromises = relevantHandymen
-          .filter((handyman) => handyman.fcmToken)
+        console.log("[NewJob] Sending push notifications to", relevantHandymen.length, "handymen");
+        const handymenWithTokens = relevantHandymen.filter((handyman) => handyman.fcmToken);
+        console.log("[NewJob] Handymen with FCM tokens:", handymenWithTokens.length);
+        
+        const notificationPromises = handymenWithTokens
           .map(async (handyman) => {
             try {
+              console.log("[NewJob] Sending push to handyman:", handyman.username || handyman._id);
+              console.log("[NewJob] FCM Token:", handyman.fcmToken ? handyman.fcmToken.substring(0, 30) + "..." : "NO TOKEN");
+              
               // Handle subcategoryInfo as array
               const firstSubcategory =
                 Array.isArray(jobData.subcategoryInfo) &&
@@ -1440,7 +1446,7 @@ function findAvailablePort(startPort) {
               const title = isUrgent ? "דחוף 🚨 קריאה חדשה" : "קריאה חדשה";
               const body = `${shortText}${distanceText}`;
 
-              await sendPushNotification(
+              const result = await sendPushNotification(
                 handyman.fcmToken,
                 title,
                 body,
@@ -1452,11 +1458,17 @@ function findAvailablePort(startPort) {
                   urgent: isUrgent ? "true" : "false",
                 }
               );
-            } catch (error) {}
+              console.log("[NewJob] Push result for", handyman.username || handyman._id, ":", JSON.stringify(result));
+            } catch (error) {
+              console.error("[NewJob] Error sending push to handyman:", error.message);
+            }
           });
 
         await Promise.all(notificationPromises);
-      } catch (error) {}
+        console.log("[NewJob] All push notifications sent");
+      } catch (error) {
+        console.error("[NewJob] Error in push notification block:", error.message);
+      }
     }
     async function ensureJobsGeoIndex() {
       try {
@@ -8455,7 +8467,11 @@ function findAvailablePort(startPort) {
     app.post("/save-fcm-token", async (req, res) => {
       try {
         const { userId, fcmToken } = req.body;
+        console.log("[FCM] Saving token for user:", userId);
+        console.log("[FCM] Token:", fcmToken ? fcmToken.substring(0, 30) + "..." : "NO TOKEN");
+        
         if (!userId || !fcmToken) {
+          console.log("[FCM] Missing userId or fcmToken");
           return res.status(400).json({
             success: false,
             message: "userId and fcmToken required",
@@ -8468,8 +8484,10 @@ function findAvailablePort(startPort) {
           { $set: { fcmToken: fcmToken } }
         );
 
+        console.log("[FCM] Token saved successfully for user:", userId);
         return res.json({ success: true });
       } catch (error) {
+        console.error("[FCM] Error saving token:", error.message);
         return res.status(500).json({
           success: false,
           message: "Error saving FCM token",
