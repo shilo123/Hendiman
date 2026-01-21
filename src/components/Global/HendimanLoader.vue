@@ -201,6 +201,7 @@ export default {
   direction: rtl;
   box-sizing: border-box;
   overflow: hidden;
+  z-index: 999999999;
 }
 
 .hendiman-loader__header {

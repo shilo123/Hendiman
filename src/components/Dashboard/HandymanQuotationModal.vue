@@ -50,36 +50,7 @@
             <div class="quotation-modal__content">
               <!-- Manual Input Mode -->
               <div v-if="inputMode === 'manual'" class="input-section">
-                <!-- Price Input -->
-                <div class="input-group">
-                  <label class="input-label">המחיר שלך (כולל מע״מ)</label>
-                  <div class="price-input-wrapper">
-                    <input
-                      v-model.number="price"
-                      type="number"
-                      class="price-input"
-                      placeholder="0"
-                      min="1"
-                      @input="validatePrice"
-                    />
-                    <span class="price-currency">₪</span>
-                  </div>
-                </div>
-
-                <!-- AI Button -->
-                <div class="ai-button-wrapper">
-                  <button
-                    type="button"
-                    class="ai-suggest-btn"
-                    @click="requestAISuggestion"
-                    :disabled="isLoadingAI"
-                  >
-                    <span class="material-symbols-outlined ai-suggest-btn__icon">auto_awesome</span>
-                    <span>צור הצעה עם AI</span>
-                  </button>
-                </div>
-
-                <!-- Text Input -->
+                <!-- Text Input - First -->
                 <div class="input-group">
                   <div class="text-input-header">
                     <label class="input-label">פירוט ההצעה</label>
@@ -101,6 +72,35 @@
                     </div>
                   </div>
                 </div>
+
+                <!-- Price Input - Second -->
+                <div class="input-group">
+                  <label class="input-label">המחיר שלך (כולל מע״מ)</label>
+                  <div class="price-input-wrapper">
+                    <input
+                      v-model.number="price"
+                      type="number"
+                      class="price-input"
+                      placeholder="0"
+                      min="1"
+                      @input="validatePrice"
+                    />
+                    <span class="price-currency">₪</span>
+                  </div>
+                </div>
+
+                <!-- AI Button - Third -->
+                <div class="ai-button-wrapper">
+                  <button
+                    type="button"
+                    class="ai-suggest-btn"
+                    @click="requestAISuggestion"
+                    :disabled="isLoadingAI"
+                  >
+                    <span class="material-symbols-outlined ai-suggest-btn__icon">auto_awesome</span>
+                    <span>צור הצעה עם AI</span>
+                  </button>
+                </div>
               </div>
 
               <!-- AI Writing Mode -->
@@ -118,23 +118,20 @@
                     <span v-if="!isLoadingAI" class="ai-badge">AI</span>
                   </div>
 
-                  <!-- AI Generated Price Range (Reference Only) -->
-                  <div class="ai-price-display">
-                    <span class="ai-price-label">טווח מחיר מוצע (המלצה בלבד):</span>
-                    <div class="ai-price-range">
-                      <span class="ai-price-value">
-                        {{ aiPriceMin || '---' }}
-                        <span v-if="aiPriceMin" class="ai-price-currency">₪</span>
+                  <!-- AI Generated Text - First -->
+                  <div class="ai-text-display">
+                    <div class="ai-text-label">הסבר:</div>
+                    <div class="ai-text-content" ref="aiTextContainer">
+                      <span v-if="isLoadingAI && !aiText" class="ai-typing-indicator">
+                        <span class="dot"></span>
+                        <span class="dot"></span>
+                        <span class="dot"></span>
                       </span>
-                      <span v-if="aiPriceMin && aiPriceMax" class="ai-price-separator">-</span>
-                      <span class="ai-price-value">
-                        {{ aiPriceMax || '---' }}
-                        <span v-if="aiPriceMax" class="ai-price-currency">₪</span>
-                      </span>
+                      <span v-else class="ai-text-stream">{{ aiText || '...' }}</span>
                     </div>
                   </div>
 
-                  <!-- Price Input for AI Mode -->
+                  <!-- Price Input for AI Mode - Second -->
                   <div class="input-group">
                     <label class="input-label">המחיר שלך (כולל מע״מ)</label>
                     <div class="price-input-wrapper">
@@ -150,16 +147,19 @@
                     </div>
                   </div>
 
-                  <!-- AI Generated Text -->
-                  <div class="ai-text-display">
-                    <div class="ai-text-label">הסבר:</div>
-                    <div class="ai-text-content" ref="aiTextContainer">
-                      <span v-if="isLoadingAI && !aiText" class="ai-typing-indicator">
-                        <span class="dot"></span>
-                        <span class="dot"></span>
-                        <span class="dot"></span>
+                  <!-- AI Generated Price Range (Reference Only) - Third -->
+                  <div class="ai-price-display">
+                    <span class="ai-price-label">טווח מחיר מוצע (המלצה בלבד):</span>
+                    <div class="ai-price-range">
+                      <span class="ai-price-value">
+                        {{ aiPriceMin || '---' }}
+                        <span v-if="aiPriceMin" class="ai-price-currency">₪</span>
                       </span>
-                      <span v-else class="ai-text-stream">{{ aiText || '...' }}</span>
+                      <span v-if="aiPriceMin && aiPriceMax" class="ai-price-separator">-</span>
+                      <span class="ai-price-value">
+                        {{ aiPriceMax || '---' }}
+                        <span v-if="aiPriceMax" class="ai-price-currency">₪</span>
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -205,9 +205,9 @@
                 :disabled="!canSubmit || isSubmitting"
               >
                 <span v-if="isSubmitting" class="submit-btn__loader"></span>
-                <span v-else>
+                <span v-else class="submit-btn__content">
+                  <span class="material-symbols-outlined submit-btn__icon">arrow_back</span>
                   <span>שליחת הצעה</span>
-                  <span class="material-symbols-outlined submit-btn__icon">send</span>
                 </span>
               </button>
             </div>
@@ -276,6 +276,10 @@ export default {
   },
   computed: {
     canSubmit() {
+      // Don't allow submission if already submitted
+      if (this.hasAlreadySubmitted) {
+        return false;
+      }
       if (this.inputMode === "manual") {
         return this.price && this.price > 0 && this.handimanText && this.handimanText.trim().length > 0;
       } else {
@@ -297,11 +301,24 @@ export default {
     finalText() {
       return this.inputMode === "ai" ? this.aiText : this.handimanText;
     },
+    hasAlreadySubmitted() {
+      // Check if handyman has already submitted a quotation for this job
+      if (!this.job || !this.handymanId || !Array.isArray(this.job.quotations)) {
+        return false;
+      }
+      return this.job.quotations.some(
+        (q) => String(q.handymanId) === String(this.handymanId)
+      );
+    },
   },
   watch: {
     visible(newVal) {
       if (newVal) {
         this.resetForm();
+        // Check if already submitted and show error
+        if (this.hasAlreadySubmitted) {
+          this.error = "כבר שלחת הצעת מחיר לעבודה זו";
+        }
         document.body.style.overflow = "hidden";
       } else {
         document.body.style.overflow = "";
@@ -894,6 +911,7 @@ $font-family: "Inter", "Noto Sans Hebrew", -apple-system, BlinkMacSystemFont, "S
 
 .text-input {
   width: 100%;
+  max-width: 100%;
   padding: 16px;
   border-radius: 1rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -906,6 +924,9 @@ $font-family: "Inter", "Noto Sans Hebrew", -apple-system, BlinkMacSystemFont, "S
   transition: all 0.2s;
   line-height: 1.75;
   min-height: 160px;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 
   &::placeholder {
     color: #71717a;
@@ -1302,14 +1323,20 @@ $font-family: "Inter", "Noto Sans Hebrew", -apple-system, BlinkMacSystemFont, "S
     transform: none;
   }
 
+  &__content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-direction: row-reverse;
+  }
+
   &__icon {
     font-size: 20px;
-    transform: rotate(180deg);
     transition: transform 0.2s;
   }
 
   &:hover:not(:disabled) &__icon {
-    transform: rotate(180deg) translateX(-4px);
+    transform: translateX(4px);
   }
 
   &__loader {

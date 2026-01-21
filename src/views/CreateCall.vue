@@ -2177,8 +2177,6 @@ export default {
 
         // Now do reverse geocoding to get the city name from coordinates
         try {
-          logger.log(`[getCurrentLocation] Calling reverse-geocode API with lat: ${improvedLocation.lat}, lon: ${improvedLocation.lon}`);
-          
           const response = await axios.get(`${URL}/reverse-geocode`, {
             params: {
               lat: improvedLocation.lat,
@@ -2186,21 +2184,16 @@ export default {
             },
           });
 
-          logger.log(`[getCurrentLocation] Reverse geocode response:`, response.data);
-
           if (response.data && response.data.success) {
             // Use city name if available, otherwise use address or fullAddress
             const cityName = response.data.city;
             const address = response.data.address || response.data.fullAddress;
             const fullAddress = response.data.fullAddress;
             
-            logger.log(`[getCurrentLocation] Extracted - cityName: ${cityName}, address: ${address}, fullAddress: ${fullAddress}`);
-            
             if (cityName) {
               // Use the city name from reverse geocoding
               this.call.location = cityName;
               this.detectedLocation = cityName;
-              logger.log(`[getCurrentLocation] Using city name: ${cityName}`);
             } else if (fullAddress) {
               // Try to extract city name from fullAddress if it contains a comma
               const parts = fullAddress.split(',').map(p => p.trim());
@@ -2209,35 +2202,28 @@ export default {
                 const potentialCity = parts[parts.length - 1];
                 this.call.location = potentialCity;
                 this.detectedLocation = potentialCity;
-                logger.log(`[getCurrentLocation] Extracted city from fullAddress: ${potentialCity}`);
               } else {
                 // Use full address
                 this.call.location = fullAddress;
                 this.detectedLocation = fullAddress;
-                logger.log(`[getCurrentLocation] Using fullAddress: ${fullAddress}`);
               }
             } else if (address) {
               // Fallback to address if no city found
               this.call.location = address;
               this.detectedLocation = address;
-              logger.log(`[getCurrentLocation] Using address: ${address}`);
             } else {
               // Fallback if no address data
-              logger.warn(`[getCurrentLocation] No city or address found in response, using fallback`);
               this.detectedLocation = "מיקום נוכחי";
               this.call.location = "מיקום נוכחי";
             }
             this.toast?.showSuccess("מיקום נמצא בהצלחה");
           } else {
             // Fallback if reverse geocoding fails
-            logger.warn(`[getCurrentLocation] Reverse geocoding failed, response.data.success is false`);
             this.detectedLocation = "מיקום נוכחי";
             this.call.location = "מיקום נוכחי";
             this.toast?.showSuccess("מיקום נמצא בהצלחה");
           }
         } catch (geocodeError) {
-          logger.error("[getCurrentLocation] Error in reverse geocoding:", geocodeError);
-          logger.error("[getCurrentLocation] Error response:", geocodeError.response?.data);
           // Fallback if reverse geocoding fails
           this.detectedLocation = "מיקום נוכחי";
           this.call.location = "מיקום נוכחי";
@@ -2248,7 +2234,6 @@ export default {
         this.isEditingLocation = false;
 
       } catch (error) {
-        logger.error("Error getting location:", error);
         this.toast?.showError(
           "לא הצלחנו לקבל את המיקום. אנא נסה שוב או בחר מיקום ידנית."
         );

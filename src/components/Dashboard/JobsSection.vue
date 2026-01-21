@@ -1639,18 +1639,18 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   overflow: hidden;
   direction: rtl;
   flex: 0 0 auto;
-  min-width: 300px;
-  width: 85%;
-  max-width: 400px;
+  min-width: 320px;
+  width: 90%;
+  max-width: 450px;
   box-sizing: border-box;
   scroll-snap-align: start;
 
   @media (max-width: 640px) {
     padding: 20px;
     border-radius: 1.25rem;
-    min-width: 280px;
-    width: 85%;
-    max-width: 320px;
+    min-width: 300px;
+    width: 90%;
+    max-width: 380px;
   }
 
   &::before {

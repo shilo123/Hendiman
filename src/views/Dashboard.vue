@@ -822,6 +822,15 @@
           @submitted="onQuotationSubmitted"
         />
 
+        <!-- Handyman Quotations View Modal -->
+        <HandymanQuotationsViewModal
+          v-if="isHendiman"
+          :visible="showHandymanQuotationsViewModal"
+          :jobs="jobs"
+          :handymanId="store.user?._id || me?._id || $route.params.id"
+          @close="showHandymanQuotationsViewModal = false"
+        />
+
         <!-- Onboarding Required Modal (for handyman) - REMOVED -->
 
         <div v-if="showJobCancelledModal" class="jobCancelledModal" dir="rtl">
@@ -1308,20 +1317,20 @@
         !isFilterModalOpen
       "
       class="mNav"
+      :style="{ '--nav-items-count': bottomNavItems.length }"
       aria-label="ניווט"
     >
-      <button class="mNav__item" type="button">
-        <font-awesome-icon :icon="['fas', 'share']" class="mNav__ic" />
-        <span class="mNav__txt">האזור האישי שלי</span>
-      </button>
-      <button class="mNav__item" type="button">
-        <span class="mNav__badge" aria-hidden="true"></span>
-        <font-awesome-icon :icon="['fas', 'comment']" class="mNav__ic" />
-        <span class="mNav__txt">צ'אט</span>
-      </button>
-      <button class="mNav__item" type="button" @click="onOpenProfile">
-        <font-awesome-icon :icon="['fas', 'circle-user']" class="mNav__ic" />
-        <span class="mNav__txt">חשבון</span>
+      <button
+        v-for="item in bottomNavItems"
+        :key="item.id"
+        class="mNav__item"
+        :class="{ 'mNav__item--highlight': item.highlight }"
+        type="button"
+        @click="handleNavItemClick(item)"
+      >
+        <span v-if="item.badge" class="mNav__badge" aria-hidden="true"></span>
+        <font-awesome-icon :icon="['fas', item.icon]" class="mNav__ic" />
+        <span class="mNav__txt">{{ item.text }}</span>
       </button>
     </nav>
 
@@ -1335,20 +1344,20 @@
         !isFilterModalOpen
       "
       class="mNav"
+      :style="{ '--nav-items-count': bottomNavItems.length }"
       aria-label="ניווט"
     >
-      <button class="mNav__item" type="button" @click="onViewRatings">
-        <font-awesome-icon :icon="['fas', 'star']" class="mNav__ic" />
-        <span class="mNav__txt">האזור האישי שלי</span>
-      </button>
-      <button class="mNav__item" type="button" @click="onOpenHandymenChat">
-        <span class="mNav__badge" aria-hidden="true"></span>
-        <font-awesome-icon :icon="['fas', 'comment']" class="mNav__ic" />
-        <span class="mNav__txt">צ'אט</span>
-      </button>
-      <button class="mNav__item" type="button" @click="onOpenProfile">
-        <font-awesome-icon :icon="['fas', 'circle-user']" class="mNav__ic" />
-        <span class="mNav__txt">חשבון</span>
+      <button
+        v-for="item in bottomNavItems"
+        :key="item.id"
+        class="mNav__item"
+        :class="{ 'mNav__item--highlight': item.highlight }"
+        type="button"
+        @click="handleNavItemClick(item)"
+      >
+        <span v-if="item.badge" class="mNav__badge" aria-hidden="true"></span>
+        <font-awesome-icon :icon="['fas', item.icon]" class="mNav__ic" />
+        <span class="mNav__txt">{{ item.text }}</span>
       </button>
     </nav>
   </div>
@@ -1372,6 +1381,7 @@ import HendimanLoader from "@/components/Global/HendimanLoader.vue";
 import ProblemReportModal from "@/components/Dashboard/ProblemReportModal.vue";
 import IncomeDetailModal from "@/components/Dashboard/IncomeDetailModal.vue";
 import ClientQuotationsModal from "@/components/Dashboard/ClientQuotationsModal.vue";
+import HandymanQuotationsViewModal from "@/components/Dashboard/HandymanQuotationsViewModal.vue";
 import logger from "@/utils/logger";
 import axios from "axios";
 import { URL } from "@/Url/url";
@@ -1404,6 +1414,7 @@ export default {
     ProblemReportModal,
     IncomeDetailModal,
     ClientQuotationsModal,
+    HandymanQuotationsViewModal,
   },
   data() {
     return {
@@ -1473,6 +1484,7 @@ export default {
       incomeDetailPayment: null, // Payment info for income detail
       showClientQuotationsModal: false, // Show client quotations modal
       showHandymanQuotationModal: false, // Show handyman quotation modal
+      showHandymanQuotationsViewModal: false, // Show handyman quotations view modal
       selectedQuotedJob: null, // Selected job with quotations for client/handyman
       quotationsPollingInterval: null, // Interval for polling quotations
       isMobile: window.innerWidth <= 768,
@@ -1755,6 +1767,61 @@ export default {
           );
         }) || null
       );
+    },
+    hasClientPendingQuotations() {
+      // Check if client has pending quotations
+      if (this.isHendiman) return false;
+      const userId = this.store.user?._id || this.me?._id;
+      if (!userId) return false;
+      const userIdStr = String(userId);
+      const allJobs = this.store.jobs || [];
+      return allJobs.some((job) => {
+        return (
+          job.clientId &&
+          String(job.clientId) === userIdStr &&
+          job.status === "quoted" &&
+          Array.isArray(job.quotations) &&
+          job.quotations.length > 0 &&
+          !job.chosenQuotation
+        );
+      });
+    },
+    hasHandymanSubmittedQuotations() {
+      // Check if handyman has submitted quotations
+      if (!this.isHendiman) return false;
+      const userId = this.store.user?._id || this.me?._id;
+      if (!userId) return false;
+      const userIdStr = String(userId);
+      const allJobs = this.store.jobs || [];
+      return allJobs.some((job) => {
+        return (
+          job.status === "quoted" &&
+          Array.isArray(job.quotations) &&
+          job.quotations.some((q) => String(q.handymanId) === userIdStr)
+        );
+      });
+    },
+    bottomNavItems() {
+      // Calculate items for bottom nav based on user type and quotations
+      const items = [];
+      if (!this.isHendiman) {
+        // Client nav items
+        items.push({ id: 'personal', icon: 'share', text: 'האזור האישי שלי', action: null });
+        items.push({ id: 'chat', icon: 'comment', text: 'צ\'אט', action: null, badge: true });
+        if (this.hasClientPendingQuotations) {
+          items.push({ id: 'quotations', icon: 'attach_money', text: 'ראה הצעות מחיר', action: 'openQuotations', highlight: true });
+        }
+        items.push({ id: 'account', icon: 'circle-user', text: 'חשבון', action: 'openProfile' });
+      } else {
+        // Handyman nav items
+        items.push({ id: 'personal', icon: 'star', text: 'האזור האישי שלי', action: 'viewRatings' });
+        items.push({ id: 'chat', icon: 'comment', text: 'צ\'אט', action: 'openHandymenChat', badge: true });
+        if (this.hasHandymanSubmittedQuotations) {
+          items.push({ id: 'myQuotations', icon: 'receipt', text: 'ראה הצעות שהצעת', action: 'openMyQuotations', highlight: true });
+        }
+        items.push({ id: 'account', icon: 'circle-user', text: 'חשבון', action: 'openProfile' });
+      }
+      return items;
     },
     currentAssignedJobs() {
       // Get all active assigned jobs
@@ -2039,6 +2106,45 @@ export default {
       }
     },
 
+    handleNavItemClick(item) {
+      if (!item.action) return;
+      switch (item.action) {
+        case 'openProfile':
+          this.onOpenProfile();
+          break;
+        case 'viewRatings':
+          this.onViewRatings();
+          break;
+        case 'openHandymenChat':
+          this.onOpenHandymenChat();
+          break;
+        case 'openQuotations':
+          // Find job with quotations and open modal
+          const userId = this.store.user?._id || this.me?._id;
+          if (!userId) return;
+          const userIdStr = String(userId);
+          const allJobs = this.store.jobs || [];
+          const jobWithQuotations = allJobs.find((job) => {
+            return (
+              job.clientId &&
+              String(job.clientId) === userIdStr &&
+              job.status === "quoted" &&
+              Array.isArray(job.quotations) &&
+              job.quotations.length > 0 &&
+              !job.chosenQuotation
+            );
+          });
+          if (jobWithQuotations) {
+            this.selectedQuotedJob = jobWithQuotations;
+            this.showClientQuotationsModal = true;
+          }
+          break;
+        case 'openMyQuotations':
+          // Open modal to view handyman's quotations
+          this.showHandymanQuotationsViewModal = true;
+          break;
+      }
+    },
     onOpenProfile() {
       this.profileForm = {
         name: this.store.user?.username || this.store.user?.name || "",
@@ -4071,34 +4177,148 @@ export default {
 
     async enablePushNotifications() {
       // In Android native app, FCM tokens are handled automatically via google-services.json
-      // But we still need to get the token from Firebase
+      // But we still need to get the token from Firebase and request permissions
       if (isNative && isAndroid) {
-        // For Android native app, get token directly without service worker
-        if (messaging) {
+        try {
+          // For Android native app, use Capacitor Push Notifications plugin
+          // First, try to load the plugin dynamically
+          let PushNotifications = null;
           try {
-            // Request notification permission explicitly for Android
-            // This ensures the permission dialog appears when app is installed
-            if ("Notification" in window && Notification.permission === "default") {
-              await Notification.requestPermission();
-            }
-            
-            // In Android, we can get token without VAPID key
-            const token = await getToken(messaging);
-            
-            if (token) {
-              await this.saveTokenToServer(token);
-            }
-          } catch (tokenError) {
-            // Token error - might be permission issue or Firebase not configured
-            logger.error("Error getting FCM token in Android:", tokenError);
+            const PushNotificationsModule = await import(/* webpackIgnore: true */ "@capacitor/push-notifications");
+            PushNotifications = PushNotificationsModule.PushNotifications;
+          } catch (e) {
+            // Plugin not installed, will use Firebase SDK directly
           }
 
-          // Set up message handler for when app is in foreground
-          onMessage(messaging, (payload) => {
-            // In Android, notifications are handled by the system
-            // But we can still show local notifications if needed
-            logger.log("FCM message received:", payload);
-          });
+          if (PushNotifications) {
+            // Use Capacitor Push Notifications plugin
+            // Check current permission status
+            const permissionStatus = await PushNotifications.checkPermissions();
+            
+            if (permissionStatus.receive !== 'granted') {
+              // Request permission
+              const requestResult = await PushNotifications.requestPermissions();
+              
+              if (requestResult.receive !== 'granted') {
+                this.toast?.showError("הרשאות התראות נדחו. אנא הפעל אותן בהגדרות האפליקציה.");
+                return;
+              }
+            }
+
+            // Register for push notifications
+            await PushNotifications.register();
+
+            // Listen for registration
+            PushNotifications.addListener('registration', async (token) => {
+              if (token.value) {
+                await this.saveTokenToServer(token.value);
+              }
+            });
+
+            // Listen for registration errors
+            PushNotifications.addListener('registrationError', (error) => {
+              logger.error("Push notification registration error:", error);
+              this.toast?.showError("שגיאה ברישום להתראות: " + error.error);
+            });
+
+            // Listen for push notifications
+            PushNotifications.addListener('pushNotificationReceived', (notification) => {
+              logger.log("Push notification received:", notification);
+            });
+
+            // Listen for push notification actions
+            PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+              logger.log("Push notification action:", action);
+            });
+          } else {
+            // Fallback: Use Firebase SDK directly (requires Firebase Messaging initialized)
+            // Note: This might not work in all cases, but we'll try
+            if (messaging) {
+              try {
+                // In Android native, Firebase SDK should handle permissions automatically
+                // But we can try to get the token
+                const token = await getToken(messaging);
+                
+                if (token) {
+                  await this.saveTokenToServer(token);
+                }
+              } catch (tokenError) {
+                logger.error("Error getting FCM token in Android:", tokenError);
+                this.toast?.showError("לא ניתן לקבל token להתראות. אנא ודא שההרשאות מופעלות בהגדרות האפליקציה.");
+              }
+
+              // Set up message handler for when app is in foreground
+              onMessage(messaging, (payload) => {
+                logger.log("FCM message received:", payload);
+              });
+            } else {
+              this.toast?.showError("Firebase Messaging לא זמין. אנא התקן את @capacitor/push-notifications.");
+            }
+          }
+        } catch (error) {
+          logger.error("Error enabling push notifications in Android:", error);
+          this.toast?.showError("שגיאה בהפעלת התראות: " + error.message);
+        }
+        return;
+      }
+
+      // For iOS native app
+      if (isNative && Capacitor.getPlatform() === "ios") {
+        try {
+          // For iOS native app, use Capacitor Push Notifications plugin
+          let PushNotifications = null;
+          try {
+            const PushNotificationsModule = await import(/* webpackIgnore: true */ "@capacitor/push-notifications");
+            PushNotifications = PushNotificationsModule.PushNotifications;
+          } catch (e) {
+            // Plugin not installed
+          }
+
+          if (PushNotifications) {
+            // Check current permission status
+            const permissionStatus = await PushNotifications.checkPermissions();
+            
+            if (permissionStatus.receive !== 'granted') {
+              // Request permission
+              const requestResult = await PushNotifications.requestPermissions();
+              
+              if (requestResult.receive !== 'granted') {
+                this.toast?.showError("הרשאות התראות נדחו. אנא הפעל אותן בהגדרות האפליקציה.");
+                return;
+              }
+            }
+
+            // Register for push notifications
+            await PushNotifications.register();
+
+            // Listen for registration
+            PushNotifications.addListener('registration', async (token) => {
+              if (token.value) {
+                await this.saveTokenToServer(token.value);
+              }
+            });
+
+            // Listen for registration errors
+            PushNotifications.addListener('registrationError', (error) => {
+              logger.error("Push notification registration error:", error);
+              this.toast?.showError("שגיאה ברישום להתראות: " + error.error);
+            });
+
+            // Listen for push notifications
+            PushNotifications.addListener('pushNotificationReceived', (notification) => {
+              logger.log("Push notification received:", notification);
+            });
+
+            // Listen for push notification actions
+            PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+              logger.log("Push notification action:", action);
+            });
+          } else {
+            this.toast?.showError("Push Notifications plugin לא זמין. אנא התקן את @capacitor/push-notifications.");
+          }
+        } catch (error) {
+          logger.error("Error enabling push notifications in iOS:", error);
+          this.toast?.showError("שגיאה בהפעלת התראות: " + error.message);
         }
         return;
       }
@@ -7781,12 +8001,26 @@ $r2: 26px;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  min-width: 62px;
+  width: calc(100% / var(--nav-items-count, 3));
+  flex: 0 0 calc(100% / var(--nav-items-count, 3));
   cursor: pointer;
   position: relative;
 
   &:active {
     transform: scale(0.96);
+  }
+
+  &--highlight {
+    color: $orange;
+    
+    .mNav__ic {
+      color: $orange;
+    }
+    
+    .mNav__txt {
+      color: $orange;
+      font-weight: 900;
+    }
   }
 }
 
