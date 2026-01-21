@@ -31,15 +31,24 @@ function initializeFirebaseAdmin() {
     // Option 2: Use environment variables (recommended for Heroku/cloud)
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
       try {
+        console.log("[Firebase] Initializing from FIREBASE_SERVICE_ACCOUNT environment variable");
         const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
         // Ensure projectId is set (from service account or env variable)
         const projectId =
           serviceAccount.project_id || process.env.FIREBASE_PROJECT_ID;
+        
+        console.log("[Firebase] Project ID:", projectId);
+        console.log("[Firebase] Client Email:", serviceAccount.client_email);
+        
         admin.initializeApp({
           credential: admin.credential.cert(serviceAccount),
           projectId: projectId,
         });
+        
+        console.log("[Firebase] ✅ Successfully initialized!");
       } catch (error) {
+        console.error("[Firebase] ❌ Initialization failed:", error.message);
+        console.error("[Firebase] Error stack:", error.stack);
         initializationError = new Error(
           `Firebase initialization failed: ${error.message}`
         );
