@@ -4181,80 +4181,61 @@ export default {
       if (isNative && isAndroid) {
         try {
           // For Android native app, use Capacitor Push Notifications plugin
-          // First, try to load the plugin dynamically
-          let PushNotifications = null;
+          // Try to load the plugin dynamically
+          let PushNotificationsPlugin = null;
           try {
-            const PushNotificationsModule = await import(/* webpackIgnore: true */ "@capacitor/push-notifications");
-            PushNotifications = PushNotificationsModule.PushNotifications;
+            const PushNotificationsModule = await import("@capacitor/push-notifications");
+            PushNotificationsPlugin = PushNotificationsModule.PushNotifications;
           } catch (e) {
-            // Plugin not installed, will use Firebase SDK directly
+            logger.error("Failed to load PushNotifications plugin:", e);
+            return;
           }
 
-          if (PushNotifications) {
-            // Use Capacitor Push Notifications plugin
-            // Check current permission status
-            const permissionStatus = await PushNotifications.checkPermissions();
+          if (!PushNotificationsPlugin) {
+            logger.error("PushNotifications plugin not available");
+            return;
+          }
+
+          // Use Capacitor Push Notifications plugin
+          // Check current permission status
+          const permissionStatus = await PushNotificationsPlugin.checkPermissions();
+          
+          if (permissionStatus.receive !== 'granted') {
+            // Request permission - THIS IS THE KEY PART!
+            const requestResult = await PushNotificationsPlugin.requestPermissions();
             
-            if (permissionStatus.receive !== 'granted') {
-              // Request permission
-              const requestResult = await PushNotifications.requestPermissions();
-              
-              if (requestResult.receive !== 'granted') {
-                this.toast?.showError("הרשאות התראות נדחו. אנא הפעל אותן בהגדרות האפליקציה.");
-                return;
-              }
-            }
-
-            // Register for push notifications
-            await PushNotifications.register();
-
-            // Listen for registration
-            PushNotifications.addListener('registration', async (token) => {
-              if (token.value) {
-                await this.saveTokenToServer(token.value);
-              }
-            });
-
-            // Listen for registration errors
-            PushNotifications.addListener('registrationError', (error) => {
-              logger.error("Push notification registration error:", error);
-              this.toast?.showError("שגיאה ברישום להתראות: " + error.error);
-            });
-
-            // Listen for push notifications
-            PushNotifications.addListener('pushNotificationReceived', (notification) => {
-              logger.log("Push notification received:", notification);
-            });
-
-            // Listen for push notification actions
-            PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-              logger.log("Push notification action:", action);
-            });
-          } else {
-            // Fallback: Use Firebase SDK directly (requires Firebase Messaging initialized)
-            // Note: This might not work in all cases, but we'll try
-            if (messaging) {
-              try {
-                // In Android native, Firebase SDK should handle permissions automatically
-                // But we can try to get the token
-                const token = await getToken(messaging);
-                
-                if (token) {
-                  await this.saveTokenToServer(token);
-                }
-              } catch (tokenError) {
-                logger.error("Error getting FCM token in Android:", tokenError);
-                this.toast?.showError("לא ניתן לקבל token להתראות. אנא ודא שההרשאות מופעלות בהגדרות האפליקציה.");
-              }
-
-              // Set up message handler for when app is in foreground
-              onMessage(messaging, (payload) => {
-                logger.log("FCM message received:", payload);
-              });
-            } else {
-              this.toast?.showError("Firebase Messaging לא זמין. אנא התקן את @capacitor/push-notifications.");
+            if (requestResult.receive !== 'granted') {
+              this.toast?.showError("הרשאות התראות נדחו. אנא הפעל אותן בהגדרות האפליקציה.");
+              return;
             }
           }
+
+          // Register for push notifications
+          await PushNotificationsPlugin.register();
+
+          // Listen for registration
+          PushNotificationsPlugin.addListener('registration', async (token) => {
+            logger.log("Push notification token received:", token.value);
+            if (token.value) {
+              await this.saveTokenToServer(token.value);
+            }
+          });
+
+          // Listen for registration errors
+          PushNotificationsPlugin.addListener('registrationError', (error) => {
+            logger.error("Push notification registration error:", error);
+            this.toast?.showError("שגיאה ברישום להתראות: " + error.error);
+          });
+
+          // Listen for push notifications
+          PushNotificationsPlugin.addListener('pushNotificationReceived', (notification) => {
+            logger.log("Push notification received:", notification);
+          });
+
+          // Listen for push notification actions
+          PushNotificationsPlugin.addListener('pushNotificationActionPerformed', (action) => {
+            logger.log("Push notification action:", action);
+          });
         } catch (error) {
           logger.error("Error enabling push notifications in Android:", error);
           this.toast?.showError("שגיאה בהפעלת התראות: " + error.message);
@@ -4266,56 +4247,60 @@ export default {
       if (isNative && Capacitor.getPlatform() === "ios") {
         try {
           // For iOS native app, use Capacitor Push Notifications plugin
-          let PushNotifications = null;
+          // Try to load the plugin dynamically
+          let PushNotificationsPlugin = null;
           try {
-            const PushNotificationsModule = await import(/* webpackIgnore: true */ "@capacitor/push-notifications");
-            PushNotifications = PushNotificationsModule.PushNotifications;
+            const PushNotificationsModule = await import("@capacitor/push-notifications");
+            PushNotificationsPlugin = PushNotificationsModule.PushNotifications;
           } catch (e) {
-            // Plugin not installed
+            logger.error("Failed to load PushNotifications plugin for iOS:", e);
+            return;
           }
 
-          if (PushNotifications) {
-            // Check current permission status
-            const permissionStatus = await PushNotifications.checkPermissions();
+          if (!PushNotificationsPlugin) {
+            logger.error("PushNotifications plugin not available for iOS");
+            return;
+          }
+
+          // Check current permission status
+          const permissionStatus = await PushNotificationsPlugin.checkPermissions();
+          
+          if (permissionStatus.receive !== 'granted') {
+            // Request permission - THIS IS THE KEY PART!
+            const requestResult = await PushNotificationsPlugin.requestPermissions();
             
-            if (permissionStatus.receive !== 'granted') {
-              // Request permission
-              const requestResult = await PushNotifications.requestPermissions();
-              
-              if (requestResult.receive !== 'granted') {
-                this.toast?.showError("הרשאות התראות נדחו. אנא הפעל אותן בהגדרות האפליקציה.");
-                return;
-              }
+            if (requestResult.receive !== 'granted') {
+              this.toast?.showError("הרשאות התראות נדחו. אנא הפעל אותן בהגדרות האפליקציה.");
+              return;
             }
-
-            // Register for push notifications
-            await PushNotifications.register();
-
-            // Listen for registration
-            PushNotifications.addListener('registration', async (token) => {
-              if (token.value) {
-                await this.saveTokenToServer(token.value);
-              }
-            });
-
-            // Listen for registration errors
-            PushNotifications.addListener('registrationError', (error) => {
-              logger.error("Push notification registration error:", error);
-              this.toast?.showError("שגיאה ברישום להתראות: " + error.error);
-            });
-
-            // Listen for push notifications
-            PushNotifications.addListener('pushNotificationReceived', (notification) => {
-              logger.log("Push notification received:", notification);
-            });
-
-            // Listen for push notification actions
-            PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-              logger.log("Push notification action:", action);
-            });
-          } else {
-            this.toast?.showError("Push Notifications plugin לא זמין. אנא התקן את @capacitor/push-notifications.");
           }
+
+          // Register for push notifications
+          await PushNotificationsPlugin.register();
+
+          // Listen for registration
+          PushNotificationsPlugin.addListener('registration', async (token) => {
+            logger.log("Push notification token received:", token.value);
+            if (token.value) {
+              await this.saveTokenToServer(token.value);
+            }
+          });
+
+          // Listen for registration errors
+          PushNotificationsPlugin.addListener('registrationError', (error) => {
+            logger.error("Push notification registration error:", error);
+            this.toast?.showError("שגיאה ברישום להתראות: " + error.error);
+          });
+
+          // Listen for push notifications
+          PushNotificationsPlugin.addListener('pushNotificationReceived', (notification) => {
+            logger.log("Push notification received:", notification);
+          });
+
+          // Listen for push notification actions
+          PushNotificationsPlugin.addListener('pushNotificationActionPerformed', (action) => {
+            logger.log("Push notification action:", action);
+          });
         } catch (error) {
           logger.error("Error enabling push notifications in iOS:", error);
           this.toast?.showError("שגיאה בהפעלת התראות: " + error.message);

@@ -114,16 +114,24 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
       };
     }
 
-    // ⚠️ CRITICAL for Web Push: Payload structure
+    // ⚠️ CRITICAL: Payload structure for both Web and Native apps
+    // For native Android apps with Capacitor Push Notifications:
+    // - Root-level notification is REQUIRED for the plugin to display notifications
+    // - Data field is also needed for app logic
+    // For web apps, we need webpush configuration
     const message = {
-      // Root-level notification - REQUIRED for Service Worker background messages
+      // Root-level notification - REQUIRED for Capacitor Push Notifications plugin
+      // This is what makes notifications appear in native Android apps
       notification: {
         title: title,
         body: body,
         icon: "/icon-192x192.png",
       },
-      // Data field for navigation and app logic (optional)
+      // Data field - REQUIRED for native apps to handle notifications when app is in foreground
+      // Also needed for navigation and app logic
       data: {
+        title: title,
+        body: body,
         ...data,
         // Convert all data values to strings (FCM requirement)
         ...Object.keys(data).reduce((acc, key) => {
@@ -154,9 +162,13 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
           TTL: "86400", // 24 hours in seconds - how long message is stored if device is offline
         },
       },
-      // Android priority (for Android apps, not web)
+      // Android priority - CRITICAL for native Android apps
+      // Capacitor Push Notifications plugin uses the root-level notification field
+      // The plugin automatically handles notification display, so we don't need android.notification
       android: {
         priority: "high",
+        // Note: Capacitor Push Notifications plugin will use the root-level notification field
+        // We don't need to duplicate it here in android.notification
       },
       // APNS for iOS devices (if needed)
       apns: {
@@ -167,6 +179,10 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
           aps: {
             sound: "default",
             badge: 1,
+            alert: {
+              title: title,
+              body: body,
+            },
           },
         },
       },

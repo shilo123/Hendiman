@@ -9,7 +9,7 @@
     "allowMixedContent": true,
     "captureInput": true,
     "webContentsDebuggingEnabled": true,
-    "icon": "public/avatar.png",
+    "icon": "public/avatar.jpg",
     "iconBackgroundColor": "#f27f0d"
   },
   "plugins": {
@@ -20,6 +20,12 @@
     "StatusBar": {
       "style": "light",
       "backgroundColor": "#1a1a1a"
+    },
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    },
+    "NativeBiometric": {
+      "useFallback": true
     }
   }
 }

@@ -60,12 +60,12 @@
         <!-- אייקון נורה -->
         <div class="hendiman-loader__tip-icon">
           <svg 
-            width="20" 
-            height="20" 
+            width="16" 
+            height="16" 
             viewBox="0 0 24 24" 
             fill="none" 
-            stroke="#ff6a00" 
-            stroke-width="2.5"
+            stroke="rgba(255, 106, 0, 0.7)" 
+            stroke-width="2"
           >
             <path d="M9 18h6" />
             <path d="M10 22h4" />
@@ -282,13 +282,13 @@ export default {
 }
 
 .hendiman-loader__tip-card {
-  max-width: 448px;
-  width: 100%;
-  border-radius: 16px;
-  padding: 24px;
-  border: 2px solid #ff6a00;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-  background-color: #0f0f15;
+  max-width: 320px;
+  width: 90%;
+  border-radius: 12px;
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 106, 0, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  background-color: rgba(15, 15, 21, 0.85);
   transition: opacity 0.5s ease;
   opacity: 1;
 
@@ -304,15 +304,15 @@ export default {
 }
 
 .hendiman-loader__tip-icon {
-  margin-top: 4px;
+  margin-top: 2px;
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: rgba(255, 106, 0, 0.2);
+  background-color: rgba(255, 106, 0, 0.12);
 }
 
 .hendiman-loader__tip-text {
@@ -320,18 +320,17 @@ export default {
 }
 
 .hendiman-loader__tip-title {
-  font-size: 14px;
-  font-weight: 900;
-  margin: 0 0 8px;
-  color: #ff6a00;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: rgba(255, 106, 0, 0.8);
 }
 
 .hendiman-loader__tip-message {
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.5;
   margin: 0;
-  color: #ff6a00;
-  opacity: 0.9;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 @keyframes wave {

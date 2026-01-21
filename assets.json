@@ -1,10 +1,10 @@
 {
   "icon": {
-    "source": "public/avatar.png",
+    "source": "public/avatar.jpg",
     "background": "#f27f0d"
   },
   "splash": {
-    "source": "public/avatar.png",
+    "source": "public/avatar.jpg",
     "background": "#f27f0d"
   }
 }

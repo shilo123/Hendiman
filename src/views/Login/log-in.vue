@@ -106,24 +106,6 @@
         </button>
       </form>
 
-      <!-- Biometric Authentication - Only on Native App (not web) -->
-      <div
-        v-if="isNativeApp && hasBiometricCredentials"
-        class="biometric-auth"
-      >
-        <button
-          type="button"
-          class="biometric-btn"
-          @click="handleBiometricLogin"
-          :disabled="biometricLoading"
-        >
-          <span class="material-symbols-outlined">fingerprint</span>
-          <span>{{
-            biometricLoading ? "מתחבר..." : "התחבר עם טביעת אצבע"
-          }}</span>
-        </button>
-      </div>
-
       <!-- Social Login Divider -->
       <div class="social-divider">
         <div class="social-divider__line social-divider__line--left"></div>
@@ -160,7 +142,7 @@
 
         <!-- Biometric (only in native app) -->
         <button
-          v-if="isNativeApp && hasBiometricCredentials"
+          v-if="isNativeApp"
           type="button"
           class="social-btn social-btn--biometric"
           @click="handleBiometricLogin"
@@ -221,8 +203,8 @@ const loadNativePlugins = async () => {
     // If it doesn't exist, we'll use WebAuthn as fallback
     if (!Biometric) {
       try {
-        const BiometricModule = await import(/* webpackIgnore: true */ "@capacitor-community/biometric");
-        Biometric = BiometricModule.Biometric;
+        const BiometricModule = await import(/* webpackIgnore: true */ "@capgo/capacitor-native-biometric");
+        Biometric = BiometricModule.NativeBiometric;
       } catch (e) {
         // Plugin not installed or not available - will use WebAuthn
         console.log("Biometric plugin not available, will use WebAuthn fallback");
@@ -334,47 +316,60 @@ export default {
       // Check if native biometric is available
       try {
         if (!Capacitor.isNativePlatform()) {
+          console.log('[checkNativeBiometricSupport] Not a native platform');
           this.hasBiometricCredentials = false;
           return;
         }
 
+        console.log('[checkNativeBiometricSupport] Loading plugins...');
+        
         // Load plugins if not already loaded
         if (!Preferences || !Biometric) {
           await loadNativePlugins();
         }
 
         if (!Biometric || !Preferences) {
-          console.log('[checkNativeBiometricSupport] Biometric or Preferences plugin not available');
+          console.log('[checkNativeBiometricSupport] Biometric or Preferences plugin not available after loading');
+          // Still allow showing the button - user can see the error when clicking
           this.hasBiometricCredentials = false;
           return;
         }
 
-        // Check if we have saved credentials first (before checking biometry)
-        const savedUsername = await Preferences.get({ key: 'biometric_username' });
-        const savedUserId = await Preferences.get({ key: 'biometric_userId' });
+        console.log('[checkNativeBiometricSupport] Plugins loaded, checking biometry...');
 
-        if (!savedUsername.value || !savedUserId.value) {
-          console.log('[checkNativeBiometricSupport] No saved credentials found');
+        // Check if biometric is available first
+        try {
+          const available = await Biometric.checkBiometry();
+          console.log('[checkNativeBiometricSupport] checkBiometry result:', JSON.stringify(available));
+          
+          // Show biometric button if biometric is available (even without saved credentials)
+          this.hasBiometricCredentials = available.isAvailable === true;
+          
+          if (!available.isAvailable) {
+            console.log('[checkNativeBiometricSupport] Biometric not available. Reason:', available.errorCode || available.reason || 'unknown');
+          }
+        } catch (error) {
+          console.error('[checkNativeBiometricSupport] Error checking biometric:', error);
           this.hasBiometricCredentials = false;
           return;
         }
-
-        // Now check if biometric is available
-        const available = await Biometric.checkBiometry({
-          reason: 'אנא זהה את עצמך',
-          title: 'אימות ביומטרי',
-          subtitle: 'השתמש בטביעת אצבע להתחברות',
-          description: 'אנא השתמש בטביעת האצבע שלך כדי להתחבר',
-        });
-
-        console.log('[checkNativeBiometricSupport] Biometric available:', available.isAvailable);
-
-        this.hasBiometricCredentials = available.isAvailable;
         
+        // Check if we have saved credentials and auto-fill username if available
         if (this.hasBiometricCredentials) {
-          // Auto-fill username if available
-          this.username = savedUsername.value;
-          console.log('[checkNativeBiometricSupport] Biometric credentials found, button will be shown');
+          try {
+            const savedUsername = await Preferences.get({ key: 'biometric_username' });
+            const savedPassword = await Preferences.get({ key: 'biometric_password' });
+            
+            if (savedUsername.value && savedPassword.value) {
+              this.username = savedUsername.value;
+              console.log('[checkNativeBiometricSupport] Saved credentials found, auto-filled username');
+            } else {
+              console.log('[checkNativeBiometricSupport] No saved credentials - user needs to login first');
+            }
+          } catch (e) {
+            console.log('[checkNativeBiometricSupport] Error checking saved credentials:', e);
+          }
+          console.log('[checkNativeBiometricSupport] Biometric button will be shown');
         }
       } catch (error) {
         console.error('[checkNativeBiometricSupport] Error:', error);
@@ -494,8 +489,36 @@ export default {
         await loadNativePlugins();
       }
 
+      // Check again after loading
       if (!Preferences || !Biometric) {
-        this.toast?.showError("טביעת אצבע לא זמינה במכשיר זה");
+        console.log("[Biometric] Plugins not available after loading");
+        this.toast?.showError("תוסף ביומטרי לא זמין. נסה להתחבר עם שם משתמש וסיסמה");
+        return;
+      }
+
+      // Check if biometric is actually available on the device
+      try {
+        const available = await Biometric.checkBiometry();
+        console.log("[Biometric] checkBiometry result:", JSON.stringify(available));
+        
+        if (!available.isAvailable) {
+          // Give specific error message based on reason
+          const reason = available.errorCode || available.reason || "unknown";
+          console.log("[Biometric] Not available, reason:", reason);
+          
+          if (reason.includes("NOT_ENROLLED") || reason.includes("NONE_ENROLLED")) {
+            this.toast?.showError("לא הוגדרה טביעת אצבע במכשיר. אנא הגדר בהגדרות המכשיר");
+          } else if (reason.includes("NOT_AVAILABLE") || reason.includes("NO_HARDWARE")) {
+            this.toast?.showError("המכשיר לא תומך בטביעת אצבע");
+          } else {
+            this.toast?.showError("טביעת אצבע לא זמינה כרגע. נסה להתחבר עם שם משתמש וסיסמה");
+          }
+          return;
+        }
+      } catch (error) {
+        console.error("[Biometric] Error checking availability:", error);
+        // Show error and return instead of continuing
+        this.toast?.showError("שגיאה בבדיקת זמינות טביעת אצבע");
         return;
       }
 
@@ -518,11 +541,14 @@ export default {
           title: 'אימות ביומטרי',
           subtitle: 'התחברות מהירה',
           description: 'השתמש בטביעת האצבע שלך כדי להתחבר',
-          negativeButtonText: 'ביטול',
         });
 
-        if (!result.succeeded) {
-          this.toast?.showError("האימות בוטל");
+        if (!result.isSuccess) {
+          if (result.error === 'USER_CANCEL') {
+            // User cancelled - don't show error
+          } else {
+            this.toast?.showError("האימות בוטל או נכשל");
+          }
           this.biometricLoading = false;
           return;
         }
