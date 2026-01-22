@@ -4608,106 +4608,120 @@ export default {
 
     async enablePushNotifications() {
       // Check platform directly using Capacitor (not imported values)
-      const isNativePlatform = Capacitor.isNativePlatform();
-      const platform = Capacitor.getPlatform();
+      try {
+        const isNativePlatform = Capacitor.isNativePlatform();
+        const platform = Capacitor.getPlatform();
 
-      // For native apps (Android/iOS), use Capacitor Push Notifications plugin
-      if (isNativePlatform) {
-        try {
-          // Import the plugin
-          const { PushNotifications } = await import("@capacitor/push-notifications");
-          
-          if (!PushNotifications) {
-            this.toast?.showError("❌ תוסף התראות לא נטען");
-        return;
-      }
-
-          // Check current permission status
-          const permissionStatus = await PushNotifications.checkPermissions();
-          
-          if (permissionStatus.receive !== 'granted') {
-            // Request permission - THIS WILL SHOW THE PERMISSION DIALOG!
-            const requestResult = await PushNotifications.requestPermissions();
+        // For native apps (Android/iOS), use Capacitor Push Notifications plugin
+        if (isNativePlatform) {
+          try {
+            // Import the plugin
+            const { PushNotifications } = await import("@capacitor/push-notifications");
             
-            if (requestResult.receive !== 'granted') {
-              this.toast?.showError("❌ הרשאות התראות נדחו");
-        return;
+            if (!PushNotifications) {
+              logger.error("[Push] PushNotifications plugin not available");
+              return;
             }
+
+            // Check current permission status
+            const permissionStatus = await PushNotifications.checkPermissions();
+            
+            if (permissionStatus.receive !== 'granted') {
+              // Request permission - THIS WILL SHOW THE PERMISSION DIALOG!
+              const requestResult = await PushNotifications.requestPermissions();
+              
+              if (requestResult.receive !== 'granted') {
+                logger.warn("[Push] Push notification permissions denied");
+                return;
+              }
+            }
+
+            // Register for push notifications
+            await PushNotifications.register();
+
+            // Listen for registration success
+            PushNotifications.addListener('registration', async (token) => {
+              try {
+                if (token.value) {
+                  logger.log("[Push] Registration successful, token:", token.value.substring(0, 15) + "...");
+                  await this.saveTokenToServer(token.value);
+                }
+              } catch (error) {
+                logger.error("[Push] Error in registration listener:", error);
+              }
+            });
+
+            // Listen for registration errors
+            PushNotifications.addListener('registrationError', (error) => {
+              logger.error("[Push] Registration error:", error.error || error.message || "שגיאה");
+            });
+
+            // Listen for push notifications when app is open
+            PushNotifications.addListener('pushNotificationReceived', (notification) => {
+              try {
+                // Show in-app notification
+                this.toast?.showInfo("🔔 " + (notification.title || notification.body || "התראה חדשה"));
+              } catch (error) {
+                logger.error("[Push] Error in pushNotificationReceived listener:", error);
+              }
+            });
+
+            // Listen for push notification taps and action button clicks
+            PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+              try {
+                const actionId = action.actionId;
+                const notificationData = action.notification?.data || {};
+                const jobId = notificationData.jobId;
+
+                logger.log("[Push] Action performed:", actionId, "JobId:", jobId);
+
+                // Handle different actions
+                if (actionId === "accept") {
+                  // Handle accept action
+                  if (jobId) {
+                    this.$router.push({
+                      name: "Dashboard",
+                      params: { id: this.store.user?._id || this.me?._id },
+                      query: { action: "accept", jobId: jobId }
+                    });
+                  }
+                  this.toast?.showSuccess("✅ פעולה בוצעה: קבלה");
+                } else if (actionId === "view") {
+                  // Handle view action
+                  if (jobId) {
+                    this.$router.push({
+                      name: "Dashboard",
+                      params: { id: this.store.user?._id || this.me?._id },
+                      query: { action: "view", jobId: jobId }
+                    });
+                  }
+                  this.toast?.showInfo("👁️ פעולה בוצעה: צפייה");
+                } else if (actionId === "skip") {
+                  // Handle skip action - just close notification
+                  this.toast?.showInfo("⏭️ התראה נדחתה");
+                } else {
+                  // Default click - navigate to dashboard
+                  if (jobId) {
+                    this.$router.push({
+                      name: "Dashboard",
+                      params: { id: this.store.user?._id || this.me?._id },
+                      query: { jobId: jobId }
+                    });
+                  }
+                }
+              } catch (error) {
+                logger.error("[Push] Error in pushNotificationActionPerformed listener:", error);
+              }
+            });
+          } catch (error) {
+            logger.error("[Push] Error initializing push notifications:", error);
+            // Don't show error to user - just log it
           }
-
-          // Register for push notifications
-          await PushNotifications.register();
-
-          // Listen for registration success
-          PushNotifications.addListener('registration', async (token) => {
-            if (token.value) {
-              this.toast?.showSuccess("✅ נרשמת להתראות! טוקן: " + token.value.substring(0, 15) + "...");
-              await this.saveTokenToServer(token.value);
-            }
-          });
-
-          // Listen for registration errors
-          PushNotifications.addListener('registrationError', (error) => {
-            this.toast?.showError("❌ שגיאה ברישום: " + (error.error || error.message || "שגיאה"));
-          });
-
-          // Listen for push notifications when app is open
-          PushNotifications.addListener('pushNotificationReceived', (notification) => {
-            // Show in-app notification
-            this.toast?.showInfo("🔔 " + (notification.title || notification.body || "התראה חדשה"));
-          });
-
-          // Listen for push notification taps and action button clicks
-          PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-            const actionId = action.actionId;
-            const notificationData = action.notification?.data || {};
-            const jobId = notificationData.jobId;
-
-            logger.log("[Push] Action performed:", actionId, "JobId:", jobId);
-
-            // Handle different actions
-            if (actionId === "accept") {
-              // Handle accept action
-              if (jobId) {
-                this.$router.push({
-                  name: "Dashboard",
-                  params: { id: this.store.user?._id || this.me?._id },
-                  query: { action: "accept", jobId: jobId }
-                });
-              }
-              this.toast?.showSuccess("✅ פעולה בוצעה: קבלה");
-            } else if (actionId === "view") {
-              // Handle view action
-              if (jobId) {
-                this.$router.push({
-                  name: "Dashboard",
-                  params: { id: this.store.user?._id || this.me?._id },
-                  query: { action: "view", jobId: jobId }
-                });
-              }
-              this.toast?.showInfo("👁️ פעולה בוצעה: צפייה");
-            } else if (actionId === "skip") {
-              // Handle skip action - just close notification
-              this.toast?.showInfo("⏭️ התראה נדחתה");
-            } else {
-              // Default click - navigate to dashboard
-              if (jobId) {
-                this.$router.push({
-                  name: "Dashboard",
-                  params: { id: this.store.user?._id || this.me?._id },
-                  query: { jobId: jobId }
-                });
-              }
-            }
-          });
-
+        }
       } catch (error) {
-          this.toast?.showError("❌ שגיאה: " + (error.message || "שגיאה לא ידועה"));
+        logger.error("[Push] Fatal error in enablePushNotifications:", error);
+        // Don't show error to user - just log it
       }
-        return;
-      }
-
-      // Web push notifications removed - only native apps are supported
     },
 
     async saveTokenToServer(token) {
@@ -5554,10 +5568,52 @@ export default {
       // TODO: Implement reject job functionality
       this.toast?.showInfo("עבודה נדחתה");
     },
-    onViewJob(job) {
-      this.jobDetails = job;
-      // Open job details modal or navigate
-      // This will be handled by existing ViewJob component
+    async onViewJob(job) {
+      if (!job) {
+        this.toast?.showError("לא ניתן לטעון את פרטי העבודה");
+        return;
+      }
+
+      const jobId = String(job?.id || job?._id || "").trim();
+      if (!jobId || jobId === "undefined" || jobId === "null") {
+        logger.error("Job missing ID:", job);
+        this.toast?.showError("לא ניתן לטעון את פרטי העבודה - חסר מספר עבודה");
+        return;
+      }
+
+      // Check if job has full details (subcategoryInfo as array with data)
+      const hasFullDetails = 
+        Array.isArray(job.subcategoryInfo) && 
+        job.subcategoryInfo.length > 0 &&
+        job.subcategoryInfo[0] &&
+        (job.subcategoryInfo[0].subcategory || job.subcategoryInfo[0].category);
+
+      // Always try to fetch from server to ensure we have latest data
+      try {
+        const response = await axios.get(`${URL}/jobs/${jobId}`);
+        if (response.data && response.data.success && response.data.job) {
+          this.jobDetails = response.data.job;
+        } else if (hasFullDetails) {
+          // If fetch failed but we have full details, use them
+          this.jobDetails = job;
+        } else {
+          // No full details and fetch failed
+          logger.error("Failed to fetch job details, response:", response.data);
+          this.toast?.showError("לא ניתן לטעון את פרטי העבודה מהשרת");
+          // Still try to show what we have
+          this.jobDetails = job;
+        }
+      } catch (error) {
+        logger.error("Error fetching job details:", error);
+        if (hasFullDetails) {
+          // If we have full details, use them even if fetch failed
+          this.jobDetails = job;
+        } else {
+          // No details and fetch failed
+          this.toast?.showError("לא ניתן לטעון את פרטי העבודה מהשרת");
+          this.jobDetails = job;
+        }
+      }
     },
     getClientAvatar(job) {
       // Return client avatar or default
@@ -5634,10 +5690,13 @@ export default {
     // ⚠️ CRITICAL: Enable Push Notifications FIRST, before anything else
     // This ensures it runs even if other code fails
     try {
-      console.log("[Dashboard] Mounted - initializing push notifications first");
-      this.enablePushNotifications();
+      logger.log("[Dashboard] Mounted - initializing push notifications first");
+      // Don't await - let it run in background
+      this.enablePushNotifications().catch((error) => {
+        logger.error("[Dashboard] Push notification initialization error:", error);
+      });
     } catch (pushError) {
-      console.error("[Dashboard] Push notification initialization error:", pushError);
+      logger.error("[Dashboard] Push notification initialization error:", pushError);
     }
 
     // Fast check for active job (runs in parallel with dashboard data loading)
@@ -5852,6 +5911,11 @@ export default {
       // נטען את המשתמש פעם אחת בלבד עם הקואורדינטות שלו (אם יש)
       // קודם נטען בלי קואורדינטות כדי לקבל את הקואורדינטות של המשתמש מה-DB
       const routeId = this.$route.params.id;
+      if (!routeId) {
+        logger.error("[Dashboard] No route ID found");
+        this.$router.push("/");
+        return;
+      }
       const initialData = await this.store.fetchDashboardData(routeId);
 
       // אם המשתמש לא נמצא, החזר ל-דף הבית
@@ -6457,8 +6521,13 @@ export default {
         }, 10000); // Check every 10 seconds
       }
     } catch (error) {
-      // אם יש שגיאה או שהמשתמש לא נמצא, החזר ל-דף הבית
-      this.$router.push("/");
+      // אם יש שגיאה, לוג אותה אבל אל תגרום לקריסה
+      logger.error("[Dashboard] ❌ Fatal error in mounted hook:", error);
+      if (error?.stack) {
+        logger.error("[Dashboard] Error stack:", error.stack);
+      }
+      // Don't redirect - let the component render with error state
+      // The component should handle missing data gracefully
     }
   },
   beforeUnmount() {

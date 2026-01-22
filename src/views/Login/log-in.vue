@@ -142,7 +142,7 @@
 
         <!-- Biometric (only in native app and if available) -->
         <button
-          v-if="isNativeApp && hasBiometricCredentials"
+          v-if="isNativeApp && isBiometricAvailable"
           type="button"
           class="social-btn social-btn--biometric"
           @click="handleBiometricLogin"
@@ -234,6 +234,7 @@ export default {
       isMobile: false,
       isNativeApp: false,
       hasBiometricCredentials: false,
+      isBiometricAvailable: false,
       biometricLoading: false,
       currentUserId: null,
       // For Android IME handling
@@ -317,6 +318,7 @@ export default {
       try {
         if (!Capacitor.isNativePlatform()) {
           console.log('[checkNativeBiometricSupport] Not a native platform');
+          this.isBiometricAvailable = false;
           this.hasBiometricCredentials = false;
           return;
         }
@@ -330,7 +332,7 @@ export default {
 
         if (!Biometric || !Preferences) {
           console.log('[checkNativeBiometricSupport] Biometric or Preferences plugin not available after loading');
-          // Still allow showing the button - user can see the error when clicking
+          this.isBiometricAvailable = false;
           this.hasBiometricCredentials = false;
           return;
         }
@@ -343,39 +345,45 @@ export default {
           const available = await Biometric.checkBiometry();
           console.log('[checkNativeBiometricSupport] checkBiometry result:', JSON.stringify(available));
           
-          // Show biometric button if biometric is available (even without saved credentials)
-          // The API returns { isAvailable: true/false }
-          this.hasBiometricCredentials = available.isAvailable === true;
+          // Set isBiometricAvailable based on device support (always show button if device supports it)
+          this.isBiometricAvailable = available.isAvailable === true;
           
           if (!available.isAvailable) {
             console.log('[checkNativeBiometricSupport] Biometric not available. Reason:', available.errorCode || available.reason || 'unknown');
+            this.isBiometricAvailable = false;
             this.hasBiometricCredentials = false;
+            return;
           }
         } catch (error) {
           console.error('[checkNativeBiometricSupport] Error checking biometric:', error);
           // If check fails, don't show button
+          this.isBiometricAvailable = false;
           this.hasBiometricCredentials = false;
+          return;
         }
         
         // Check if we have saved credentials and auto-fill username if available
-        if (this.hasBiometricCredentials) {
-          try {
-            const savedUsername = await Preferences.get({ key: 'biometric_username' });
-            const savedPassword = await Preferences.get({ key: 'biometric_password' });
-            
-            if (savedUsername.value && savedPassword.value) {
-              this.username = savedUsername.value;
-              console.log('[checkNativeBiometricSupport] Saved credentials found, auto-filled username');
-            } else {
-              console.log('[checkNativeBiometricSupport] No saved credentials - user needs to login first');
-            }
-          } catch (e) {
-            console.log('[checkNativeBiometricSupport] Error checking saved credentials:', e);
+        // hasBiometricCredentials indicates if user has already logged in once
+        try {
+          const savedUsername = await Preferences.get({ key: 'biometric_username' });
+          const savedPassword = await Preferences.get({ key: 'biometric_password' });
+          
+          if (savedUsername.value && savedPassword.value) {
+            this.hasBiometricCredentials = true;
+            this.username = savedUsername.value;
+            console.log('[checkNativeBiometricSupport] Saved credentials found, auto-filled username');
+          } else {
+            this.hasBiometricCredentials = false;
+            console.log('[checkNativeBiometricSupport] No saved credentials - user needs to login first');
           }
-          console.log('[checkNativeBiometricSupport] Biometric button will be shown');
+        } catch (e) {
+          console.log('[checkNativeBiometricSupport] Error checking saved credentials:', e);
+          this.hasBiometricCredentials = false;
         }
+        console.log('[checkNativeBiometricSupport] Biometric button will be shown:', this.isBiometricAvailable);
       } catch (error) {
         console.error('[checkNativeBiometricSupport] Error:', error);
+        this.isBiometricAvailable = false;
         this.hasBiometricCredentials = false;
       }
     },
@@ -534,7 +542,7 @@ export default {
 
         // If no saved credentials, user needs to login first with username/password
         if (!savedUsername.value || !savedUserId.value) {
-          this.toast?.showError("אנא התחבר פעם אחת עם שם משתמש וסיסמה כדי להפעיל טביעת אצבע");
+          this.toast?.showError("אנא הזן שם משתמש וסיסמה והתחבר פעם אחת כדי להפעיל טביעת אצבע. לאחר מכן תוכל להשתמש בטביעת אצבע תמיד");
           this.biometricLoading = false;
           return;
         }
@@ -564,7 +572,7 @@ export default {
 
         if (!savedPassword.value) {
           // No saved password, user needs to login normally first
-          this.toast?.showError("אנא התחבר פעם אחת עם שם משתמש וסיסמה כדי להפעיל טביעת אצבע");
+          this.toast?.showError("אנא הזן שם משתמש וסיסמה והתחבר פעם אחת כדי להפעיל טביעת אצבע. לאחר מכן תוכל להשתמש בטביעת אצבע תמיד");
           await Preferences.remove({ key: 'biometric_username' });
           await Preferences.remove({ key: 'biometric_userId' });
           this.hasBiometricCredentials = false;

@@ -1,4 +1,5 @@
 const admin = require("firebase-admin");
+const { serverLogger } = require("../utils/logger");
 
 // Get client URL from environment variable (set in server.js or .env)
 // Default to relative path if not set (will resolve to origin)
@@ -31,24 +32,24 @@ function initializeFirebaseAdmin() {
     // Option 2: Use environment variables (recommended for Heroku/cloud)
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
       try {
-        console.log("[Firebase] Initializing from FIREBASE_SERVICE_ACCOUNT environment variable");
+        serverLogger.log("[Firebase] Initializing from FIREBASE_SERVICE_ACCOUNT environment variable");
         const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
         // Ensure projectId is set (from service account or env variable)
         const projectId =
           serviceAccount.project_id || process.env.FIREBASE_PROJECT_ID;
         
-        console.log("[Firebase] Project ID:", projectId);
-        console.log("[Firebase] Client Email:", serviceAccount.client_email);
+        serverLogger.log("[Firebase] Project ID:", projectId);
+        serverLogger.log("[Firebase] Client Email:", serviceAccount.client_email);
         
         admin.initializeApp({
           credential: admin.credential.cert(serviceAccount),
           projectId: projectId,
         });
         
-        console.log("[Firebase] ✅ Successfully initialized!");
+        serverLogger.log("[Firebase] ✅ Successfully initialized!");
       } catch (error) {
-        console.error("[Firebase] ❌ Initialization failed:", error.message);
-        console.error("[Firebase] Error stack:", error.stack);
+        serverLogger.error("[Firebase] ❌ Initialization failed:", error.message);
+        serverLogger.error("[Firebase] Error stack:", error.stack);
         initializationError = new Error(
           `Firebase initialization failed: ${error.message}`
         );
@@ -95,20 +96,20 @@ function initializeFirebaseAdmin() {
  */
 async function sendPushNotification(fcmToken, title, body, data = {}) {
   // 🔍 LOG: Start of push notification
-  console.log("[Push] 📤 START | Token:", fcmToken ? `${fcmToken.substring(0, 30)}...` : "❌ NO TOKEN");
-  console.log("[Push] 📤 START | Title:", title, "| Body:", body);
+  serverLogger.log("[Push] 📤 START | Token:", fcmToken ? `${fcmToken.substring(0, 30)}...` : "❌ NO TOKEN");
+  serverLogger.log("[Push] 📤 START | Title:", title, "| Body:", body);
   
   try {
     try {
       initializeFirebaseAdmin();
     } catch (initError) {
-      console.error("[Push] ❌ Firebase init error:", initError.message);
+      serverLogger.error("[Push] ❌ Firebase init error:", initError.message);
       return { success: false, error: initError.message, silent: true };
     }
 
     // Check if Firebase is actually initialized and has project ID
     if (!admin.apps.length || admin.apps.length === 0) {
-      console.error("[Push] ❌ Firebase not initialized");
+      serverLogger.error("[Push] ❌ Firebase not initialized");
       return {
         success: false,
         error: "Firebase not initialized",
@@ -120,7 +121,7 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
     const app = admin.app();
     const projectId = app?.options?.projectId;
     if (!projectId) {
-      console.error("[Push] ❌ Firebase project ID not configured");
+      serverLogger.error("[Push] ❌ Firebase project ID not configured");
       return {
         success: false,
         error: "Firebase project ID not configured",
@@ -128,7 +129,7 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
       };
     }
     
-    console.log("[Push] ✅ Firebase ready | Project:", projectId);
+    serverLogger.log("[Push] ✅ Firebase ready | Project:", projectId);
 
     // ⚠️ CRITICAL: Payload structure for Native Android apps only
     // For native Android apps with Capacitor Push Notifications:
@@ -166,6 +167,11 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
       // Capacitor Push Notifications plugin uses the root-level notification field
       android: {
         priority: "high",
+        notification: {
+          channelId: "default", // Required for Android 8.0+ (Oreo)
+          sound: "default",
+          // clickAction removed - not needed for Capacitor Push Notifications
+        },
         // Note: Action buttons are included in data.action_buttons
         // The native app will need to create notification with actions using this data
       },
@@ -188,23 +194,27 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
     };
 
     // 🔍 LOG: Before sending to FCM
-    console.log("[Push] 🚀 Sending to FCM | Token length:", fcmToken?.length || 0);
+    serverLogger.log("[Push] 🚀 Sending to FCM | Token length:", fcmToken?.length || 0);
+    serverLogger.log("[Push] 📦 Message payload:", JSON.stringify(message, null, 2));
     
     const response = await admin.messaging().send(message);
     
     // 🔍 LOG: Success
-    console.log("[Push] ✅ SUCCESS | Message ID:", response);
+    serverLogger.log("[Push] ✅ SUCCESS | Message ID:", response);
     return { success: true, messageId: response };
   } catch (error) {
     // 🔍 LOG: Error details
-    console.error("[Push] ❌ ERROR | Code:", error.code, "| Message:", error.message);
+    serverLogger.error("[Push] ❌ ERROR | Code:", error.code, "| Message:", error.message);
+    if (error.stack) {
+      serverLogger.error("[Push] ❌ ERROR Stack:", error.stack);
+    }
     
     // Handle invalid token error
     if (
       error.code === "messaging/invalid-registration-token" ||
       error.code === "messaging/registration-token-not-registered"
     ) {
-      console.log("[Push] ⚠️ Invalid token - should be removed from DB");
+      serverLogger.log("[Push] ⚠️ Invalid token - should be removed from DB");
       return { success: false, error: "invalid_token", shouldRemove: true };
     }
 
@@ -259,6 +269,11 @@ async function sendPushNotificationToMultiple(
       token: token,
       android: {
         priority: "high",
+        notification: {
+          channelId: "default", // Required for Android 8.0+ (Oreo)
+          sound: "default",
+          clickAction: "FLUTTER_NOTIFICATION_CLICK",
+        },
         // Note: Action buttons are included in data.action_buttons
         // The native app will need to create notification with actions using this data
       },

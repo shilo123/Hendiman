@@ -142,7 +142,7 @@
           :key="job.id || job._id"
           class="client-dashboard-new__activity-item"
           :class="getActivityItemClass(job)"
-          @click="$emit('view-job', job.id || job._id)"
+          @click="$emit('view-job', job)"
         >
           <div class="client-dashboard-new__activity-status">
             <span class="client-dashboard-new__activity-status-text">{{

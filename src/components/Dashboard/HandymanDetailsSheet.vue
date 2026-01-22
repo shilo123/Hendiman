@@ -77,12 +77,10 @@
 
       <div class="hsBody" dir="rtl">
         <div v-if="activeTab === 'ratings'" class="hsPane" role="tabpanel">
-          <div v-if="loadingRatings" class="hsLoading">טוען דירוגים…</div>
-          <div v-else-if="ratingsError" class="hsEmpty">{{ ratingsError }}</div>
-          <div v-else-if="ratings.length === 0" class="hsEmpty">
+          <div v-if="ratingsError" class="hsEmpty">{{ ratingsError }}</div>
+          <div v-else-if="!loadingRatings && ratings.length === 0 && skeletonRatingsCount === 0" class="hsEmpty">
             אין דירוגים עדיין
           </div>
-
           <div
             v-else
             class="hsPaginationWrapper"
@@ -93,20 +91,16 @@
               :name="`rating-slide-${swipeDirection}`"
               tag="div"
               class="hsHTrack"
-              @before-enter="onBeforeEnter"
-              @enter="onEnter"
             >
+              <!-- Actual Ratings for current page (3 cards) -->
               <article
                 v-for="(r, idx) in paginatedRatings"
-                :key="`page-${currentRatingPage}-${String(
-                  r._id || r.jobId || r.createdAt || idx
-                )}`"
+                :key="`page-${currentRatingPage}-${String(r._id || r.jobId || r.createdAt || idx)}`"
                 class="hsCard hsCard--h"
                 :data-index="idx"
                 dir="rtl"
               >
                 <div class="hsCardTop">
-                  <!-- Customer Profile with full info -->
                   <div class="hsCustomerProfile">
                     <img
                       :src="r.customerImage || '/img/Hendima-logo.png'"
@@ -130,6 +124,29 @@
                 <div class="hsReview" v-if="r.review">{{ r.review }}</div>
                 <div class="hsReview hsReview--muted" v-else>ללא טקסט</div>
               </article>
+
+              <!-- Skeleton Loading Cards (3 cards) - shown when loading more for current page -->
+              <article
+                v-for="n in skeletonRatingsCount"
+                :key="`skeleton-rating-page-${currentRatingPage}-${n}`"
+                class="hsCard hsCard--h hsCard--skeleton"
+                :data-index="paginatedRatings.length + n - 1"
+                dir="rtl"
+              >
+                <div class="hsCardTop">
+                  <div class="hsCustomerProfile">
+                    <div class="hsCustomerAvatar hsSkeleton"></div>
+                    <div class="hsCustomerInfo">
+                      <div class="hsCustomerHeader">
+                        <div class="hsCustomerName hsSkeleton" style="width: 120px; height: 16px;"></div>
+                        <div class="hsStars hsSkeleton" style="width: 40px; height: 16px;"></div>
+                      </div>
+                      <div class="hsCardDate hsSkeleton" style="width: 80px; height: 12px; margin-top: 4px;"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="hsReview hsSkeleton" style="width: 100%; height: 40px; margin-top: 8px;"></div>
+              </article>
             </transition-group>
 
             <!-- Pagination dots -->
@@ -149,12 +166,10 @@
         </div>
 
         <div v-else class="hsPane" role="tabpanel">
-          <div v-if="loadingJobs" class="hsLoading">טוען היסטוריית עבודות…</div>
-          <div v-else-if="jobsError" class="hsEmpty">{{ jobsError }}</div>
-          <div v-else-if="jobs.length === 0" class="hsEmpty">
+          <div v-if="jobsError" class="hsEmpty">{{ jobsError }}</div>
+          <div v-else-if="!loadingJobs && jobs.length === 0 && skeletonJobsCount === 0" class="hsEmpty">
             אין עבודות להצגה
           </div>
-
           <div
             v-else
             class="hsPaginationWrapper"
@@ -165,17 +180,15 @@
               :name="`job-slide-${jobsSwipeDirection}`"
               tag="div"
               class="hsHTrack"
-              @before-enter="onBeforeEnter"
-              @enter="onEnter"
             >
+              <!-- Actual Jobs for current page (3 cards) -->
               <article
                 v-for="(j, idx) in paginatedJobs"
-                :key="`page-${currentJobPage}-${String(j._id || idx)}`"
+                :key="`page-${currentJobPage}-${String(j._id || j.id || idx)}`"
                 class="hsCard hsCard--h hsCard--job"
                 :data-index="idx"
                 dir="rtl"
               >
-                <!-- Customer Profile Header -->
                 <div class="hsJobHeader">
                   <div class="hsJobProfileSection">
                     <img
@@ -199,7 +212,6 @@
                   </div>
                 </div>
 
-                <!-- Rating and Date Row -->
                 <div class="hsJobFooter">
                   <div class="hsJobRating">
                     <span
@@ -221,6 +233,32 @@
                   <div class="hsJobDate" v-if="j.updatedAt">
                     {{ formatDate(j.updatedAt) }}
                   </div>
+                </div>
+              </article>
+
+              <!-- Skeleton Loading Cards (3 cards) - shown when loading more for current page -->
+              <article
+                v-for="n in skeletonJobsCount"
+                :key="`skeleton-job-page-${currentJobPage}-${n}`"
+                class="hsCard hsCard--h hsCard--job hsCard--skeleton"
+                :data-index="paginatedJobs.length + n - 1"
+                dir="rtl"
+              >
+                <div class="hsJobHeader">
+                  <div class="hsJobProfileSection">
+                    <div class="hsJobAvatar hsSkeleton"></div>
+                    <div class="hsJobInfo">
+                      <div class="hsJobClientName hsSkeleton" style="width: 100px; height: 16px;"></div>
+                      <div class="hsJobTitle hsSkeleton" style="width: 80px; height: 14px; margin-top: 4px;"></div>
+                    </div>
+                  </div>
+                  <div class="hsCardPill hsCardPill--sm hsSkeleton" style="width: 60px; height: 24px;"></div>
+                </div>
+                <div class="hsJobFooter">
+                  <div class="hsJobRating">
+                    <div class="hsJobStars hsSkeleton" style="width: 80px; height: 16px;"></div>
+                  </div>
+                  <div class="hsJobDate hsSkeleton" style="width: 70px; height: 12px;"></div>
                 </div>
               </article>
             </transition-group>
@@ -281,19 +319,14 @@ export default {
       jobsSkip: 0,
       currentRatingPage: 0,
       currentJobPage: 0,
-      ratingsPerPage: 4,
+      ratingsPerPage: 3,
       jobsPerPage: 3,
-      // How many cards to show per "page" in the horizontal scroller.
-      // Updates based on available width (max 4).
-      ratingsCols: 4,
-      jobsCols: 4,
       hasMoreRatings: true,
       hasMoreJobs: true,
       loadingMoreRatings: false,
       loadingMoreJobs: false,
       _ratingsScrollTick: false,
       _jobsScrollTick: false,
-
       _ratingsSwipeStartX: 0,
       _ratingsSwipeStartY: 0,
       _jobsSwipeStartX: 0,
@@ -302,9 +335,6 @@ export default {
       isJobsAnimating: false,
       swipeDirection: "right",
       jobsSwipeDirection: "right",
-
-      _ratingsResizeObserver: null,
-      _jobsResizeObserver: null,
 
       isDragging: false,
       dragStartY: 0,
@@ -329,6 +359,21 @@ export default {
       // If the server says there are more ratings, expose one extra page dot.
       return this.hasMoreRatings ? loadedPages + 1 : loadedPages;
     },
+    skeletonRatingsCount() {
+      // Show 3 skeleton cards when loading more ratings for current page
+      if (this.loadingRatings && this.ratings.length === 0) {
+        // Initial load - show 3 skeleton cards
+        return 3;
+      }
+      // Check if we need to show skeleton for current page
+      // Show skeleton if we don't have enough ratings for current page and there are more to load
+      const needed = (this.currentRatingPage + 1) * this.ratingsPerPage;
+      if (this.ratings.length < needed && this.hasMoreRatings) {
+        const missing = needed - this.ratings.length;
+        return Math.min(3, missing);
+      }
+      return 0;
+    },
     paginatedJobs() {
       const start = this.currentJobPage * this.jobsPerPage;
       const end = start + this.jobsPerPage;
@@ -340,6 +385,21 @@ export default {
         Math.ceil(this.jobs.length / this.jobsPerPage) || 1
       );
       return this.hasMoreJobs ? loadedPages + 1 : loadedPages;
+    },
+    skeletonJobsCount() {
+      // Show 3 skeleton cards when loading more jobs for current page
+      if (this.loadingJobs && this.jobs.length === 0) {
+        // Initial load - show 3 skeleton cards
+        return 3;
+      }
+      // Check if we need to show skeleton for current page
+      // Show skeleton if we don't have enough jobs for current page and there are more to load
+      const needed = (this.currentJobPage + 1) * this.jobsPerPage;
+      if (this.jobs.length < needed && this.hasMoreJobs) {
+        const missing = needed - this.jobs.length;
+        return Math.min(3, missing);
+      }
+      return 0;
     },
     avatarUrl() {
       if (this.avatarErrored) return "/img/Hendima-logo.png";
@@ -379,214 +439,13 @@ export default {
   mounted() {
     document.addEventListener("keydown", this.onKeydown);
     this.lockBodyScroll();
-
-    this.$nextTick(() => {
-      this.setupScrollObservers();
-    });
   },
   beforeUnmount() {
     document.removeEventListener("keydown", this.onKeydown);
     this.unlockBodyScroll();
-
-    try {
-      this._ratingsResizeObserver?.disconnect?.();
-    } catch (e) {}
-    try {
-      this._jobsResizeObserver?.disconnect?.();
-    } catch (e) {}
   },
   methods: {
-    async goToRatingPage(page) {
-      if (this.isAnimating) return; // Prevent multiple animations
 
-      const safePage = Math.max(0, Number(page) || 0);
-      const maxCurrentPage = Math.max(
-        0,
-        Math.ceil(this.ratings.length / this.ratingsPerPage) - 1
-      );
-
-      // Don't go beyond loaded pages if no more to load
-      if (safePage > maxCurrentPage && !this.hasMoreRatings) return;
-
-      // Start animation immediately
-      this.isAnimating = true;
-      this.currentRatingPage = Math.min(safePage, maxCurrentPage);
-
-      // Wait for slide-out animation (300ms for leave transition)
-      await new Promise((resolve) => setTimeout(resolve, 300));
-
-      // Now load more data if needed
-      const needed = (safePage + 1) * this.ratingsPerPage;
-      if (this.hasMoreRatings && this.ratings.length < needed) {
-        await this.loadRatings();
-
-        // Update page after loading
-        const newMaxPage = Math.max(
-          0,
-          Math.ceil(this.ratings.length / this.ratingsPerPage) - 1
-        );
-        this.currentRatingPage = Math.min(safePage, newMaxPage);
-      }
-
-      // Wait for slide-in animation to complete (500ms for enter transition)
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      this.isAnimating = false;
-    },
-
-    onRatingsSwipeStart(e) {
-      try {
-        const t = e?.touches?.[0];
-        if (!t) return;
-        this._ratingsSwipeStartX = t.clientX;
-        this._ratingsSwipeStartY = t.clientY;
-      } catch (_) {}
-    },
-
-    async onRatingsSwipeEnd(e) {
-      try {
-        if (this.isAnimating) return; // Prevent swipe during animation
-
-        const t = e?.changedTouches?.[0];
-        if (!t) return;
-
-        const dx = t.clientX - (this._ratingsSwipeStartX || 0);
-        const dy = t.clientY - (this._ratingsSwipeStartY || 0);
-
-        // Only treat mostly-horizontal swipes
-        if (Math.abs(dx) < 40 || Math.abs(dy) > 70) return;
-
-        // Set swipe direction based on swipe
-        // swipe right (dx > 0) = going back (left direction)
-        // swipe left (dx < 0) = going forward (right direction)
-        if (dx > 0) {
-          this.swipeDirection = "left";
-          await this.goToRatingPage(this.currentRatingPage - 1);
-        } else {
-          this.swipeDirection = "right";
-          await this.goToRatingPage(this.currentRatingPage + 1);
-        }
-      } catch (_) {}
-    },
-
-    onBeforeEnter(el) {
-      el.style.opacity = "0";
-      el.style.transform = "translateY(20px)";
-    },
-
-    onEnter(el, done) {
-      const delay = Number(el.dataset.index) * 80;
-      setTimeout(() => {
-        el.style.transition = "all 0.5s ease-out";
-        el.style.opacity = "1";
-        el.style.transform = "translateY(0)";
-        done();
-      }, delay);
-    },
-
-    // Jobs pagination and swipe handlers
-    async goToJobPage(page) {
-      if (this.isJobsAnimating) return;
-
-      const safePage = Math.max(0, Number(page) || 0);
-      const maxCurrentPage = Math.max(
-        0,
-        Math.ceil(this.jobs.length / this.jobsPerPage) - 1
-      );
-
-      if (safePage > maxCurrentPage && !this.hasMoreJobs) return;
-
-      this.isJobsAnimating = true;
-      this.currentJobPage = Math.min(safePage, maxCurrentPage);
-
-      await new Promise((resolve) => setTimeout(resolve, 300));
-
-      const needed = (safePage + 1) * this.jobsPerPage;
-      if (this.hasMoreJobs && this.jobs.length < needed) {
-        await this.loadJobs();
-
-        const newMaxPage = Math.max(
-          0,
-          Math.ceil(this.jobs.length / this.jobsPerPage) - 1
-        );
-        this.currentJobPage = Math.min(safePage, newMaxPage);
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      this.isJobsAnimating = false;
-    },
-
-    onJobsSwipeStart(e) {
-      try {
-        const t = e?.touches?.[0];
-        if (!t) return;
-        this._jobsSwipeStartX = t.clientX;
-        this._jobsSwipeStartY = t.clientY;
-      } catch (_) {}
-    },
-
-    async onJobsSwipeEnd(e) {
-      try {
-        if (this.isJobsAnimating) return;
-
-        const t = e?.changedTouches?.[0];
-        if (!t) return;
-
-        const dx = t.clientX - (this._jobsSwipeStartX || 0);
-        const dy = t.clientY - (this._jobsSwipeStartY || 0);
-
-        if (Math.abs(dx) < 40 || Math.abs(dy) > 70) return;
-
-        if (dx > 0) {
-          this.jobsSwipeDirection = "left";
-          await this.goToJobPage(this.currentJobPage - 1);
-        } else {
-          this.jobsSwipeDirection = "right";
-          await this.goToJobPage(this.currentJobPage + 1);
-        }
-      } catch (_) {}
-    },
-
-    setupScrollObservers() {
-      // No ResizeObserver support? fall back to 4.
-      if (typeof ResizeObserver === "undefined") return;
-
-      const computeCols = (el) => {
-        try {
-          const w = el?.clientWidth || 0;
-          const gap = 12;
-          const minCard = 120;
-          const maxCols = 4;
-          const cols = Math.floor((w + gap) / (minCard + gap));
-          return Math.max(1, Math.min(maxCols, cols || 1));
-        } catch (e) {
-          return 4;
-        }
-      };
-
-      const ratingsEl = this.$refs.ratingsScroll;
-      if (ratingsEl) {
-        try {
-          this._ratingsResizeObserver?.disconnect?.();
-        } catch (e) {}
-        this.ratingsCols = computeCols(ratingsEl);
-        this._ratingsResizeObserver = new ResizeObserver(() => {
-          this.ratingsCols = computeCols(ratingsEl);
-        });
-        this._ratingsResizeObserver.observe(ratingsEl);
-      }
-
-      const jobsEl = this.$refs.jobsScroll;
-      if (jobsEl) {
-        try {
-          this._jobsResizeObserver?.disconnect?.();
-        } catch (e) {}
-        this.jobsCols = computeCols(jobsEl);
-        this._jobsResizeObserver = new ResizeObserver(() => {
-          this.jobsCols = computeCols(jobsEl);
-        });
-        this._jobsResizeObserver.observe(jobsEl);
-      }
-    },
 
     starsText(val) {
       const n = Math.max(0, Math.min(5, Math.round(Number(val) || 0)));
@@ -671,13 +530,6 @@ export default {
         this.ratingsError = "";
         this.currentRatingPage = 0;
 
-        try {
-          // reset scroll position so user starts from the beginning
-          this.$nextTick(() => {
-            const el = this.$refs.ratingsScroll;
-            if (el && el.scrollTo) el.scrollTo({ left: 0, behavior: "auto" });
-          });
-        } catch (_) {}
       }
 
       if (!this.hasMoreRatings) return;
@@ -688,7 +540,7 @@ export default {
 
       try {
         const { URL } = await import("@/Url/url");
-        const limit = Math.max(1, Number(this.ratingsPerPage) || 5);
+        const limit = this.ratingsPerPage; // Always load 3 ratings
 
         const { data } = await axios.get(
           `${URL}/ratings/handyman/${this.handymanId}?limit=${limit}&skip=${this.ratingsSkip}&includeSummary=false`,
@@ -726,13 +578,8 @@ export default {
         this.jobsSkip = 0;
         this.hasMoreJobs = true;
         this.jobsError = "";
+        this.currentJobPage = 0;
 
-        try {
-          this.$nextTick(() => {
-            const el = this.$refs.jobsScroll;
-            if (el && el.scrollTo) el.scrollTo({ left: 0, behavior: "auto" });
-          });
-        } catch (_) {}
       }
 
       if (!this.hasMoreJobs) return;
@@ -772,33 +619,131 @@ export default {
       }
     },
 
-    onRatingsScroll() {
-      if (this._ratingsScrollTick) return;
-      this._ratingsScrollTick = true;
-      requestAnimationFrame(() => {
-        this._ratingsScrollTick = false;
-        const el = this.$refs.ratingsScroll;
-        if (!el) return;
+    async goToRatingPage(page) {
+      if (this.isAnimating) return;
 
-        const threshold = 60;
-        const nearEnd =
-          el.scrollLeft + el.clientWidth >= el.scrollWidth - threshold;
-        if (nearEnd) this.loadRatings();
-      });
+      const safePage = Math.max(0, Number(page) || 0);
+      const maxCurrentPage = Math.max(
+        0,
+        Math.ceil(this.ratings.length / this.ratingsPerPage) - 1
+      );
+
+      // Don't go beyond loaded pages if no more to load
+      if (safePage > maxCurrentPage && !this.hasMoreRatings) return;
+
+      // Start animation immediately and update page immediately
+      this.isAnimating = true;
+      this.currentRatingPage = safePage;
+
+      // Check if we need to load more data for this page
+      const needed = (safePage + 1) * this.ratingsPerPage;
+      if (this.hasMoreRatings && this.ratings.length < needed) {
+        // Start loading immediately (skeleton cards will show automatically)
+        this.loadRatings(); // Don't await - let it load in background
+      }
+
+      // Wait for slide-out animation (300ms for leave transition)
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Wait for slide-in animation to complete (500ms for enter transition)
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      this.isAnimating = false;
     },
-    onJobsScroll() {
-      if (this._jobsScrollTick) return;
-      this._jobsScrollTick = true;
-      requestAnimationFrame(() => {
-        this._jobsScrollTick = false;
-        const el = this.$refs.jobsScroll;
-        if (!el) return;
 
-        const threshold = 60;
-        const nearEnd =
-          el.scrollLeft + el.clientWidth >= el.scrollWidth - threshold;
-        if (nearEnd) this.loadJobs();
-      });
+    onRatingsSwipeStart(e) {
+      try {
+        const t = e?.touches?.[0];
+        if (!t) return;
+        this._ratingsSwipeStartX = t.clientX;
+        this._ratingsSwipeStartY = t.clientY;
+      } catch (_) {}
+    },
+
+    async onRatingsSwipeEnd(e) {
+      try {
+        if (this.isAnimating) return;
+
+        const t = e?.changedTouches?.[0];
+        if (!t) return;
+
+        const dx = t.clientX - (this._ratingsSwipeStartX || 0);
+        const dy = t.clientY - (this._ratingsSwipeStartY || 0);
+
+        // Only treat mostly-horizontal swipes
+        if (Math.abs(dx) < 40 || Math.abs(dy) > 70) return;
+
+        // Set swipe direction based on swipe
+        // swipe right (dx > 0) = going back (left direction)
+        // swipe left (dx < 0) = going forward (right direction)
+        if (dx > 0) {
+          this.swipeDirection = "left";
+          await this.goToRatingPage(this.currentRatingPage - 1);
+        } else {
+          this.swipeDirection = "right";
+          await this.goToRatingPage(this.currentRatingPage + 1);
+        }
+      } catch (_) {}
+    },
+
+    async goToJobPage(page) {
+      if (this.isJobsAnimating) return;
+
+      const safePage = Math.max(0, Number(page) || 0);
+      const maxCurrentPage = Math.max(
+        0,
+        Math.ceil(this.jobs.length / this.jobsPerPage) - 1
+      );
+
+      if (safePage > maxCurrentPage && !this.hasMoreJobs) return;
+
+      // Start animation immediately and update page immediately
+      this.isJobsAnimating = true;
+      this.currentJobPage = safePage;
+
+      // Check if we need to load more data for this page
+      const needed = (safePage + 1) * this.jobsPerPage;
+      if (this.hasMoreJobs && this.jobs.length < needed) {
+        // Start loading immediately (skeleton cards will show automatically)
+        this.loadJobs(); // Don't await - let it load in background
+      }
+
+      // Wait for slide-out animation (300ms for leave transition)
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // Wait for slide-in animation to complete (500ms for enter transition)
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      this.isJobsAnimating = false;
+    },
+
+    onJobsSwipeStart(e) {
+      try {
+        const t = e?.touches?.[0];
+        if (!t) return;
+        this._jobsSwipeStartX = t.clientX;
+        this._jobsSwipeStartY = t.clientY;
+      } catch (_) {}
+    },
+
+    async onJobsSwipeEnd(e) {
+      try {
+        if (this.isJobsAnimating) return;
+
+        const t = e?.changedTouches?.[0];
+        if (!t) return;
+
+        const dx = t.clientX - (this._jobsSwipeStartX || 0);
+        const dy = t.clientY - (this._jobsSwipeStartY || 0);
+
+        if (Math.abs(dx) < 40 || Math.abs(dy) > 70) return;
+
+        if (dx > 0) {
+          this.jobsSwipeDirection = "left";
+          await this.goToJobPage(this.currentJobPage - 1);
+        } else {
+          this.jobsSwipeDirection = "right";
+          await this.goToJobPage(this.currentJobPage + 1);
+        }
+      } catch (_) {}
     },
 
     // Drag to close (pointer)
@@ -1055,8 +1000,11 @@ $orange2: #ff8a2b;
   background: rgba(255, 255, 255, 0.04);
   padding: 10px 12px 10px;
   max-width: 100%;
+  max-height: 180px;
   box-sizing: border-box;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .hsCard--h {
@@ -1183,6 +1131,12 @@ $orange2: #ff8a2b;
   overflow-wrap: break-word;
   white-space: normal;
   overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-height: 0;
 }
 
 .hsReview--muted {
@@ -1512,6 +1466,40 @@ $orange2: #ff8a2b;
   to {
     transform: translate3d(0, 0, 0);
     opacity: 1;
+  }
+}
+
+/* Skeleton Loading Styles */
+.hsCard--skeleton {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.hsSkeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.08) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+.hsSkeleton.hsCustomerAvatar,
+.hsSkeleton.hsJobAvatar {
+  border-radius: 50%;
+  width: 42px;
+  height: 42px;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
   }
 }
 </style>
