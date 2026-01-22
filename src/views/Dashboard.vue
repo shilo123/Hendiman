@@ -3,63 +3,114 @@
     <!-- Loading Overlay -->
     <HendimanLoader v-if="isLoading" />
 
-    <!-- TOP BAR - hidden when loading, chat is active, shown when minimized or no job, or when IncomeDetailModal is open -->
-    <DashboardTopBar
+    <!-- Handyman header (new design) -->
+    <header
       v-if="
         isHendiman &&
         !isLoading &&
         (!currentAssignedJob || isChatMinimized) &&
-        !showIncomeDetailModal
+        !showIncomeDetailModal &&
+        isMobile
       "
-      :me="me"
-      :isHendiman="isHendiman"
-      :isAvailable="isAvailable"
-      :stats="stats"
-      :hasActiveJob="!!currentAssignedJob"
-      :isChatMinimized="isChatMinimized"
-      @open-profile="onOpenProfile"
-      @open-handymen-chat="onOpenHandymenChat"
-      @open-all-users-chat="onOpenAllUsersChat"
-      @view-ratings="onViewRatings"
-      @return-to-job="onReturnToJob"
-    />
+      class="handyman-header-new"
+    >
+      <div class="handyman-header-new__left">
+        <div class="relative group cursor-pointer" @click="onOpenProfile">
+          <div class="handyman-header-new__avatar-glow"></div>
+          <img
+            v-if="me?.avatarUrl"
+            :src="me.avatarUrl"
+            alt="User Avatar"
+            class="handyman-header-new__avatar"
+          />
+          <span v-else class="handyman-header-new__avatar-placeholder">👤</span>
+          <div
+            v-if="isAvailable"
+            class="handyman-header-new__status-dot"
+          ></div>
+        </div>
+        <div class="handyman-header-new__info">
+          <span class="handyman-header-new__greeting">שלום,</span>
+          <h1 class="handyman-header-new__name">
+            {{ me?.name || me?.username || "הנדימן" }}
+          </h1>
+          <div
+            class="handyman-header-new__availability"
+            :class="{ 'handyman-header-new__availability--available': isAvailable }"
+            @click="toggleAvailability"
+          >
+            <div class="handyman-header-new__availability-toggle">
+              <div
+                class="handyman-header-new__availability-dot"
+                :class="{ 'handyman-header-new__availability-dot--active': isAvailable }"
+              ></div>
+            </div>
+            <span class="handyman-header-new__availability-text">
+              {{ isAvailable ? "זמין לעבודה" : "לא זמין" }}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="handyman-header-new__actions">
+        <button
+          class="handyman-header-new__action-btn handyman-header-new__action-btn--notifications"
+          type="button"
+          aria-label="התראות"
+        >
+          <i class="ph ph-bell"></i>
+          <span class="handyman-header-new__notification-dot"></span>
+        </button>
+      </div>
+    </header>
 
-    <!-- Client header (mobile screenshot-like) -->
+    <!-- Client header (new design) -->
     <header
       v-if="
         !isHendiman &&
         !isLoading &&
         (!currentAssignedJob || isChatMinimized) &&
-        !showIncomeDetailModal
+        !showIncomeDetailModal &&
+        isMobile
       "
-      class="mHdr"
+      class="client-header-new"
     >
-      <div class="mHdr__icons">
-        <button class="mHdr__icon" type="button" aria-label="התראות">
-          <font-awesome-icon :icon="['fas', 'bell']" />
-          <span class="mHdr__dot" aria-hidden="true"></span>
-        </button>
-        <button class="mHdr__icon" type="button" aria-label="שיתוף">
-          <font-awesome-icon :icon="['fas', 'share']" />
-        </button>
-      </div>
-
-      <div class="mHdr__center">
-        <div class="mHdr__kicker">
-          {{ me?.subscriptionPlanType ? "לקוח פרימיום" : "לקוח" }}
+      <div class="client-header-new__left">
+        <div class="relative group cursor-pointer" @click="onOpenProfile">
+          <div class="client-header-new__avatar-glow"></div>
+          <img
+            v-if="me?.avatarUrl"
+            :src="me.avatarUrl"
+            alt="User Avatar"
+            class="client-header-new__avatar"
+          />
+          <span v-else class="client-header-new__avatar-placeholder">👤</span>
         </div>
-        <div class="mHdr__name">{{ me?.name || me?.username }}</div>
+        <div class="client-header-new__info">
+          <span class="client-header-new__badge">
+            לקוח
+          </span>
+          <h1 class="client-header-new__name">
+            {{ me?.name || me?.username || "לקוח" }}
+          </h1>
+        </div>
       </div>
-
+      <div class="client-header-new__actions">
       <button
-        class="mHdr__avatar"
+          class="client-header-new__action-btn"
         type="button"
-        aria-label="פרופיל"
-        @click="onOpenProfile"
+          aria-label="חיפוש"
       >
-        <img v-if="me?.avatarUrl" :src="me.avatarUrl" alt="" />
-        <span v-else class="mHdr__ph">👤</span>
+          <i class="ph ph-magnifying-glass"></i>
       </button>
+        <button
+          class="client-header-new__action-btn client-header-new__action-btn--notifications"
+          type="button"
+          aria-label="התראות"
+        >
+          <i class="ph ph-bell"></i>
+          <span class="client-header-new__notification-dot"></span>
+        </button>
+      </div>
     </header>
 
     <!-- MAIN -->
@@ -88,30 +139,183 @@
           class="client-actions-top"
         />
 
-        <!-- CLIENT (mobile): handymen carousel like screenshot -->
-        <section v-if="!isHendiman && isMobile" class="clientNearby">
-          <div class="clientNearby__head">
-            <h2 class="clientNearby__title">הנדימנים באזורך</h2>
+        <!-- CLIENT (mobile): handymen carousel with new design -->
+        <div
+          v-if="!isHendiman && isMobile"
+          class="client-dashboard-new"
+        >
+          <!-- Recommended Handymen Section -->
+          <div class="client-dashboard-new__section">
+            <div class="client-dashboard-new__section-header">
+              <h2 class="client-dashboard-new__section-title">
+                <span class="client-dashboard-new__title-accent"></span>
+                מומלצים עבורך
+              </h2>
             <button
               type="button"
-              class="clientNearby__filter"
-              aria-label="סינון תוצאות"
+                class="client-dashboard-new__filter-btn"
+                aria-label="סינון"
             >
-              ≡
+                סינון
+                <i class="ph ph-sliders-horizontal"></i>
             </button>
           </div>
 
-          <HandymenList
-            :filteredHandymen="filteredHandymen"
-            :pagination="handymenPagination"
-            @view-details="onViewHandymanDetails"
-            @open-chat="onOpenUserChat"
-            @personal-request="onPersonalRequest"
-            @block-handyman="onBlockHandyman"
-            @next-page="onNextPage"
-            @prev-page="onPrevPage"
-          />
-        </section>
+            <!-- Handymen Carousel -->
+            <div
+              ref="handymanCarousel"
+              class="client-dashboard-new__carousel"
+              @scroll="onCarouselScroll"
+            >
+              <div class="client-dashboard-new__carousel-spacer"></div>
+              <div
+                v-for="(handyman, index) in filteredHandymen"
+                :key="handyman.id || handyman._id"
+                class="client-dashboard-new__card"
+                :class="{ 'client-dashboard-new__card--blocked': handyman.isBlocked }"
+              >
+                <div class="client-dashboard-new__card-content">
+                  <div class="client-dashboard-new__card-top">
+                    <div class="client-dashboard-new__card-header">
+                      <div class="client-dashboard-new__avatar-wrapper">
+                        <div
+                          class="client-dashboard-new__avatar-border"
+                          :class="{
+                            'client-dashboard-new__avatar-border--pro': index === 0,
+                            'client-dashboard-new__avatar-border--hover': index > 0
+                          }"
+                        >
+                          <img
+                            :src="getHandymanImage(handyman)"
+                            :alt="handyman.username"
+                            class="client-dashboard-new__avatar-img"
+                            :class="{
+                              'client-dashboard-new__avatar-img--grayscale': index === 2,
+                              'client-dashboard-new__avatar-img--sepia': index === 3
+                            }"
+                            @error="onHandymanImageError"
+                          />
+                        </div>
+                        <div class="client-dashboard-new__rating-badge">
+                          <span class="client-dashboard-new__rating-value">{{
+                            formatHandymanRating(handyman)
+                          }}</span>
+                          <i class="ph-fill ph-star client-dashboard-new__rating-star"></i>
+                        </div>
+                      </div>
+                      <div class="client-dashboard-new__card-info">
+                        <h3 class="client-dashboard-new__card-name">
+                          {{ handyman.username }}
+                        </h3>
+                        <div class="client-dashboard-new__card-location">
+                          <i class="ph-fill ph-map-pin"></i>
+                          <span>{{ getCityText(handyman) }}</span>
+                          <span class="client-dashboard-new__location-separator">•</span>
+                          <span>{{ formatDistance(handyman) }}</span>
+                        </div>
+                        <div class="client-dashboard-new__card-status">
+                          <div class="client-dashboard-new__status-dot"></div>
+                          <span class="client-dashboard-new__status-text">
+                            {{ getStatusText(handyman) }}
+                          </span>
+                        </div>
+                        <div
+                          v-if="index === 3"
+                          class="client-dashboard-new__card-badge"
+                        >
+                          <i class="ph-fill ph-trophy"></i>
+                          <span>TOP RATED</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        class="client-dashboard-new__details-btn"
+                        @click="onViewHandymanDetails(handyman.id || handyman._id)"
+                      >
+                        פרטים
+                        <i class="ph-bold ph-caret-left"></i>
+                      </button>
+                    </div>
+                    <div
+                      v-if="getCategories(handyman).length"
+                      class="client-dashboard-new__card-categories"
+                    >
+                      <span
+                        v-for="category in getVisibleCategories(handyman, 2)"
+                        :key="category"
+                        class="client-dashboard-new__category-tag"
+                      >
+                        {{ category }}
+                      </span>
+                    </div>
+                  </div>
+                  <div class="client-dashboard-new__card-actions">
+                    <button
+                      type="button"
+                      class="client-dashboard-new__action-btn client-dashboard-new__action-btn--block"
+                      @click="onBlockHandyman(handyman.id || handyman._id, handyman.isBlocked)"
+                    >
+                      <i class="ph-bold ph-prohibit"></i>
+                      חסום
+                    </button>
+                    <button
+                      type="button"
+                      class="client-dashboard-new__action-btn client-dashboard-new__action-btn--primary"
+                      @click="onPersonalRequest(handyman.id || handyman._id)"
+                    >
+                      <i class="ph-fill ph-paper-plane-right"></i>
+                      שלח קריאה
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Carousel Pagination Dots -->
+            <div class="client-dashboard-new__pagination">
+              <div
+                v-for="(dot, index) in carouselPages"
+                :key="index"
+                class="client-dashboard-new__pagination-dot"
+                :class="{ 'client-dashboard-new__pagination-dot--active': index === currentCarouselPage }"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Recent Activity Section -->
+          <div class="client-dashboard-new__section">
+            <h2 class="client-dashboard-new__section-title-small">
+              <span class="client-dashboard-new__title-accent-small"></span>
+              פעילות אחרונה
+            </h2>
+            <div class="client-dashboard-new__activity-list">
+              <div
+                v-for="job in recentJobs"
+                :key="job.id || job._id"
+                class="client-dashboard-new__activity-item"
+                :class="getActivityItemClass(job)"
+              >
+                <div class="client-dashboard-new__activity-status">
+                  <span class="client-dashboard-new__activity-status-text">{{
+                    getJobStatusText(job)
+                  }}</span>
+                  <i :class="getJobStatusIcon(job)"></i>
+                </div>
+                <div class="client-dashboard-new__activity-content">
+                  <h4 class="client-dashboard-new__activity-title">
+                    {{ getJobTitle(job) }}
+                  </h4>
+                  <p class="client-dashboard-new__activity-time">
+                    {{ formatJobTime(job) }}
+                  </p>
+                </div>
+                <div class="client-dashboard-new__activity-icon">
+                  <i :class="getJobIcon(job)"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <!-- Return to job button (mobile only - above jobs) -->
         <button
@@ -352,8 +556,208 @@
           </div>
         </div>
 
-        <!-- LEFT ~60% JOBS -->
+        <!-- HANDYMAN (mobile): new design -->
+        <div
+          v-if="isHendiman && isMobile"
+          class="handyman-dashboard-new"
+        >
+          <!-- Urgent Jobs Section -->
+          <section
+            v-if="urgentJobs.length > 0"
+            class="handyman-dashboard-new__section"
+          >
+            <div class="handyman-dashboard-new__section-header">
+              <h2 class="handyman-dashboard-new__section-title">
+                קריאה דחופה
+              </h2>
+              <span class="handyman-dashboard-new__urgent-pulse">
+                <span class="handyman-dashboard-new__urgent-pulse-inner"></span>
+                <span class="handyman-dashboard-new__urgent-pulse-outer"></span>
+              </span>
+            </div>
+
+            <div
+              v-for="job in urgentJobs"
+              :key="job.id || job._id"
+              class="handyman-dashboard-new__urgent-card"
+            >
+              <div class="handyman-dashboard-new__urgent-card-content">
+                <div class="handyman-dashboard-new__urgent-card-header">
+                  <div class="handyman-dashboard-new__urgent-client-info">
+                    <div class="handyman-dashboard-new__urgent-avatar">
+                      <img
+                        :src="getClientAvatar(job)"
+                        :alt="job.clientName"
+                        class="handyman-dashboard-new__urgent-avatar-img"
+                      />
+                    </div>
+                    <div>
+                      <h3 class="handyman-dashboard-new__urgent-title">
+                        {{ getJobTitleForHandyman(job) }}
+                      </h3>
+                      <p class="handyman-dashboard-new__urgent-subtitle">
+                        אצל {{ job.clientName }} • {{ formatJobTimeAgo(job) }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="handyman-dashboard-new__urgent-badge">
+                    SOS
+                  </div>
+                </div>
+
+                <div class="handyman-dashboard-new__urgent-meta">
+                  <div class="handyman-dashboard-new__urgent-meta-item">
+                    <i class="ph-fill ph-map-pin"></i>
+                    <span>{{ getJobLocation(job) }}</span>
+                  </div>
+                  <div class="handyman-dashboard-new__urgent-meta-separator"></div>
+                  <div class="handyman-dashboard-new__urgent-meta-item">
+                    <i class="ph-fill ph-navigation-arrow"></i>
+                    <span>{{ formatJobDistance(job) }}</span>
+                  </div>
+                </div>
+
+                <div class="handyman-dashboard-new__urgent-actions">
+                  <button
+                    type="button"
+                    class="handyman-dashboard-new__urgent-btn handyman-dashboard-new__urgent-btn--reject"
+                    @click="onRejectJob(job)"
+                  >
+                    דחה
+                  </button>
+                  <button
+                    type="button"
+                    class="handyman-dashboard-new__urgent-btn handyman-dashboard-new__urgent-btn--accept"
+                    @click="onAcceptJob(job)"
+                  >
+                    <i class="ph-fill ph-phone-call"></i>
+                    קבל קריאה
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Quoted Jobs Section -->
+          <section
+            v-if="quotedJobs.length > 0"
+            class="handyman-dashboard-new__section"
+          >
+            <div class="handyman-dashboard-new__section-header">
+              <h2 class="handyman-dashboard-new__section-title">
+                <span class="handyman-dashboard-new__title-accent"></span>
+                עבודות בהצעת מחיר
+              </h2>
+              <button
+                type="button"
+                class="handyman-dashboard-new__filter-btn"
+                aria-label="סינון"
+              >
+                <i class="ph ph-sliders-horizontal"></i>
+                סינון
+              </button>
+            </div>
+
+            <div class="handyman-dashboard-new__quoted-jobs">
+              <div
+                v-for="job in quotedJobs"
+                :key="job.id || job._id"
+                class="handyman-dashboard-new__quoted-card"
+              >
+                <div class="handyman-dashboard-new__quoted-card-content">
+                  <div class="handyman-dashboard-new__quoted-card-header">
+                    <div>
+                      <h3 class="handyman-dashboard-new__quoted-title">
+                        {{ getJobTitleForHandyman(job) }}
+                      </h3>
+                      <div class="handyman-dashboard-new__quoted-categories">
+                        <span
+                          v-for="category in getJobCategories(job)"
+                          :key="category"
+                          class="handyman-dashboard-new__quoted-category-tag"
+                        >
+                          {{ category }}
+                        </span>
+                      </div>
+                    </div>
+                    <div class="handyman-dashboard-new__quoted-budget">
+                      <span class="handyman-dashboard-new__quoted-budget-label">תקציב משוער</span>
+                      <span class="handyman-dashboard-new__quoted-budget-value">
+                        ₪{{ formatJobBudget(job) }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="handyman-dashboard-new__quoted-client">
+                    <img
+                      :src="getClientAvatar(job)"
+                      :alt="job.clientName"
+                      class="handyman-dashboard-new__quoted-client-avatar"
+                    />
+                    <span class="handyman-dashboard-new__quoted-client-name">
+                      {{ job.clientName }}
+                    </span>
+                    <span class="handyman-dashboard-new__quoted-client-separator">•</span>
+                    <span class="handyman-dashboard-new__quoted-client-location">
+                      {{ getJobLocation(job) }} ({{ formatJobDistance(job) }})
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="handyman-dashboard-new__quoted-btn"
+                    @click="onOpenQuotationModal(job)"
+                  >
+                    <i class="ph-bold ph-paper-plane-right"></i>
+                    שלח הצעת מחיר
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Regular Jobs Section -->
+          <section class="handyman-dashboard-new__section">
+            <h2 class="handyman-dashboard-new__section-title-small">
+              עבודות רגילות
+              <span class="handyman-dashboard-new__jobs-count">
+                {{ regularJobs.length }}
+              </span>
+            </h2>
+
+            <div class="handyman-dashboard-new__regular-jobs">
+              <div
+                v-for="job in regularJobs"
+                :key="job.id || job._id"
+                class="handyman-dashboard-new__regular-card"
+                @click="onViewJob(job)"
+              >
+                <div class="handyman-dashboard-new__regular-icon">
+                  <i :class="getJobIconForHandyman(job)"></i>
+                </div>
+                <div class="handyman-dashboard-new__regular-content">
+                  <h4 class="handyman-dashboard-new__regular-title">
+                    {{ getJobTitleForHandyman(job) }}
+                  </h4>
+                  <p class="handyman-dashboard-new__regular-meta">
+                    {{ job.clientName }} • {{ formatJobDistance(job) }}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="handyman-dashboard-new__regular-arrow"
+                  @click.stop="onViewJob(job)"
+                >
+                  <i class="ph-bold ph-caret-left"></i>
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- LEFT ~60% JOBS (Desktop or fallback) -->
         <JobsSection
+          v-if="!isMobile || !isHendiman"
           :isHendiman="isHendiman"
           :isMobile="isMobile"
           :filteredJobs="pagedJobs"
@@ -1308,6 +1712,7 @@
       <span class="fab__label">צור קריאה</span>
     </button>
 
+    <!-- Client Bottom Navigation (new design) -->
     <nav
       v-if="
         !isHendiman &&
@@ -1316,25 +1721,59 @@
         (!currentAssignedJob || isChatMinimized) &&
         !isFilterModalOpen
       "
-      class="mNav"
-      :style="{ '--nav-items-count': bottomNavItems.length }"
+      class="client-bottom-nav-new"
       aria-label="ניווט"
     >
-      <button
-        v-for="item in bottomNavItems"
-        :key="item.id"
-        class="mNav__item"
-        :class="{ 'mNav__item--highlight': item.highlight }"
-        type="button"
-        @click="handleNavItemClick(item)"
-      >
-        <span v-if="item.badge" class="mNav__badge" aria-hidden="true"></span>
-        <font-awesome-icon :icon="['fas', item.icon]" class="mNav__ic" />
-        <span class="mNav__txt">{{ item.text }}</span>
+      <div class="client-bottom-nav-new__container">
+        <button
+          type="button"
+          class="client-bottom-nav-new__item"
+          @click="handleNavItemClick({ action: 'openProfile' })"
+        >
+          <i class="ph ph-user"></i>
+          <span class="client-bottom-nav-new__label">חשבון</span>
       </button>
+        <button
+          type="button"
+          class="client-bottom-nav-new__item client-bottom-nav-new__item--with-badge"
+          @click="handleNavItemClick({ action: 'openHandymenChat' })"
+        >
+          <div class="client-bottom-nav-new__icon-wrapper">
+            <i class="ph ph-chat-circle-dots"></i>
+            <span class="client-bottom-nav-new__badge"></span>
+          </div>
+          <span class="client-bottom-nav-new__label">צ'אט</span>
+      </button>
+        <button
+          type="button"
+          class="client-bottom-nav-new__item client-bottom-nav-new__item--home"
+          @click="$router.push('/')"
+        >
+          <div class="client-bottom-nav-new__home-icon">
+            <i class="ph-fill ph-house"></i>
+          </div>
+          <span class="client-bottom-nav-new__label client-bottom-nav-new__label--home">דף הבית</span>
+      </button>
+        <button
+          type="button"
+          class="client-bottom-nav-new__item"
+          @click="handleNavItemClick({ action: 'viewHistory' })"
+        >
+          <i class="ph ph-clock-counter-clockwise"></i>
+          <span class="client-bottom-nav-new__label">היסטוריה</span>
+        </button>
+        <button
+          type="button"
+          class="client-bottom-nav-new__item"
+          @click="handleNavItemClick({ action: 'share' })"
+        >
+          <i class="ph ph-share-network"></i>
+          <span class="client-bottom-nav-new__label">שתף</span>
+        </button>
+      </div>
     </nav>
 
-    <!-- Mobile handyman: bottom nav (same style as client) -->
+    <!-- Handyman Bottom Navigation (new design) -->
     <nav
       v-if="
         isHendiman &&
@@ -1343,22 +1782,56 @@
         (!currentAssignedJob || isChatMinimized) &&
         !isFilterModalOpen
       "
-      class="mNav"
-      :style="{ '--nav-items-count': bottomNavItems.length }"
+      class="handyman-bottom-nav-new"
       aria-label="ניווט"
     >
-      <button
-        v-for="item in bottomNavItems"
-        :key="item.id"
-        class="mNav__item"
-        :class="{ 'mNav__item--highlight': item.highlight }"
-        type="button"
-        @click="handleNavItemClick(item)"
-      >
-        <span v-if="item.badge" class="mNav__badge" aria-hidden="true"></span>
-        <font-awesome-icon :icon="['fas', item.icon]" class="mNav__ic" />
-        <span class="mNav__txt">{{ item.text }}</span>
-      </button>
+      <div class="handyman-bottom-nav-new__container">
+        <button
+          type="button"
+          class="handyman-bottom-nav-new__item"
+          @click="handleNavItemClick({ action: 'openProfile' })"
+        >
+          <i class="ph ph-user"></i>
+          <span class="handyman-bottom-nav-new__label">פרופיל</span>
+        </button>
+        <button
+          type="button"
+          class="handyman-bottom-nav-new__item handyman-bottom-nav-new__item--with-badge"
+          @click="handleNavItemClick({ action: 'openHandymenChat' })"
+        >
+          <div class="handyman-bottom-nav-new__icon-wrapper">
+            <i class="ph ph-chat-circle-dots"></i>
+            <span class="handyman-bottom-nav-new__badge"></span>
+          </div>
+          <span class="handyman-bottom-nav-new__label">הודעות</span>
+        </button>
+        <button
+          type="button"
+          class="handyman-bottom-nav-new__item handyman-bottom-nav-new__item--home"
+          @click="$router.push('/')"
+        >
+          <div class="handyman-bottom-nav-new__home-icon">
+            <i class="ph-fill ph-briefcase"></i>
+          </div>
+          <span class="handyman-bottom-nav-new__label handyman-bottom-nav-new__label--home">עבודות</span>
+        </button>
+        <button
+          type="button"
+          class="handyman-bottom-nav-new__item"
+          @click="handleNavItemClick({ action: 'viewCalendar' })"
+        >
+          <i class="ph ph-calendar-check"></i>
+          <span class="handyman-bottom-nav-new__label">יומן</span>
+        </button>
+        <button
+          type="button"
+          class="handyman-bottom-nav-new__item"
+          @click="handleNavItemClick({ action: 'viewWallet' })"
+        >
+          <i class="ph ph-wallet"></i>
+          <span class="handyman-bottom-nav-new__label">ארנק</span>
+        </button>
+      </div>
     </nav>
   </div>
 </template>
@@ -1388,7 +1861,7 @@ import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
 import { getCurrentLocation } from "@/utils/geolocation";
 import { io } from "socket.io-client";
-import { messaging, VAPID_KEY, getToken, onMessage, isNative, isAndroid } from "@/firebase";
+// Web push notifications removed - only native apps are supported
 import { Capacitor } from "@capacitor/core";
 import AddressAutocomplete from "@/components/Global/AddressAutocomplete.vue";
 import citiesData from "@/APIS/AdressFromIsrael.json";
@@ -1471,6 +1944,7 @@ export default {
       showFabAfterScroll: false,
       pendingActiveJobId: null, // Store active job ID from fast check
       doneJobsCache: [], // Cache for done jobs that need client approval (persists after refresh)
+      _currentCarouselPage: 0, // Current page in carousel for new design
       showJobCancelledModal: false,
       cancelledBy: "handyman", // Track who cancelled: "handyman" or "client"
       showOnboardingModal: false, // Show onboarding popup for handyman
@@ -1984,6 +2458,94 @@ export default {
       }
       return null;
     },
+    carouselPages() {
+      // Calculate number of pages for carousel dots
+      const total = this.filteredHandymen?.length || 0;
+      const itemsPerPage = 1; // Each card is one page
+      return Math.ceil(total / itemsPerPage);
+    },
+    recentJobs() {
+      // Get recent jobs for activity section
+      if (!this.jobs || !Array.isArray(this.jobs)) return [];
+      const userId = this.store.user?._id || this.me?._id;
+      if (!userId) return [];
+      const userIdStr = String(userId);
+      return this.jobs
+        .filter(job => job.clientId && String(job.clientId) === userIdStr)
+        .sort((a, b) => {
+          const dateA = new Date(a.updatedAt || a.createdAt || 0);
+          const dateB = new Date(b.updatedAt || b.createdAt || 0);
+          return dateB - dateA;
+        })
+        .slice(0, 5); // Show only last 5 jobs
+    },
+    currentCarouselPage: {
+      get() {
+        return this._currentCarouselPage || 0;
+      },
+      set(value) {
+        this._currentCarouselPage = value;
+      }
+    },
+    urgentJobs() {
+      if (!this.isHendiman || !this.jobs) return [];
+      return this.jobs
+        .filter(job => {
+          return (
+            job.status === "open" &&
+            job.urgent === true &&
+            !job.handymanId &&
+            !this.isJobExpired(job)
+          );
+        })
+        .sort((a, b) => {
+          const dateA = new Date(a.createdAt || 0);
+          const dateB = new Date(b.createdAt || 0);
+          return dateB - dateA;
+        })
+        .slice(0, 3); // Show max 3 urgent jobs
+    },
+    quotedJobs() {
+      if (!this.isHendiman || !this.jobs) return [];
+      const userId = this.store.user?._id || this.me?._id;
+      if (!userId) return [];
+      const userIdStr = String(userId);
+      return this.jobs
+        .filter(job => {
+          // Jobs that are quoted and this handyman hasn't submitted a quotation yet
+          return (
+            job.status === "quoted" &&
+            Array.isArray(job.quotations) &&
+            !job.quotations.some(q => String(q.handymanId) === userIdStr) &&
+            !this.isJobExpired(job)
+          );
+        })
+        .sort((a, b) => {
+          const dateA = new Date(a.createdAt || 0);
+          const dateB = new Date(b.createdAt || 0);
+          return dateB - dateA;
+        })
+        .slice(0, 5); // Show max 5 quoted jobs
+    },
+    regularJobs() {
+      if (!this.isHendiman || !this.jobs) return [];
+      return this.jobs
+        .filter(job => {
+          return (
+            job.status === "open" &&
+            job.urgent !== true &&
+            !job.handymanId &&
+            !this.isJobExpired(job) &&
+            !this.quotedJobs.some(qj => String(qj._id || qj.id) === String(job._id || job.id))
+          );
+        })
+        .sort((a, b) => {
+          const dateA = new Date(a.createdAt || 0);
+          const dateB = new Date(b.createdAt || 0);
+          return dateB - dateA;
+        })
+        .slice(0, 10); // Show max 10 regular jobs
+    },
   },
 
   methods: {
@@ -2142,6 +2704,57 @@ export default {
         case 'openMyQuotations':
           // Open modal to view handyman's quotations
           this.showHandymanQuotationsViewModal = true;
+          break;
+        case 'viewHistory':
+          // Navigate to history/jobs section
+          this.$nextTick(() => {
+            const jobsSection = document.querySelector('.jobs-section, .grid');
+            if (jobsSection) {
+              jobsSection.scrollIntoView({ behavior: 'smooth' });
+            }
+          });
+          break;
+        case 'share':
+          // Share functionality
+          if (navigator.share) {
+            navigator.share({
+              title: 'HENDIMAN',
+              text: 'בואו נחבר אתכם להנדימן הטוב ביותר!',
+              url: window.location.href,
+            }).catch(() => {
+              // User cancelled or error
+            });
+          } else {
+            // Fallback: copy to clipboard
+            navigator.clipboard.writeText(window.location.href).then(() => {
+              this.toast?.showSuccess('הקישור הועתק ללוח');
+            }).catch(() => {
+              this.toast?.showError('לא ניתן לשתף');
+            });
+          }
+          break;
+        case 'viewCalendar':
+          // Navigate to calendar or show calendar modal
+          this.toast?.showInfo('יומן - תכונה בקרוב');
+          break;
+        case 'viewWallet':
+          // Navigate to wallet/income details
+          // Check if there's a job with payment released
+          const jobsWithPayment = this.jobs?.filter(j => 
+            j.paymentStatus === "paid" || j.handymanReceivedPayment
+          );
+          if (jobsWithPayment && jobsWithPayment.length > 0) {
+            // Show income detail modal for the most recent job
+            const latestJob = jobsWithPayment.sort((a, b) => {
+              const dateA = new Date(a.updatedAt || a.createdAt || 0);
+              const dateB = new Date(b.updatedAt || b.createdAt || 0);
+              return dateB - dateA;
+            })[0];
+            this.incomeDetailJob = latestJob;
+            this.showIncomeDetailModal = true;
+          } else {
+            this.toast?.showInfo('אין תשלומים זמינים');
+          }
           break;
       }
     },
@@ -4188,8 +4801,8 @@ export default {
           
           if (!PushNotifications) {
             this.toast?.showError("❌ תוסף התראות לא נטען");
-            return;
-          }
+        return;
+      }
 
           // Check current permission status
           const permissionStatus = await PushNotifications.checkPermissions();
@@ -4200,7 +4813,7 @@ export default {
             
             if (requestResult.receive !== 'granted') {
               this.toast?.showError("❌ הרשאות התראות נדחו");
-              return;
+        return;
             }
           }
 
@@ -4226,127 +4839,57 @@ export default {
             this.toast?.showInfo("🔔 " + (notification.title || notification.body || "התראה חדשה"));
           });
 
-          // Listen for push notification taps
+          // Listen for push notification taps and action button clicks
           PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-            this.toast?.showInfo("📲 לחצת על התראה");
-          });
+            const actionId = action.actionId;
+            const notificationData = action.notification?.data || {};
+            const jobId = notificationData.jobId;
 
-        } catch (error) {
-          this.toast?.showError("❌ שגיאה: " + (error.message || "שגיאה לא ידועה"));
-        }
-        return;
-      }
+            logger.log("[Push] Action performed:", actionId, "JobId:", jobId);
 
-      // For web platform, use service worker approach
-      // Check if browser supports notifications and messaging is available
-      if (!messaging) {
-        console.warn("Firebase Messaging is not available. This may be due to missing HTTPS or unsupported browser.");
-        return;
-      }
-
-      // Check if browser supports notifications
-      if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-        return;
-      }
-
-      // If permission is denied, don't try to get token
-      if (Notification.permission === "denied") {
-        return;
-      }
-
-      try {
-        // If permission is default, request it
-        if (Notification.permission === "default") {
-          const permission = await Notification.requestPermission();
-          if (permission !== "granted") {
-            return; // User denied permission
-          }
-        }
-
-        // Wait for service worker to be ready
-        let registration = await navigator.serviceWorker.ready;
-
-        // Register or update service worker (force update check)
-        registration = await navigator.serviceWorker.register(
-          "/firebase-messaging-sw.js",
-          { updateViaCache: "none" } // Always check for updates
-        );
-
-        // Handle service worker updates and ensure it's active
-        if (registration.waiting) {
-          // If there's a waiting service worker, skip waiting
-          registration.waiting.postMessage({ type: "SKIP_WAITING" });
-          // Wait a bit for it to activate
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-
-        if (registration.installing) {
-          // Wait for installation and activation to complete
-          await new Promise((resolve, reject) => {
-            const serviceWorker = registration.installing;
-            if (!serviceWorker) {
-              resolve();
-              return;
-            }
-
-            serviceWorker.addEventListener("statechange", function () {
-              if (this.state === "activated") {
-                resolve();
-              } else if (this.state === "redundant") {
-                reject(new Error("Service worker installation failed"));
+            // Handle different actions
+            if (actionId === "accept") {
+              // Handle accept action
+              if (jobId) {
+                this.$router.push({
+                  name: "Dashboard",
+                  params: { id: this.store.user?._id || this.me?._id },
+                  query: { action: "accept", jobId: jobId }
+                });
               }
-            });
-          });
-        } else if (registration.active) {
-          // If service worker is already active, wait a moment to ensure it's ready
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-
-        // Ensure service worker is ready
-        registration = await navigator.serviceWorker.ready;
-
-        // Get FCM token (this will always get the current token, even if it changed)
-        if (messaging) {
-          try {
-            const token = await getToken(messaging, {
-              vapidKey: VAPID_KEY,
-              serviceWorkerRegistration: registration,
-            });
-
-            if (token) {
-              // Always update the token on server (even if it's the same or changed)
-              await this.saveTokenToServer(token);
-            }
-          } catch (tokenError) {
-            // Token error - might be permission issue or service worker issue
-          }
-
-          // Set up message handler for when app is in foreground
-          onMessage(messaging, (payload) => {
-            // Show notification when app is open
-            const notificationTitle =
-              payload.notification?.title || "הודעה חדשה";
-            const notificationBody =
-              payload.notification?.body || "יש לך הודעה חדשה";
-
-            // Show browser notification
-            if (
-              "Notification" in window &&
-              Notification.permission === "granted"
-            ) {
-              new Notification(notificationTitle, {
-                body: notificationBody,
-                icon: payload.notification?.icon || "/icon-192x192.png",
-                badge: "/icon-192x192.png",
-                dir: "rtl",
-                tag: payload.data?.jobId || "default",
-              });
+              this.toast?.showSuccess("✅ פעולה בוצעה: קבלה");
+            } else if (actionId === "view") {
+              // Handle view action
+              if (jobId) {
+                this.$router.push({
+                  name: "Dashboard",
+                  params: { id: this.store.user?._id || this.me?._id },
+                  query: { action: "view", jobId: jobId }
+                });
+              }
+              this.toast?.showInfo("👁️ פעולה בוצעה: צפייה");
+            } else if (actionId === "skip") {
+              // Handle skip action - just close notification
+              this.toast?.showInfo("⏭️ התראה נדחתה");
+            } else {
+              // Default click - navigate to dashboard
+              if (jobId) {
+                this.$router.push({
+                  name: "Dashboard",
+                  params: { id: this.store.user?._id || this.me?._id },
+                  query: { jobId: jobId }
+                });
+              }
             }
           });
-        }
+
       } catch (error) {
-        // Silently fail if notification setup fails
+          this.toast?.showError("❌ שגיאה: " + (error.message || "שגיאה לא ידועה"));
       }
+        return;
+      }
+
+      // Web push notifications removed - only native apps are supported
     },
 
     async saveTokenToServer(token) {
@@ -5177,6 +5720,232 @@ export default {
       } finally {
         this.isProcessingSubscription = false;
       }
+    },
+    // New design helper methods
+    getHandymanImage(handyman) {
+      const defaultImage = "/img/Hendima-logo.png";
+      if (!handyman || !handyman.imageUrl) return defaultImage;
+      const imageUrl = handyman.imageUrl;
+      if (
+        typeof imageUrl !== "string" ||
+        imageUrl.trim() === "" ||
+        imageUrl.includes("demo-02.png") ||
+        imageUrl.includes("/demo") ||
+        imageUrl.endsWith("demo-02.png") ||
+        (!imageUrl.startsWith("http") && !imageUrl.startsWith("/"))
+      ) {
+        return defaultImage;
+      }
+      return imageUrl;
+    },
+    onHandymanImageError(event) {
+      event.target.src = "/img/Hendima-logo.png";
+    },
+    getCityText(handyman) {
+      if (handyman?.city) return String(handyman.city).trim();
+      const addressObj = handyman?.address ?? handyman?.adress ?? null;
+      if (addressObj?.city) return String(addressObj.city).trim();
+      return "מיקום לא זמין";
+    },
+    formatHandymanRating(handyman) {
+      const rating = Number(handyman?.rating);
+      if (!Number.isFinite(rating) || rating <= 0) return "0.0";
+      return rating % 1 === 0 ? rating.toFixed(0) : rating.toFixed(1);
+    },
+    formatDistance(handyman) {
+      // Calculate distance if available
+      if (handyman?.distance) {
+        const dist = Number(handyman.distance);
+        if (Number.isFinite(dist) && dist > 0) {
+          if (dist < 1) return `${Math.round(dist * 1000)} מ' ממך`;
+          return `${dist.toFixed(1)} ק"מ ממך`;
+        }
+      }
+      return "מרחק לא זמין";
+    },
+    getStatusText(handyman) {
+      // Check if handyman is available
+      if (handyman?.isAvailable !== false) {
+        return "זמין עכשיו";
+      }
+      return "לא זמין";
+    },
+    getCategories(handyman) {
+      const out = [];
+      const full = Array.isArray(handyman?.fullCategories) ? handyman.fullCategories : [];
+      for (const c of full) {
+        const s = String(c || "").trim();
+        if (s) out.push(s);
+      }
+      if (!out.length) {
+        const specs = Array.isArray(handyman?.specialties) ? handyman.specialties : [];
+        for (const sp of specs) {
+          const name = typeof sp === "string" ? sp : sp?.name;
+          const s = String(name || "").trim();
+          if (s) out.push(s);
+        }
+      }
+      const seen = new Set();
+      return out.filter((x) => {
+        if (seen.has(x)) return false;
+        seen.add(x);
+        return true;
+      });
+    },
+    getVisibleCategories(handyman, max = 2) {
+      const cats = this.getCategories(handyman);
+      return cats.slice(0, max);
+    },
+    onCarouselScroll() {
+      // Update current carousel page based on scroll position
+      const carousel = this.$refs.handymanCarousel;
+      if (!carousel) return;
+      const scrollLeft = carousel.scrollLeft;
+      const cardWidth = carousel.querySelector('.client-dashboard-new__card')?.offsetWidth || 0;
+      if (cardWidth > 0) {
+        this.currentCarouselPage = Math.round(scrollLeft / cardWidth);
+      }
+    },
+    getActivityItemClass(job) {
+      if (job.status === "done") return "client-dashboard-new__activity-item--success";
+      if (job.status === "in_progress" || job.status === "assigned") return "client-dashboard-new__activity-item--primary";
+      return "";
+    },
+    getJobStatusText(job) {
+      if (job.status === "done") return "הושלם";
+      if (job.status === "in_progress" || job.status === "assigned") return "בביצוע";
+      return "פתוח";
+    },
+    getJobStatusIcon(job) {
+      if (job.status === "done") return "ph-fill ph-check-circle";
+      if (job.status === "in_progress" || job.status === "assigned") return "ph-fill ph-spinner";
+      return "ph-fill ph-clock";
+    },
+    getJobTitle(job) {
+      if (job.subcategoryInfo && job.subcategoryInfo.length > 0) {
+        return job.subcategoryInfo.map(s => s.subcategory || s.category).join(", ");
+      }
+      return job.desc || "עבודה";
+    },
+    formatJobTime(job) {
+      if (!job.createdAt && !job.updatedAt) return "";
+      const date = job.updatedAt || job.createdAt;
+      const jobDate = new Date(date);
+      const now = new Date();
+      const diffMs = now - jobDate;
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const hours = jobDate.getHours();
+      const minutes = String(jobDate.getMinutes()).padStart(2, '0');
+      
+      if (diffDays === 0) {
+        return `היום • ${hours}:${minutes}`;
+      } else if (diffDays === 1) {
+        return `אתמול • ${hours}:${minutes}`;
+      } else if (diffDays < 7) {
+        return `לפני ${diffDays} ימים • ${hours}:${minutes}`;
+      }
+      return jobDate.toLocaleDateString('he-IL');
+    },
+    getJobIcon(job) {
+      // Return icon based on job category
+      if (job.subcategoryInfo && job.subcategoryInfo.length > 0) {
+        const category = job.subcategoryInfo[0].category || job.subcategoryInfo[0].subcategory || "";
+        if (category.includes("נזילה") || category.includes("אינסטלציה")) return "ph-fill ph-drop";
+        if (category.includes("חשמל") || category.includes("תאורה")) return "ph-fill ph-lamp";
+        if (category.includes("צבע")) return "ph-fill ph-paint-brush";
+      }
+      return "ph-fill ph-wrench";
+    },
+    // Handyman new design methods
+    toggleAvailability() {
+      this.isAvailable = !this.isAvailable;
+      // TODO: Save availability to server
+      this.toast?.showInfo(
+        this.isAvailable ? "אתה כעת זמין לעבודה" : "אתה כעת לא זמין לעבודה"
+      );
+    },
+    onAcceptJob(job) {
+      this.onAccept(job);
+    },
+    onRejectJob(job) {
+      // TODO: Implement reject job functionality
+      this.toast?.showInfo("עבודה נדחתה");
+    },
+    onViewJob(job) {
+      this.jobDetails = job;
+      // Open job details modal or navigate
+      // This will be handled by existing ViewJob component
+    },
+    getClientAvatar(job) {
+      // Return client avatar or default
+      return job.clientAvatar || "/img/Hendima-logo.png";
+    },
+    getJobTitleForHandyman(job) {
+      if (job.subcategoryInfo && job.subcategoryInfo.length > 0) {
+        return job.subcategoryInfo.map(s => s.subcategory || s.category).join(", ");
+      }
+      return job.desc || "עבודה";
+    },
+    formatJobTimeAgo(job) {
+      if (!job.createdAt) return "";
+      const jobDate = new Date(job.createdAt);
+      const now = new Date();
+      const diffMs = now - jobDate;
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      
+      if (diffMins < 1) return "עכשיו";
+      if (diffMins < 60) return `לפני ${diffMins} דקות`;
+      if (diffHours < 24) return `לפני ${diffHours} שעות`;
+      if (diffDays === 1) return "אתמול";
+      return `לפני ${diffDays} ימים`;
+    },
+    getJobLocation(job) {
+      return job.locationText || job.city || "מיקום לא זמין";
+    },
+    formatJobDistance(job) {
+      if (job.distance) {
+        const dist = Number(job.distance);
+        if (Number.isFinite(dist) && dist > 0) {
+          if (dist < 1) return `${Math.round(dist * 1000)} מ'`;
+          return `${dist.toFixed(1)} ק"מ`;
+        }
+      }
+      return "מרחק לא זמין";
+    },
+    getJobCategories(job) {
+      const categories = [];
+      if (job.subcategoryInfo && job.subcategoryInfo.length > 0) {
+        job.subcategoryInfo.forEach(sub => {
+          if (sub.subcategory) categories.push(sub.subcategory);
+          else if (sub.category) categories.push(sub.category);
+        });
+      }
+      return categories.slice(0, 2); // Show max 2 categories
+    },
+    formatJobBudget(job) {
+      // Try to get budget from various sources
+      if (job.budget) return Number(job.budget).toLocaleString('he-IL');
+      if (job.price) return Number(job.price).toLocaleString('he-IL');
+      if (job.subcategoryInfo && job.subcategoryInfo.length > 0) {
+        const price = job.subcategoryInfo[0].price;
+        if (price && price !== "bid") return Number(price).toLocaleString('he-IL');
+      }
+      return "מחיר לפי הצעה";
+    },
+    getJobIconForHandyman(job) {
+      return this.getJobIcon(job);
+    },
+    isJobExpired(job) {
+      // Check if job has quotedUntil and if it's expired
+      if (job.quotedUntil) {
+        const quotedUntil = new Date(job.quotedUntil);
+        const now = new Date();
+        return now > quotedUntil;
+      }
+      return false;
     },
   },
   async mounted() {
@@ -6148,22 +6917,25 @@ $r2: 26px;
 /* GRID */
 .grid {
   display: grid;
-  grid-template-columns: 1fr 1.6fr; /* ~40/60 - handymen first, then jobs */
+  grid-template-columns: 1fr; /* Jobs centered */
   grid-template-rows: 1fr auto; /* Jobs section takes available space, tools at bottom */
   gap: 14px;
   align-items: stretch; // זה יגרום לשני הבלוקים להיות באותו גובה
+  justify-items: center; /* Center jobs section */
 
-  // For handyman on desktop: jobs on left, filters on right
+  // For handyman on desktop: jobs centered, filters on right
   @media (min-width: 981px) {
     &:has(.side--handyman-filters) {
-      grid-template-columns: 1.6fr 1fr; /* ~60/40 - jobs first (left), filters second (right) */
+      grid-template-columns: 1fr 1fr; /* Jobs centered, filters on right */
       grid-template-rows: 1fr auto;
+      justify-items: start; /* Jobs start from center */
     }
   }
 
   @media (max-width: 980px) {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto auto; /* Stack items vertically on smaller screens */
+    justify-items: center; /* Center all items */
   }
 
   @media (max-width: 768px) {
@@ -6174,6 +6946,7 @@ $r2: 26px;
     padding-bottom: calc(
       80px + env(safe-area-inset-bottom)
     ); // Space for bottom nav
+    align-items: center; /* Center items on mobile */
   }
 }
 
@@ -10077,5 +10850,1580 @@ $r2: 26px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.85);
   line-height: 1.5;
+}
+
+/* ============================================
+   NEW HANDYMAN DASHBOARD DESIGN
+   ============================================ */
+
+/* Handyman Header New */
+.handyman-header-new {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  padding: 0 20px;
+  position: relative;
+  z-index: 10;
+}
+
+.handyman-header-new__left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  text-align: right;
+}
+
+.handyman-header-new__avatar-glow {
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(to bottom right, #FF5F00, transparent);
+  border-radius: 50%;
+  opacity: 0.7;
+  filter: blur(4px);
+  transition: opacity 0.3s;
+}
+
+.handyman-header-new__left:hover .handyman-header-new__avatar-glow {
+  opacity: 1;
+}
+
+.handyman-header-new__avatar {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid #000;
+  object-fit: cover;
+  z-index: 1;
+}
+
+.handyman-header-new__avatar-placeholder {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid #000;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  z-index: 1;
+}
+
+.handyman-header-new__status-dot {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  background: #00E055;
+  border: 2px solid #000;
+  border-radius: 50%;
+  z-index: 2;
+}
+
+.handyman-header-new__info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.handyman-header-new__greeting {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 2px;
+}
+
+.handyman-header-new__name {
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+  color: #fff;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+
+.handyman-header-new__availability {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(9, 9, 11, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  padding-left: 12px;
+  padding-right: 4px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  backdrop-filter: blur(12px);
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.handyman-header-new__availability:hover {
+  border-color: rgba(0, 224, 85, 0.3);
+}
+
+.handyman-header-new__availability-toggle {
+  position: relative;
+  width: 32px;
+  height: 16px;
+  background: rgba(0, 224, 85, 0.2);
+  border-radius: 9999px;
+  transition: background 0.3s;
+}
+
+.handyman-header-new__availability-dot {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: #00E055;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(0, 224, 85, 0.8);
+  transition: transform 0.3s;
+}
+
+.handyman-header-new__availability-dot--active {
+  transform: translateX(16px);
+}
+
+.handyman-header-new__availability-text {
+  font-size: 10px;
+  font-weight: 700;
+  color: #00E055;
+  transition: color 0.3s;
+}
+
+.handyman-header-new__availability:hover .handyman-header-new__availability-text {
+  color: #fff;
+}
+
+.handyman-header-new__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.handyman-header-new__action-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #09090B;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.4);
+  transition: all 0.3s;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.handyman-header-new__action-btn:hover {
+  border-color: rgba(255, 95, 0, 0.5);
+  color: #FF5F00;
+  transform: scale(1.1);
+}
+
+.handyman-header-new__action-btn--notifications {
+  position: relative;
+}
+
+.handyman-header-new__notification-dot {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 6px;
+  height: 6px;
+  background: #FF5F00;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(255, 95, 0, 0.8);
+}
+
+/* Handyman Dashboard New */
+.handyman-dashboard-new {
+  position: relative;
+  z-index: 10;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0 20px;
+  padding-top: 0;
+  padding-bottom: 32px;
+}
+
+.handyman-dashboard-new__section {
+  margin-bottom: 32px;
+}
+
+.handyman-dashboard-new__section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.handyman-dashboard-new__section-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.handyman-dashboard-new__title-accent {
+  width: 6px;
+  height: 20px;
+  background: #FF5F00;
+  border-radius: 9999px;
+  box-shadow: 0 0 10px rgba(255, 95, 0, 0.8);
+}
+
+.handyman-dashboard-new__urgent-pulse {
+  position: relative;
+  display: flex;
+  height: 12px;
+  width: 12px;
+}
+
+.handyman-dashboard-new__urgent-pulse-inner {
+  position: absolute;
+  inline-size: 100%;
+  block-size: 100%;
+  border-radius: 50%;
+  background: #FF2A2A;
+  box-shadow: 0 0 10px rgba(255, 42, 42, 0.6);
+  animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.handyman-dashboard-new__urgent-pulse-outer {
+  position: absolute;
+  inline-size: 100%;
+  block-size: 100%;
+  border-radius: 50%;
+  background: #FF2A2A;
+  opacity: 0.75;
+  animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.handyman-dashboard-new__filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #09090B;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.handyman-dashboard-new__filter-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 95, 0, 0.4);
+  color: #fff;
+}
+
+.handyman-dashboard-new__section-title-small {
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.handyman-dashboard-new__jobs-count {
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.3);
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+/* Urgent Card */
+.handyman-dashboard-new__urgent-card {
+  position: relative;
+  border-radius: 24px;
+  background: linear-gradient(145deg, rgba(40, 5, 5, 0.95) 0%, rgba(10, 0, 0, 0.95) 100%);
+  overflow: hidden;
+  transition: all 0.3s;
+  transform: scale(1);
+  box-shadow: 0 0 30px -5px rgba(255, 42, 42, 0.2);
+}
+
+.handyman-dashboard-new__urgent-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 24px;
+  padding: 1px;
+  background: linear-gradient(to bottom right, rgba(255, 42, 42, 0.8), rgba(255, 42, 42, 0.1), rgba(0, 0, 0, 0.05));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.handyman-dashboard-new__urgent-card:hover {
+  box-shadow: 0 0 30px -5px rgba(255, 42, 42, 0.2);
+  transform: scale(1.01);
+}
+
+.handyman-dashboard-new__urgent-card-content {
+  padding: 20px;
+  position: relative;
+  z-index: 10;
+}
+
+.handyman-dashboard-new__urgent-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.handyman-dashboard-new__urgent-client-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.handyman-dashboard-new__urgent-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px;
+  border: 1px solid rgba(255, 0, 0, 0.3);
+}
+
+.handyman-dashboard-new__urgent-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  filter: grayscale(100%);
+  opacity: 0.8;
+}
+
+.handyman-dashboard-new__urgent-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.handyman-dashboard-new__urgent-subtitle {
+  font-size: 12px;
+  color: rgba(255, 68, 68, 0.8);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.handyman-dashboard-new__urgent-badge {
+  background: rgba(255, 0, 0, 0.1);
+  border: 1px solid rgba(255, 0, 0, 0.2);
+  color: #FF2A2A;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.handyman-dashboard-new__urgent-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 20px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.handyman-dashboard-new__urgent-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.handyman-dashboard-new__urgent-meta-separator {
+  width: 1px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.handyman-dashboard-new__urgent-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.handyman-dashboard-new__urgent-btn {
+  flex: 1;
+  height: 44px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.3s;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #09090B;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.handyman-dashboard-new__urgent-btn--reject:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.handyman-dashboard-new__urgent-btn--accept {
+  flex: 2;
+  background: #FF2A2A;
+  color: #fff;
+  border: none;
+  font-weight: 900;
+  box-shadow: 0 0 12px rgba(255, 42, 42, 0.4), 0 0 4px rgba(255, 42, 42, 0.2);
+}
+
+.handyman-dashboard-new__urgent-btn--accept:hover {
+  background: #ff4444;
+}
+
+/* Quoted Jobs */
+.handyman-dashboard-new__quoted-jobs {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.handyman-dashboard-new__quoted-card {
+  position: relative;
+  border-radius: 16px;
+  background: #050505;
+  overflow: hidden;
+  transition: all 0.3s;
+}
+
+.handyman-dashboard-new__quoted-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  padding: 1px;
+  background: linear-gradient(to bottom right, rgba(255, 95, 0, 0.6), rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.handyman-dashboard-new__quoted-card:hover {
+  box-shadow: 0 0 30px -10px rgba(255, 95, 0, 0.15);
+}
+
+.handyman-dashboard-new__quoted-card:hover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 95, 0, 0.05);
+  opacity: 1;
+  transition: opacity 0.5s;
+  pointer-events: none;
+}
+
+.handyman-dashboard-new__quoted-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 95, 0, 0.05);
+  opacity: 0;
+  transition: opacity 0.5s;
+  pointer-events: none;
+}
+
+.handyman-dashboard-new__quoted-card-content {
+  padding: 16px;
+  position: relative;
+  z-index: 10;
+}
+
+.handyman-dashboard-new__quoted-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.handyman-dashboard-new__quoted-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.handyman-dashboard-new__quoted-categories {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.handyman-dashboard-new__quoted-category-tag {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.4);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.handyman-dashboard-new__quoted-budget {
+  text-align: right;
+}
+
+.handyman-dashboard-new__quoted-budget-label {
+  display: block;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 4px;
+}
+
+.handyman-dashboard-new__quoted-budget-value {
+  display: block;
+  font-size: 18px;
+  font-weight: 900;
+  color: #FF5F00;
+}
+
+.handyman-dashboard-new__quoted-client {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+  margin-bottom: 12px;
+}
+
+.handyman-dashboard-new__quoted-client-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  filter: grayscale(100%);
+  opacity: 0.7;
+}
+
+.handyman-dashboard-new__quoted-client-name {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.handyman-dashboard-new__quoted-client-separator {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.handyman-dashboard-new__quoted-btn {
+  width: 100%;
+  background: rgba(255, 95, 0, 0.1);
+  color: #FF5F00;
+  border: 1px solid rgba(255, 95, 0, 0.2);
+  padding: 10px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.handyman-dashboard-new__quoted-btn:hover {
+  background: #FF5F00;
+  color: #000;
+  border-color: #FF5F00;
+}
+
+/* Regular Jobs */
+.handyman-dashboard-new__regular-jobs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.handyman-dashboard-new__regular-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-radius: 16px;
+  background: #09090B;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.handyman-dashboard-new__regular-card:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.handyman-dashboard-new__regular-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 20px;
+}
+
+.handyman-dashboard-new__regular-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  text-align: right;
+  flex: 1;
+}
+
+.handyman-dashboard-new__regular-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.handyman-dashboard-new__regular-meta {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.handyman-dashboard-new__regular-arrow {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.4);
+  transition: all 0.3s;
+  cursor: pointer;
+  border: none;
+  font-size: 16px;
+}
+
+.handyman-dashboard-new__regular-arrow:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Handyman Bottom Navigation New */
+.handyman-bottom-nav-new {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(24px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 24px;
+  padding-top: 16px;
+  z-index: 50;
+}
+
+.handyman-bottom-nav-new__container {
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0 8px;
+}
+
+.handyman-bottom-nav-new__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 0.3s;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 24px;
+}
+
+.handyman-bottom-nav-new__item:hover {
+  color: #fff;
+}
+
+.handyman-bottom-nav-new__item--home {
+  margin-top: -32px;
+}
+
+.handyman-bottom-nav-new__icon-wrapper {
+  position: relative;
+}
+
+.handyman-bottom-nav-new__badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  background: #FF5F00;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.handyman-bottom-nav-new__home-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #FF5F00;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #000;
+  box-shadow: 0 0 20px rgba(255, 95, 0, 0.6);
+  border: 4px solid #000;
+  transition: all 0.3s;
+  font-size: 24px;
+}
+
+.handyman-bottom-nav-new__item--home:hover .handyman-bottom-nav-new__home-icon {
+  transform: scale(1.1);
+  box-shadow: 0 0 30px rgba(255, 95, 0, 0.8);
+}
+
+.handyman-bottom-nav-new__label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.handyman-bottom-nav-new__label--home {
+  color: #FF5F00;
+  margin-top: 8px;
+  text-shadow: 0 0 8px rgba(255, 95, 0, 0.5);
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .handyman-dashboard-new {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  
+  .handyman-header-new {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+
+/* ============================================
+   NEW CLIENT DASHBOARD DESIGN
+   ============================================ */
+
+/* Client Header New */
+.client-header-new {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding: 16px 20px;
+  position: relative;
+  z-index: 10;
+  background: #000 !important;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.client-header-new__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.client-header-new__avatar-wrapper {
+  position: relative;
+}
+
+.client-header-new__avatar-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 95, 0, 0.4) 0%, transparent 70%);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+
+.client-header-new__avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 95, 0, 0.3);
+  position: relative;
+  z-index: 1;
+}
+
+.client-header-new__avatar-placeholder {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  border: 2px solid rgba(255, 95, 0, 0.3);
+  position: relative;
+  z-index: 1;
+}
+
+.client-header-new__info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.client-header-new__badge {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #FF5F00;
+  background: rgba(255, 95, 0, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 95, 0, 0.3);
+  display: inline-block;
+  width: fit-content;
+}
+
+.client-header-new__name {
+  font-size: 18px;
+  font-weight: 900;
+  color: #fff;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.client-header-new__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.client-header-new__action-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #09090B;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.4);
+  transition: all 0.3s;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.client-header-new__action-btn:hover {
+  border-color: rgba(255, 95, 0, 0.5);
+  color: #FF5F00;
+  transform: scale(1.1);
+}
+
+.client-header-new__action-btn--notifications {
+  position: relative;
+}
+
+.client-header-new__notification-dot {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 6px;
+  height: 6px;
+  background: #FF5F00;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(255, 95, 0, 0.8);
+}
+
+/* Client Dashboard New */
+.client-dashboard-new {
+  position: relative;
+  z-index: 10;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0 20px;
+  padding-top: 0;
+  padding-bottom: 100px;
+  direction: rtl;
+}
+
+.client-dashboard-new__section {
+  margin-bottom: 32px;
+  direction: rtl;
+  text-align: right;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.client-dashboard-new__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  width: 100%;
+  direction: rtl;
+}
+
+.client-dashboard-new__section-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.client-dashboard-new__title-accent {
+  width: 4px;
+  height: 20px;
+  background: linear-gradient(180deg, #FF5F00 0%, #FF8F00 100%);
+  border-radius: 2px;
+}
+
+.client-dashboard-new__section-title-small {
+  font-size: 16px;
+  font-weight: 900;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px 0;
+}
+
+.client-dashboard-new__title-accent-small {
+  width: 3px;
+  height: 16px;
+  background: linear-gradient(180deg, #FF5F00 0%, #FF8F00 100%);
+  border-radius: 2px;
+}
+
+.client-dashboard-new__filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.client-dashboard-new__filter-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 95, 0, 0.3);
+  color: #FF5F00;
+}
+
+.client-dashboard-new__filter-btn i {
+  font-size: 14px;
+}
+
+/* Handymen Carousel */
+.client-dashboard-new__carousel {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 8px;
+  padding-right: 0;
+  padding-left: 0;
+  justify-content: flex-start;
+  align-items: center;
+  direction: rtl;
+  text-align: right;
+  width: 100%;
+}
+
+.client-dashboard-new__carousel-spacer {
+  flex: 1 1 0;
+  min-width: 0;
+  flex-shrink: 1;
+  order: -1;
+}
+
+.client-dashboard-new__carousel::-webkit-scrollbar {
+  display: none;
+}
+
+.client-dashboard-new__carousel::after {
+  content: '';
+  flex: 0 0 0;
+  min-width: 0;
+}
+
+.client-dashboard-new__card {
+  flex: 0 0 calc(100% - 32px);
+  min-width: calc(100% - 32px);
+  max-width: calc(100% - 32px);
+  scroll-snap-align: start;
+  background: #09090B;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  padding: 20px;
+  transition: all 0.3s;
+  direction: rtl;
+  text-align: right;
+}
+
+.client-dashboard-new__card--blocked {
+  opacity: 0.5;
+  filter: grayscale(100%);
+}
+
+.client-dashboard-new__card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.client-dashboard-new__card-top {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.client-dashboard-new__card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.client-dashboard-new__avatar-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.client-dashboard-new__avatar-border {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  transition: all 0.3s;
+}
+
+.client-dashboard-new__avatar-border--pro {
+  background: linear-gradient(135deg, #FF5F00 0%, #FF8F00 100%);
+  box-shadow: 0 0 20px rgba(255, 95, 0, 0.4);
+}
+
+.client-dashboard-new__avatar-border--hover:hover {
+  background: rgba(255, 95, 0, 0.2);
+}
+
+.client-dashboard-new__avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #09090B;
+}
+
+.client-dashboard-new__avatar-img--grayscale {
+  filter: grayscale(100%);
+  opacity: 0.7;
+}
+
+.client-dashboard-new__avatar-img--sepia {
+  filter: sepia(100%);
+  opacity: 0.8;
+}
+
+.client-dashboard-new__rating-badge {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: #09090B;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 4px 8px;
+  z-index: 2;
+}
+
+.client-dashboard-new__rating-value {
+  font-size: 11px;
+  font-weight: 900;
+  color: #FFD700;
+}
+
+.client-dashboard-new__rating-star {
+  font-size: 12px;
+  color: #FFD700;
+}
+
+.client-dashboard-new__card-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.client-dashboard-new__card-name {
+  font-size: 18px;
+  font-weight: 900;
+  color: #fff;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.client-dashboard-new__card-location {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.client-dashboard-new__card-location i {
+  font-size: 14px;
+  color: rgba(255, 95, 0, 0.6);
+}
+
+.client-dashboard-new__location-separator {
+  margin: 0 4px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.client-dashboard-new__card-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.client-dashboard-new__status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00E055;
+  box-shadow: 0 0 8px rgba(0, 224, 85, 0.6);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+.client-dashboard-new__status-text {
+  font-size: 11px;
+  font-weight: 700;
+  color: #00E055;
+}
+
+.client-dashboard-new__card-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+  color: #000;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 900;
+  width: fit-content;
+  margin-top: 4px;
+}
+
+.client-dashboard-new__card-badge i {
+  font-size: 12px;
+}
+
+.client-dashboard-new__details-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+
+.client-dashboard-new__details-btn:hover {
+  background: rgba(255, 95, 0, 0.1);
+  border-color: rgba(255, 95, 0, 0.3);
+  color: #FF5F00;
+}
+
+.client-dashboard-new__details-btn i {
+  font-size: 14px;
+}
+
+.client-dashboard-new__card-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.client-dashboard-new__category-tag {
+  padding: 4px 10px;
+  background: rgba(255, 95, 0, 0.1);
+  border: 1px solid rgba(255, 95, 0, 0.2);
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #FF5F00;
+}
+
+.client-dashboard-new__card-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: auto;
+}
+
+.client-dashboard-new__action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: none;
+}
+
+.client-dashboard-new__action-btn--block {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.client-dashboard-new__action-btn--block:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.client-dashboard-new__action-btn--primary {
+  flex: 2;
+  background: linear-gradient(135deg, #FF5F00 0%, #FF8F00 100%);
+  color: #000;
+  box-shadow: 0 4px 12px rgba(255, 95, 0, 0.3);
+}
+
+.client-dashboard-new__action-btn--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 95, 0, 0.4);
+}
+
+.client-dashboard-new__action-btn i {
+  font-size: 16px;
+}
+
+/* Carousel Pagination */
+.client-dashboard-new__pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.client-dashboard-new__pagination-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.client-dashboard-new__pagination-dot--active {
+  width: 24px;
+  border-radius: 4px;
+  background: #FF5F00;
+  box-shadow: 0 0 8px rgba(255, 95, 0, 0.6);
+}
+
+/* Recent Activity */
+.client-dashboard-new__activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  direction: rtl;
+  align-items: stretch;
+  width: 100%;
+}
+
+.client-dashboard-new__activity-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #09090B;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  transition: all 0.3s;
+  cursor: pointer;
+  direction: rtl;
+  text-align: right;
+}
+
+.client-dashboard-new__activity-item:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.client-dashboard-new__activity-item--active {
+  border-color: rgba(255, 95, 0, 0.3);
+  background: rgba(255, 95, 0, 0.05);
+}
+
+.client-dashboard-new__activity-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.client-dashboard-new__activity-status-text {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.client-dashboard-new__activity-status i {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.client-dashboard-new__activity-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.client-dashboard-new__activity-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.client-dashboard-new__activity-time {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 0;
+}
+
+.client-dashboard-new__activity-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(255, 95, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FF5F00;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+/* Client Bottom Navigation New */
+.client-bottom-nav-new {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(24px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 24px;
+  padding-top: 16px;
+  z-index: 50;
+}
+
+.client-bottom-nav-new__container {
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0 8px;
+}
+
+.client-bottom-nav-new__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 0.3s;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 24px;
+}
+
+.client-bottom-nav-new__item:hover {
+  color: #fff;
+}
+
+.client-bottom-nav-new__item--home {
+  margin-top: -32px;
+}
+
+.client-bottom-nav-new__icon-wrapper {
+  position: relative;
+}
+
+.client-bottom-nav-new__badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  background: #FF5F00;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.client-bottom-nav-new__home-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #FF5F00;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #000;
+  box-shadow: 0 0 20px rgba(255, 95, 0, 0.6);
+  border: 4px solid #000;
+  transition: all 0.3s;
+  font-size: 24px;
+}
+
+.client-bottom-nav-new__item--home:hover .client-bottom-nav-new__home-icon {
+  transform: scale(1.1);
+  box-shadow: 0 0 30px rgba(255, 95, 0, 0.8);
+}
+
+.client-bottom-nav-new__label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.client-bottom-nav-new__label--home {
+  color: #FF5F00;
+  margin-top: 8px;
+  text-shadow: 0 0 8px rgba(255, 95, 0, 0.5);
+}
+
+/* Responsive adjustments for client */
+@media (max-width: 640px) {
+  .client-dashboard-new {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  
+  .client-header-new {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
 }
 </style>

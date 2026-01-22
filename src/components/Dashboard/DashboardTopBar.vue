@@ -267,6 +267,10 @@ $shadowO: 0 18px 55px rgba(255, 106, 0, 0.2);
   gap: 10px;
   margin-bottom: 14px;
   min-width: 0;
+  background: #000 !important;
+  padding: 10px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 
   @media (max-width: 768px) {
     flex-wrap: nowrap;
@@ -276,18 +280,8 @@ $shadowO: 0 18px 55px rgba(255, 106, 0, 0.2);
     padding: 10px 12px;
 
     border-radius: 16px;
-    border: 1px solid rgba($orange, 0.18);
-    background: radial-gradient(
-        700px 160px at 10% 0%,
-        rgba($orange, 0.18),
-        transparent 60%
-      ),
-      radial-gradient(
-        600px 140px at 90% 0%,
-        rgba(16, 185, 129, 0.12),
-        transparent 55%
-      ),
-      linear-gradient(180deg, $card2, $card);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #000;
 
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
     backdrop-filter: blur(12px);

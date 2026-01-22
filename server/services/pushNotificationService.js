@@ -130,12 +130,11 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
     
     console.log("[Push] ✅ Firebase ready | Project:", projectId);
 
-    // ⚠️ CRITICAL: Payload structure for both Web and Native apps
+    // ⚠️ CRITICAL: Payload structure for Native Android apps only
     // For native Android apps with Capacitor Push Notifications:
     // - Root-level notification is REQUIRED for the plugin to display notifications
-    // - Data field is also needed for app logic
+    // - Data field contains action buttons info for native app to handle
     // - NOTE: icon field is NOT supported in root-level notification for native apps
-    // For web apps, we need webpush configuration
     const message = {
       // Root-level notification - REQUIRED for Capacitor Push Notifications plugin
       // This is what makes notifications appear in native Android apps
@@ -145,10 +144,16 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
         body: body,
       },
       // Data field - REQUIRED for native apps to handle notifications when app is in foreground
-      // Also needed for navigation and app logic
+      // Also contains action buttons info for the app to create notification with actions
       data: {
         title: title,
         body: body,
+        // Action buttons info - will be used by native app to create notification with actions
+        action_buttons: JSON.stringify([
+          { action: "skip", title: "דלג" },
+          { action: "accept", title: "קבל" },
+          { action: "view", title: "צפה" }
+        ]),
         ...data,
         // Convert all data values to strings (FCM requirement)
         ...Object.keys(data).reduce((acc, key) => {
@@ -157,69 +162,12 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
         }, {}),
       },
       token: fcmToken,
-      // ⚠️ CRITICAL for Web Push: webpush configuration - This is what makes it work when app is closed
-      webpush: {
-        // Notification payload specifically for web browsers - REQUIRED
-        notification: {
-          title: title,
-          body: body,
-          icon: "/icon-192x192.png",
-          badge: "/icon-192x192.png",
-          dir: "rtl", // Right-to-left for Hebrew
-          requireInteraction: false,
-          // Action buttons for push notifications
-          actions: [
-            {
-              action: "skip",
-              title: "דלג",
-              icon: "/icon-192x192.png"
-            },
-            {
-              action: "accept",
-              title: "קבל",
-              icon: "/icon-192x192.png"
-            },
-            {
-              action: "view",
-              title: "צפה",
-              icon: "/icon-192x192.png"
-            }
-          ]
-        },
-        // FCM options for web - use full URL if available, otherwise relative path
-        // Full URL is recommended for better reliability across different environments
-        fcmOptions: {
-          link: CLIENT_URL ? `${CLIENT_URL}/` : "/",
-        },
-        // ⚠️ CRITICAL: Headers for web push delivery - ensures reliable delivery
-        headers: {
-          Urgency: "high", // High urgency for immediate delivery (not "normal")
-          TTL: "86400", // 24 hours in seconds - how long message is stored if device is offline
-        },
-      },
       // Android priority - CRITICAL for native Android apps
       // Capacitor Push Notifications plugin uses the root-level notification field
       android: {
         priority: "high",
-        // Action buttons for Android native notifications
-        notification: {
-          clickAction: "FLUTTER_NOTIFICATION_CLICK",
-          // Action buttons
-          actions: [
-            {
-              action: "skip",
-              title: "דלג"
-            },
-            {
-              action: "accept",
-              title: "קבל"
-            },
-            {
-              action: "view",
-              title: "צפה"
-            }
-          ]
-        }
+        // Note: Action buttons are included in data.action_buttons
+        // The native app will need to create notification with actions using this data
       },
       // APNS for iOS devices (if needed)
       apns: {
@@ -286,7 +234,7 @@ async function sendPushNotificationToMultiple(
     }
 
     const messages = fcmTokens.map((token) => ({
-      // Root-level notification - REQUIRED for Service Worker background messages
+      // Root-level notification - REQUIRED for native Android apps
       // NOTE: Do NOT include 'icon' here - it's not supported for native apps
       notification: {
         title: title,
@@ -294,6 +242,14 @@ async function sendPushNotificationToMultiple(
       },
       // Data field for navigation and app logic
       data: {
+        title: title,
+        body: body,
+        // Action buttons info - will be used by native app to create notification with actions
+        action_buttons: JSON.stringify([
+          { action: "skip", title: "דלג" },
+          { action: "accept", title: "קבל" },
+          { action: "view", title: "צפה" }
+        ]),
         ...data,
         ...Object.keys(data).reduce((acc, key) => {
           acc[key] = String(data[key]);
@@ -301,26 +257,10 @@ async function sendPushNotificationToMultiple(
         }, {}),
       },
       token: token,
-      // ⚠️ CRITICAL for Web Push: webpush configuration
-      webpush: {
-        notification: {
-          title: title,
-          body: body,
-          icon: "/icon-192x192.png",
-          badge: "/icon-192x192.png",
-          dir: "rtl",
-          requireInteraction: false,
-        },
-        fcmOptions: {
-          link: CLIENT_URL ? `${CLIENT_URL}/` : "/",
-        },
-        headers: {
-          Urgency: "high",
-          TTL: "86400",
-        },
-      },
       android: {
         priority: "high",
+        // Note: Action buttons are included in data.action_buttons
+        // The native app will need to create notification with actions using this data
       },
       apns: {
         headers: {

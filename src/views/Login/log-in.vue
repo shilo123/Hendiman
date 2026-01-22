@@ -340,9 +340,7 @@ export default {
         // Check if biometric is available first
         try {
           // @capgo/capacitor-native-biometric uses checkBiometry() without parameters
-          const available = await Biometric.checkBiometry({
-            reason: 'בדיקת זמינות טביעת אצבע'
-          });
+          const available = await Biometric.checkBiometry();
           console.log('[checkNativeBiometricSupport] checkBiometry result:', JSON.stringify(available));
           
           // Show biometric button if biometric is available (even without saved credentials)
@@ -355,8 +353,8 @@ export default {
           }
         } catch (error) {
           console.error('[checkNativeBiometricSupport] Error checking biometric:', error);
-          // Even if check fails, allow user to try (they'll see error when clicking)
-          this.hasBiometricCredentials = true; // Show button, let user try
+          // If check fails, don't show button
+          this.hasBiometricCredentials = false;
         }
         
         // Check if we have saved credentials and auto-fill username if available
@@ -503,9 +501,7 @@ export default {
 
       // Check if biometric is actually available on the device
       try {
-        const available = await Biometric.checkBiometry({
-          reason: 'בדיקת זמינות טביעת אצבע'
-        });
+        const available = await Biometric.checkBiometry();
         console.log("[Biometric] checkBiometry result:", JSON.stringify(available));
         
         if (!available.isAvailable) {
@@ -747,9 +743,7 @@ export default {
                   }
 
                   // Check if biometric is available
-                  const available = await Biometric.checkBiometry({
-                    reason: 'שמירת פרטי התחברות'
-                  });
+                  const available = await Biometric.checkBiometry();
 
                   if (available.isAvailable && !this.ifGoogleUser && !this.ifFacebookUser) {
                     // Save username and userId for biometric login

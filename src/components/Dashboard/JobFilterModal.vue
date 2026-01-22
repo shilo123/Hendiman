@@ -16,183 +16,117 @@
         <div class="job-filter-modal__handle-bar"></div>
       </div>
 
-      <!-- Header -->
-      <div class="job-filter-modal__header">
-        <div class="job-filter-modal__header-content">
-          <div class="job-filter-modal__user-section">
-            <div class="job-filter-modal__avatar-wrapper">
-              <div class="job-filter-modal__avatar-glow"></div>
-              <div class="job-filter-modal__avatar">
-                <img 
-                  v-if="userAvatar" 
-                  :src="userAvatar" 
-                  alt=""
-                  class="job-filter-modal__avatar-img"
-                />
-                <div v-else class="job-filter-modal__avatar-placeholder">
-                  <span class="material-symbols-outlined">person</span>
-                </div>
-              </div>
-              <div v-if="userPlan" class="job-filter-modal__pro-badge">PRO</div>
-            </div>
-            <div class="job-filter-modal__user-info">
-              <div class="job-filter-modal__user-name">{{ userName || 'משתמש' }}</div>
-              <div class="job-filter-modal__user-plan">{{ userPlan || 'לקוח' }}</div>
-            </div>
-          </div>
-          <button
-            class="job-filter-modal__close"
-            @click="$emit('close')"
-            aria-label="סגור"
-          >
-            <span class="material-symbols-outlined">close</span>
-            <div class="job-filter-modal__close-glow"></div>
-          </button>
-        </div>
-      </div>
-
       <!-- Scrollable Content -->
       <div class="job-filter-modal__content">
-        <div class="job-filter-modal__title">
-          סנן <span class="job-filter-modal__title-accent">עבודות</span>
+        <!-- AI Filter Button -->
+        <button 
+          class="job-filter-ai-btn"
+          @click="handleAIFilter"
+        >
+          <div class="job-filter-ai-btn__content">
+            <div class="job-filter-ai-btn__icon">
+              <i class="ph ph-sparkle"></i>
+            </div>
+            <div class="job-filter-ai-btn__text">
+              <div class="job-filter-ai-btn__title">סנן בעזרת AI</div>
+              <div class="job-filter-ai-btn__desc">התאמה אישית חכמה</div>
+            </div>
+          </div>
+          <div class="job-filter-ai-btn__pulse">
+            <span class="job-filter-ai-btn__pulse-ring"></span>
+            <span class="job-filter-ai-btn__pulse-dot"></span>
+          </div>
+        </button>
+
+        <!-- Search Input -->
+        <div class="job-filter-search-wrapper">
+          <div class="job-filter-search-glow"></div>
+          <div class="job-filter-search-container">
+            <input
+              v-model="searchQuery"
+              class="job-filter-search-input"
+              type="text"
+              placeholder="לדוגמה: אינסטלטור מומלץ..."
+            />
+            <button 
+              class="job-filter-search-btn"
+              @click="handleSearch"
+            >
+              <i class="ph ph-paper-plane-right"></i>
+            </button>
+          </div>
         </div>
 
         <!-- Location Filter -->
         <div class="job-filter-section">
-          <h3 class="job-filter-section__title">מיקום</h3>
-          <div class="job-filter-radio-group">
-            <label class="job-filter-radio-item">
-              <input
-                type="radio"
-                name="locationFilter"
-                value="myLocation"
-                :checked="localFilters.locationType === 'myLocation'"
-                @change="updateLocationType('myLocation')"
-                class="job-filter-radio-input"
-              />
-              <div class="job-filter-radio-content">
-                <div class="job-filter-radio-icon" :class="{ 'job-filter-radio-icon--checked': localFilters.locationType === 'myLocation' }">
-                  <span class="material-symbols-outlined">my_location</span>
-                </div>
-                <div class="job-filter-radio-text">
-                  <span class="job-filter-radio-label">המיקום שלי</span>
-                  <span class="job-filter-radio-desc">לפי מיקום GPS נוכחי</span>
-                </div>
-                <div class="job-filter-radio-check" :class="{ 'job-filter-radio-check--checked': localFilters.locationType === 'myLocation' }">
-                  <div class="job-filter-radio-check-inner"></div>
-                </div>
-              </div>
-            </label>
-            <label class="job-filter-radio-item">
-              <input
-                type="radio"
-                name="locationFilter"
-                value="residence"
-                :checked="localFilters.locationType === 'residence'"
-                @change="updateLocationType('residence')"
-                class="job-filter-radio-input"
-              />
-              <div class="job-filter-radio-content" :class="{ 'job-filter-radio-content--checked': localFilters.locationType === 'residence' }">
-                <div class="job-filter-radio-icon" :class="{ 'job-filter-radio-icon--checked': localFilters.locationType === 'residence' }">
-                  <span class="material-symbols-outlined">home_pin</span>
-                </div>
-                <div class="job-filter-radio-text">
-                  <span class="job-filter-radio-label">מקום המגורים שלי</span>
-                  <span class="job-filter-radio-desc">{{ userCity || 'מיקום מגורים' }}</span>
-                </div>
-                <div class="job-filter-radio-check" :class="{ 'job-filter-radio-check--checked': localFilters.locationType === 'residence' }">
-                  <div class="job-filter-radio-check-inner"></div>
-                </div>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        <!-- Distance Filter -->
-        <div class="job-filter-section">
           <div class="job-filter-section__header">
-            <h3 class="job-filter-section__title">מרחק</h3>
-            <button
-              class="job-filter-reset-btn"
-              type="button"
-              @click="resetDistance"
-            >
-              איפוס
-            </button>
+            <label class="job-filter-section__label">מיקום</label>
           </div>
-          <div class="job-filter-range-container">
-            <div class="job-filter-range-display">
-              <div class="job-filter-range-value-large">
-                <span class="job-filter-range-number">{{ localFilters.maxKm }}</span>
-                <span class="job-filter-range-unit">ק״מ</span>
-              </div>
-              <span class="job-filter-range-max">מקסימום: 50 ק״מ</span>
-            </div>
-            <div class="job-filter-range-slider-wrapper">
-              <div class="job-filter-range-track">
-                <div 
-                  class="job-filter-range-track-filled" 
-                  :style="{ width: `${(localFilters.maxKm / 50) * 100}%` }"
-                ></div>
-              </div>
-              <input
-                class="job-filter-range-input"
-                type="range"
-                min="1"
-                max="50"
-                step="1"
-                :value="localFilters.maxKm"
-                @input="updateMaxKm($event.target.value)"
-              />
-            </div>
-            <div class="job-filter-range-labels">
-              <span>1 ק״מ</span>
-              <span>50 ק״מ</span>
-            </div>
+          <div class="job-filter-location-buttons">
+            <button
+              class="job-filter-location-btn"
+              :class="{ 'job-filter-location-btn--active': localFilters.locationType === 'residence' }"
+              @click="updateLocationType('residence')"
+            >
+              מיקום המגורים שלי
+            </button>
+            <button
+              class="job-filter-location-btn"
+              :class="{ 'job-filter-location-btn--active': localFilters.locationType === 'myLocation' }"
+              @click="updateLocationType('myLocation')"
+            >
+              המיקום הנוכחי
+            </button>
           </div>
         </div>
 
         <!-- Price Filter -->
         <div class="job-filter-section">
           <div class="job-filter-section__header">
-            <h3 class="job-filter-section__title">מחיר מינימלי</h3>
-            <button
-              class="job-filter-reset-btn"
-              type="button"
-              @click="resetPrice"
-            >
-              איפוס
-            </button>
+            <label class="job-filter-section__label">מינימום מחיר</label>
+            <span class="job-filter-section__value">{{ localFilters.minPrice || 0 }} ₪</span>
           </div>
-          <div class="job-filter-range-container">
-            <div class="job-filter-range-display">
-              <div class="job-filter-range-value-large">
-                <span class="job-filter-range-number">{{ localFilters.minPrice || 0 }}</span>
-                <span class="job-filter-range-unit">₪</span>
-              </div>
-              <span class="job-filter-range-max">מקסימום: 1000 ₪</span>
+          <div class="job-filter-slider-container">
+            <div class="job-filter-slider-track">
+              <div 
+                class="job-filter-slider-fill" 
+                :style="{ width: `${((localFilters.minPrice || 0) / 1000) * 100}%` }"
+              ></div>
             </div>
-            <div class="job-filter-range-slider-wrapper">
-              <div class="job-filter-range-track">
-                <div 
-                  class="job-filter-range-track-filled" 
-                  :style="{ width: `${((localFilters.minPrice || 0) / 1000) * 100}%` }"
-                ></div>
-              </div>
-              <input
-                class="job-filter-range-input"
-                type="range"
-                min="0"
-                max="1000"
-                step="50"
-                :value="localFilters.minPrice || 0"
-                @input="updateMinPrice($event.target.value)"
-              />
+            <input
+              class="job-filter-slider-input"
+              type="range"
+              min="0"
+              max="1000"
+              step="50"
+              :value="localFilters.minPrice || 0"
+              @input="updateMinPrice($event.target.value)"
+            />
+          </div>
+        </div>
+
+        <!-- Distance Filter -->
+        <div class="job-filter-section">
+          <div class="job-filter-section__header">
+            <label class="job-filter-section__label">טווח בקילומטרים</label>
+            <span class="job-filter-section__value">{{ localFilters.maxKm }} ק"מ</span>
+          </div>
+          <div class="job-filter-slider-container">
+            <div class="job-filter-slider-track">
+              <div 
+                class="job-filter-slider-fill" 
+                :style="{ width: `${(localFilters.maxKm / 50) * 100}%` }"
+              ></div>
             </div>
-            <div class="job-filter-range-labels">
-              <span>0 ₪</span>
-              <span>1000 ₪</span>
-            </div>
+            <input
+              class="job-filter-slider-input"
+              type="range"
+              min="1"
+              max="50"
+              step="1"
+              :value="localFilters.maxKm"
+              @input="updateMaxKm($event.target.value)"
+            />
           </div>
         </div>
       </div>
@@ -200,18 +134,17 @@
       <!-- Footer -->
       <div class="job-filter-modal__footer">
         <button
-          class="job-filter-modal__btn job-filter-modal__btn--cancel"
+          class="job-filter-modal__btn job-filter-modal__btn--back"
           @click="$emit('close')"
         >
-          ביטול
+          חזור
         </button>
         <button
           class="job-filter-modal__btn job-filter-modal__btn--apply"
           @click="applyFilters"
         >
-          <span class="material-symbols-outlined">filter_alt</span>
+          <i class="ph ph-faders"></i>
           <span>סנן תוצאות</span>
-          <div class="job-filter-modal__btn-shine"></div>
         </button>
       </div>
     </div>
@@ -261,6 +194,7 @@ export default {
       touchCurrentY: 0,
       isDragging: false,
       modalTransform: 0,
+      searchQuery: "",
     };
   },
   watch: {
@@ -313,6 +247,14 @@ export default {
     applyFilters() {
       this.$emit("apply", { ...this.localFilters });
       this.$emit("close");
+    },
+    handleAIFilter() {
+      // TODO: Implement AI filter logic
+      console.log("AI Filter clicked");
+    },
+    handleSearch() {
+      // TODO: Implement search logic
+      console.log("Search:", this.searchQuery);
     },
     handleTouchStart(e) {
       // Only allow dragging from the handle area or top of modal
@@ -369,17 +311,13 @@ export default {
 </script>
 
 <style scoped lang="scss">
-$primary: #FF6B00;
-$primary-400: #fdba74;
-$primary-500: #f97316;
-$primary-600: #ea580c;
-$primary-700: #c2410c;
-$bg: #0a0a0a;
-$bg-800: rgba(10, 10, 10, 0.95);
-$bg-700: #121212;
-$bg-900: #050505;
-$bg-card: #18181b;
-$surface: #27272a;
+$primary: #FF5F00;
+$primary-dim: #CC4C00;
+$obsidian: #000000;
+$charcoal: #09090B;
+$card-bg: #050505;
+$glass: rgba(20, 20, 20, 0.6);
+$success: #00E055;
 $text: #ffffff;
 $text-muted: rgba(255, 255, 255, 0.4);
 $border: rgba(255, 255, 255, 0.1);
@@ -391,9 +329,9 @@ $border-light: rgba(255, 255, 255, 0.05);
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -401,6 +339,34 @@ $border-light: rgba(255, 255, 255, 0.05);
   direction: rtl;
   padding-bottom: 0;
   animation: fadeIn 0.3s ease-out;
+  
+  // Grid pattern background
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-size: 40px 40px;
+    background-image: 
+      linear-gradient(to right, rgba(255, 95, 0, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 95, 0, 0.03) 1px, transparent 1px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  
+  // Gradient blurs
+  &::after {
+    content: '';
+    position: absolute;
+    top: -10%;
+    left: -10%;
+    width: 50%;
+    height: 40%;
+    background: rgba(255, 95, 0, 0.05);
+    border-radius: 50%;
+    filter: blur(120px);
+    pointer-events: none;
+    z-index: 0;
+  }
   
   @media (min-width: 768px) {
     align-items: center;
@@ -419,29 +385,30 @@ $border-light: rgba(255, 255, 255, 0.05);
 }
 
 .job-filter-modal {
-  background: $bg-800;
+  background: rgba(9, 9, 11, 0.9);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border-top: 1px solid $border-light;
-  border-radius: 24px 24px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 2.5rem 2.5rem 0 0;
   width: 100%;
   max-width: 448px;
   max-height: calc(92vh - 60px);
   height: calc(92vh - 60px);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8);
   position: relative;
   overflow: hidden;
-  animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+  z-index: 1;
   
   @media (min-width: 768px) {
     border-radius: 2rem;
     max-height: 85vh;
     height: auto;
     max-width: 448px;
-    animation: slideUpCenter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    animation: slideUpCenter 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   }
   
   // Ensure it's above DashboardTopBar (z-index: 100000)
@@ -490,182 +457,17 @@ $border-light: rgba(255, 255, 255, 0.05);
 }
 
 .job-filter-modal__handle-bar {
-  width: 64px;
+  width: 48px;
   height: 6px;
   border-radius: 999px;
-  background: $primary-600;
-  box-shadow: 0 0 10px rgba(234, 88, 12, 0.5);
+  background: rgba(255, 255, 255, 0.2);
   transition: all 0.2s ease;
   
   .job-filter-modal__handle:hover & {
-    background: $primary-500;
-    box-shadow: 0 0 15px rgba(234, 88, 12, 0.7);
+    background: rgba(255, 255, 255, 0.3);
   }
 }
 
-.job-filter-modal__header {
-  position: relative;
-  z-index: 1;
-  padding: 24px 24px 16px;
-  border-bottom: 1px solid $border-light;
-  flex-shrink: 0;
-}
-
-.job-filter-modal__header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-}
-
-.job-filter-modal__user-section {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.job-filter-modal__avatar-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.job-filter-modal__avatar-glow {
-  position: absolute;
-  inset: -2px;
-  background: linear-gradient(135deg, $primary-500, #fbbf24);
-  border-radius: 50%;
-  opacity: 0.4;
-  filter: blur(4px);
-  transition: opacity 0.2s ease;
-  
-  .job-filter-modal__avatar-wrapper:hover & {
-    opacity: 0.75;
-  }
-}
-
-.job-filter-modal__avatar {
-  position: relative;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  padding: 2px;
-  background: linear-gradient(135deg, #27272a, #050505);
-  overflow: hidden;
-  z-index: 1;
-}
-
-.job-filter-modal__avatar-img {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.job-filter-modal__avatar-placeholder {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255, 255, 255, 0.5);
-  
-  .material-symbols-outlined {
-    font-size: 28px;
-  }
-}
-
-.job-filter-modal__pro-badge {
-  position: absolute;
-  bottom: -4px;
-  right: -4px;
-  background: linear-gradient(135deg, $primary-500, #fbbf24);
-  color: #000;
-  font-size: 10px;
-  font-weight: 900;
-  padding: 2px 8px;
-  border-radius: 999px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(0, 0, 0, 0.5);
-  letter-spacing: 0.05em;
-  z-index: 2;
-}
-
-.job-filter-modal__user-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.job-filter-modal__user-name {
-  font-size: 20px;
-  font-weight: 900;
-  color: $text;
-  line-height: 1.2;
-}
-
-.job-filter-modal__user-plan {
-  font-size: 12px;
-  color: rgba(161, 161, 170, 1);
-  font-weight: 500;
-  letter-spacing: 0.025em;
-}
-
-.job-filter-modal__close {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 1px solid $border-light;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(161, 161, 170, 1);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-  overflow: hidden;
-
-  .material-symbols-outlined {
-    font-size: 20px;
-    transition: color 0.2s ease;
-    position: relative;
-    z-index: 1;
-  }
-  
-  .job-filter-modal__close-glow {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    border: 1px solid rgba($primary-500, 0);
-    transition: all 0.5s ease;
-    transform: scale(1.1);
-    opacity: 0;
-  }
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.2);
-    
-    .material-symbols-outlined {
-      color: $text;
-    }
-    
-    .job-filter-modal__close-glow {
-      border-color: rgba($primary-500, 0.3);
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-}
 
 .job-filter-modal__content {
   position: relative;
@@ -679,7 +481,7 @@ $border-light: rgba(255, 255, 255, 0.05);
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 24px;
   
   // Hide scrollbar
   &::-webkit-scrollbar {
@@ -694,22 +496,174 @@ $border-light: rgba(255, 255, 255, 0.05);
   }
 }
 
-.job-filter-modal__title {
-  font-size: 30px;
-  font-weight: 900;
-  color: $text;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+// AI Filter Button
+.job-filter-ai-btn {
+  width: 100%;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
+  padding: 16px;
+  border-radius: 1rem;
+  background: linear-gradient(to right, rgba(255, 95, 0, 0.1), transparent);
+  border: 1px solid rgba(255, 95, 0, 0.3);
+  color: $text;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 8px;
+
+  &:hover {
+    background: linear-gradient(to right, rgba(255, 95, 0, 0.2), transparent);
+    border-color: rgba(255, 95, 0, 0.5);
+  }
+
+  &__content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  &__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: $primary;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #000;
+    box-shadow: 0 4px 12px rgba(255, 95, 0, 0.2);
+    
+    i {
+      font-size: 20px;
+    }
+  }
+
+  &__text {
+    text-align: right;
+  }
+
+  &__title {
+    font-size: 16px;
+    font-weight: 900;
+    color: $text;
+    margin-bottom: 2px;
+  }
+
+  &__desc {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  &__pulse {
+    position: relative;
+    width: 12px;
+    height: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__pulse-ring {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: $primary;
+    animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+    opacity: 0.75;
+  }
+
+  &__pulse-dot {
+    position: relative;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: $primary;
+    z-index: 1;
+  }
 }
 
-.job-filter-modal__title-accent {
-  background: linear-gradient(135deg, $primary, $primary-600);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+// Search Input
+.job-filter-search-wrapper {
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.job-filter-search-glow {
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(to right, rgba(255, 95, 0, 0.5), rgba(255, 95, 0, 0.1));
+  border-radius: 1rem;
+  filter: blur(8px);
+  opacity: 0.3;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+  z-index: 0;
+
+  .job-filter-search-wrapper:hover & {
+    opacity: 0.6;
+  }
+}
+
+.job-filter-search-container {
+  position: relative;
+  background: $card-bg;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 95, 0, 0.4);
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  z-index: 1;
+}
+
+.job-filter-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: $text;
+  text-align: right;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 12px 16px;
+  outline: none;
+  font-family: inherit;
+
+  &::placeholder {
+    color: rgba(113, 113, 122, 1);
+  }
+}
+
+.job-filter-search-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 0.75rem;
+  background: rgba(255, 95, 0, 0.2);
+  color: $primary;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+
+  i {
+    font-size: 18px;
+  }
+
+  &:hover {
+    background: $primary;
+    color: #000;
+  }
 }
 
 .job-filter-section {
@@ -720,12 +674,13 @@ $border-light: rgba(255, 255, 255, 0.05);
 
 .job-filter-section__header {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
+  margin-bottom: 16px;
 }
 
-.job-filter-section__title {
-  font-size: 13px;
+.job-filter-section__label {
+  font-size: 12px;
   font-weight: 900;
   color: rgba(161, 161, 170, 1);
   text-transform: uppercase;
@@ -733,188 +688,52 @@ $border-light: rgba(255, 255, 255, 0.05);
   margin: 0;
 }
 
-.job-filter-reset-btn {
+.job-filter-section__value {
+  font-size: 18px;
+  font-weight: 900;
+  color: $primary;
+  font-family: monospace;
+}
+
+// Location Buttons
+.job-filter-location-buttons {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 6px;
+  border-radius: 1rem;
+  display: flex;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  position: relative;
+}
+
+.job-filter-location-btn {
+  flex: 1;
+  padding: 12px;
+  text-align: center;
   font-size: 12px;
-  font-weight: 500;
-  color: $primary-500;
+  font-weight: 900;
+  border-radius: 0.75rem;
   background: transparent;
+  color: rgba(113, 113, 122, 1);
   border: none;
-  border-radius: 6px;
-  padding: 4px 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
+  font-family: inherit;
 
   &:hover {
-    color: $primary-400;
-    background: rgba(249, 115, 22, 0.1);
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-}
-
-.job-filter-radio-group {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-
-.job-filter-radio-item {
-  position: relative;
-  cursor: pointer;
-}
-
-.job-filter-radio-input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.job-filter-radio-content {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid $border-light;
-  transition: all 0.3s ease;
-
-  &--checked {
-    background: rgba(249, 115, 22, 0.1);
-    border-color: rgba(249, 115, 22, 0.5);
-  }
-
-  .job-filter-radio-item:hover & {
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  .job-filter-radio-item:hover &--checked {
-    background: rgba(249, 115, 22, 0.15);
-  }
-}
-
-.job-filter-radio-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: $bg-900;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(161, 161, 170, 1);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
-  transition: all 0.3s ease;
-  margin-left: 16px;
-
-  .material-symbols-outlined {
-    font-size: 20px;
-  }
-
-  &--checked {
-    color: $primary-500;
-  }
-}
-
-.job-filter-radio-text {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.job-filter-radio-label {
-  font-size: 16px;
-  font-weight: 900;
-  color: rgba(255, 255, 255, 0.8);
-  transition: color 0.3s ease;
-
-  .job-filter-radio-item:hover & {
     color: $text;
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  &--active {
+    background: rgba(39, 39, 42, 1);
+    color: $text;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(39, 39, 42, 1);
   }
 }
 
-.job-filter-radio-desc {
-  font-size: 12px;
-  color: rgba(113, 113, 122, 1);
-}
-
-.job-filter-radio-check {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 2px solid rgba(113, 113, 122, 1);
-  background: transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
-  flex-shrink: 0;
-
-  &--checked {
-    border-color: $primary-500;
-    background: $primary-500;
-    box-shadow: 0 0 15px rgba(249, 115, 22, 0.5);
-  }
-}
-
-.job-filter-radio-check-inner {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: white;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-
-  .job-filter-radio-check--checked & {
-    opacity: 1;
-  }
-}
-
-.job-filter-range-container {
-  padding: 20px;
-  border-radius: 16px;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.05), transparent);
-  border: 1px solid $border-light;
-}
-
-.job-filter-range-display {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 24px;
-}
-
-.job-filter-range-value-large {
-  text-align: center;
-}
-
-.job-filter-range-number {
-  display: block;
-  font-size: 36px;
-  font-weight: 900;
-  color: $text;
-  letter-spacing: -0.02em;
-  line-height: 1;
-}
-
-.job-filter-range-unit {
-  display: block;
-  font-size: 12px;
-  color: rgba(113, 113, 122, 1);
-  font-weight: 500;
-  margin-top: 4px;
-}
-
-.job-filter-range-max {
-  color: rgba(113, 113, 122, 1);
-  font-size: 12px;
-  margin-bottom: 2px;
-}
-
-.job-filter-range-slider-wrapper {
+// Slider Styles
+.job-filter-slider-container {
   position: relative;
   width: 100%;
   height: 32px;
@@ -923,24 +742,24 @@ $border-light: rgba(255, 255, 255, 0.05);
   margin-bottom: 8px;
 }
 
-.job-filter-range-track {
+.job-filter-slider-track {
   position: absolute;
   width: 100%;
-  height: 4px;
-  background: $surface;
-  border-radius: 2px;
+  height: 8px;
+  background: rgba(39, 39, 42, 1);
+  border-radius: 4px;
   overflow: hidden;
 }
 
-.job-filter-range-track-filled {
+.job-filter-slider-fill {
   height: 100%;
-  background: linear-gradient(to right, $primary-700, $primary-500);
-  box-shadow: 0 0 10px rgba(249, 115, 22, 0.5);
-  border-radius: 2px;
+  background: $primary;
+  border-radius: 4px;
+  box-shadow: 0 0 10px rgba(255, 95, 0, 0.5);
   transition: width 0.1s ease;
 }
 
-.job-filter-range-input {
+.job-filter-slider-input {
   position: relative;
   z-index: 10;
   width: 100%;
@@ -958,20 +777,20 @@ $border-light: rgba(255, 255, 255, 0.05);
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: $primary;
+    background: #000;
+    border: 2px solid $primary;
     cursor: pointer;
-    border: 2px solid white;
-    box-shadow: 0 0 0 3px $bg-900, 0 0 15px rgba(255, 107, 0, 0.6);
+    box-shadow: 0 0 0 3px rgba(39, 39, 42, 1), 0 4px 12px rgba(0, 0, 0, 0.5);
     transition: all 0.2s ease;
-    margin-top: -10px;
+    margin-top: -8px;
 
     &:hover {
-      box-shadow: 0 0 0 3px $bg-900, 0 0 20px rgba(255, 107, 0, 0.8);
+      transform: scale(1.1);
     }
   }
 
   &::-webkit-slider-runnable-track {
-    height: 4px;
+    height: 8px;
     background: transparent;
     border: none;
   }
@@ -979,119 +798,26 @@ $border-light: rgba(255, 255, 255, 0.05);
   &::-moz-range-thumb {
     width: 24px;
     height: 24px;
-    border: 2px solid white;
+    border: 2px solid $primary;
     border-radius: 50%;
-    background: $primary;
+    background: #000;
     cursor: pointer;
-    box-shadow: 0 0 0 3px $bg-900, 0 0 15px rgba(255, 107, 0, 0.6);
+    box-shadow: 0 0 0 3px rgba(39, 39, 42, 1), 0 4px 12px rgba(0, 0, 0, 0.5);
     transition: all 0.2s ease;
 
     &:hover {
-      box-shadow: 0 0 0 3px $bg-900, 0 0 20px rgba(255, 107, 0, 0.8);
+      transform: scale(1.1);
     }
   }
 
   &::-moz-range-track {
     width: 100%;
-    height: 4px;
+    height: 8px;
     background: transparent;
     border: none;
   }
 }
 
-.job-filter-range-labels {
-  display: flex;
-  justify-content: space-between;
-  font-size: 10px;
-  font-weight: 900;
-  color: rgba(113, 113, 122, 1);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  padding: 0 4px;
-}
-
-.job-filter-price-range {
-  display: flex;
-  gap: 16px;
-  
-  @media (max-width: 768px) {
-    flex-direction: column;
-    gap: 12px;
-  }
-}
-
-.job-filter-price-input-wrapper {
-  position: relative;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.job-filter-price-label {
-  display: block;
-  font-size: 10px;
-  font-weight: 900;
-  color: rgba(113, 113, 122, 1);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 6px;
-  margin-right: 4px;
-}
-
-.job-filter-price-input-container {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: transform 0.2s ease;
-
-  &:focus-within {
-    transform: scale(1.02);
-  }
-}
-
-.job-filter-price-symbol {
-  font-weight: 900;
-  color: $primary-500;
-  font-size: 16px;
-  flex-shrink: 0;
-  margin-right: 4px;
-  
-  @media (max-width: 768px) {
-    font-size: 14px;
-  }
-}
-
-.job-filter-price-input {
-  width: 100%;
-  box-sizing: border-box;
-  background: $bg-900;
-  border: 1px solid $border-light;
-  border-radius: 12px;
-  padding: 12px 16px;
-  font-size: 14px;
-  font-weight: 900;
-  color: $text;
-  font-family: inherit;
-  outline: none;
-  transition: all 0.2s ease;
-  text-align: right;
-  direction: rtl;
-
-  &::placeholder {
-    color: rgba(113, 113, 122, 1);
-  }
-
-  &:focus {
-    border-color: $primary-500;
-    box-shadow: 0 0 15px rgba(249, 115, 22, 0.15);
-    background: rgba(5, 5, 5, 0.9);
-  }
-  
-  @media (max-width: 768px) {
-    padding: 10px 14px;
-    font-size: 13px;
-  }
-}
 
 .job-filter-modal__footer {
   position: sticky;
@@ -1101,10 +827,10 @@ $border-light: rgba(255, 255, 255, 0.05);
   grid-template-columns: 1fr 2fr;
   gap: 16px;
   padding: 24px;
-  border-top: 1px solid $border-light;
-  background: rgba(10, 10, 10, 0.98);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(9, 9, 11, 0.98);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   flex-shrink: 0;
   margin-top: auto;
   
@@ -1117,7 +843,7 @@ $border-light: rgba(255, 255, 255, 0.05);
 
 .job-filter-modal__btn {
   padding: 16px;
-  border-radius: 16px;
+  border-radius: 1rem;
   font-size: 14px;
   font-weight: 900;
   cursor: pointer;
@@ -1135,44 +861,38 @@ $border-light: rgba(255, 255, 255, 0.05);
     transform: scale(0.98);
   }
 
-  &--cancel {
+  i {
+    font-size: 18px;
+  }
+
+  &--back {
     background: transparent;
-    color: $text;
-    border: 1px solid $border-light;
+    color: rgba(113, 113, 122, 1);
+    border: 1px solid rgba(39, 39, 42, 1);
     font-size: 14px;
 
     &:hover {
+      border-color: rgba(39, 39, 42, 0.8);
+      color: $text;
       background: rgba(255, 255, 255, 0.05);
     }
   }
 
   &--apply {
-    background: linear-gradient(135deg, $primary, $primary-600);
+    background: $primary;
     color: #000;
     font-size: 16px;
     font-weight: 900;
-    box-shadow: 0 0 20px rgba(234, 88, 12, 0.4);
+    box-shadow: 0 0 25px rgba(255, 95, 0, 0.4);
     
-    .material-symbols-outlined {
+    i {
       font-size: 20px;
     }
 
     &:hover {
-      box-shadow: 0 0 30px rgba(234, 88, 12, 0.6);
-      filter: brightness(1.1);
+      background: #fff;
+      box-shadow: 0 0 35px rgba(255, 95, 0, 0.6);
     }
-  }
-}
-
-.job-filter-modal__btn-shine {
-  position: absolute;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.2);
-  transform: translateY(100%);
-  transition: transform 0.3s ease;
-
-  .job-filter-modal__btn--apply:hover & {
-    transform: translateY(0);
   }
 }
 
@@ -1191,39 +911,10 @@ $border-light: rgba(255, 255, 255, 0.05);
     align-items: flex-end;
   }
 
-  .job-filter-modal__header {
-    padding: 12px 16px 12px;
-  }
-
-  .job-filter-modal__header-content {
-    gap: 12px;
-  }
-
-  .job-filter-modal__avatar {
-    width: 48px;
-    height: 48px;
-  }
-
-  .job-filter-modal__user-name {
-    font-size: 18px;
-  }
-
-  .job-filter-modal__user-plan {
-    font-size: 11px;
-  }
-
-  .job-filter-modal__close {
-    width: 36px;
-    height: 36px;
-    
-    .material-symbols-outlined {
-      font-size: 18px;
-    }
-  }
 
   .job-filter-modal__content {
     padding: 16px;
-    gap: 24px;
+    gap: 20px;
     padding-bottom: calc(160px + env(safe-area-inset-bottom));
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -1231,66 +922,75 @@ $border-light: rgba(255, 255, 255, 0.05);
     min-height: 0;
     overscroll-behavior: contain;
   }
-  
 
-  .job-filter-modal__title {
-    font-size: 24px;
-    margin-bottom: 8px;
+  .job-filter-ai-btn {
+    padding: 14px;
+    
+    &__icon {
+      width: 36px;
+      height: 36px;
+      
+      i {
+        font-size: 18px;
+      }
+    }
+
+    &__title {
+      font-size: 14px;
+    }
+
+    &__desc {
+      font-size: 9px;
+    }
+  }
+
+  .job-filter-search-input {
+    font-size: 13px;
+    padding: 10px 14px;
+  }
+
+  .job-filter-search-btn {
+    width: 36px;
+    height: 36px;
+    
+    i {
+      font-size: 16px;
+    }
   }
 
   .job-filter-section {
     gap: 12px;
   }
 
-  .job-filter-section__title {
-    font-size: 12px;
+  .job-filter-section__label {
+    font-size: 11px;
   }
 
-  .job-filter-radio-content {
-    padding: 14px;
+  .job-filter-section__value {
+    font-size: 16px;
   }
 
-  .job-filter-radio-icon {
-    width: 36px;
-    height: 36px;
-    margin-left: 12px;
+  .job-filter-location-btn {
+    padding: 10px;
+    font-size: 11px;
+  }
+
+  .job-filter-slider-container {
+    height: 28px;
+  }
+
+  .job-filter-slider-input {
+    height: 28px;
     
-    .material-symbols-outlined {
-      font-size: 18px;
+    &::-webkit-slider-thumb {
+      width: 20px;
+      height: 20px;
     }
-  }
 
-  .job-filter-radio-label {
-    font-size: 15px;
-  }
-
-  .job-filter-radio-desc {
-    font-size: 11px;
-  }
-
-  .job-filter-range-container {
-    padding: 16px;
-  }
-
-  .job-filter-range-number {
-    font-size: 32px;
-  }
-
-  .job-filter-range-unit {
-    font-size: 11px;
-  }
-
-  .job-filter-range-max {
-    font-size: 11px;
-  }
-
-  .job-filter-price-range {
-    gap: 12px;
-  }
-
-  .job-filter-price-input {
-    padding: 12px 14px 12px 36px;
-    font-size: 15px;
+    &::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+    }
   }
 
   .job-filter-modal__footer {
@@ -1321,15 +1021,32 @@ $border-light: rgba(255, 255, 255, 0.05);
 @media (max-width: 480px) {
   .job-filter-modal__content {
     padding: 14px;
-    gap: 20px;
+    gap: 18px;
   }
 
-  .job-filter-modal__title {
-    font-size: 22px;
+  .job-filter-ai-btn {
+    padding: 12px;
+    
+    &__icon {
+      width: 32px;
+      height: 32px;
+      
+      i {
+        font-size: 16px;
+      }
+    }
+
+    &__title {
+      font-size: 13px;
+    }
+
+    &__desc {
+      font-size: 8px;
+    }
   }
 
-  .job-filter-range-number {
-    font-size: 28px;
+  .job-filter-section__value {
+    font-size: 14px;
   }
 
   .job-filter-modal__footer {

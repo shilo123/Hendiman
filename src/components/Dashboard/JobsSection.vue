@@ -233,6 +233,8 @@
             v-for="job in urgentJobs"
             :key="job.id || job._id"
             class="job job--urgent-card"
+            @click="$emit('view', job)"
+            style="cursor: pointer;"
           >
           <div class="job__urgent-glow"></div>
           <div class="job__content">
@@ -319,6 +321,8 @@
             v-for="job in regularJobs"
             :key="job.id || job._id"
             class="job job--regular-card"
+            @click="$emit('view', job)"
+            style="cursor: pointer;"
           >
             <div class="job__hover-glow"></div>
             <div class="job__content">
