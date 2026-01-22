@@ -140,182 +140,15 @@
         />
 
         <!-- CLIENT (mobile): handymen carousel with new design -->
-        <div
+        <HandymenList
           v-if="!isHendiman && isMobile"
-          class="client-dashboard-new"
-        >
-          <!-- Recommended Handymen Section -->
-          <div class="client-dashboard-new__section">
-            <div class="client-dashboard-new__section-header">
-              <h2 class="client-dashboard-new__section-title">
-                <span class="client-dashboard-new__title-accent"></span>
-                מומלצים עבורך
-              </h2>
-            <button
-              type="button"
-                class="client-dashboard-new__filter-btn"
-                aria-label="סינון"
-            >
-                סינון
-                <i class="ph ph-sliders-horizontal"></i>
-            </button>
-          </div>
-
-            <!-- Handymen Carousel -->
-            <div
-              ref="handymanCarousel"
-              class="client-dashboard-new__carousel"
-              @scroll="onCarouselScroll"
-            >
-              <div class="client-dashboard-new__carousel-spacer"></div>
-              <div
-                v-for="(handyman, index) in filteredHandymen"
-                :key="handyman.id || handyman._id"
-                class="client-dashboard-new__card"
-                :class="{ 'client-dashboard-new__card--blocked': handyman.isBlocked }"
-              >
-                <div class="client-dashboard-new__card-content">
-                  <div class="client-dashboard-new__card-top">
-                    <div class="client-dashboard-new__card-header">
-                      <div class="client-dashboard-new__avatar-wrapper">
-                        <div
-                          class="client-dashboard-new__avatar-border"
-                          :class="{
-                            'client-dashboard-new__avatar-border--pro': index === 0,
-                            'client-dashboard-new__avatar-border--hover': index > 0
-                          }"
-                        >
-                          <img
-                            :src="getHandymanImage(handyman)"
-                            :alt="handyman.username"
-                            class="client-dashboard-new__avatar-img"
-                            :class="{
-                              'client-dashboard-new__avatar-img--grayscale': index === 2,
-                              'client-dashboard-new__avatar-img--sepia': index === 3
-                            }"
-                            @error="onHandymanImageError"
-                          />
-                        </div>
-                        <div class="client-dashboard-new__rating-badge">
-                          <span class="client-dashboard-new__rating-value">{{
-                            formatHandymanRating(handyman)
-                          }}</span>
-                          <i class="ph-fill ph-star client-dashboard-new__rating-star"></i>
-                        </div>
-                      </div>
-                      <div class="client-dashboard-new__card-info">
-                        <h3 class="client-dashboard-new__card-name">
-                          {{ handyman.username }}
-                        </h3>
-                        <div class="client-dashboard-new__card-location">
-                          <i class="ph-fill ph-map-pin"></i>
-                          <span>{{ getCityText(handyman) }}</span>
-                          <span class="client-dashboard-new__location-separator">•</span>
-                          <span>{{ formatDistance(handyman) }}</span>
-                        </div>
-                        <div class="client-dashboard-new__card-status">
-                          <div class="client-dashboard-new__status-dot"></div>
-                          <span class="client-dashboard-new__status-text">
-                            {{ getStatusText(handyman) }}
-                          </span>
-                        </div>
-                        <div
-                          v-if="index === 3"
-                          class="client-dashboard-new__card-badge"
-                        >
-                          <i class="ph-fill ph-trophy"></i>
-                          <span>TOP RATED</span>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        class="client-dashboard-new__details-btn"
-                        @click="onViewHandymanDetails(handyman.id || handyman._id)"
-                      >
-                        פרטים
-                        <i class="ph-bold ph-caret-left"></i>
-                      </button>
-                    </div>
-                    <div
-                      v-if="getCategories(handyman).length"
-                      class="client-dashboard-new__card-categories"
-                    >
-                      <span
-                        v-for="category in getVisibleCategories(handyman, 2)"
-                        :key="category"
-                        class="client-dashboard-new__category-tag"
-                      >
-                        {{ category }}
-                      </span>
-                    </div>
-                  </div>
-                  <div class="client-dashboard-new__card-actions">
-                    <button
-                      type="button"
-                      class="client-dashboard-new__action-btn client-dashboard-new__action-btn--block"
-                      @click="onBlockHandyman(handyman.id || handyman._id, handyman.isBlocked)"
-                    >
-                      <i class="ph-bold ph-prohibit"></i>
-                      חסום
-                    </button>
-                    <button
-                      type="button"
-                      class="client-dashboard-new__action-btn client-dashboard-new__action-btn--primary"
-                      @click="onPersonalRequest(handyman.id || handyman._id)"
-                    >
-                      <i class="ph-fill ph-paper-plane-right"></i>
-                      שלח קריאה
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Carousel Pagination Dots -->
-            <div class="client-dashboard-new__pagination">
-              <div
-                v-for="(dot, index) in carouselPages"
-                :key="index"
-                class="client-dashboard-new__pagination-dot"
-                :class="{ 'client-dashboard-new__pagination-dot--active': index === currentCarouselPage }"
-              ></div>
-            </div>
-          </div>
-
-          <!-- Recent Activity Section -->
-          <div class="client-dashboard-new__section">
-            <h2 class="client-dashboard-new__section-title-small">
-              <span class="client-dashboard-new__title-accent-small"></span>
-              פעילות אחרונה
-            </h2>
-            <div class="client-dashboard-new__activity-list">
-              <div
-                v-for="job in recentJobs"
-                :key="job.id || job._id"
-                class="client-dashboard-new__activity-item"
-                :class="getActivityItemClass(job)"
-              >
-                <div class="client-dashboard-new__activity-status">
-                  <span class="client-dashboard-new__activity-status-text">{{
-                    getJobStatusText(job)
-                  }}</span>
-                  <i :class="getJobStatusIcon(job)"></i>
-                </div>
-                <div class="client-dashboard-new__activity-content">
-                  <h4 class="client-dashboard-new__activity-title">
-                    {{ getJobTitle(job) }}
-                  </h4>
-                  <p class="client-dashboard-new__activity-time">
-                    {{ formatJobTime(job) }}
-                  </p>
-                </div>
-                <div class="client-dashboard-new__activity-icon">
-                  <i :class="getJobIcon(job)"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+          :filtered-handymen="filteredHandymen"
+          :recent-jobs="recentJobs"
+          @view-details="onViewHandymanDetails"
+          @personal-request="onPersonalRequest"
+          @block-handyman="onBlockHandyman"
+          @view-job="onViewJob"
+        />
 
         <!-- Return to job button (mobile only - above jobs) -->
         <button
@@ -1944,7 +1777,6 @@ export default {
       showFabAfterScroll: false,
       pendingActiveJobId: null, // Store active job ID from fast check
       doneJobsCache: [], // Cache for done jobs that need client approval (persists after refresh)
-      _currentCarouselPage: 0, // Current page in carousel for new design
       showJobCancelledModal: false,
       cancelledBy: "handyman", // Track who cancelled: "handyman" or "client"
       showOnboardingModal: false, // Show onboarding popup for handyman
@@ -2458,12 +2290,6 @@ export default {
       }
       return null;
     },
-    carouselPages() {
-      // Calculate number of pages for carousel dots
-      const total = this.filteredHandymen?.length || 0;
-      const itemsPerPage = 1; // Each card is one page
-      return Math.ceil(total / itemsPerPage);
-    },
     recentJobs() {
       // Get recent jobs for activity section
       if (!this.jobs || !Array.isArray(this.jobs)) return [];
@@ -2478,14 +2304,6 @@ export default {
           return dateB - dateA;
         })
         .slice(0, 5); // Show only last 5 jobs
-    },
-    currentCarouselPage: {
-      get() {
-        return this._currentCarouselPage || 0;
-      },
-      set(value) {
-        this._currentCarouselPage = value;
-      }
     },
     urgentJobs() {
       if (!this.isHendiman || !this.jobs) return [];
@@ -5721,142 +5539,6 @@ export default {
         this.isProcessingSubscription = false;
       }
     },
-    // New design helper methods
-    getHandymanImage(handyman) {
-      const defaultImage = "/img/Hendima-logo.png";
-      if (!handyman || !handyman.imageUrl) return defaultImage;
-      const imageUrl = handyman.imageUrl;
-      if (
-        typeof imageUrl !== "string" ||
-        imageUrl.trim() === "" ||
-        imageUrl.includes("demo-02.png") ||
-        imageUrl.includes("/demo") ||
-        imageUrl.endsWith("demo-02.png") ||
-        (!imageUrl.startsWith("http") && !imageUrl.startsWith("/"))
-      ) {
-        return defaultImage;
-      }
-      return imageUrl;
-    },
-    onHandymanImageError(event) {
-      event.target.src = "/img/Hendima-logo.png";
-    },
-    getCityText(handyman) {
-      if (handyman?.city) return String(handyman.city).trim();
-      const addressObj = handyman?.address ?? handyman?.adress ?? null;
-      if (addressObj?.city) return String(addressObj.city).trim();
-      return "מיקום לא זמין";
-    },
-    formatHandymanRating(handyman) {
-      const rating = Number(handyman?.rating);
-      if (!Number.isFinite(rating) || rating <= 0) return "0.0";
-      return rating % 1 === 0 ? rating.toFixed(0) : rating.toFixed(1);
-    },
-    formatDistance(handyman) {
-      // Calculate distance if available
-      if (handyman?.distance) {
-        const dist = Number(handyman.distance);
-        if (Number.isFinite(dist) && dist > 0) {
-          if (dist < 1) return `${Math.round(dist * 1000)} מ' ממך`;
-          return `${dist.toFixed(1)} ק"מ ממך`;
-        }
-      }
-      return "מרחק לא זמין";
-    },
-    getStatusText(handyman) {
-      // Check if handyman is available
-      if (handyman?.isAvailable !== false) {
-        return "זמין עכשיו";
-      }
-      return "לא זמין";
-    },
-    getCategories(handyman) {
-      const out = [];
-      const full = Array.isArray(handyman?.fullCategories) ? handyman.fullCategories : [];
-      for (const c of full) {
-        const s = String(c || "").trim();
-        if (s) out.push(s);
-      }
-      if (!out.length) {
-        const specs = Array.isArray(handyman?.specialties) ? handyman.specialties : [];
-        for (const sp of specs) {
-          const name = typeof sp === "string" ? sp : sp?.name;
-          const s = String(name || "").trim();
-          if (s) out.push(s);
-        }
-      }
-      const seen = new Set();
-      return out.filter((x) => {
-        if (seen.has(x)) return false;
-        seen.add(x);
-        return true;
-      });
-    },
-    getVisibleCategories(handyman, max = 2) {
-      const cats = this.getCategories(handyman);
-      return cats.slice(0, max);
-    },
-    onCarouselScroll() {
-      // Update current carousel page based on scroll position
-      const carousel = this.$refs.handymanCarousel;
-      if (!carousel) return;
-      const scrollLeft = carousel.scrollLeft;
-      const cardWidth = carousel.querySelector('.client-dashboard-new__card')?.offsetWidth || 0;
-      if (cardWidth > 0) {
-        this.currentCarouselPage = Math.round(scrollLeft / cardWidth);
-      }
-    },
-    getActivityItemClass(job) {
-      if (job.status === "done") return "client-dashboard-new__activity-item--success";
-      if (job.status === "in_progress" || job.status === "assigned") return "client-dashboard-new__activity-item--primary";
-      return "";
-    },
-    getJobStatusText(job) {
-      if (job.status === "done") return "הושלם";
-      if (job.status === "in_progress" || job.status === "assigned") return "בביצוע";
-      return "פתוח";
-    },
-    getJobStatusIcon(job) {
-      if (job.status === "done") return "ph-fill ph-check-circle";
-      if (job.status === "in_progress" || job.status === "assigned") return "ph-fill ph-spinner";
-      return "ph-fill ph-clock";
-    },
-    getJobTitle(job) {
-      if (job.subcategoryInfo && job.subcategoryInfo.length > 0) {
-        return job.subcategoryInfo.map(s => s.subcategory || s.category).join(", ");
-      }
-      return job.desc || "עבודה";
-    },
-    formatJobTime(job) {
-      if (!job.createdAt && !job.updatedAt) return "";
-      const date = job.updatedAt || job.createdAt;
-      const jobDate = new Date(date);
-      const now = new Date();
-      const diffMs = now - jobDate;
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-      const hours = jobDate.getHours();
-      const minutes = String(jobDate.getMinutes()).padStart(2, '0');
-      
-      if (diffDays === 0) {
-        return `היום • ${hours}:${minutes}`;
-      } else if (diffDays === 1) {
-        return `אתמול • ${hours}:${minutes}`;
-      } else if (diffDays < 7) {
-        return `לפני ${diffDays} ימים • ${hours}:${minutes}`;
-      }
-      return jobDate.toLocaleDateString('he-IL');
-    },
-    getJobIcon(job) {
-      // Return icon based on job category
-      if (job.subcategoryInfo && job.subcategoryInfo.length > 0) {
-        const category = job.subcategoryInfo[0].category || job.subcategoryInfo[0].subcategory || "";
-        if (category.includes("נזילה") || category.includes("אינסטלציה")) return "ph-fill ph-drop";
-        if (category.includes("חשמל") || category.includes("תאורה")) return "ph-fill ph-lamp";
-        if (category.includes("צבע")) return "ph-fill ph-paint-brush";
-      }
-      return "ph-fill ph-wrench";
-    },
     // Handyman new design methods
     toggleAvailability() {
       this.isAvailable = !this.isAvailable;
@@ -8387,7 +8069,8 @@ $r2: 26px;
     position: relative;
     z-index: 100;
     padding: 0;
-    margin: 10px 0 10px 0;
+    margin: 10px auto;
+    width: 80%;
     backdrop-filter: none;
   }
 }
@@ -8493,6 +8176,7 @@ $r2: 26px;
 .client-actions-desktop {
   display: block; // Visible on desktop
   width: 100%;
+  margin: 0 auto;
 
   @media (max-width: 768px) {
     display: none; // Hidden on mobile
@@ -11807,22 +11491,23 @@ $r2: 26px;
 .client-dashboard-new {
   position: relative;
   z-index: 10;
+  width: 100%;
   max-width: 100%;
-  margin: 0 auto;
-  padding: 0 20px;
+  margin: 0;
+  padding: 0;
   padding-top: 0;
   padding-bottom: 100px;
   direction: rtl;
+  text-align: right;
 }
 
 .client-dashboard-new__section {
   margin-bottom: 32px;
+  padding: 0 20px;
   direction: rtl;
   text-align: right;
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  box-sizing: border-box;
 }
 
 .client-dashboard-new__section-header {
@@ -11842,6 +11527,7 @@ $r2: 26px;
   align-items: center;
   gap: 8px;
   margin: 0;
+  direction: rtl;
 }
 
 .client-dashboard-new__title-accent {
@@ -11859,6 +11545,7 @@ $r2: 26px;
   align-items: center;
   gap: 8px;
   margin: 0 0 16px 0;
+  direction: rtl;
 }
 
 .client-dashboard-new__title-accent-small {
@@ -11903,37 +11590,24 @@ $r2: 26px;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  padding-bottom: 8px;
-  padding-right: 0;
-  padding-left: 0;
-  justify-content: flex-start;
-  align-items: center;
+  padding: 8px 0;
   direction: rtl;
   text-align: right;
-  width: 100%;
-}
-
-.client-dashboard-new__carousel-spacer {
-  flex: 1 1 0;
-  min-width: 0;
-  flex-shrink: 1;
-  order: -1;
+  width: calc(100% + 40px);
+  margin-right: -20px;
+  margin-left: -20px;
+  padding-right: 20px;
+  padding-left: 20px;
 }
 
 .client-dashboard-new__carousel::-webkit-scrollbar {
   display: none;
 }
 
-.client-dashboard-new__carousel::after {
-  content: '';
-  flex: 0 0 0;
-  min-width: 0;
-}
-
 .client-dashboard-new__card {
-  flex: 0 0 calc(100% - 32px);
-  min-width: calc(100% - 32px);
-  max-width: calc(100% - 32px);
+  flex: 0 0 calc(100% - 24px);
+  min-width: calc(100% - 24px);
+  max-width: calc(100% - 24px);
   scroll-snap-align: start;
   background: #09090B;
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -11942,6 +11616,7 @@ $r2: 26px;
   transition: all 0.3s;
   direction: rtl;
   text-align: right;
+  box-sizing: border-box;
 }
 
 .client-dashboard-new__card--blocked {
@@ -12210,10 +11885,11 @@ $r2: 26px;
 /* Carousel Pagination */
 .client-dashboard-new__pagination {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
   gap: 8px;
   margin-top: 16px;
+  direction: rtl;
 }
 
 .client-dashboard-new__pagination-dot {
@@ -12266,6 +11942,16 @@ $r2: 26px;
   background: rgba(255, 95, 0, 0.05);
 }
 
+.client-dashboard-new__activity-item--success {
+  border-color: rgba(0, 224, 85, 0.3);
+  background: rgba(0, 224, 85, 0.05);
+}
+
+.client-dashboard-new__activity-item--primary {
+  border-color: rgba(255, 95, 0, 0.3);
+  background: rgba(255, 95, 0, 0.05);
+}
+
 .client-dashboard-new__activity-status {
   display: flex;
   align-items: center;
@@ -12292,6 +11978,8 @@ $r2: 26px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  text-align: right;
+  direction: rtl;
 }
 
 .client-dashboard-new__activity-title {

@@ -17,7 +17,6 @@
         aria-label="איך זה עובד"
       >
         <span class="tile__txt">איך זה עובד</span>
-        <span class="tile__q" aria-hidden="true">?</span>
       </button>
     </div>
   </section>
@@ -49,19 +48,21 @@ $orange2: #ea580c;
 
 .tile {
   flex: 1 1 0;
-  width: auto;
+  min-width: 0;
+  width: 0;
   height: 64px;
   border-radius: 18px;
-  padding: 10px 12px;
+  padding: 10px 20px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 10px;
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
   transition: transform 120ms ease, filter 120ms ease;
+  box-sizing: border-box;
 
   &:active {
     transform: scale(0.98);
@@ -85,24 +86,8 @@ $orange2: #ea580c;
   gap: 10px;
 }
 
-.tile--secondary .tile__txt {
-  white-space: nowrap;
-}
-
-.tile__q {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  font-weight: 1200;
-  font-size: 18px;
-  color: $orange;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
 .tile__txt {
+  white-space: nowrap;
   font-weight: 1100;
   font-size: 17px;
   letter-spacing: -0.2px;
@@ -111,7 +96,7 @@ $orange2: #ea580c;
 @media (max-width: 420px) {
   .tile {
     height: 60px;
-    padding: 9px 10px;
+    padding: 9px 16px;
   }
   .tile__txt {
     font-size: 16px;

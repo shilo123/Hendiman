@@ -1,182 +1,170 @@
 <template>
-  <section class="hc" aria-label="הנדימנים באזורך">
-    <div ref="track" class="hc__track" @scroll.passive="onTrackScroll">
-      <div v-for="(page, pageIndex) in pages" :key="pageIndex" class="hc__page">
-        <article
-          v-for="h in page"
-          :key="h.id || h._id"
-          class="hcCard"
-          :class="{ 'hcCard--blocked': h.isBlocked }"
+  <div class="client-dashboard-new" dir="rtl">
+    <!-- Recommended Handymen Section -->
+    <div class="client-dashboard-new__section">
+      <div class="client-dashboard-new__section-header">
+        <h2 class="client-dashboard-new__section-title">
+          <span class="client-dashboard-new__title-accent"></span>
+          מומלצים עבורך
+        </h2>
+        <button
+          type="button"
+          class="client-dashboard-new__filter-btn"
+          aria-label="סינון"
         >
-          <div class="hcCard__top">
-            <div class="hcCard__who">
-              <div class="hcCard__avatar">
-                <img
-                  class="hcCard__img"
-                  :src="getHandymanImage(h)"
-                  alt=""
-                  @error="onImageError"
-                  loading="lazy"
-                  decoding="async"
-                />
-                <span class="hcCard__ring"></span>
+          סינון
+          <i class="ph ph-sliders-horizontal"></i>
+        </button>
+      </div>
 
+      <!-- Handymen Carousel -->
+      <div
+        ref="handymanCarousel"
+        class="client-dashboard-new__carousel"
+        @scroll="onCarouselScroll"
+      >
+        <div
+          v-for="(handyman, index) in filteredHandymen"
+          :key="handyman.id || handyman._id"
+          class="client-dashboard-new__card"
+          :class="{ 'client-dashboard-new__card--blocked': handyman.isBlocked }"
+        >
+          <div class="client-dashboard-new__card-content">
+            <div class="client-dashboard-new__card-top">
+              <div class="client-dashboard-new__card-header">
+                <div class="client-dashboard-new__avatar-wrapper">
+                  <div
+                    class="client-dashboard-new__avatar-border"
+                    :class="{
+                      'client-dashboard-new__avatar-border--pro': index === 0,
+                      'client-dashboard-new__avatar-border--hover': index > 0
+                    }"
+                  >
+                    <img
+                      :src="getHandymanImage(handyman)"
+                      :alt="handyman.username"
+                      class="client-dashboard-new__avatar-img"
+                      :class="{
+                        'client-dashboard-new__avatar-img--grayscale': index === 2,
+                        'client-dashboard-new__avatar-img--sepia': index === 3
+                      }"
+                      @error="onHandymanImageError"
+                    />
+                  </div>
+                  <div class="client-dashboard-new__rating-badge">
+                    <span class="client-dashboard-new__rating-value">{{
+                      formatHandymanRating(handyman)
+                    }}</span>
+                    <i class="ph-fill ph-star client-dashboard-new__rating-star"></i>
+                  </div>
+                </div>
+                <div class="client-dashboard-new__card-info">
+                  <h3 class="client-dashboard-new__card-name">
+                    {{ handyman.username }}
+                  </h3>
+                  <div class="client-dashboard-new__card-location">
+                    <i class="ph-fill ph-map-pin"></i>
+                    <span>{{ getCityText(handyman) }}</span>
+                    <span class="client-dashboard-new__location-separator">•</span>
+                    <span>{{ formatDistance(handyman) }}</span>
+                  </div>
+                  <div class="client-dashboard-new__card-status">
+                    <div class="client-dashboard-new__status-dot"></div>
+                    <span class="client-dashboard-new__status-text">
+                      {{ getStatusText(handyman) }}
+                    </span>
+                  </div>
+                </div>
                 <button
-                  class="hcCard__avatarBtn"
                   type="button"
-                  aria-label="פרטים"
-                  @click="$emit('view-details', h.id || h._id)"
+                  class="client-dashboard-new__details-btn"
+                  @click="$emit('view-details', handyman.id || handyman._id)"
                 >
-                  <font-awesome-icon :icon="['fas', 'info-circle']" />
+                  פרטים
+                  <i class="ph-bold ph-caret-left"></i>
                 </button>
               </div>
-
-              <div class="hcCard__info">
-                <h3 class="hcCard__name" :title="h.username">
-                  {{ h.username }}
-                </h3>
-
-                <div class="hcCard__meta">
-                  <font-awesome-icon
-                    :icon="['fas', 'location-dot']"
-                    class="hcCard__metaIc"
-                  />
-                  <span class="hcCard__metaTxt">{{ getCityText(h) }}</span>
-                </div>
-
-                <div class="hcCard__travel" v-if="isInSameCity(h)">
-                  <font-awesome-icon
-                    :icon="['fas', 'location-dot']"
-                    class="hcCard__travelIc"
-                  />
-                  <span class="hcCard__travelTxt">בעיר שלך</span>
-                </div>
-
-                <div class="hcCard__travel" v-else-if="hasTravelTime(h)">
-                  <font-awesome-icon
-                    :icon="['fas', 'car']"
-                    class="hcCard__travelIc"
-                  />
-                  <span class="hcCard__travelTxt">מרחק נסיעה: {{ formatTravelTime(h) }}</span>
-                </div>
-
-                <div class="hcCard__rating" v-if="hasRating(h)">
-                  <span class="hcCard__ratingNum">{{
-                    formatRating(h.rating)
-                  }}</span>
-                  <font-awesome-icon
-                    :icon="['fas', 'star']"
-                    class="hcCard__star"
-                  />
-                  <span class="hcCard__ratingCount"
-                    >({{ getRatingCount(h) }})</span
-                  >
-                </div>
-                <div v-else class="hcCard__rating hcCard__rating--empty">
-                  אין דירוג
-                </div>
+              <div
+                v-if="getCategories(handyman).length"
+                class="client-dashboard-new__card-categories"
+              >
+                <span
+                  v-for="category in getVisibleCategories(handyman, 2)"
+                  :key="category"
+                  class="client-dashboard-new__category-tag"
+                >
+                  {{ category }}
+                </span>
               </div>
             </div>
-
-            <span class="hcCard__spacer" aria-hidden="true"></span>
-
-            <button
-              class="hcCard__detailsBtn"
-              type="button"
-              @click="$emit('view-details', h.id || h._id)"
-            >
-              פרטים
-              <span class="hcCard__detailsArrow" aria-hidden="true">›</span>
-            </button>
-          </div>
-
-          <div
-            class="hcCard__cats"
-            v-if="getCategories(h).length"
-            aria-label="תחומי התמחות"
-          >
-            <div class="hcCard__catsTrack" role="list">
-              <span
-                v-for="c in getVisibleCategories(h)"
-                :key="c"
-                class="hcCard__cat"
-                role="listitem"
-              >
-                {{ c }}
-              </span>
-
+            <div class="client-dashboard-new__card-actions">
               <button
-                v-if="getMoreCategoriesCount(h) > 0"
                 type="button"
-                class="hcCard__cat hcCard__catBtn"
-                :class="{
-                  'hcCard__catBtn--less': isCategoriesExpanded(h),
-                  'hcCard__catBtn--more': !isCategoriesExpanded(h),
-                }"
-                :aria-label="
-                  isCategoriesExpanded(h)
-                    ? 'הסתר תחומי התמחות נוספים'
-                    : `הצג עוד ${getMoreCategoriesCount(h)} תחומי התמחות`
-                "
-                @click="toggleCategories(h)"
+                class="client-dashboard-new__action-btn client-dashboard-new__action-btn--primary"
+                @click="$emit('personal-request', handyman.id || handyman._id)"
               >
-                {{
-                  isCategoriesExpanded(h)
-                    ? "פחות"
-                    : `${getMoreCategoriesCount(h)}+`
-                }}
+                שלח קריאה
+                <i class="ph-fill ph-paper-plane-left"></i>
+              </button>
+              <button
+                type="button"
+                class="client-dashboard-new__action-btn client-dashboard-new__action-btn--block"
+                @click="$emit('block-handyman', handyman.id || handyman._id, handyman.isBlocked)"
+              >
+                <i class="ph-bold ph-prohibit"></i>
+                חסום
               </button>
             </div>
           </div>
-
-          <div class="hcCard__actions">
-            <button
-              class="hcBtn hcBtn--primary"
-              type="button"
-              @click="$emit('personal-request', h.id || h._id)"
-            >
-              <font-awesome-icon
-                :icon="['fas', 'calendar']"
-                class="hcBtn__ic"
-              />
-              הזמן
-            </button>
-
-            <button
-              class="hcBtn"
-              :class="h.isBlocked ? 'hcBtn--muted' : 'hcBtn--block'"
-              type="button"
-              @click="$emit('block-handyman', h.id || h._id, h.isBlocked)"
-            >
-              <font-awesome-icon
-                :icon="h.isBlocked ? ['fas', 'unlock'] : ['fas', 'ban']"
-                class="hcBtn__ic"
-              />
-              {{ h.isBlocked ? "בטל" : "חסום" }}
-            </button>
-          </div>
-        </article>
+        </div>
       </div>
 
-      <div class="hc__endSpacer" aria-hidden="true"></div>
+      <!-- Carousel Pagination Dots -->
+      <div class="client-dashboard-new__pagination">
+        <div
+          v-for="(dot, index) in carouselPages"
+          :key="index"
+          class="client-dashboard-new__pagination-dot"
+          :class="{ 'client-dashboard-new__pagination-dot--active': index === currentCarouselPage }"
+        ></div>
+      </div>
     </div>
 
-    <div class="hc__dots" v-if="visibleDotIndexes.length > 1">
-      <button
-        v-for="idx in visibleDotIndexes"
-        :key="idx"
-        type="button"
-        class="hc__dot"
-        :class="{ 'hc__dot--on': idx === activePage }"
-        :aria-label="`מעבר לעמוד ${idx + 1}`"
-        @click="scrollToPage(idx)"
-      ></button>
+    <!-- Recent Activity Section -->
+    <div class="client-dashboard-new__section">
+      <h2 class="client-dashboard-new__section-title-small">
+        <span class="client-dashboard-new__title-accent-small"></span>
+        פעילות אחרונה
+      </h2>
+      <div class="client-dashboard-new__activity-list">
+        <div
+          v-for="job in recentJobs"
+          :key="job.id || job._id"
+          class="client-dashboard-new__activity-item"
+          :class="getActivityItemClass(job)"
+          @click="$emit('view-job', job.id || job._id)"
+        >
+          <div class="client-dashboard-new__activity-status">
+            <span class="client-dashboard-new__activity-status-text">{{
+              getJobStatusText(job)
+            }}</span>
+            <i :class="getJobStatusIcon(job)"></i>
+          </div>
+          <div class="client-dashboard-new__activity-content">
+            <h4 class="client-dashboard-new__activity-title">
+              {{ getJobTitle(job) }}
+            </h4>
+            <p class="client-dashboard-new__activity-time">
+              {{ formatJobTime(job) }}
+            </p>
+          </div>
+          <div class="client-dashboard-new__activity-icon">
+            <i :class="getJobIcon(job)"></i>
+          </div>
+        </div>
+      </div>
     </div>
-
-    <div class="hc__loading" v-if="loadingNext" aria-live="polite">
-      טוען עוד הנדימנים…
-    </div>
-  </section>
+  </div>
 </template>
 
 <script>
@@ -184,285 +172,33 @@ export default {
   name: "HandymenList",
   props: {
     filteredHandymen: { type: Array, required: true },
-    pagination: { type: Object, required: true },
+    recentJobs: { type: Array, default: () => [] },
   },
-  emits: [
-    "view-details",
-    "personal-request",
-    "next-page",
-    "prev-page",
-    "block-handyman",
-  ],
+  emits: ["view-details", "personal-request", "block-handyman", "view-job"],
   data() {
     return {
-      activePage: 0,
-      loadingNext: false,
-      expandedCategoriesByKey: {},
+      _currentCarouselPage: 0,
     };
   },
   computed: {
-    safeHandymen() {
-      return Array.isArray(this.filteredHandymen) ? this.filteredHandymen : [];
+    carouselPages() {
+      const total = this.filteredHandymen?.length || 0;
+      const itemsPerPage = 1;
+      return Math.ceil(total / itemsPerPage);
     },
-    pages() {
-      const out = [];
-      for (let i = 0; i < this.safeHandymen.length; i += 3) {
-        out.push(this.safeHandymen.slice(i, i + 3));
-      }
-      return out;
+    currentCarouselPage: {
+      get() {
+        return this._currentCarouselPage || 0;
+      },
+      set(value) {
+        this._currentCarouselPage = value;
+      },
     },
-    visibleDotIndexes() {
-      const total = this.pages.length;
-      if (total <= 1) return [];
-      const windowSize = Math.min(5, total);
-      const half = Math.floor(windowSize / 2);
-      let start = Math.max(0, this.activePage - half);
-      let end = start + windowSize - 1;
-      if (end >= total) {
-        end = total - 1;
-        start = Math.max(0, end - (windowSize - 1));
-      }
-      const out = [];
-      for (let i = start; i <= end; i++) out.push(i);
-      return out;
-    },
-  },
-  watch: {
-    filteredHandymen() {
-      this.loadingNext = false;
-      this.$nextTick(() => this.syncActivePage());
-    },
-    "pagination.currentPage"() {
-      this.loadingNext = false;
-      this.$nextTick(() => {
-        this.activePage = 0;
-        this.scrollToPage(0);
-      });
-    },
-    "pagination.page"() {
-      this.loadingNext = false;
-      this.$nextTick(() => {
-        this.activePage = 0;
-        this.scrollToPage(0);
-      });
-    },
-  },
-  mounted() {
-    this.syncActivePage();
-  },
-  beforeUnmount() {
-    // no-op
   },
   methods: {
-    getHandymanKey(h) {
-      return String(h?.id || h?._id || h?.userId || h?.username || "");
-    },
-    isCategoriesExpanded(h) {
-      const k = this.getHandymanKey(h);
-      return !!(k && this.expandedCategoriesByKey[k]);
-    },
-    toggleCategories(h) {
-      const k = this.getHandymanKey(h);
-      if (!k) return;
-      this.expandedCategoriesByKey[k] = !this.expandedCategoriesByKey[k];
-    },
-    getMoreCategoriesCount(h) {
-      const cats = this.getCategories(h);
-      return cats.length > 2 ? cats.length - 2 : 0;
-    },
-    getVisibleCategories(h) {
-      const cats = this.getCategories(h);
-      if (cats.length <= 2) return cats;
-      return this.isCategoriesExpanded(h) ? cats : cats.slice(0, 2);
-    },
-    onTrackScroll() {
-      this.syncActivePage();
-    },
-    syncActivePage() {
-      const el = this.$refs.track;
-      if (!el) return;
-
-      const pageEls = el.querySelectorAll?.(".hc__page") || [];
-      if (!pageEls.length) {
-        this.activePage = 0;
-        return;
-      }
-
-      const dir = window.getComputedStyle(el).direction;
-      const trackRect = el.getBoundingClientRect();
-
-      let bestIndex = 0;
-      let bestDist = Infinity;
-      pageEls.forEach((p, idx) => {
-        const r = p.getBoundingClientRect();
-        const anchor = dir === "rtl" ? r.right : r.left;
-        const trackAnchor = dir === "rtl" ? trackRect.right : trackRect.left;
-        const dist = Math.abs(anchor - trackAnchor);
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestIndex = idx;
-        }
-      });
-
-      this.activePage = Math.max(0, Math.min(this.pages.length - 1, bestIndex));
-      this.maybeLoadNext();
-    },
-    scrollToPage(index) {
-      const el = this.$refs.track;
-      if (!el) return;
-      const pageEls = el.querySelectorAll?.(".hc__page") || [];
-      const target = pageEls?.[index];
-      if (!target) return;
-      const dir = window.getComputedStyle(el).direction;
-      target.scrollIntoView({
-        behavior: "smooth",
-        inline: dir === "rtl" ? "end" : "start",
-        block: "nearest",
-      });
-    },
-    maybeLoadNext() {
-      const hasNext = !!this.pagination?.hasNext;
-      if (!hasNext || this.loadingNext) return;
-      if (this.pages.length < 1) return;
-      if (this.activePage >= this.pages.length - 1) {
-        this.loadingNext = true;
-        this.$emit("next-page");
-      }
-    },
-    hasRating(h) {
-      const r = Number(h?.rating);
-      return Number.isFinite(r) && r > 0;
-    },
-    formatRating(rating) {
-      if (rating === null || rating === undefined) return "0.0";
-      const numRating = Number(rating);
-      if (isNaN(numRating)) return "0.0";
-      return numRating % 1 === 0 ? numRating.toFixed(0) : numRating.toFixed(1);
-    },
-    getRatingCount(h) {
-      const c =
-        h?.ratingCount ??
-        h?.ratingsCount ??
-        h?.reviewsCount ??
-        h?.reviewCount ??
-        h?.ratings?.length ??
-        h?.reviews?.length ??
-        0;
-      const n = Number(c);
-      return Number.isFinite(n) && n >= 0 ? n : 0;
-    },
-    toText(val) {
-      if (val === null || val === undefined) return "";
-      if (typeof val === "string") return val.trim();
-      if (typeof val === "number") return String(val);
-      if (Array.isArray(val)) {
-        for (const item of val) {
-          const t = this.toText(item);
-          if (t) return t;
-        }
-        return "";
-      }
-      if (typeof val === "object") {
-        // try common keys we use across the app/db
-        return (
-          this.toText(val.city) ||
-          this.toText(val.selectedCity) ||
-          this.toText(val.cityName) ||
-          this.toText(val.town) ||
-          this.toText(val.locality) ||
-          this.toText(val.settlement) ||
-          this.toText(val.place) ||
-          this.toText(val.name) ||
-          this.toText(val["שם_ישוב"]) ||
-          this.toText(val["שם"]) ||
-          this.toText(val.hebrewName) ||
-          this.toText(val.nameHe) ||
-          this.toText(val.englishName) ||
-          this.toText(val.nameEn) ||
-          this.toText(val.label) ||
-          this.toText(val.value) ||
-          ""
-        );
-      }
-      return "";
-    },
-    getCityText(h) {
-      // NOTE: some data uses 'adress' (typo) and sometimes nested address objects
-      const direct = this.toText(h?.city);
-      if (direct) return direct;
-
-      const addressObj = h?.address ?? h?.adress ?? h?.Adress ?? null;
-      const fromAddress =
-        this.toText(addressObj?.city) ||
-        this.toText(addressObj?.selectedCity) ||
-        this.toText(addressObj?.cityName) ||
-        this.toText(addressObj?.name) ||
-        this.toText(addressObj);
-      if (fromAddress) return fromAddress;
-
-      const locationText = this.toText(h?.locationText);
-      if (locationText) return locationText;
-
-      const location = this.toText(h?.location);
-      if (location) return location;
-
-      return "";
-    },
-    formatCityTravel(h) {
-      const city = this.getCityText(h);
-      return city || "לא צוין";
-    },
-    isInSameCity(h) {
-      const mins = Number(
-        h?.travelTimeMinutes ?? h?.durationMinutes ?? h?.travelMinutes
-      );
-      return Number.isFinite(mins) && mins === 0;
-    },
-    hasTravelTime(h) {
-      const mins = Number(
-        h?.travelTimeMinutes ?? h?.durationMinutes ?? h?.travelMinutes
-      );
-      return Number.isFinite(mins) && mins > 0;
-    },
-    formatTravelTime(h) {
-      const mins = Number(
-        h?.travelTimeMinutes ?? h?.durationMinutes ?? h?.travelMinutes
-      );
-      if (Number.isFinite(mins) && mins > 0) {
-        return `${mins} דק'`;
-      }
-      return "";
-    },
-    getCategories(h) {
-      const out = [];
-
-      const full = Array.isArray(h?.fullCategories) ? h.fullCategories : [];
-      for (const c of full) {
-        const s = String(c || "").trim();
-        if (s) out.push(s);
-      }
-
-      if (!out.length) {
-        const specs = Array.isArray(h?.specialties) ? h.specialties : [];
-        for (const sp of specs) {
-          const name = typeof sp === "string" ? sp : sp?.name;
-          const s = String(name || "").trim();
-          if (s) out.push(s);
-        }
-      }
-
-      // de-dup while preserving order
-      const seen = new Set();
-      return out.filter((x) => {
-        if (seen.has(x)) return false;
-        seen.add(x);
-        return true;
-      });
-    },
     getHandymanImage(handyman) {
       const defaultImage = "/img/Hendima-logo.png";
       if (!handyman || !handyman.imageUrl) return defaultImage;
-
       const imageUrl = handyman.imageUrl;
       if (
         typeof imageUrl !== "string" ||
@@ -476,1027 +212,689 @@ export default {
       }
       return imageUrl;
     },
-    onImageError(event) {
-      const defaultImage = "/img/Hendima-logo.png";
-      if (
-        event.target.src !== defaultImage &&
-        !event.target.src.includes("Hendima-logo.png")
-      ) {
-        event.target.src = defaultImage;
+    onHandymanImageError(event) {
+      event.target.src = "/img/Hendima-logo.png";
+    },
+    getCityText(handyman) {
+      // Check direct city field
+      if (handyman?.city) {
+        const city = String(handyman.city).trim();
+        if (city) return city;
+      }
+      
+      // Check address object (can be string or object)
+      const addressObj = handyman?.address ?? handyman?.adress ?? handyman?.Adress ?? null;
+      if (addressObj) {
+        // If address is a string, use it directly
+        if (typeof addressObj === 'string') {
+          const addr = addressObj.trim();
+          if (addr) return addr;
+        }
+        // If address is an object, check various city fields
+        if (typeof addressObj === 'object') {
+          const city = addressObj?.city || 
+                      addressObj?.selectedCity || 
+                      addressObj?.cityName || 
+                      addressObj?.name;
+          if (city) {
+            const cityStr = String(city).trim();
+            if (cityStr) return cityStr;
+          }
+        }
+      }
+      
+      // Check locationText
+      if (handyman?.locationText) {
+        const loc = String(handyman.locationText).trim();
+        if (loc) return loc;
+      }
+      
+      // Check location as string
+      if (handyman?.location && typeof handyman.location === 'string') {
+        const loc = handyman.location.trim();
+        if (loc) return loc;
+      }
+      
+      // Try to get from location.formatted_address if available
+      if (handyman?.location?.formatted_address) {
+        const addr = handyman.location.formatted_address;
+        const parts = addr.split(',');
+        if (parts.length > 0) {
+          const city = parts[0].trim();
+          if (city) return city;
+        }
+      }
+      
+      return "מיקום לא זמין";
+    },
+    formatHandymanRating(handyman) {
+      const rating = Number(handyman?.rating);
+      if (!Number.isFinite(rating) || rating <= 0) return "0.0";
+      return rating % 1 === 0 ? rating.toFixed(0) : rating.toFixed(1);
+    },
+    formatDistance(handyman) {
+      // Show travel time from MapBox if available
+      if (handyman?.travelTimeMinutes !== null && handyman?.travelTimeMinutes !== undefined) {
+        const time = Number(handyman.travelTimeMinutes);
+        if (Number.isFinite(time) && time >= 0) {
+          if (time === 0) return "באותו מקום";
+          if (time < 60) return `${time} דק'`;
+          const hours = Math.floor(time / 60);
+          const minutes = time % 60;
+          if (minutes === 0) return `${hours} ש'`;
+          return `${hours} ש' ${minutes} דק'`;
+        }
+      }
+      // Fallback to distance if travel time not available
+      if (handyman?.distance) {
+        const dist = Number(handyman.distance);
+        if (Number.isFinite(dist) && dist > 0) {
+          if (dist < 1) return `${Math.round(dist * 1000)} מ'`;
+          return `${dist.toFixed(1)} ק"מ`;
+        }
+      }
+      return "מרחק לא זמין";
+    },
+    getStatusText(handyman) {
+      // Check if handyman is available
+      if (handyman?.isAvailable !== false) {
+        return "זמין עכשיו";
+      }
+      return "לא זמין";
+    },
+    getCategories(handyman) {
+      const out = [];
+      const full = Array.isArray(handyman?.fullCategories) ? handyman.fullCategories : [];
+      for (const c of full) {
+        const s = String(c || "").trim();
+        if (s) out.push(s);
+      }
+      if (!out.length) {
+        const specs = Array.isArray(handyman?.specialties) ? handyman.specialties : [];
+        for (const sp of specs) {
+          const name = typeof sp === "string" ? sp : sp?.name;
+          const s = String(name || "").trim();
+          if (s) out.push(s);
+        }
+      }
+      const seen = new Set();
+      return out.filter((x) => {
+        if (seen.has(x)) return false;
+        seen.add(x);
+        return true;
+      });
+    },
+    getVisibleCategories(handyman, max = 2) {
+      const cats = this.getCategories(handyman);
+      return cats.slice(0, max);
+    },
+    onCarouselScroll() {
+      // Update current carousel page based on scroll position
+      const carousel = this.$refs.handymanCarousel;
+      if (!carousel) return;
+      const scrollLeft = carousel.scrollLeft;
+      const cardWidth = carousel.querySelector('.client-dashboard-new__card')?.offsetWidth || 0;
+      if (cardWidth > 0) {
+        this.currentCarouselPage = Math.round(scrollLeft / cardWidth);
       }
     },
-    getHandymanLogo(handyman) {
-      const defaultLogo = "/img/Hendima-logo.png";
-      if (!handyman || !handyman.logoUrl) return defaultLogo;
-
-      const logoUrl = handyman.logoUrl;
-      if (
-        typeof logoUrl !== "string" ||
-        logoUrl.trim() === "" ||
-        logoUrl.includes("demo") ||
-        (!logoUrl.startsWith("http") && !logoUrl.startsWith("/"))
-      ) {
-        return defaultLogo;
-      }
-      return logoUrl;
+    getActivityItemClass(job) {
+      if (job.status === "done") return "client-dashboard-new__activity-item--success";
+      if (job.status === "in_progress" || job.status === "assigned") return "client-dashboard-new__activity-item--primary";
+      return "";
     },
-    onLogoError(event) {
-      const defaultLogo = "/img/Hendima-logo.png";
-      if (
-        event.target.src !== defaultLogo &&
-        !event.target.src.includes("Hendima-logo.png")
-      ) {
-        event.target.src = defaultLogo;
+    getJobStatusText(job) {
+      if (job.status === "done") return "הושלם";
+      if (job.status === "in_progress" || job.status === "assigned") return "בביצוע";
+      return "פתוח";
+    },
+    getJobStatusIcon(job) {
+      if (job.status === "done") return "ph-fill ph-check-circle";
+      if (job.status === "in_progress" || job.status === "assigned") return "ph-fill ph-spinner";
+      return "ph-fill ph-clock";
+    },
+    getJobTitle(job) {
+      if (job.subcategoryInfo && job.subcategoryInfo.length > 0) {
+        return job.subcategoryInfo.map(s => s.subcategory || s.category).join(", ");
       }
+      return job.desc || "עבודה";
+    },
+    formatJobTime(job) {
+      if (!job.createdAt && !job.updatedAt) return "";
+      const date = job.updatedAt || job.createdAt;
+      const jobDate = new Date(date);
+      const now = new Date();
+      const diffMs = now - jobDate;
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const hours = jobDate.getHours();
+      const minutes = String(jobDate.getMinutes()).padStart(2, '0');
+      
+      if (diffDays === 0) {
+        return `היום • ${hours}:${minutes}`;
+      } else if (diffDays === 1) {
+        return `אתמול • ${hours}:${minutes}`;
+      } else if (diffDays < 7) {
+        return `לפני ${diffDays} ימים • ${hours}:${minutes}`;
+      }
+      return jobDate.toLocaleDateString('he-IL');
+    },
+    getJobIcon(job) {
+      // Return icon based on job category
+      if (job.subcategoryInfo && job.subcategoryInfo.length > 0) {
+        const category = job.subcategoryInfo[0].category || job.subcategoryInfo[0].subcategory || "";
+        if (category.includes("נזילה") || category.includes("אינסטלציה")) return "ph-fill ph-drop";
+        if (category.includes("חשמל") || category.includes("תאורה")) return "ph-fill ph-lamp";
+        if (category.includes("צבע")) return "ph-fill ph-paint-brush";
+      }
+      return "ph-fill ph-wrench";
     },
   },
 };
 </script>
 
 <style lang="scss" scoped>
-$orange: #f97316;
-$orange2: #ea580c;
-
-.hc {
+/* Client Dashboard New */
+.client-dashboard-new {
+  position: relative;
+  z-index: 10;
   width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  padding-top: 0;
+  padding-bottom: 100px;
+  direction: rtl;
+  text-align: right;
 }
 
-.hc__track {
+.client-dashboard-new__section {
+  margin-bottom: 32px;
+  padding: 0 20px;
+  direction: rtl;
+  text-align: right;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.client-dashboard-new__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  width: 100%;
+  direction: rtl;
+}
+
+.client-dashboard-new__section-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  direction: rtl;
+}
+
+.client-dashboard-new__title-accent {
+  width: 4px;
+  height: 20px;
+  background: linear-gradient(180deg, #FF5F00 0%, #FF8F00 100%);
+  border-radius: 2px;
+}
+
+.client-dashboard-new__section-title-small {
+  font-size: 16px;
+  font-weight: 900;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px 0;
+  direction: rtl;
+}
+
+.client-dashboard-new__title-accent-small {
+  width: 3px;
+  height: 16px;
+  background: linear-gradient(180deg, #FF5F00 0%, #FF8F00 100%);
+  border-radius: 2px;
+}
+
+.client-dashboard-new__filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.client-dashboard-new__filter-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 95, 0, 0.3);
+  color: #FF5F00;
+}
+
+.client-dashboard-new__filter-btn i {
+  font-size: 14px;
+}
+
+/* Handymen Carousel */
+.client-dashboard-new__carousel {
   display: flex;
   gap: 16px;
   overflow-x: auto;
-  padding: 0 16px;
-  direction: rtl;
+  overflow-y: hidden;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 8px 0;
+  direction: rtl;
+  text-align: right;
+  width: calc(100% + 40px);
+  margin-right: -20px;
+  margin-left: -20px;
+  padding-right: 20px;
+  padding-left: 20px;
 }
 
-.hc__track::-webkit-scrollbar {
+.client-dashboard-new__carousel::-webkit-scrollbar {
   display: none;
 }
 
-.hc__page {
-  flex: 0 0 calc(100% - 32px);
+.client-dashboard-new__card {
+  flex: 0 0 calc(100% - 24px);
+  min-width: calc(100% - 24px);
+  max-width: calc(100% - 24px);
   scroll-snap-align: start;
-  display: grid;
-  grid-template-rows: repeat(3, auto);
+  background: #09090B;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  padding: 20px;
+  transition: all 0.3s;
+  direction: rtl;
+  text-align: right;
+  box-sizing: border-box;
+}
+
+.client-dashboard-new__card--blocked {
+  opacity: 0.5;
+  filter: grayscale(100%);
+}
+
+.client-dashboard-new__card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.client-dashboard-new__card-top {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
-.hc__endSpacer {
-  flex: 0 0 20px;
-}
-
-.hcCard {
-  direction: rtl;
-  flex: 0 0 auto;
-  width: 100%;
-  border-radius: 26px;
-  padding: 12px;
-  background: linear-gradient(
-    165deg,
-    rgba(25, 25, 45, 0.7),
-    rgba(10, 10, 10, 0.98)
-  );
-  backdrop-filter: blur(25px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  position: relative;
-  display: grid;
-  grid-template-rows: auto auto 1fr;
-  gap: 10px;
-  color: rgba(255, 255, 255, 0.92);
-}
-
-.hcCard::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 26px;
-  pointer-events: none;
-  background: radial-gradient(
-    520px 220px at 90% 0%,
-    rgba(249, 115, 22, 0.12),
-    transparent 60%
-  );
-}
-
-.hcCard--blocked {
-  opacity: 0.78;
-}
-
-.hcCard__top {
+.client-dashboard-new__card-header {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.hcCard__who {
-  display: flex;
-  align-items: center;
   gap: 12px;
-  min-width: 0;
 }
 
-.hcCard__avatar {
-  width: 50px;
-  height: 50px;
-  border-radius: 999px;
+.client-dashboard-new__avatar-wrapper {
   position: relative;
-  flex: 0 0 auto;
+  flex-shrink: 0;
 }
 
-.hcCard__ring {
-  position: absolute;
-  inset: -3px;
-  border-radius: 999px;
-  border: 2px solid rgba(249, 115, 22, 0.35);
-  pointer-events: none;
+.client-dashboard-new__avatar-border {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  transition: all 0.3s;
 }
 
-.hcCard__avatarBtn {
-  position: absolute;
-  bottom: -4px;
-  left: -4px;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  border: 1px solid rgba(3, 3, 3, 0.8);
-  background: rgba(249, 115, 22, 0.95);
-  color: #0b0b0f;
-  display: grid;
-  place-items: center;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
-  cursor: pointer;
-
-  &:active {
-    transform: scale(0.92);
-  }
+.client-dashboard-new__avatar-border--pro {
+  background: linear-gradient(135deg, #FF5F00 0%, #FF8F00 100%);
+  box-shadow: 0 0 20px rgba(255, 95, 0, 0.4);
 }
 
-.hcCard__img {
+.client-dashboard-new__avatar-border--hover:hover {
+  background: rgba(255, 95, 0, 0.2);
+}
+
+.client-dashboard-new__avatar-img {
   width: 100%;
   height: 100%;
-  border-radius: 999px;
-  object-fit: cover;
-}
-
-.hcCard__info {
-  min-width: 0;
-}
-
-.hcCard__nameRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.hcCard__vip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 10px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #facc15, $orange);
-  color: #0b0b0f;
-  font-weight: 1100;
-  font-size: 12px;
-  line-height: 1;
-}
-
-.hcCard__name {
-  margin: 0;
-  font-weight: 1100;
-  font-size: 20px;
-  letter-spacing: -0.2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.hcCard__spacer {
-  width: 1px;
-}
-
-.hcCard__detailsBtn {
-  align-self: flex-start;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.92);
-  border-radius: 999px;
-  padding: 8px 12px;
-  font-weight: 1000;
-  font-size: 12px;
-  letter-spacing: 0.2px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-
-  &:active {
-    transform: scale(0.98);
-  }
-}
-
-.hcCard__detailsArrow {
-  color: rgba(249, 115, 22, 0.95);
-  font-size: 16px;
-  line-height: 1;
-  margin-top: -1px;
-}
-
-.hcCard__meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-  color: rgba(161, 161, 170, 0.95);
-}
-
-.hcCard__cats {
-  margin-top: -4px;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.hcCard__catsTrack {
-  display: flex;
-  direction: rtl;
-  flex-wrap: wrap;
-  gap: 8px;
-  row-gap: 8px;
-  max-width: 100%;
-  width: 100%;
-  padding: 4px 2px 0;
-  overflow: hidden;
-}
-
-.hcCard__cat {
-  flex: 0 0 auto;
-  max-width: 100%;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.hcCard__catBtn {
-  appearance: none;
-  -webkit-appearance: none;
-  font: inherit;
-  line-height: 1;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.08);
-  padding: 6px 10px;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.hcCard__catBtn--less {
-  background: rgba(249, 115, 22, 0.12);
-  border-color: rgba(249, 115, 22, 0.25);
-  color: rgba(249, 115, 22, 0.95);
-}
-
-.hcCard__catBtn--more {
-  background: rgba(249, 115, 22, 0.12);
-  border-color: rgba(249, 115, 22, 0.25);
-  color: rgba(249, 115, 22, 0.95);
-}
-
-.hc__loading {
-  margin-top: 10px;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 800;
-  color: rgba(249, 115, 22, 0.95);
-}
-
-.hcCard__metaIc {
-  font-size: 12px;
-  opacity: 0.9;
-}
-
-.hcCard__metaTxt {
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.hcCard__travel {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-  color: rgba(249, 115, 22, 0.9);
-}
-
-.hcCard__travelIc {
-  font-size: 11px;
-  opacity: 0.9;
-}
-
-.hcCard__travelTxt {
-  font-size: 11px;
-  font-weight: 800;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.hcCard__rating {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-  font-weight: 1000;
-}
-
-.hcCard__rating--empty {
-  color: rgba(161, 161, 170, 0.9);
-  font-weight: 800;
-}
-
-.hcCard__ratingNum {
-  color: rgba(255, 255, 255, 0.95);
-}
-
-.hcCard__star {
-  color: rgba(249, 115, 22, 0.95);
-}
-
-.hcCard__ratingCount {
-  color: rgba(113, 113, 122, 0.95);
-  font-weight: 800;
-  font-size: 12px;
-}
-
-.hcCard__pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-  width: fit-content;
-}
-
-.hcCard__pillIc {
-  color: $orange;
-  font-size: 14px;
-}
-
-.hcCard__pillTxt {
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.4px;
-}
-
-.hcCard__actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  align-items: end;
-}
-
-.hcBtn {
-  border-radius: 14px;
-  padding: 14px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.92);
-  font-weight: 1100;
-  font-size: 13px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: transform 120ms ease;
-
-  &:active {
-    transform: scale(0.98);
-  }
-}
-
-.hcBtn__ic {
-  font-size: 15px;
-}
-
-.hcBtn--primary {
-  background: linear-gradient(135deg, #fb923c, $orange2);
-  border: none;
-  color: #0b0b0f;
-  box-shadow: 0 8px 20px rgba(249, 115, 22, 0.25);
-}
-
-.hcBtn--block {
-  background: rgba(255, 50, 50, 0.03);
-  border: 1px solid rgba(255, 50, 50, 0.2);
-  color: rgba(255, 160, 160, 0.92);
-}
-
-.hcBtn--muted {
-  opacity: 0.85;
-}
-
-.hc__dots {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 14px 0 0;
-}
-
-.hc__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  border: none;
-  background: rgba(255, 255, 255, 0.2);
-  transition: width 180ms ease, background 180ms ease, box-shadow 180ms ease;
-}
-
-.hc__dot--on {
-  width: 26px;
-  background: rgba(34, 197, 94, 0.92);
-  box-shadow: 0 0 10px rgba(34, 197, 94, 0.45);
-}
-
-@media (max-width: 420px) {
-  .hcCard {
-    width: 78vw;
-    padding: 14px;
-  }
-  .hcCard__name {
-    font-size: 18px;
-  }
-  .hcBtn {
-    padding: 12px 10px;
-    font-size: 12px;
-  }
-}
-</style>
-
-<style lang="scss" scoped>
-$font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-  Arial, sans-serif;
-
-$bg: #0b0b0f;
-$text: rgba(255, 255, 255, 0.92);
-$muted: rgba(255, 255, 255, 0.62);
-
-$orange: #ff6a00;
-$orange2: #ff8a2b;
-
-@mixin focusRing {
-  outline: none;
-  box-shadow: 0 0 0 4px rgba($orange, 0.22);
-}
-
-.nearby {
-  font-family: $font-family;
-}
-
-/* Wrapper header: premium but light */
-.nearby__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 16px;
-  border: 1px solid rgba($orange, 0.16);
-  background: radial-gradient(
-      260px 120px at 10% 0%,
-      rgba($orange, 0.16),
-      transparent 60%
-    ),
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.06),
-      rgba(255, 255, 255, 0.035)
-    );
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
-  margin: 8px 0 10px;
-}
-
-.nearby__title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 1100;
-  color: $orange2;
-  line-height: 1.1;
-}
-
-.nearby__hint {
-  margin: 6px 0 0;
-  font-size: 12px;
-  font-weight: 900;
-  color: rgba(255, 255, 255, 0.55);
-}
-
-.nearby__pill {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba($orange, 0.18);
-  background: rgba($orange, 0.1);
-}
-
-.nearby__pillNum {
-  width: 26px;
-  height: 26px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, $orange, $orange2);
-  color: #111;
-  font-weight: 1100;
-}
-
-.nearby__pillTxt {
-  color: rgba(255, 255, 255, 0.75);
-  font-weight: 1000;
-  font-size: 12px;
-}
-
-/* List */
-.handymen-list {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
-
-/* Card: compact, readable */
-.hcard {
-  border-radius: 18px;
-  border: 1px solid rgba($orange, 0.14);
-  background: radial-gradient(
-      220px 120px at 12% 0%,
-      rgba($orange, 0.12),
-      transparent 62%
-    ),
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.065),
-      rgba(255, 255, 255, 0.04)
-    );
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.42);
-
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-
-  transition: transform 140ms ease, box-shadow 140ms ease,
-    border-color 140ms ease;
-
-  &:hover {
-    transform: translateY(-2px);
-    border-color: rgba($orange, 0.24);
-    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.52);
-  }
-
-  &:focus-within {
-    border-color: rgba($orange, 0.3);
-  }
-}
-
-/* Row 1 */
-.hcard__row1 {
-  display: grid;
-  grid-template-columns: 52px 1fr 36px;
-  gap: 10px;
-  align-items: center;
-  min-width: 0;
-}
-
-.hcard__avatar {
-  width: 52px;
-  height: 52px;
-  position: relative;
-}
-
-.hcard__av {
-  width: 52px;
-  height: 52px;
-  border-radius: 999px;
-  border: 2px solid rgba($orange, 0.32);
-  object-fit: cover;
-  background: $bg;
-}
-
-.hcard__logo {
-  position: absolute;
-  bottom: -2px;
-  left: -2px;
-  width: 18px;
-  height: 18px;
   border-radius: 50%;
-  border: 2px solid $bg;
   object-fit: cover;
-  background: $bg;
+  border: 2px solid #09090B;
 }
 
-.hcard__main {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.client-dashboard-new__avatar-img--grayscale {
+  filter: grayscale(100%);
+  opacity: 0.7;
 }
 
-.hcard__nameLine {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
+.client-dashboard-new__avatar-img--sepia {
+  filter: sepia(100%);
+  opacity: 0.8;
 }
 
-.hcard__name {
-  color: $text;
-  font-weight: 1100;
-  font-size: 14px;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.tag {
-  flex: 0 0 auto;
-  padding: 5px 10px;
-  border-radius: 999px;
-  font-weight: 1100;
-  font-size: 11px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.85);
-}
-.tag--danger {
-  border-color: rgba(239, 68, 68, 0.28);
-  background: rgba(239, 68, 68, 0.12);
-  color: rgba(239, 68, 68, 0.95);
-}
-
-.hcard__ratingLine {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.stars {
+.client-dashboard-new__rating-badge {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
   display: flex;
   align-items: center;
   gap: 2px;
-  flex-direction: row-reverse;
-}
-
-.star {
-  font-size: 12px;
-  line-height: 1;
-
-  &--full,
-  &--half {
-    color: #ffd700;
-    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.3));
-  }
-  &--empty {
-    color: rgba(255, 255, 255, 0.22);
-  }
-}
-
-.hcard__score {
-  padding: 5px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba($orange, 0.16);
-  background: rgba($orange, 0.08);
-  color: $orange2;
-  font-weight: 1100;
-  font-size: 12px;
-}
-
-.hcard__noRating {
-  color: rgba(255, 255, 255, 0.55);
-  font-weight: 900;
-  font-size: 12px;
-  font-style: italic;
-}
-
-/* Micro icon button */
-.iconBtn {
-  width: 36px;
-  height: 36px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.82);
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  transition: transform 140ms ease, background 140ms ease,
-    border-color 140ms ease;
-  position: relative;
-  bottom: 22%;
-
-  &:hover {
-    transform: translateY(-1px);
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.18);
-  }
-
-  &:focus-visible {
-    @include focusRing;
-  }
-}
-
-/* Row 2: only 2 chips */
-.hcard__row2 {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
-}
-
-.chip {
-  flex: 0 0 auto;
-  padding: 7px 12px;
-  border-radius: 999px;
+  background: #09090B;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.86);
-  font-weight: 1000;
+  border-radius: 12px;
+  padding: 4px 8px;
+  z-index: 2;
+}
+
+.client-dashboard-new__rating-value {
+  font-size: 11px;
+  font-weight: 900;
+  color: #FFD700;
+}
+
+.client-dashboard-new__rating-star {
   font-size: 12px;
-  white-space: nowrap;
+  color: #FFD700;
 }
 
-.chip--travel {
-  border-color: rgba($orange, 0.16);
-  background: rgba($orange, 0.08);
+.client-dashboard-new__card-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.chip--good {
-  border-color: rgba(16, 185, 129, 0.22);
-  background: rgba(16, 185, 129, 0.1);
-  color: #34d399;
+.client-dashboard-new__card-name {
+  font-size: 18px;
+  font-weight: 900;
+  color: #fff;
+  margin: 0;
+  line-height: 1.2;
 }
 
-/* Row 3: three equal small buttons in one row */
-.hcard__row3 {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+.client-dashboard-new__card-location {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.client-dashboard-new__card-location i {
+  font-size: 14px;
+  color: rgba(255, 95, 0, 0.6);
+}
+
+.client-dashboard-new__location-separator {
+  margin: 0 4px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.client-dashboard-new__card-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.client-dashboard-new__status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00E055;
+  box-shadow: 0 0 8px rgba(0, 224, 85, 0.6);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+.client-dashboard-new__status-text {
+  font-size: 11px;
+  font-weight: 700;
+  color: #00E055;
+}
+
+.client-dashboard-new__details-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+
+.client-dashboard-new__details-btn:hover {
+  background: rgba(255, 95, 0, 0.1);
+  border-color: rgba(255, 95, 0, 0.3);
+  color: #FF5F00;
+}
+
+.client-dashboard-new__details-btn i {
+  font-size: 14px;
+}
+
+.client-dashboard-new__card-categories {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
-.miniBtn {
-  min-height: 40px;
-  border-radius: 14px;
-  padding: 8px 8px;
-  font-weight: 1100;
-  font-size: 12px;
+.client-dashboard-new__category-tag {
+  padding: 4px 10px;
+  background: rgba(255, 95, 0, 0.1);
+  border: 1px solid rgba(255, 95, 0, 0.2);
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #FF5F00;
+}
 
-  border: 1px solid rgba($orange, 0.18);
-  background: rgba($orange, 0.09);
-  color: $text;
+.client-dashboard-new__card-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: auto;
+}
 
-  cursor: pointer;
-  display: inline-flex;
+.client-dashboard-new__action-btn {
+  flex: 1;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-
-  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease,
-    border-color 140ms ease;
-
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
-
-  &:hover {
-    transform: translateY(-1px);
-    border-color: rgba($orange, 0.3);
-    background: rgba($orange, 0.13);
-    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.38);
-  }
-
-  &:active {
-    transform: translateY(0) scale(0.99);
-  }
-
-  &:focus-visible {
-    @include focusRing;
-  }
-}
-
-.miniBtn__ic {
+  padding: 12px;
+  border-radius: 12px;
   font-size: 13px;
-  line-height: 1;
-}
-
-.miniBtn--primary {
-  border: none;
-  background: linear-gradient(135deg, $orange, $orange2);
-  color: #111;
-  box-shadow: 0 14px 26px rgba($orange, 0.18);
-
-  &:hover {
-    background: linear-gradient(135deg, $orange2, $orange);
-    box-shadow: 0 18px 34px rgba($orange, 0.26);
-  }
-
-  .miniBtn__ic {
-    color: #111;
-  }
-}
-
-.miniBtn--ghost {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.18);
-  }
-}
-
-.miniBtn--danger {
-  border-color: rgba(239, 68, 68, 0.3);
-  background: rgba(239, 68, 68, 0.14);
-  color: rgba(239, 68, 68, 0.95);
-
-  &:hover {
-    border-color: rgba(239, 68, 68, 0.46);
-    background: rgba(239, 68, 68, 0.22);
-    box-shadow: 0 16px 30px rgba(239, 68, 68, 0.12);
-  }
-}
-
-.miniBtn--ok {
-  border-color: rgba(34, 197, 94, 0.3);
-  background: rgba(34, 197, 94, 0.14);
-  color: rgba(34, 197, 94, 0.95);
-
-  &:hover {
-    border-color: rgba(34, 197, 94, 0.46);
-    background: rgba(34, 197, 94, 0.22);
-    box-shadow: 0 16px 30px rgba(34, 197, 94, 0.12);
-  }
-}
-
-/* Blocked state */
-.hcard--blocked {
-  opacity: 0.62;
-  filter: grayscale(0.18);
-
-  &:hover {
-    opacity: 0.75;
-    filter: grayscale(0.1);
-  }
-}
-
-/* Pagination */
-.pagination {
-  margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 16px;
-  border: 1px solid rgba($orange, 0.14);
-  background: rgba(255, 255, 255, 0.04);
-
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  gap: 10px;
-  align-items: center;
-}
-
-.pagination__info {
-  text-align: center;
-  color: $muted;
-  font-weight: 1100;
-  font-size: 12px;
-}
-
-.pbtn {
-  min-height: 40px;
-  border-radius: 14px;
-  padding: 8px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.18);
-  color: $text;
+  font-weight: 700;
   cursor: pointer;
-  font-weight: 1100;
-  transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease;
-
-  &:hover:not(:disabled) {
-    transform: translateY(-1px);
-    background: rgba(255, 255, 255, 0.06);
-    box-shadow: 0 14px 26px rgba(0, 0, 0, 0.28);
-  }
-
-  &:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
-  &:focus-visible {
-    @include focusRing;
-  }
+  transition: all 0.3s;
+  border: none;
 }
 
-/* === MAX 420px: super tight, super clean === */
-@media (max-width: 420px) {
-  .nearby__header {
-    padding: 10px 10px;
-    border-radius: 14px;
-  }
-
-  .nearby__title {
-    font-size: 14px;
-  }
-
-  .nearby__hint {
-    font-size: 11px;
-    margin-top: 5px;
-  }
-
-  .hcard {
-    padding: 11px;
-    border-radius: 16px;
-    gap: 9px;
-  }
-
-  .hcard__row1 {
-    grid-template-columns: 48px 1fr 34px;
-    gap: 9px;
-  }
-
-  .hcard__avatar {
-    width: 48px;
-    height: 48px;
-  }
-
-  .hcard__av {
-    width: 48px;
-    height: 48px;
-  }
-
-  .hcard__name {
-    font-size: 13px;
-  }
-
-  .chip {
-    padding: 6px 10px;
-    font-size: 11px;
-  }
-
-  .hcard__row3 {
-    gap: 6px;
-  }
-
-  .miniBtn {
-    min-height: 38px;
-    font-size: 11px;
-    padding: 7px 6px;
-    border-radius: 12px;
-    gap: 5px;
-  }
-
-  .miniBtn__ic {
-    font-size: 12px;
-  }
-
-  .pagination {
-    grid-template-columns: 1fr auto 1fr;
-    padding: 10px 10px;
-    border-radius: 14px;
-  }
-
-  .pbtn {
-    min-height: 38px;
-    font-size: 12px;
-    border-radius: 12px;
-  }
+.client-dashboard-new__action-btn--block {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Reduce motion */
-@media (prefers-reduced-motion: reduce) {
-  * {
-    transition: none !important;
-  }
+.client-dashboard-new__action-btn--block:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.client-dashboard-new__action-btn--primary {
+  flex: 2;
+  background: linear-gradient(135deg, #FF5F00 0%, #FF8F00 100%);
+  color: #000;
+  box-shadow: 0 4px 12px rgba(255, 95, 0, 0.3);
+}
+
+.client-dashboard-new__action-btn--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 95, 0, 0.4);
+}
+
+.client-dashboard-new__action-btn i {
+  font-size: 16px;
+}
+
+/* Carousel Pagination */
+.client-dashboard-new__pagination {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  direction: rtl;
+}
+
+.client-dashboard-new__pagination-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.client-dashboard-new__pagination-dot--active {
+  width: 24px;
+  border-radius: 4px;
+  background: #FF5F00;
+  box-shadow: 0 0 8px rgba(255, 95, 0, 0.6);
+}
+
+/* Recent Activity */
+.client-dashboard-new__activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  direction: rtl;
+  align-items: stretch;
+  width: 100%;
+}
+
+.client-dashboard-new__activity-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #09090B;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  transition: all 0.3s;
+  cursor: pointer;
+  direction: rtl;
+  text-align: right;
+}
+
+.client-dashboard-new__activity-item:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.client-dashboard-new__activity-item--active {
+  border-color: rgba(255, 95, 0, 0.3);
+  background: rgba(255, 95, 0, 0.05);
+}
+
+.client-dashboard-new__activity-item--success {
+  border-color: rgba(0, 224, 85, 0.3);
+  background: rgba(0, 224, 85, 0.05);
+}
+
+.client-dashboard-new__activity-item--primary {
+  border-color: rgba(255, 95, 0, 0.3);
+  background: rgba(255, 95, 0, 0.05);
+}
+
+.client-dashboard-new__activity-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.client-dashboard-new__activity-status-text {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.client-dashboard-new__activity-status i {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.client-dashboard-new__activity-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: right;
+  direction: rtl;
+}
+
+.client-dashboard-new__activity-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.client-dashboard-new__activity-time {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 0;
+}
+
+.client-dashboard-new__activity-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(255, 95, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FF5F00;
+  font-size: 20px;
+  flex-shrink: 0;
 }
 </style>
