@@ -1,11 +1,11 @@
 {
   "icon": {
     "source": "public/avatar.jpg",
-    "background": "#f27f0d"
+    "background": "#F27C0E"
   },
   "splash": {
     "source": "public/avatar.jpg",
-    "background": "#f27f0d"
+    "background": "#F27C0E"
   }
 }
 

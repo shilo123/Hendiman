@@ -15155,15 +15155,22 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                 }
               }
 
+              // 🔍 LOG: Starting push notifications
+              serverLogger.log(`[create-call-v2] 📤 Sending push to ${handymenToNotify.length} handymen | JobId: ${savedJobId}`);
+              
               for (const handyman of handymenToNotify) {
                 if (handyman.fcmToken) {
                   const subcategoryNames = subcategoryInfoArray
                     .map((s) => s.subcategory || s.category)
                     .join(", ");
 
+                  // 🔍 LOG: Before sending to specific handyman
+                  serverLogger.log(`[create-call-v2] 📤 Push to handyman: ${handyman.username || handyman._id} | Token: ${handyman.fcmToken.substring(0, 30)}...`);
+
+                  let pushResult;
                   // Different message for quoted jobs
                   if (hasQuotedSubcategory) {
-                    await sendPushNotification(
+                    pushResult = await sendPushNotification(
                       handyman.fcmToken,
                       "עבודה חדשה להצעת מחיר! 💰",
                       `קיבלת עבודה חדשה להצעת מחיר: ${subcategoryNames}`,
@@ -15175,7 +15182,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                   } else {
                     // Different push for special (personal) request
                     if (handymanIdSpecial) {
-                      await sendPushNotification(
+                      pushResult = await sendPushNotification(
                         handyman.fcmToken,
                         "נבחרת 🎯",
                         "לקוח רוצה דווקא אותך.",
@@ -15185,7 +15192,7 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                         }
                       );
                     } else {
-                      await sendPushNotification(
+                      pushResult = await sendPushNotification(
                         handyman.fcmToken,
                         "עבודה חדשה באזור שלך! 🔧",
                         `${subcategoryNames} - ${location || "מיקום"}`,
@@ -15196,10 +15203,21 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                       );
                     }
                   }
+                  
+                  // 🔍 LOG: Result of push
+                  if (pushResult.success) {
+                    serverLogger.log(`[create-call-v2] ✅ Push sent | Handyman: ${handyman.username || handyman._id} | MessageId: ${pushResult.messageId}`);
+                  } else {
+                    serverLogger.error(`[create-call-v2] ❌ Push failed | Handyman: ${handyman.username || handyman._id} | Error: ${pushResult.error}`);
+                  }
+                } else {
+                  // 🔍 LOG: No token
+                  serverLogger.warn(`[create-call-v2] ⚠️ No FCM token | Handyman: ${handyman.username || handyman._id}`);
                 }
               }
             } catch (notifyError) {
-              // Push notification failed, continue anyway
+              // 🔍 LOG: Error in notification block
+              serverLogger.error(`[create-call-v2] ❌ Push notification block error:`, notifyError.message);
             }
           })();
 

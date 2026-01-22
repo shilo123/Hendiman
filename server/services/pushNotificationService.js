@@ -94,24 +94,21 @@ function initializeFirebaseAdmin() {
  * @returns {Promise}
  */
 async function sendPushNotification(fcmToken, title, body, data = {}) {
-  console.log("[PushNotification] Sending notification:");
-  console.log("[PushNotification] - Token:", fcmToken ? fcmToken.substring(0, 20) + "..." : "NO TOKEN");
-  console.log("[PushNotification] - Title:", title);
-  console.log("[PushNotification] - Body:", body);
+  // 🔍 LOG: Start of push notification
+  console.log("[Push] 📤 START | Token:", fcmToken ? `${fcmToken.substring(0, 30)}...` : "❌ NO TOKEN");
+  console.log("[Push] 📤 START | Title:", title, "| Body:", body);
   
   try {
     try {
       initializeFirebaseAdmin();
     } catch (initError) {
-      console.error("[PushNotification] Firebase init error:", initError.message);
-      // Don't fail the request - just log and return silently
-      // This allows the app to work even if Firebase is not configured
+      console.error("[Push] ❌ Firebase init error:", initError.message);
       return { success: false, error: initError.message, silent: true };
     }
 
     // Check if Firebase is actually initialized and has project ID
     if (!admin.apps.length || admin.apps.length === 0) {
-      console.error("[PushNotification] Firebase not initialized");
+      console.error("[Push] ❌ Firebase not initialized");
       return {
         success: false,
         error: "Firebase not initialized",
@@ -123,7 +120,7 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
     const app = admin.app();
     const projectId = app?.options?.projectId;
     if (!projectId) {
-      console.error("[PushNotification] Firebase project ID not configured");
+      console.error("[Push] ❌ Firebase project ID not configured");
       return {
         success: false,
         error: "Firebase project ID not configured",
@@ -131,20 +128,21 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
       };
     }
     
-    console.log("[PushNotification] Firebase ready, project:", projectId);
+    console.log("[Push] ✅ Firebase ready | Project:", projectId);
 
     // ⚠️ CRITICAL: Payload structure for both Web and Native apps
     // For native Android apps with Capacitor Push Notifications:
     // - Root-level notification is REQUIRED for the plugin to display notifications
     // - Data field is also needed for app logic
+    // - NOTE: icon field is NOT supported in root-level notification for native apps
     // For web apps, we need webpush configuration
     const message = {
       // Root-level notification - REQUIRED for Capacitor Push Notifications plugin
       // This is what makes notifications appear in native Android apps
+      // NOTE: Do NOT include 'icon' here - it's not supported for native apps
       notification: {
         title: title,
         body: body,
-        icon: "/icon-192x192.png",
       },
       // Data field - REQUIRED for native apps to handle notifications when app is in foreground
       // Also needed for navigation and app logic
@@ -169,6 +167,24 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
           badge: "/icon-192x192.png",
           dir: "rtl", // Right-to-left for Hebrew
           requireInteraction: false,
+          // Action buttons for push notifications
+          actions: [
+            {
+              action: "skip",
+              title: "דלג",
+              icon: "/icon-192x192.png"
+            },
+            {
+              action: "accept",
+              title: "קבל",
+              icon: "/icon-192x192.png"
+            },
+            {
+              action: "view",
+              title: "צפה",
+              icon: "/icon-192x192.png"
+            }
+          ]
         },
         // FCM options for web - use full URL if available, otherwise relative path
         // Full URL is recommended for better reliability across different environments
@@ -183,11 +199,27 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
       },
       // Android priority - CRITICAL for native Android apps
       // Capacitor Push Notifications plugin uses the root-level notification field
-      // The plugin automatically handles notification display, so we don't need android.notification
       android: {
         priority: "high",
-        // Note: Capacitor Push Notifications plugin will use the root-level notification field
-        // We don't need to duplicate it here in android.notification
+        // Action buttons for Android native notifications
+        notification: {
+          clickAction: "FLUTTER_NOTIFICATION_CLICK",
+          // Action buttons
+          actions: [
+            {
+              action: "skip",
+              title: "דלג"
+            },
+            {
+              action: "accept",
+              title: "קבל"
+            },
+            {
+              action: "view",
+              title: "צפה"
+            }
+          ]
+        }
       },
       // APNS for iOS devices (if needed)
       apns: {
@@ -207,20 +239,24 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
       },
     };
 
-    console.log("[PushNotification] Sending message...");
+    // 🔍 LOG: Before sending to FCM
+    console.log("[Push] 🚀 Sending to FCM | Token length:", fcmToken?.length || 0);
+    
     const response = await admin.messaging().send(message);
-    console.log("[PushNotification] SUCCESS! Message ID:", response);
+    
+    // 🔍 LOG: Success
+    console.log("[Push] ✅ SUCCESS | Message ID:", response);
     return { success: true, messageId: response };
   } catch (error) {
-    console.error("[PushNotification] ERROR:", error.code, error.message);
+    // 🔍 LOG: Error details
+    console.error("[Push] ❌ ERROR | Code:", error.code, "| Message:", error.message);
     
     // Handle invalid token error
     if (
       error.code === "messaging/invalid-registration-token" ||
       error.code === "messaging/registration-token-not-registered"
     ) {
-      console.log("[PushNotification] Invalid token - should be removed from DB");
-      // Token is invalid, should be removed from database
+      console.log("[Push] ⚠️ Invalid token - should be removed from DB");
       return { success: false, error: "invalid_token", shouldRemove: true };
     }
 
@@ -251,10 +287,10 @@ async function sendPushNotificationToMultiple(
 
     const messages = fcmTokens.map((token) => ({
       // Root-level notification - REQUIRED for Service Worker background messages
+      // NOTE: Do NOT include 'icon' here - it's not supported for native apps
       notification: {
         title: title,
         body: body,
-        icon: "/icon-192x192.png",
       },
       // Data field for navigation and app logic
       data: {

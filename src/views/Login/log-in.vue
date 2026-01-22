@@ -140,9 +140,9 @@
           </svg>
         </button>
 
-        <!-- Biometric (only in native app) -->
+        <!-- Biometric (only in native app and if available) -->
         <button
-          v-if="isNativeApp"
+          v-if="isNativeApp && hasBiometricCredentials"
           type="button"
           class="social-btn social-btn--biometric"
           @click="handleBiometricLogin"
@@ -339,19 +339,24 @@ export default {
 
         // Check if biometric is available first
         try {
-          const available = await Biometric.checkBiometry();
+          // @capgo/capacitor-native-biometric uses checkBiometry() without parameters
+          const available = await Biometric.checkBiometry({
+            reason: 'בדיקת זמינות טביעת אצבע'
+          });
           console.log('[checkNativeBiometricSupport] checkBiometry result:', JSON.stringify(available));
           
           // Show biometric button if biometric is available (even without saved credentials)
+          // The API returns { isAvailable: true/false }
           this.hasBiometricCredentials = available.isAvailable === true;
           
           if (!available.isAvailable) {
             console.log('[checkNativeBiometricSupport] Biometric not available. Reason:', available.errorCode || available.reason || 'unknown');
+            this.hasBiometricCredentials = false;
           }
         } catch (error) {
           console.error('[checkNativeBiometricSupport] Error checking biometric:', error);
-          this.hasBiometricCredentials = false;
-          return;
+          // Even if check fails, allow user to try (they'll see error when clicking)
+          this.hasBiometricCredentials = true; // Show button, let user try
         }
         
         // Check if we have saved credentials and auto-fill username if available
@@ -498,7 +503,9 @@ export default {
 
       // Check if biometric is actually available on the device
       try {
-        const available = await Biometric.checkBiometry();
+        const available = await Biometric.checkBiometry({
+          reason: 'בדיקת זמינות טביעת אצבע'
+        });
         console.log("[Biometric] checkBiometry result:", JSON.stringify(available));
         
         if (!available.isAvailable) {
@@ -513,13 +520,13 @@ export default {
           } else {
             this.toast?.showError("טביעת אצבע לא זמינה כרגע. נסה להתחבר עם שם משתמש וסיסמה");
           }
+          this.biometricLoading = false;
           return;
         }
       } catch (error) {
         console.error("[Biometric] Error checking availability:", error);
-        // Show error and return instead of continuing
-        this.toast?.showError("שגיאה בבדיקת זמינות טביעת אצבע");
-        return;
+        // If check fails, still allow user to try authenticate (might work)
+        console.log("[Biometric] Check failed, but will try authenticate anyway");
       }
 
       this.biometricLoading = true;
@@ -529,8 +536,9 @@ export default {
         const savedUsername = await Preferences.get({ key: 'biometric_username' });
         const savedUserId = await Preferences.get({ key: 'biometric_userId' });
 
+        // If no saved credentials, user needs to login first with username/password
         if (!savedUsername.value || !savedUserId.value) {
-          this.toast?.showError("לא נמצאו פרטי התחברות שמורים");
+          this.toast?.showError("אנא התחבר פעם אחת עם שם משתמש וסיסמה כדי להפעיל טביעת אצבע");
           this.biometricLoading = false;
           return;
         }
@@ -740,10 +748,7 @@ export default {
 
                   // Check if biometric is available
                   const available = await Biometric.checkBiometry({
-                    reason: 'שמירת פרטי התחברות',
-                    title: 'אימות ביומטרי',
-                    subtitle: 'הפעלת התחברות מהירה',
-                    description: 'האם תרצה להפעיל התחברות מהירה עם טביעת אצבע?',
+                    reason: 'שמירת פרטי התחברות'
                   });
 
                   if (available.isAvailable && !this.ifGoogleUser && !this.ifFacebookUser) {

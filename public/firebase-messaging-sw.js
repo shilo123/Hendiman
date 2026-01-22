@@ -52,6 +52,25 @@ messaging.onBackgroundMessage((payload) => {
     payload.notification?.body || payload.data?.body || "יש לך הודעה חדשה";
   const notificationIcon = payload.notification?.icon || "/icon-192x192.png";
 
+  // Extract actions from payload if available
+  const actions = payload.notification?.actions || [
+    {
+      action: "skip",
+      title: "דלג",
+      icon: "/icon-192x192.png"
+    },
+    {
+      action: "accept",
+      title: "קבל",
+      icon: "/icon-192x192.png"
+    },
+    {
+      action: "view",
+      title: "צפה",
+      icon: "/icon-192x192.png"
+    }
+  ];
+
   const notificationOptions = {
     body: notificationBody,
     icon: notificationIcon,
@@ -62,6 +81,7 @@ messaging.onBackgroundMessage((payload) => {
     data: payload.data || {},
     vibrate: [200, 100, 200],
     timestamp: Date.now(),
+    actions: actions, // Add action buttons
   };
 
   // ⚠️ MUST use self.registration.showNotification for background messages
@@ -73,24 +93,45 @@ messaging.onBackgroundMessage((payload) => {
   );
 });
 
-// Handle notification clicks
+// Handle notification clicks and action button clicks
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+
+  const action = event.action; // Get the action button that was clicked
+  const data = event.notification.data || {};
+
+  // Handle different actions
+  let url = self.location.origin;
+  
+  if (action === "accept") {
+    // Handle accept action - navigate to accept page
+    url = `${self.location.origin}/dashboard?action=accept&jobId=${data.jobId || ''}`;
+  } else if (action === "view") {
+    // Handle view action - navigate to view page
+    url = `${self.location.origin}/dashboard?action=view&jobId=${data.jobId || ''}`;
+  } else if (action === "skip") {
+    // Handle skip action - just close notification
+    return;
+  }
+  // If no action or default click, open dashboard
 
   // Open the app when notification is clicked
   event.waitUntil(
     clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((clientList) => {
-        // If app is already open, focus it
+        // If app is already open, focus it and navigate
         for (const client of clientList) {
           if (client.url === self.location.origin && "focus" in client) {
+            if ("navigate" in client) {
+              return client.navigate(url).then(() => client.focus());
+            }
             return client.focus();
           }
         }
         // Otherwise open new window
         if (clients.openWindow) {
-          return clients.openWindow(self.location.origin);
+          return clients.openWindow(url);
         }
       })
   );
