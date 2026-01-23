@@ -120,14 +120,52 @@
             </div>
           </div>
 
-          <!-- Stripe Payment Element (includes Apple Pay/Google Pay) -->
+          <!-- Stripe Card Elements - Separate fields for better control -->
           <div class="form-field">
-            <label class="form-label">פרטי תשלום</label>
-            <div id="card-element" class="stripe-element-container">
-              <!-- Stripe Payment Element will mount here (includes Apple Pay/Google Pay) -->
+            <label class="form-label">מספר כרטיס</label>
+            <div class="stripe-fields-wrapper">
+              <!-- Loading Skeleton -->
+              <div v-if="isLoadingStripe" class="stripe-loading-skeleton">
+                <div class="skeleton skeleton-label"></div>
+                <div class="skeleton skeleton-input"></div>
+              </div>
+              <div v-show="!isLoadingStripe" id="card-number-element" class="stripe-input-field"></div>
             </div>
-            <div id="card-errors" class="form-error" role="alert"></div>
           </div>
+          
+          <div class="form-row">
+            <div class="form-field">
+              <label class="form-label">תאריך תפוגה</label>
+              <div class="stripe-fields-wrapper">
+                <!-- Loading Skeleton -->
+                <div v-if="isLoadingStripe" class="stripe-loading-skeleton">
+                  <div class="skeleton skeleton-label"></div>
+                  <div class="skeleton skeleton-input"></div>
+                </div>
+                <div v-show="!isLoadingStripe" id="card-expiry-element" class="stripe-input-field"></div>
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">קוד אבטחה (CVV)</label>
+              <div class="stripe-fields-wrapper">
+                <!-- Loading Skeleton -->
+                <div v-if="isLoadingStripe" class="stripe-loading-skeleton">
+                  <div class="skeleton skeleton-label"></div>
+                  <div class="skeleton skeleton-input"></div>
+                </div>
+                <div v-show="!isLoadingStripe" id="card-cvc-element" class="stripe-input-field"></div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Loading Spinner and Text -->
+          <div v-if="isLoadingStripe" class="stripe-loading-container">
+            <div class="stripe-loading-spinner"></div>
+            <div class="stripe-loading-text">💳 טוען פרטי תשלום...</div>
+            <div class="stripe-loading-subtext">אנא המתן, טוען את השדות...</div>
+          </div>
+          
+          <div id="card-errors" class="form-error" role="alert"></div>
 
           <!-- Security Notice -->
           <div class="security-notice">
@@ -203,8 +241,12 @@ export default {
       toast: null,
       userId: this.id,
       stripe: null,
+      stripePromise: null, // Store the promise to wait for it
       elements: null,
       paymentElement: null,
+      cardNumberElement: null,
+      cardExpiryElement: null,
+      cardCvcElement: null,
       stripePublishableKey: null,
       currentJobId: null,
       currentAmount: null,
@@ -213,6 +255,7 @@ export default {
       isProcessing: false,
       submitError: "",
       isStripeReady: false,
+      isLoadingStripe: true,
       clientSecret: null,
       selectedPlan: "annual", // 'annual' or 'monthly'
       monthlyPrice: 49.9,
@@ -262,7 +305,6 @@ export default {
     this.toast = useToast();
 
     // Check if this is a subscription payment
-    // Check both query param and localStorage for pending registration
     const hasPendingRegistration = this.getPendingRegistrationData() !== null;
     this.isSubscription =
       this.$route.query.subscription === "true" || hasPendingRegistration;
@@ -278,10 +320,7 @@ export default {
           this.subscriptionStatus = data;
         }
       } catch (error) {
-        logger.error(
-          "Error fetching subscription status in Payments.vue:",
-          error
-        );
+        // Ignore subscription status errors
       }
     }
 
@@ -320,38 +359,74 @@ export default {
       } catch (error) {}
     }
 
-    // Get Stripe publishable key from server
+  },
+  async mounted() {
+    // Wait for DOM to be ready
+    await this.$nextTick();
+    
+    // Load Stripe publishable key and initialize Stripe
     try {
       const response = await fetch(`${URL}/api/stripe/publishable-key`);
       const data = await response.json();
+      
       if (data.publishableKey) {
         this.stripePublishableKey = data.publishableKey;
-        this.stripe = await loadStripe(data.publishableKey);
-
-        if (this.stripe) {
-          // Initialize Payment Element after getting clientSecret
-          await this.initializePaymentElement();
+        this.stripePromise = loadStripe(data.publishableKey);
+        
+        try {
+          this.stripe = await this.stripePromise;
+        } catch (error) {
+          logger.error("[PAYMENTS] Error loading Stripe:", error);
+          this.submitError = "שגיאה בטעינת מערכת התשלומים. אנא רענן את הדף.";
+          return;
         }
+      } else {
+        this.submitError = "לא הצלחנו לטעון את מפתח התשלום. אנא נסה שוב.";
+        return;
       }
     } catch (error) {
+      logger.error("[PAYMENTS] Error loading Stripe publishable key:", error);
       this.submitError = "שגיאה בטעינת מערכת התשלומים. אנא נסה שוב.";
+      return;
+    }
+    
+    if (!this.stripe) {
+      this.submitError = "מערכת התשלומים לא נטענה. אנא רענן את הדף.";
+      return;
+    }
+    
+    // Wait for containers to be ready
+    await this.$nextTick();
+    let cardNumberContainer = document.getElementById("card-number-element");
+    if (!cardNumberContainer) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      cardNumberContainer = document.getElementById("card-number-element");
+      if (!cardNumberContainer) {
+        this.submitError = "שגיאה: שדה התשלום לא נמצא. אנא רענן את הדף.";
+        return;
+      }
+    }
+    
+    try {
+      await this.initializePaymentElement();
+    } catch (error) {
+      logger.error("[PAYMENTS] Error initializing Payment Element:", error);
+      this.submitError = "שגיאה באתחול שדות התשלום. אנא רענן את הדף.";
     }
   },
   beforeUnmount() {
-    // Clean up Stripe elements
-    if (this.paymentElement) {
-      try {
-        this.paymentElement.unmount();
-      } catch (error) {
-        // Ignore unmount errors
-      }
-      this.paymentElement = null;
+    // Clean up Stripe card elements
+    if (this.cardNumberElement) {
+      try { this.cardNumberElement.unmount(); } catch (e) { /* ignore */ }
+      this.cardNumberElement = null;
     }
-
-    // Clear container
-    const paymentElementContainer = document.getElementById("card-element");
-    if (paymentElementContainer) {
-      paymentElementContainer.innerHTML = "";
+    if (this.cardExpiryElement) {
+      try { this.cardExpiryElement.unmount(); } catch (e) { /* ignore */ }
+      this.cardExpiryElement = null;
+    }
+    if (this.cardCvcElement) {
+      try { this.cardCvcElement.unmount(); } catch (e) { /* ignore */ }
+      this.cardCvcElement = null;
     }
 
     // Reset state
@@ -376,23 +451,29 @@ export default {
       }
     },
     async initializePaymentElement() {
-      if (!this.stripe) return;
+      if (!this.stripe) {
+        this.submitError = "מערכת התשלומים לא נטענה. אנא רענן את הדף.";
+        this.isLoadingStripe = false;
+        return;
+      }
+
+      this.isLoadingStripe = true;
+      await this.$nextTick();
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       try {
-        // Clean up existing payment element before creating a new one
-        if (this.paymentElement) {
-          try {
-            this.paymentElement.unmount();
-          } catch (unmountError) {
-            // Ignore unmount errors
-          }
-          this.paymentElement = null;
+        // Clean up existing card elements
+        if (this.cardNumberElement) {
+          try { this.cardNumberElement.unmount(); } catch (e) { /* ignore */ }
+          this.cardNumberElement = null;
         }
-
-        // Clear the container
-        let paymentElementContainer = document.getElementById("card-element");
-        if (paymentElementContainer) {
-          paymentElementContainer.innerHTML = "";
+        if (this.cardExpiryElement) {
+          try { this.cardExpiryElement.unmount(); } catch (e) { /* ignore */ }
+          this.cardExpiryElement = null;
+        }
+        if (this.cardCvcElement) {
+          try { this.cardCvcElement.unmount(); } catch (e) { /* ignore */ }
+          this.cardCvcElement = null;
         }
 
         // Reset Stripe ready state
@@ -402,34 +483,45 @@ export default {
         let clientSecret = null;
 
         if (this.isSubscription) {
-          // For subscription, create payment intent
           const registrationData = this.getPendingRegistrationData();
           if (!registrationData) {
             this.submitError = "נתוני הרשמה לא נמצאו. אנא חזור לדף ההרשמה.";
             return;
           }
 
-          const createSubscriptionResponse = await fetch(
-            `${URL}/api/subscription/create`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                registrationData: registrationData,
-                planType: this.selectedPlan, // 'annual' or 'monthly'
-              }),
-            }
-          );
+          try {
+            const createSubscriptionResponse = await fetch(
+              `${URL}/api/subscription/create`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  registrationData: registrationData,
+                  planType: this.selectedPlan,
+                }),
+              }
+            );
 
-          const subscriptionData = await createSubscriptionResponse.json();
-          if (!subscriptionData.success || !subscriptionData.clientSecret) {
-            this.submitError =
-              subscriptionData.message || "שגיאה ביצירת מנוי. אנא נסה שוב.";
+            if (!createSubscriptionResponse.ok) {
+              this.submitError = `שגיאה בשרת (${createSubscriptionResponse.status}). אנא נסה שוב.`;
+              return;
+            }
+
+            const subscriptionData = await createSubscriptionResponse.json();
+            
+            if (!subscriptionData.success || !subscriptionData.clientSecret) {
+              this.submitError =
+                subscriptionData.message || "שגיאה ביצירת מנוי. אנא נסה שוב.";
+              return;
+            }
+            clientSecret = subscriptionData.clientSecret;
+          } catch (fetchError) {
+            logger.error("[PAYMENTS] Error creating subscription:", fetchError);
+            this.submitError = "שגיאה בחיבור לשרת. אנא נסה שוב.";
             return;
           }
-          clientSecret = subscriptionData.clientSecret;
         } else {
           // For regular payment, create payment intent
           const jobIdToUse =
@@ -464,43 +556,22 @@ export default {
 
         this.clientSecret = clientSecret;
 
-        // Step 2: Clean up existing Elements instance if it exists
+        // Step 2: Create Elements instance with clientSecret
         if (this.elements) {
-          // Elements instance will be recreated with new clientSecret
           this.elements = null;
         }
 
-        // Step 3: Create Elements instance with clientSecret
         const elementsOptions = {
           clientSecret: clientSecret,
           appearance: {
             theme: "night",
             variables: {
               colorPrimary: "#ff6a00",
-              colorBackground: "#0b0b0f",
+              colorBackground: "#1a1a1f",
               colorText: "rgba(255, 255, 255, 0.92)",
               colorDanger: "#ef4444",
-              fontFamily:
-                '"Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
-              spacingUnit: "4px",
+              fontFamily: '"Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
               borderRadius: "8px",
-            },
-            rules: {
-              ".Input": {
-                backgroundColor: "rgba(255, 255, 255, 0.06)",
-                border: "1px solid rgba(255, 106, 0, 0.2)",
-                color: "rgba(255, 255, 255, 0.92)",
-                fontSize: "15px",
-                fontWeight: "800",
-              },
-              ".Input:focus": {
-                border: "1px solid rgba(255, 106, 0, 0.5)",
-                boxShadow: "0 0 0 3px rgba(255, 106, 0, 0.18)",
-              },
-              ".Input--invalid": {
-                border: "1px solid #ef4444",
-                color: "#ef4444",
-              },
             },
           },
           locale: "he",
@@ -508,37 +579,131 @@ export default {
 
         this.elements = this.stripe.elements(elementsOptions);
 
-        // Step 4: Create Payment Element (includes Apple Pay/Google Pay)
-        this.paymentElement = this.elements.create("payment", {
-          layout: "tabs",
-          // Disable automatic Link form display
-          link: {
-            enabled: false,
+        // Card element style
+        const cardStyle = {
+          base: {
+            color: "rgba(255, 255, 255, 0.92)",
+            fontFamily: '"Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+            fontSize: "15px",
+            fontWeight: "500",
+            lineHeight: "24px",
+            "::placeholder": {
+              color: "rgba(255, 255, 255, 0.4)",
+            },
           },
+          invalid: {
+            color: "#ef4444",
+            iconColor: "#ef4444",
+          },
+        };
+
+        // Step 3: Create individual card elements
+        this.cardNumberElement = this.elements.create("cardNumber", {
+          style: cardStyle,
+          showIcon: true,
         });
 
-        // Step 5: Mount Payment Element
-        paymentElementContainer = document.getElementById("card-element");
-        if (paymentElementContainer) {
-          // Ensure container is empty before mounting
-          paymentElementContainer.innerHTML = "";
+        this.cardExpiryElement = this.elements.create("cardExpiry", {
+          style: cardStyle,
+        });
 
-          this.paymentElement.mount("#card-element");
-          this.isStripeReady = true;
+        this.cardCvcElement = this.elements.create("cardCvc", {
+          style: cardStyle,
+        });
 
-          // Handle real-time validation errors
-          this.paymentElement.on("change", (event) => {
-            const displayError = document.getElementById("card-errors");
-            if (event.error) {
-              displayError.textContent = event.error.message;
-            } else {
-              displayError.textContent = "";
+        // Step 4: Mount card elements
+        const cardNumberContainer = document.getElementById("card-number-element");
+        const cardExpiryContainer = document.getElementById("card-expiry-element");
+        const cardCvcContainer = document.getElementById("card-cvc-element");
+
+        if (cardNumberContainer && cardExpiryContainer && cardCvcContainer) {
+          this.cardNumberElement.mount("#card-number-element");
+          this.cardExpiryElement.mount("#card-expiry-element");
+          this.cardCvcElement.mount("#card-cvc-element");
+
+          // Handle errors
+          const displayError = document.getElementById("card-errors");
+          
+          const handleError = (event) => {
+            if (displayError) {
+              displayError.textContent = event.error ? event.error.message : "";
             }
-          });
+          };
+
+          this.cardNumberElement.on("change", handleError);
+          this.cardExpiryElement.on("change", handleError);
+          this.cardCvcElement.on("change", handleError);
+
+          // Set ready when all elements are ready AND visible
+          let readyCount = 0;
+          const checkAllReady = () => {
+            readyCount++;
+            logger.log(`[PAYMENTS] Element ready: ${readyCount}/3`);
+            
+            // Wait a bit more to ensure iframes are loaded
+            setTimeout(() => {
+              if (readyCount >= 3) {
+                // Double check that iframes are actually loaded
+                const checkIframesLoaded = () => {
+                  const cardNumberIframes = cardNumberContainer.querySelectorAll("iframe");
+                  const cardExpiryIframes = cardExpiryContainer.querySelectorAll("iframe");
+                  const cardCvcIframes = cardCvcContainer.querySelectorAll("iframe");
+                  
+                  const allIframesLoaded = 
+                    cardNumberIframes.length > 0 && 
+                    cardExpiryIframes.length > 0 && 
+                    cardCvcIframes.length > 0;
+                  
+                  if (allIframesLoaded) {
+                    this.isStripeReady = true;
+                    this.isLoadingStripe = false;
+                    logger.log("[PAYMENTS] All card elements ready and iframes loaded");
+                  } else {
+                    logger.log("[PAYMENTS] Waiting for iframes to load...");
+                    // Retry after 500ms
+                    setTimeout(checkIframesLoaded, 500);
+                  }
+                };
+                
+                checkIframesLoaded();
+              }
+            }, 300);
+          };
+
+          this.cardNumberElement.on("ready", checkAllReady);
+          this.cardExpiryElement.on("ready", checkAllReady);
+          this.cardCvcElement.on("ready", checkAllReady);
+
+          // Extended fallback timeout - wait longer for slow connections
+          setTimeout(() => {
+            if (!this.isStripeReady) {
+              // Final check - if iframes exist, mark as ready
+              const cardNumberIframes = cardNumberContainer.querySelectorAll("iframe");
+              const cardExpiryIframes = cardExpiryContainer.querySelectorAll("iframe");
+              const cardCvcIframes = cardCvcContainer.querySelectorAll("iframe");
+              
+              if (cardNumberIframes.length > 0 || cardExpiryIframes.length > 0 || cardCvcIframes.length > 0) {
+                this.isStripeReady = true;
+                this.isLoadingStripe = false;
+                logger.log("[PAYMENTS] Setting isStripeReady after extended timeout (iframes found)");
+              } else {
+                // If still no iframes, wait a bit more
+                setTimeout(() => {
+                  this.isStripeReady = true;
+                  this.isLoadingStripe = false;
+                  logger.log("[PAYMENTS] Setting isStripeReady after extended timeout (force)");
+                }, 2000);
+              }
+            }
+          }, 5000); // Extended to 5 seconds
+        } else {
+          this.submitError = "שגיאה: שדות התשלום לא נמצאו. אנא רענן את הדף.";
+          this.isLoadingStripe = false;
         }
       } catch (error) {
         this.submitError = "שגיאה באתחול מערכת התשלומים. אנא נסה שוב.";
-        logger.error("Error initializing Payment Element:", error);
+        this.isLoadingStripe = false;
+        logger.error("[PAYMENTS] Error initializing Card Elements:", error);
       }
     },
     formatCurrency(amount) {
@@ -548,10 +713,15 @@ export default {
       }).format(amount || 0);
     },
     async handlePayment() {
-      if (!this.isStripeReady || !this.paymentElement || !this.clientSecret) {
+      if (!this.isStripeReady || !this.cardNumberElement || !this.clientSecret) {
         this.submitError = "מערכת התשלומים לא נטענה. אנא רענן את הדף.";
         return;
       }
+
+      logger.log("[PAYMENTS] Starting payment process", {
+        isSubscription: this.isSubscription,
+        hasClientSecret: !!this.clientSecret,
+      });
 
       this.isProcessing = true;
       this.submitError = "";
@@ -563,36 +733,35 @@ export default {
           await this.handleRegularPayment();
         }
       } catch (error) {
+        logger.error("[PAYMENTS] Payment process error:", error);
         this.submitError = error.message || "שגיאה בחיבור לשרת. אנא נסה שוב.";
       } finally {
         this.isProcessing = false;
       }
     },
     async handleSubscriptionPayment() {
-      // Step 1: Submit the Payment Element first (required by Stripe)
-      const { error: submitError } = await this.elements.submit();
-      if (submitError) {
-        this.submitError =
-          submitError.message || "שגיאה באימות פרטי התשלום. אנא נסה שוב.";
-        return;
-      }
-
-      // Step 2: Confirm Payment Intent with Payment Element
-      const { error, paymentIntent } = await this.stripe.confirmPayment({
-        elements: this.elements,
-        clientSecret: this.clientSecret,
-        confirmParams: {
-          return_url: `${window.location.origin}/Dashboard/${this.userId}`,
-        },
-        redirect: "if_required",
-      });
+      // Confirm Payment with Card Element
+      const { error, paymentIntent } = await this.stripe.confirmCardPayment(
+        this.clientSecret,
+        {
+          payment_method: {
+            card: this.cardNumberElement,
+          },
+        }
+      );
 
       if (error) {
+        logger.error("[PAYMENTS] Stripe payment confirmation error:", error);
         this.submitError = error.message || "שגיאה באישור התשלום. אנא נסה שוב.";
         return;
       }
 
       if (paymentIntent && paymentIntent.status === "succeeded") {
+        logger.log("[PAYMENTS] Payment succeeded, completing registration", {
+          paymentIntentId: paymentIntent.id,
+          paymentMethodId: paymentIntent.payment_method,
+        });
+
         // Complete registration on server
         try {
           const completeResponse = await fetch(
@@ -608,6 +777,22 @@ export default {
               }),
             }
           );
+
+          logger.log("[PAYMENTS] Complete response status:", completeResponse.status);
+
+          if (!completeResponse.ok) {
+            const errorText = await completeResponse.text();
+            logger.error("[PAYMENTS] Complete response not OK:", {
+              status: completeResponse.status,
+              statusText: completeResponse.statusText,
+              body: errorText,
+            });
+            this.submitError = "שגיאה בהשלמת הרשמת מנוי. אנא פנה לתמיכה.";
+            return;
+          }
+
+          const completeData = await completeResponse.json();
+          logger.log("[PAYMENTS] Complete response data:", completeData);
 
           if (completeData.success) {
             // Clear pending registration
@@ -629,17 +814,14 @@ export default {
               }
             }, 2000);
           } else {
-            logger.error("[PAYMENTS] Complete failed:", completeData);
+            logger.error("[PAYMENTS] Complete registration failed:", completeData);
             this.submitError =
               completeData.message ||
-              "המנוי אושר אך יש בעיה בעדכון השרת. אנא פנה לתמיכה.";
+              "שגיאה בהשלמת הרשמת מנוי. אנא פנה לתמיכה.";
           }
         } catch (fetchError) {
-          logger.error(
-            "[PAYMENTS] Error calling /api/subscription/complete:",
-            fetchError
-          );
-          this.submitError = "שגיאה בחיבור לשרת. אנא פנה לתמיכה או נסה שוב.";
+          logger.error("[PAYMENTS] Error calling /api/subscription/complete:", fetchError);
+          this.submitError = "שגיאה בהשלמת הרשמת מנוי. אנא פנה לתמיכה או נסה שוב.";
         }
       } else {
         logger.error(
@@ -656,23 +838,15 @@ export default {
         return;
       }
 
-      // Step 1: Submit the Payment Element first (required by Stripe)
-      const { error: submitError } = await this.elements.submit();
-      if (submitError) {
-        this.submitError =
-          submitError.message || "שגיאה באימות פרטי התשלום. אנא נסה שוב.";
-        return;
-      }
-
-      // Step 2: Confirm Payment Intent with Payment Element
-      const { error, paymentIntent } = await this.stripe.confirmPayment({
-        elements: this.elements,
-        clientSecret: this.clientSecret,
-        confirmParams: {
-          return_url: `${window.location.origin}/Dashboard/${this.userId}`,
-        },
-        redirect: "if_required",
-      });
+      // Confirm Payment with Card Element
+      const { error, paymentIntent } = await this.stripe.confirmCardPayment(
+        this.clientSecret,
+        {
+          payment_method: {
+            card: this.cardNumberElement,
+          },
+        }
+      );
 
       if (error) {
         this.submitError = error.message || "שגיאה באישור התשלום. אנא נסה שוב.";
@@ -1165,6 +1339,7 @@ $font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
   border: 1px solid rgba($orange, 0.2);
   border-radius: 16px;
   padding: 24px;
+  overflow: visible;
 }
 
 .payment-form {
@@ -1177,6 +1352,7 @@ $font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
   display: flex;
   flex-direction: column;
   gap: 6px;
+  overflow: visible;
 }
 
 .form-row {
@@ -1192,17 +1368,166 @@ $font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
 }
 
 .stripe-element-container {
-  padding: 12px 14px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba(255, 255, 255, 0.04);
+  transition: all 0.2s ease;
+  min-height: auto;
+  width: 100%;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative;
+  overflow: visible;
+}
+
+.stripe-fields-wrapper {
+  position: relative;
+}
+
+// Skeleton Loading Styles
+.stripe-loading-skeleton {
+  width: 100%;
+  pointer-events: none;
+  
+  .skeleton {
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.08) 25%, rgba($orange, 0.3) 50%, rgba(255, 255, 255, 0.08) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: 8px;
+    pointer-events: none;
+  }
+  
+  .skeleton-label {
+    width: 40%;
+    height: 14px;
+    margin-bottom: 8px;
+    pointer-events: none;
+  }
+  
+  .skeleton-input {
+    height: 56px;
+    border-radius: 10px;
+    width: 100%;
+    pointer-events: none;
+  }
+}
+
+.stripe-loading-container {
+  text-align: center;
+  margin: 30px 0;
+  padding: 20px;
+}
+
+.stripe-loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(255, 255, 255, 0.1);
+  border-top: 5px solid $orange;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+.stripe-loading-text {
+  color: $orange;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.stripe-loading-subtext {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.stripe-input-field {
+  padding: 16px;
   border-radius: 10px;
   border: 1px solid rgba($orange, 0.3);
   background: rgba(255, 255, 255, 0.06);
   transition: all 0.2s ease;
+  width: 100%;
+  min-height: 56px;
+  box-sizing: border-box;
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 1;
 
   &:focus-within {
     border-color: $orange;
     box-shadow: 0 0 0 3px rgba($orange, 0.2);
     background: rgba(255, 255, 255, 0.08);
   }
+}
+
+/* Force ALL Stripe iframes to be visible - must be outside scoped to override App.vue */
+.stripe-element-container iframe,
+#card-element iframe,
+[id="card-element"] iframe {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 40px !important;
+  position: relative !important;
+  border: none !important;
+  z-index: 9999 !important;
+  pointer-events: auto !important;
+  left: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: scale(1) !important;
+  overflow: visible !important;
+}
+
+/* Hide only developer tools iframes */
+.stripe-element-container iframe[name*="__privateStripeFrame"],
+.stripe-element-container iframe[name*="privateStripeFrame"],
+.stripe-element-container iframe[title*="מסגרת כלים למפתחי פס"],
+.stripe-element-container iframe[title*="Stripe developer tools frame"],
+#card-element iframe[name*="__privateStripeFrame"],
+#card-element iframe[name*="privateStripeFrame"],
+[id="card-element"] iframe[name*="__privateStripeFrame"],
+[id="card-element"] iframe[name*="privateStripeFrame"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  pointer-events: none !important;
 }
 
 .form-input {
@@ -1351,8 +1676,8 @@ $font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
   }
 
   .form-row {
-    grid-template-columns: 1fr;
-    gap: 16px;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
   }
 }
 
@@ -1507,5 +1832,31 @@ $font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
   span {
     padding: 0 10px;
   }
+}
+</style>
+
+<!-- Global styles for Stripe elements -->
+<style>
+/* Force Stripe iframes to be visible */
+.stripe-input-field > div,
+.stripe-input-field iframe {
+  display: block !important;
+  width: 100% !important;
+}
+
+.stripe-input-field iframe {
+  visibility: visible !important;
+  opacity: 1 !important;
+  min-height: 24px !important;
+  position: relative !important;
+  border: none !important;
+  pointer-events: auto !important;
+}
+
+/* Overflow visible for containers */
+.payment-form-wrapper,
+.payment-form,
+.form-field {
+  overflow: visible !important;
 }
 </style>

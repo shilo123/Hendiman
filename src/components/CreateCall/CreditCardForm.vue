@@ -1019,27 +1019,9 @@ $danger: #ff3b3b;
   color: rgba($danger, 0.95);
 }
 
-/* Hide Stripe developer/test buttons and iframes */
-:deep(iframe[name*="__privateStripeFrame"]),
-:deep(iframe[name*="privateStripeFrame"]),
-:deep(iframe[src*="stripe.com"][src*="elements-inner"]),
-:deep(iframe[title*="מסגרת כלים למפתחי פס"]),
-:deep(iframe[title*="Stripe developer tools frame"]),
-:deep(.stripe-test-mode-badge),
-:deep([class*="__PrivateStripeElement"]),
-:deep([class*="privateStripe"]),
-:deep([id*="__privateStripe"]),
-:deep([id*="privateStripe"]) {
+/* הסתר רק את באדג' הטסט של Stripe */
+:deep(.stripe-test-mode-badge) {
   display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-  width: 0 !important;
-  height: 0 !important;
-  position: absolute !important;
-  left: -9999px !important;
-  top: -9999px !important;
-  z-index: -9999 !important;
 }
 
 /* mobile */

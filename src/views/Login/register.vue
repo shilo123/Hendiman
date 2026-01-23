@@ -82,7 +82,8 @@
               @click="fillDemoData"
               title="מלא פרטי דמו"
             >
-              🧪 דמו
+              <img src="https://via.placeholder.com/20x20/ff6a00/ffffff?text=🧪" alt="דמו" class="demo-icon" />
+              דמו
             </button>
           </div>
 
@@ -170,13 +171,11 @@
                     <span>📷</span>
                   </div>
                 </div>
-                (!isGoogleUser || !googleUserData || !googleUserData.picture) &&
-                (!isFacebookUser || !facebookUserData ||
-                !facebookUserData.picture)
-                <!-- העלאת תמונה (רק אם אין תמונת גוגל) -->
+                <!-- העלאת תמונה (רק אם אין תמונת גוגל או פייסבוק) -->
                 <div
                   v-if="
-                    !isGoogleUser || !googleUserData || !googleUserData.picture
+                    (!isGoogleUser || !googleUserData || !googleUserData.picture) &&
+                    (!isFacebookUser || !facebookUserData || !facebookUserData.picture)
                   "
                   class="field"
                 >
@@ -424,12 +423,10 @@
                     <span>🧰</span>
                   </div>
                 </div>
-                (!isGoogleUser || !googleUserData || !googleUserData.picture) &&
-                (!isFacebookUser || !facebookUserData ||
-                !facebookUserData.picture)
                 <div
                   v-if="
-                    !isGoogleUser || !googleUserData || !googleUserData.picture
+                    (!isGoogleUser || !googleUserData || !googleUserData.picture) &&
+                    (!isFacebookUser || !facebookUserData || !facebookUserData.picture)
                   "
                   class="field"
                 >
@@ -1068,6 +1065,17 @@ export default {
           formData.imageUrl = data.imageUrl;
         }
 
+        // וולידציה: בדיקה שחובה להעלות תמונה
+        const hasGooglePicture = this.isGoogleUser && this.googleUserData && this.googleUserData.picture;
+        const hasFacebookPicture = this.isFacebookUser && this.facebookUserData && this.facebookUserData.picture;
+        const hasUploadedImage = formData.imageUrl || formData.image;
+        
+        if (!hasGooglePicture && !hasFacebookPicture && !hasUploadedImage) {
+          this.toast.showError("חובה להעלות תמונת פרופיל", 6000);
+          this.isSubmitting = false;
+          return;
+        }
+
         delete formData.image;
         delete formData.imagePreview;
 
@@ -1215,6 +1223,17 @@ export default {
             headers: { "Content-Type": "multipart/form-data" },
           });
           formData.logoUrl = data.imageUrl;
+        }
+
+        // וולידציה: בדיקה שחובה להעלות תמונה
+        const hasGooglePicture = this.isGoogleUser && this.googleUserData && this.googleUserData.picture;
+        const hasFacebookPicture = this.isFacebookUser && this.facebookUserData && this.facebookUserData.picture;
+        const hasUploadedImage = formData.imageUrl || formData.image;
+        
+        if (!hasGooglePicture && !hasFacebookPicture && !hasUploadedImage) {
+          this.toast.showError("חובה להעלות תמונת פרופיל", 6000);
+          this.isSubmitting = false;
+          return;
         }
 
         delete formData.image;
@@ -1366,7 +1385,14 @@ export default {
         this.clientForm.city = "תל אביב";
         this.clientForm.address = "תל אביב";
         this.clientForm.howDidYouHear = "חבר המליץ";
+        // Add demo profile image
+        this.clientForm.imageUrl = "https://via.placeholder.com/200x200/ff6a00/ffffff?text=Demo";
         this.toast?.showSuccess("פרטי דמו מולאו לטופס לקוח");
+        
+        // Auto-submit after 0.5 seconds
+        setTimeout(() => {
+          this.handleClientRegister();
+        }, 500);
       } else {
         // Fill handyman form with demo data
         this.handymanForm.firstName = "דוד";
@@ -1378,12 +1404,19 @@ export default {
         this.handymanForm.address = "ירושלים";
         this.handymanForm.addressEnglish = "Jerusalem";
         this.handymanForm.howDidYouHear = "אינסטגרם";
+        // Add demo profile image
+        this.handymanForm.imageUrl = "https://via.placeholder.com/200x200/ff6a00/ffffff?text=Demo";
         // Add some demo specialties
         this.handymanForm.specialties = [
           { name: "אינסטלציה", isFullCategory: true, type: "category" },
           { name: "חשמל", isFullCategory: true, type: "category" },
         ];
         this.toast?.showSuccess("פרטי דמו מולאו לטופס הנדימן");
+        
+        // Auto-submit after 0.5 seconds
+        setTimeout(() => {
+          this.handleHandymanRegister();
+        }, 500);
       }
     },
   },
@@ -1620,6 +1653,17 @@ export default {
 
   &:active {
     transform: scale(0.95);
+  }
+
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  .demo-icon {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    border-radius: 4px;
   }
 }
 

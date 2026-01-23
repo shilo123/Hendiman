@@ -5687,6 +5687,8 @@ export default {
     },
   },
   async mounted() {
+    logger.log("[Dashboard] ⚡ Mounted hook started");
+    
     // ⚠️ CRITICAL: Enable Push Notifications FIRST, before anything else
     // This ensures it runs even if other code fails
     try {
@@ -5700,7 +5702,13 @@ export default {
     }
 
     // Fast check for active job (runs in parallel with dashboard data loading)
-    const userId = this.$route.params.id;
+    let userId = null;
+    try {
+      userId = this.$route.params.id;
+    } catch (routeError) {
+      logger.error("[Dashboard] Error getting route params:", routeError);
+    }
+    
     let activeJobCheckPromise = null;
     if (userId) {
       // Call check-active-job in parallel with fetchDashboardData
@@ -5916,10 +5924,13 @@ export default {
         this.$router.push("/");
         return;
       }
+      logger.log("[Dashboard] Fetching initial dashboard data for user:", routeId);
       const initialData = await this.store.fetchDashboardData(routeId);
+      logger.log("[Dashboard] Initial data received:", !!initialData, "User:", !!initialData?.User);
 
       // אם המשתמש לא נמצא, החזר ל-דף הבית
       if (!initialData || !initialData.User) {
+        logger.error("[Dashboard] User not found, redirecting to home");
         this.$router.push("/");
         return;
       }
@@ -5987,10 +5998,12 @@ export default {
       if (data.User.isHandyman === true) {
         try {
           const userId = this.store.user?._id || this.$route.params.id;
+          logger.log("[Dashboard] Checking subscription status for handyman:", userId);
           const { URL } = await import("@/Url/url");
           const statusResponse = await axios.get(
             `${URL}/api/subscription/status?userId=${userId}`
           );
+          logger.log("[Dashboard] Subscription status response:", statusResponse.data);
 
           if (statusResponse.data && statusResponse.data.success) {
             const status = statusResponse.data;
@@ -5999,10 +6012,12 @@ export default {
 
             // אם המשתמש חינם - אין צורך לעשות כלום
             if (status.isFree) {
+              logger.log("[Dashboard] User is free forever");
               // Free forever - no action needed
             }
             // אם המשתמש בימי נסיון - אין צורך לעשות כלום
             else if (status.isTrial) {
+              logger.log("[Dashboard] User is in trial period");
               // Still in trial - no action needed
               // If in trial and showing modal, set fillCreditCardNow to false by default
               if (this.showSubscriptionModal) {
@@ -6011,6 +6026,7 @@ export default {
             }
             // אם צריך חיוב - הצג פופאפ מנוי
             else if (status.needsBilling) {
+              logger.log("[Dashboard] User needs billing - showing subscription modal");
               this.showSubscriptionModal = true;
               // If needs billing (after expiration), force fillCreditCardNow to true
               this.fillCreditCardNow = true;
@@ -6020,17 +6036,20 @@ export default {
               status.hasActiveSubscription &&
               !status.subscriptionCancelled
             ) {
+              logger.log("[Dashboard] User has active subscription");
               // Has active subscription - no action needed
             }
           }
         } catch (statusError) {
           // אם יש שגיאה, נשתמש בלוגיקה הישנה כגיבוי
-          logger.error("Error checking subscription status:", statusError);
+          logger.error("[Dashboard] Error checking subscription status:", statusError);
+          logger.error("[Dashboard] Error details:", statusError.response?.data || statusError.message);
           const hasAccess =
             data.User.trialExpiresAt === "always" || // Free forever
             data.User.hasActiveSubscription === true;
 
           if (!hasAccess) {
+            logger.log("[Dashboard] User has no access - showing subscription modal");
             // הנדימן לא מנוי - הצג פופאפ מנוי
             this.showSubscriptionModal = true;
           }
@@ -10486,28 +10505,6 @@ $r2: 26px;
 .subscription-payment-form__stripe-element {
   padding: 12px 14px;
 
-  /* Hide Stripe test/developer buttons and iframes */
-  button[data-testid*="test"],
-  button[aria-label*="test"],
-  button[aria-label*="Test"],
-  a[href*="test"],
-  a[href*="Test"],
-  [class*="test"],
-  [class*="Test"],
-  [id*="test"],
-  [id*="Test"],
-  iframe[name*="__privateStripeFrame"],
-  iframe[name*="privateStripeFrame"],
-  iframe[src*="stripe.com"][src*="elements-inner"],
-  iframe[title*="מסגרת כלים למפתחי פס"],
-  iframe[title*="Stripe developer tools frame"] {
-    display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-    width: 0 !important;
-    height: 0 !important;
-  }
   border-radius: 10px;
   border: 1px solid rgba($orange, 0.3);
   background: rgba(255, 255, 255, 0.06);

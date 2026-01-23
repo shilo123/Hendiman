@@ -42,40 +42,23 @@ body {
   flex: 1;
 }
 
-/* הסתר את כפתור Stripe למפתחים - כל ה-iframes של Stripe */
-iframe[name*="__privateStripeFrame"],
-iframe[name*="privateStripeFrame"],
-iframe[src*="stripe.com"][src*="elements-inner"],
-iframe[src*="stripe.com"][src*="easel"],
-iframe[title*="מסגרת כלים למפתחי פס"],
-iframe[title*="Stripe developer tools frame"],
-iframe[src*="js.stripe.com"][name*="Stripe"],
-iframe[role="presentation"][src*="stripe.com"],
-.stripe-test-mode-badge,
-[class*="__PrivateStripeElement"],
-[class*="privateStripe"],
-[id*="__privateStripe"],
-[id*="privateStripe"] {
+/* הסתר רק את באדג' הטסט של Stripe */
+.stripe-test-mode-badge {
+  display: none !important;
+}
+
+/* הסתר את כפתור Stripe */
+a[href*="stripe.com"],
+[class*="PoweredBy"],
+[class*="LinkBranding"],
+[class*="StripeBranding"] {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
-  pointer-events: none !important;
   width: 0 !important;
   height: 0 !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
-  max-width: 0 !important;
-  max-height: 0 !important;
+  pointer-events: none !important;
   position: absolute !important;
   left: -9999px !important;
-  top: -9999px !important;
-  right: -9999px !important;
-  bottom: -9999px !important;
-  z-index: -99999 !important;
-  border: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  transform: scale(0) !important;
-  overflow: hidden !important;
 }
 </style>

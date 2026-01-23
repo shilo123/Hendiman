@@ -510,14 +510,23 @@
 
               <section class="ccCard ccCard--location">
                 <div class="ccLocHead">
+                  <button
+                    v-if="!isLoadingLocation && !isEditingLocation"
+                    type="button"
+                    class="ccManualLocationBtn"
+                    @click="isEditingLocation = true"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
+                    <span>בחר ידנית</span>
+                  </button>
                   <h3 class="ccSectionTitle">מיקום השירות</h3>
                   <button
-                    v-if="!isLoadingLocation"
+                    v-if="!isLoadingLocation && isEditingLocation"
                     type="button"
                     class="ccLinkBtn"
-                    @click="toggleLocationEdit"
+                    @click="isEditingLocation = false"
                   >
-                    {{ isEditingLocation ? "סגור" : "ערוך" }}
+                    סגור
                   </button>
                 </div>
 
@@ -1383,7 +1392,7 @@ export default {
       currentStep: 1,
       isLoading: false,
       isLoadingLocation: false,
-      isEditingLocation: true,
+      isEditingLocation: false,
       isImprovingLocation: false, // האם משפרים את המיקום
       detectedLocation: null, // הכתובת שנמצאה מ-reverse geocoding
       locationInputTimeout: null, // Timer for auto-closing inputs after 2 seconds of no typing
@@ -5134,6 +5143,41 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   align-items: center;
   justify-content: space-between;
   margin-bottom: 14px;
+  position: relative;
+}
+
+.ccManualLocationBtn {
+  position: absolute;
+  top: -8px;
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 10;
+
+  .material-symbols-outlined {
+    font-size: 14px;
+  }
+
+  &:hover {
+    color: rgba(255, 140, 0, 0.9);
+    border-color: rgba(255, 140, 0, 0.4);
+    background: rgba(255, 140, 0, 0.1);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
 }
 
 .ccLocMap {
@@ -9504,41 +9548,9 @@ select:focus {
 </style>
 
 <style>
-/* Global CSS to hide Stripe developer/test buttons and iframes everywhere */
-iframe[name*="__privateStripeFrame"],
-iframe[name*="privateStripeFrame"],
-iframe[src*="stripe.com"][src*="elements-inner"],
-iframe[src*="stripe.com"][src*="easel"],
-iframe[title*="מסגרת כלים למפתחי פס"],
-iframe[title*="Stripe developer tools frame"],
-iframe[src*="js.stripe.com"][name*="Stripe"],
-iframe[role="presentation"][src*="stripe.com"],
-.stripe-test-mode-badge,
-[class*="__PrivateStripeElement"],
-[class*="privateStripe"],
-[id*="__privateStripe"],
-[id*="privateStripe"] {
+/* הסתר רק את באדג' הטסט של Stripe */
+.stripe-test-mode-badge {
   display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-  width: 0 !important;
-  height: 0 !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
-  max-width: 0 !important;
-  max-height: 0 !important;
-  position: absolute !important;
-  left: -9999px !important;
-  top: -9999px !important;
-  right: -9999px !important;
-  bottom: -9999px !important;
-  z-index: -99999 !important;
-  border: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  transform: scale(0) !important;
-  overflow: hidden !important;
 }
 
 /* =========

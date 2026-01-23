@@ -288,6 +288,7 @@ export const useMainStore = defineStore("main", {
     },
     async fetchDashboardData(userId, coordinates = null) {
       try {
+        console.log("[STORE] fetchDashboardData started, userId:", userId, "coordinates:", coordinates);
         this.isLoading = true;
 
         // בנה את ה-URL עם קואורדינטות אם הן קיימות
@@ -296,17 +297,21 @@ export const useMainStore = defineStore("main", {
           url += `?lng=${coordinates.lng}&lat=${coordinates.lat}`;
         }
 
+        console.log("[STORE] Fetching dashboard data from:", url);
         let data;
         try {
           const response = await axios.get(url);
           data = response.data;
+          console.log("[STORE] Dashboard data received, success:", data?.success, "hasUser:", !!data?.User);
         } catch (axiosError) {
+          console.error("[STORE] Error fetching dashboard data:", axiosError.response?.status, axiosError.message);
           // אם יש שגיאה 400 או 404, המשתמש לא נמצא או ה-ID לא תקין
           if (
             axiosError.response &&
             (axiosError.response.status === 400 ||
               axiosError.response.status === 404)
           ) {
+            console.log("[STORE] User not found (400/404), returning null");
             return null;
           }
           // אם יש שגיאה אחרת, זרוק אותה
@@ -315,10 +320,12 @@ export const useMainStore = defineStore("main", {
 
         // אם המשתמש לא נמצא או שיש שגיאה, החזר null
         if (!data || !data.success || !data.User) {
+          console.log("[STORE] Invalid data received, returning null");
           return null;
         }
 
         // עדכן את הנתונים
+        console.log("[STORE] Updating store with user data, jobs:", data.Jobs?.length || 0, "handymen:", data.Hendimands?.length || 0);
         this.user = data.User;
         this.jobs = data.Jobs || [];
         this.handymen = data.Hendimands || [];
@@ -328,11 +335,14 @@ export const useMainStore = defineStore("main", {
         //   this.stats = data.stats;
         // }
 
+        console.log("[STORE] fetchDashboardData completed successfully");
         return data;
       } catch (error) {
+        console.error("[STORE] Fatal error in fetchDashboardData:", error);
         // אם יש שגיאה (כמו ID לא תקין), החזר null
         return null;
       } finally {
+        console.log("[STORE] Setting isLoading to false");
         this.isLoading = false;
       }
     },

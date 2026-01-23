@@ -6037,12 +6037,17 @@ function findAvailablePort(startPort) {
 
         let registrationData = null;
         let paymentMethodIdToUse = paymentMethodId;
+        let planType = "monthly"; // Default plan type
 
         // Handle PaymentIntent (new flow with wallets)
         if (paymentIntentId) {
+          serverLogger.log("[SUBSCRIPTION/COMPLETE] Retrieving payment intent:", paymentIntentId);
           const paymentIntent = await stripe.paymentIntents.retrieve(
             paymentIntentId
           );
+
+          serverLogger.log("[SUBSCRIPTION/COMPLETE] Payment intent status:", paymentIntent.status);
+          serverLogger.log("[SUBSCRIPTION/COMPLETE] Payment intent metadata:", paymentIntent.metadata);
 
           if (paymentIntent.status !== "succeeded") {
             return res.status(400).json({
@@ -6057,22 +6062,28 @@ function findAvailablePort(startPort) {
           }
 
           // Get plan type from metadata
-          const planType = paymentIntent.metadata?.planType || "monthly";
+          planType = paymentIntent.metadata?.planType || "monthly";
+          serverLogger.log("[SUBSCRIPTION/COMPLETE] Plan type:", planType);
 
           // Get registration data from metadata
           const tempRegistrationId = paymentIntent.metadata?.tempRegistrationId;
+          serverLogger.log("[SUBSCRIPTION/COMPLETE] Temp registration ID:", tempRegistrationId);
+          
           if (tempRegistrationId) {
             const tempDoc = await usersCol.findOne({
               _id: new ObjectId(tempRegistrationId),
               type: "pending_subscription",
             });
 
+            serverLogger.log("[SUBSCRIPTION/COMPLETE] Temp doc found:", !!tempDoc);
+            
             if (tempDoc && tempDoc.registrationData) {
               // Check if expired
               if (
                 tempDoc.expiresAt &&
                 new Date(tempDoc.expiresAt) < new Date()
               ) {
+                serverLogger.log("[SUBSCRIPTION/COMPLETE] Registration data expired");
                 await usersCol.deleteOne({
                   _id: new ObjectId(tempRegistrationId),
                 });
@@ -6083,12 +6094,19 @@ function findAvailablePort(startPort) {
               }
 
               registrationData = tempDoc.registrationData;
+              serverLogger.log("[SUBSCRIPTION/COMPLETE] Registration data retrieved successfully");
               // Delete the temp document after retrieving
               await usersCol.deleteOne({
                 _id: new ObjectId(tempRegistrationId),
               });
+            } else {
+              serverLogger.error("[SUBSCRIPTION/COMPLETE] Temp doc not found or no registrationData");
             }
+          } else {
+            serverLogger.error("[SUBSCRIPTION/COMPLETE] No tempRegistrationId in metadata");
           }
+          
+          serverLogger.log("[SUBSCRIPTION/COMPLETE] After paymentIntent block, registrationData:", !!registrationData);
         } else if (setupIntentId) {
           // Handle SetupIntent (legacy flow)
           const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
@@ -6145,21 +6163,34 @@ function findAvailablePort(startPort) {
           }
         }
 
+        serverLogger.log("[SUBSCRIPTION/COMPLETE] Before registrationData check, registrationData:", !!registrationData);
+
         if (!registrationData) {
+          serverLogger.error("[SUBSCRIPTION/COMPLETE] Registration data not found");
           return res.status(400).json({
             success: false,
             message: "Registration data not found",
           });
         }
 
+        serverLogger.log("[SUBSCRIPTION/COMPLETE] Registration data found, proceeding with user creation");
+        serverLogger.log("[SUBSCRIPTION/COMPLETE] Plan type value:", planType);
+
         // Get subscription amount based on plan type
         let subscriptionAmount;
-        if (planType === "annual") {
-          subscriptionAmount = 499.9; // Annual subscription price
-        } else {
-          subscriptionAmount = getMonthlySubscription(); // Monthly subscription price
+        let amountInAgorot;
+        try {
+          if (planType === "annual") {
+            subscriptionAmount = 499.9; // Annual subscription price
+          } else {
+            subscriptionAmount = getMonthlySubscription(); // Monthly subscription price
+          }
+          amountInAgorot = Math.round(subscriptionAmount * 100);
+          serverLogger.log("[SUBSCRIPTION/COMPLETE] Subscription amount:", subscriptionAmount);
+        } catch (amountError) {
+          serverLogger.error("[SUBSCRIPTION/COMPLETE] Error calculating subscription amount:", amountError);
+          throw amountError;
         }
-        const amountInAgorot = Math.round(subscriptionAmount * 100);
 
         // Get or retrieve Stripe Customer
         // If PaymentIntent was created with customer, retrieve it from metadata
@@ -6374,6 +6405,7 @@ function findAvailablePort(startPort) {
           }
 
           try {
+            serverLogger.log("[SUBSCRIPTION/COMPLETE] Creating annual subscription");
             // Create subscription with payment_method directly
             subscription = await stripe.subscriptions.create({
               customer: customer.id,
@@ -6388,7 +6420,9 @@ function findAvailablePort(startPort) {
                 planType: "annual",
               },
             });
+            serverLogger.log("[SUBSCRIPTION/COMPLETE] Annual subscription created:", subscription.id);
           } catch (subscriptionError) {
+            serverLogger.error("[SUBSCRIPTION/COMPLETE] Error creating annual subscription:", subscriptionError);
             throw subscriptionError;
           }
         } else {
@@ -6438,6 +6472,7 @@ function findAvailablePort(startPort) {
 
         // Now register the user with the subscription info
         // Reuse the registration logic from /register-handyman
+        serverLogger.log("[SUBSCRIPTION/COMPLETE] Starting user registration");
         const {
           firstName,
           lastName,
@@ -6633,17 +6668,21 @@ function findAvailablePort(startPort) {
         }
 
         // Insert user
+        serverLogger.log("[SUBSCRIPTION/COMPLETE] Attempting to insert user:", { email: userData.email, isHandyman: userData.isHandyman });
         let result;
         try {
           result = await usersCol.insertOne(userData);
+          serverLogger.log("[SUBSCRIPTION/COMPLETE] User inserted with ID:", result.insertedId);
 
           if (!result.insertedId) {
+            serverLogger.error("[SUBSCRIPTION/COMPLETE] User insertion failed - no insertedId");
             return res.status(500).json({
               success: false,
               message: "Failed to register user",
             });
           }
         } catch (insertError) {
+          serverLogger.error("[SUBSCRIPTION/COMPLETE] Error inserting user:", insertError);
           throw insertError;
         }
 
@@ -6695,12 +6734,15 @@ function findAvailablePort(startPort) {
         }
 
         // Get the created user
+        serverLogger.log("[SUBSCRIPTION/COMPLETE] Retrieving saved user with ID:", result.insertedId);
         let savedUser;
         try {
           savedUser = await usersCol.findOne({
             _id: result.insertedId,
           });
+          serverLogger.log("[SUBSCRIPTION/COMPLETE] Saved user found:", !!savedUser);
         } catch (findError) {
+          serverLogger.error("[SUBSCRIPTION/COMPLETE] Error finding saved user:", findError);
           // Return userData instead if find fails
           savedUser = userData;
           savedUser._id = result.insertedId;
@@ -6725,6 +6767,7 @@ function findAvailablePort(startPort) {
           }
         }
 
+        serverLogger.log("[SUBSCRIPTION/COMPLETE] Returning success response with user ID:", savedUser?._id);
         return res.json({
           success: true,
           user: savedUser,
@@ -6732,6 +6775,11 @@ function findAvailablePort(startPort) {
           customerId: customer.id,
         });
       } catch (error) {
+        serverLogger.error("[SUBSCRIPTION/COMPLETE] Error completing subscription:", {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+        });
         return res.status(500).json({
           success: false,
           message: "שגיאה בהשלמת הרשמת מנוי",

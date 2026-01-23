@@ -248,8 +248,16 @@ export default {
     this.handleFacebookCallback();
     
     // Check for saved biometric credentials in native app
+    // Always try to check, even if there might be errors
     if (Capacitor.isNativePlatform()) {
-      await this.checkNativeBiometricSupport();
+      try {
+        await this.checkNativeBiometricSupport();
+      } catch (error) {
+        console.error('[Login created] Error checking biometric support:', error);
+        // Don't block the app - just log the error
+        this.isBiometricAvailable = false;
+        this.hasBiometricCredentials = false;
+      }
     }
     
     // בדוק אם המשתמש הועבר לכאן כי הוא חסום
@@ -315,6 +323,9 @@ export default {
 
     async checkNativeBiometricSupport() {
       // Check if native biometric is available
+      console.log('[checkNativeBiometricSupport] Starting check...');
+      console.log('[checkNativeBiometricSupport] isNativePlatform:', Capacitor.isNativePlatform());
+      
       try {
         if (!Capacitor.isNativePlatform()) {
           console.log('[checkNativeBiometricSupport] Not a native platform');
@@ -327,7 +338,15 @@ export default {
         
         // Load plugins if not already loaded
         if (!Preferences || !Biometric) {
-          await loadNativePlugins();
+          try {
+            await loadNativePlugins();
+            console.log('[checkNativeBiometricSupport] Plugins loaded');
+          } catch (loadError) {
+            console.error('[checkNativeBiometricSupport] Error loading plugins:', loadError);
+            this.isBiometricAvailable = false;
+            this.hasBiometricCredentials = false;
+            return;
+          }
         }
 
         if (!Biometric || !Preferences) {
@@ -340,23 +359,33 @@ export default {
         console.log('[checkNativeBiometricSupport] Plugins loaded, checking biometry...');
 
         // Check if biometric is available first
+        let available = null;
         try {
           // @capgo/capacitor-native-biometric uses checkBiometry() without parameters
-          const available = await Biometric.checkBiometry();
+          available = await Biometric.checkBiometry();
           console.log('[checkNativeBiometricSupport] checkBiometry result:', JSON.stringify(available));
-          
-          // Set isBiometricAvailable based on device support (always show button if device supports it)
-          this.isBiometricAvailable = available.isAvailable === true;
-          
-          if (!available.isAvailable) {
-            console.log('[checkNativeBiometricSupport] Biometric not available. Reason:', available.errorCode || available.reason || 'unknown');
-            this.isBiometricAvailable = false;
-            this.hasBiometricCredentials = false;
-            return;
-          }
         } catch (error) {
           console.error('[checkNativeBiometricSupport] Error checking biometric:', error);
+          console.error('[checkNativeBiometricSupport] Error details:', error.message, error.stack);
           // If check fails, don't show button
+          this.isBiometricAvailable = false;
+          this.hasBiometricCredentials = false;
+          return;
+        }
+        
+        if (!available) {
+          console.log('[checkNativeBiometricSupport] No result from checkBiometry');
+          this.isBiometricAvailable = false;
+          this.hasBiometricCredentials = false;
+          return;
+        }
+        
+        // Set isBiometricAvailable based on device support (always show button if device supports it)
+        this.isBiometricAvailable = available.isAvailable === true;
+        console.log('[checkNativeBiometricSupport] isBiometricAvailable set to:', this.isBiometricAvailable);
+        
+        if (!available.isAvailable) {
+          console.log('[checkNativeBiometricSupport] Biometric not available. Reason:', available.errorCode || available.reason || 'unknown');
           this.isBiometricAvailable = false;
           this.hasBiometricCredentials = false;
           return;
@@ -368,6 +397,9 @@ export default {
           const savedUsername = await Preferences.get({ key: 'biometric_username' });
           const savedPassword = await Preferences.get({ key: 'biometric_password' });
           
+          console.log('[checkNativeBiometricSupport] Saved username exists:', !!savedUsername.value);
+          console.log('[checkNativeBiometricSupport] Saved password exists:', !!savedPassword.value);
+          
           if (savedUsername.value && savedPassword.value) {
             this.hasBiometricCredentials = true;
             this.username = savedUsername.value;
@@ -377,12 +409,14 @@ export default {
             console.log('[checkNativeBiometricSupport] No saved credentials - user needs to login first');
           }
         } catch (e) {
-          console.log('[checkNativeBiometricSupport] Error checking saved credentials:', e);
+          console.error('[checkNativeBiometricSupport] Error checking saved credentials:', e);
           this.hasBiometricCredentials = false;
         }
-        console.log('[checkNativeBiometricSupport] Biometric button will be shown:', this.isBiometricAvailable);
+        
+        console.log('[checkNativeBiometricSupport] Final state - isBiometricAvailable:', this.isBiometricAvailable, 'hasBiometricCredentials:', this.hasBiometricCredentials);
       } catch (error) {
-        console.error('[checkNativeBiometricSupport] Error:', error);
+        console.error('[checkNativeBiometricSupport] Fatal error:', error);
+        console.error('[checkNativeBiometricSupport] Error stack:', error.stack);
         this.isBiometricAvailable = false;
         this.hasBiometricCredentials = false;
       }
