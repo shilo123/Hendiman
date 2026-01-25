@@ -21,11 +21,22 @@
                 @click="handleClose"
                 aria-label="סגור"
               >
-                <span class="material-symbols-outlined">close</span>
+                <i class="ph ph-x"></i>
               </button>
               <span class="quotation-modal__title">הצעת מחיר</span>
-              <div class="quotation-modal__icon">
-                <span class="material-symbols-outlined">receipt_long</span>
+              
+              <button
+                v-if="inputMode === 'manual'"
+                type="button"
+                class="header-ai-btn"
+                @click="requestAISuggestion"
+                :disabled="isLoadingAI"
+              >
+                <i class="ph-fill ph-sparkle"></i>
+                <span>AI</span>
+              </button>
+              <div v-else class="quotation-modal__icon">
+                <i class="ph ph-receipt"></i>
               </div>
             </div>
 
@@ -37,9 +48,12 @@
                     <p class="job-info-card__label">פרטי עבודה</p>
                     <h3 class="job-info-card__title">{{ getSubcategoryText() }}</h3>
                     <div class="job-info-card__location">
-                      <span class="material-symbols-outlined">location_on</span>
+                      <i class="ph ph-map-pin"></i>
                       <span>{{ job?.locationText || "מיקום לא צוין" }}</span>
                     </div>
+                    <p v-if="job?.desc" class="job-info-card__desc">
+                      {{ job.desc }}
+                    </p>
                   </div>
                   <div v-if="job?.imageUrl && job.imageUrl.length > 0" class="job-info-card__image" :style="{ backgroundImage: `url(${job.imageUrl[0]})` }"></div>
                 </div>
@@ -55,7 +69,7 @@
                   <div class="text-input-header">
                     <label class="input-label">פירוט ההצעה</label>
                     <div class="edit-hint">
-                      <span class="material-symbols-outlined">edit</span>
+                      <i class="ph ph-pencil-simple"></i>
                       <span>עריכה</span>
                     </div>
                   </div>
@@ -68,7 +82,7 @@
                       maxlength="500"
                     ></textarea>
                     <div class="textarea-icon">
-                      <span class="material-symbols-outlined">format_quote</span>
+                      <i class="ph ph-quotes"></i>
                     </div>
                   </div>
                 </div>
@@ -88,19 +102,6 @@
                     <span class="price-currency">₪</span>
                   </div>
                 </div>
-
-                <!-- AI Button - Third -->
-                <div class="ai-button-wrapper">
-                  <button
-                    type="button"
-                    class="ai-suggest-btn"
-                    @click="requestAISuggestion"
-                    :disabled="isLoadingAI"
-                  >
-                    <span class="material-symbols-outlined ai-suggest-btn__icon">auto_awesome</span>
-                    <span>צור הצעה עם AI</span>
-                  </button>
-                </div>
               </div>
 
               <!-- AI Writing Mode -->
@@ -108,7 +109,7 @@
                 <div class="ai-writing-container">
                   <div class="ai-header">
                     <div class="ai-avatar">
-                      <span class="material-symbols-outlined">auto_awesome</span>
+                      <i class="ph-fill ph-sparkle"></i>
                       <span class="ai-pulse"></span>
                     </div>
                     <div class="ai-title">
@@ -172,7 +173,7 @@
                     @click="switchToManual"
                     :disabled="isLoadingAI"
                   >
-                    <span class="material-symbols-outlined">edit</span>
+                    <i class="ph ph-pencil-simple"></i>
                     כתוב ידנית
                   </button>
                   <button
@@ -181,7 +182,7 @@
                     @click="requestAISuggestion"
                     :disabled="isLoadingAI"
                   >
-                    <span class="material-symbols-outlined">refresh</span>
+                    <i class="ph ph-arrows-clockwise"></i>
                     הצעה אחרת
                   </button>
                 </div>
@@ -204,11 +205,11 @@
                 @click="submitQuotation"
                 :disabled="!canSubmit || isSubmitting"
               >
-                <span v-if="isSubmitting" class="submit-btn__loader"></span>
-                <span v-else class="submit-btn__content">
-                  <span class="material-symbols-outlined submit-btn__icon">arrow_back</span>
+                <div v-if="isSubmitting" class="submit-btn__loader"></div>
+                <div v-else class="submit-btn__content">
+                  <i class="ph-bold ph-paper-plane-right"></i>
                   <span>שליחת הצעה</span>
-                </span>
+                </div>
               </button>
             </div>
 
@@ -561,27 +562,27 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-$bg: #121212;
-$bg-card: #1c1c1e;
-$bg-input: #18181a;
-$text: rgba(255, 255, 255, 0.9);
-$muted: rgba(255, 255, 255, 0.4);
-$primary: #ec6d13;
-$primary-dark: #d15605;
-$orange: #ec6d13;
-$orange2: #ff7d21;
-$orange-glow: rgba(236, 109, 19, 0.4);
-$success: #00d26a;
-$error: #ff3b3b;
-$ai-purple: #a855f7;
-$ai-purple-glow: rgba(168, 85, 247, 0.3);
-$font-family: "Inter", "Noto Sans Hebrew", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+$bg: #0f0f10;
+$bg-card: #18181b;
+$bg-input: #09090b;
+$text: #ffffff;
+$muted: #a1a1aa;
+$primary: #ff7b00;
+$primary-dark: #e06c00;
+$orange: #ff7b00;
+$orange-glow: rgba(255, 123, 0, 0.2);
+$success: #10b981;
+$error: #ef4444;
+$ai-purple: #8b5cf6;
+$ai-gradient: linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%);
+$font-family: "Heebo", "Inter", sans-serif;
 
 .quotation-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   z-index: 100020;
   display: flex;
   align-items: flex-end;
@@ -591,18 +592,26 @@ $font-family: "Inter", "Noto Sans Hebrew", -apple-system, BlinkMacSystemFont, "S
 .quotation-modal {
   width: 100%;
   max-width: 500px;
-  height: 95dvh;
+  height: 92dvh;
   background: $bg;
   border-radius: 2.5rem 2.5rem 0 0;
-  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: $font-family;
+
+  @media (min-width: 640px) {
+    height: auto;
+    max-height: 90vh;
+    border-radius: 2.5rem;
+    margin-bottom: 20px;
+  }
 
   &__handle-area {
-    padding: 12px 0 8px;
+    padding: 12px 0 4px;
     display: flex;
     justify-content: center;
     cursor: grab;
@@ -617,83 +626,87 @@ $font-family: "Inter", "Noto Sans Hebrew", -apple-system, BlinkMacSystemFont, "S
   }
 
   &__handle {
-    width: 48px;
-    height: 6px;
-    background: #3f3f46;
-    border-radius: 9999px;
-    transition: background 0.2s;
+    width: 40px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 999px;
   }
 
   &__header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 20px;
+    padding: 12px 20px;
     flex-shrink: 0;
     z-index: 10;
     background: $bg;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   }
 
   &__title {
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 18px;
+    font-weight: 800;
     color: $text;
-    font-family: $font-family;
+    letter-spacing: -0.01em;
   }
 
   &__icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: rgba(63, 63, 70, 0.5);
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
 
-    .material-symbols-outlined {
+    i {
       font-size: 20px;
       color: $muted;
     }
   }
 
   &__close {
-    padding: 8px;
-    margin-right: -8px;
-    border-radius: 50%;
-    background: transparent;
-    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     color: $muted;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     align-items: center;
     justify-content: center;
 
-    .material-symbols-outlined {
-      font-size: 24px;
+    i {
+      font-size: 20px;
     }
 
     &:hover {
       color: $text;
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.15);
     }
   }
 
   &__job-info {
-    padding: 16px 20px;
+    padding: 16px 20px 0;
   }
 
   &__content {
     flex: 1;
     overflow-y: auto;
-    padding: 16px 20px 128px;
+    padding: 16px 20px 140px;
     min-height: 0;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-
+    -webkit-overflow-scrolling: touch;
+    
     &::-webkit-scrollbar {
-      display: none;
+      width: 4px;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
     }
   }
 
@@ -704,23 +717,24 @@ $font-family: "Inter", "Noto Sans Hebrew", -apple-system, BlinkMacSystemFont, "S
     right: 0;
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 16px 20px;
-    padding-bottom: calc(32px + env(safe-area-inset-bottom));
-    background: rgba($bg, 0.95);
-    backdrop-filter: blur(12px);
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    gap: 12px;
+    padding: 16px 20px calc(16px + env(safe-area-inset-bottom, 24px));
+    background: rgba($bg, 0.9);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
     z-index: 20;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.3);
   }
 
   &__error {
     position: absolute;
-    bottom: 100px;
+    bottom: 110px;
     left: 20px;
     right: 20px;
     padding: 12px 16px;
-    background: rgba($error, 0.15);
-    border: 1px solid rgba($error, 0.4);
+    background: rgba($error, 0.1);
+    border: 1px solid rgba($error, 0.2);
     border-radius: 12px;
     color: $error;
     font-size: 14px;
@@ -728,181 +742,189 @@ $font-family: "Inter", "Noto Sans Hebrew", -apple-system, BlinkMacSystemFont, "S
     display: flex;
     align-items: center;
     gap: 8px;
+    z-index: 25;
+    animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  }
+}
 
-    .error-icon {
-      font-size: 18px;
-    }
+.header-ai-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: $ai-gradient;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+
+  i {
+    font-size: 16px;
+  }
+
+  &:hover:not(:disabled) {
+    box-shadow: 0 6px 16px rgba(139, 92, 246, 0.45);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: scale(0.96);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 }
 
 .job-info-card {
-  margin-top: 16px;
-  margin-bottom: 32px;
+  margin-bottom: 20px;
 
   &__content {
     display: flex;
-    align-items: center;
     gap: 16px;
-    padding: 12px;
-    border-radius: 1rem;
+    padding: 16px;
+    border-radius: 1.25rem;
     background: $bg-card;
     border: 1px solid rgba(255, 255, 255, 0.05);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   }
 
   &__details {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
 
   &__label {
-    font-size: 12px;
-    font-weight: 700;
+    font-size: 11px;
+    font-weight: 800;
     color: $primary;
-    margin-bottom: 4px;
-    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
   &__title {
-    font-size: 14px;
-    font-weight: 700;
+    font-size: 17px;
+    font-weight: 800;
     color: $text;
-    margin-bottom: 4px;
-    line-height: 1.3;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.2;
   }
 
   &__location {
     display: flex;
     align-items: center;
-    gap: 4px;
-    font-size: 12px;
-    color: #71717a;
-    margin-top: 4px;
+    gap: 6px;
+    font-size: 13px;
+    color: $muted;
+    margin-top: 2px;
 
-    .material-symbols-outlined {
-      font-size: 14px;
+    i {
+      font-size: 16px;
+      color: $primary;
     }
   }
 
+  &__desc {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.5;
+    margin-top: 8px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 8px 12px;
+    border-radius: 8px;
+    border-right: 2px solid rgba($primary, 0.3);
+  }
+
   &__image {
-    width: 64px;
-    height: 64px;
-    border-radius: 0.75rem;
+    width: 72px;
+    height: 72px;
+    border-radius: 12px;
     background-size: cover;
     background-position: center;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     flex-shrink: 0;
   }
 }
 
-.quotations-count-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 12px;
-  border-radius: 20px;
-  background: rgba($ai-purple, 0.15);
-  border: 1px solid rgba($ai-purple, 0.3);
-  color: $ai-purple;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.input-section {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
 .input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  margin-bottom: 24px;
 }
 
 .input-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: $muted;
+  font-size: 14px;
+  font-weight: 800;
+  color: $text;
   margin-bottom: 12px;
-  padding-right: 4px;
-  letter-spacing: 0.5px;
+  display: block;
+  opacity: 0.9;
 }
 
 .price-input-wrapper {
   position: relative;
-  display: flex;
-  align-items: center;
+  width: 100%;
 }
 
 .price-input {
   width: 100%;
-  padding: 32px 32px 32px 64px;
-  border-radius: 1.5rem;
-  border: 2px solid rgba($primary, 0.6);
+  height: 80px;
+  padding: 0 24px 0 60px;
+  border-radius: 1.25rem;
+  border: 2px solid rgba(255, 255, 255, 0.08);
   background: $bg-input;
-  color: $text;
-  font-size: 5rem;
-  font-weight: 700;
-  font-family: $font-family;
-  transition: all 0.2s;
+  color: $primary;
+  font-size: 42px;
+  font-weight: 900;
   text-align: center;
-  box-shadow: 0 4px 20px -4px rgba(236, 109, 19, 0.1);
+  transition: all 0.2s ease;
 
   &::placeholder {
-    color: #3f3f46;
-    font-weight: 300;
+    color: rgba(255, 255, 255, 0.1);
   }
 
   &:focus {
     outline: none;
     border-color: $primary;
-    box-shadow: 0 4px 20px -4px rgba(236, 109, 19, 0.2);
+    background: rgba($primary, 0.03);
+    box-shadow: 0 0 0 4px rgba($primary, 0.1);
   }
-
-  /* Hide number input spinners */
-  &::-webkit-outer-spin-button,
-  &::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    appearance: none;
-    margin: 0;
-  }
-  -moz-appearance: textfield;
-  appearance: textfield;
 }
 
 .price-currency {
   position: absolute;
-  left: 32px;
+  left: 24px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 3rem;
-  font-weight: 300;
-  color: #71717a;
+  font-size: 24px;
+  font-weight: 800;
+  color: $muted;
 }
 
 .text-input-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
-  padding: 0 4px;
+  align-items: center;
+  margin-bottom: 10px;
 }
 
 .edit-hint {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: rgba($primary, 0.8);
-  font-size: 10px;
-  font-weight: 500;
-
-  .material-symbols-outlined {
-    font-size: 16px;
-  }
+  color: $primary;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.8;
 }
 
 .textarea-wrapper {
@@ -911,589 +933,206 @@ $font-family: "Inter", "Noto Sans Hebrew", -apple-system, BlinkMacSystemFont, "S
 
 .text-input {
   width: 100%;
-  max-width: 100%;
-  padding: 16px;
-  border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 16px 16px 16px 40px;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   background: $bg-card;
-  color: $text;
-  font-size: 14px;
-  font-weight: 400;
-  font-family: $font-family;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 15px;
+  line-height: 1.6;
   resize: none;
-  transition: all 0.2s;
-  line-height: 1.75;
-  min-height: 160px;
-  box-sizing: border-box;
-  overflow-wrap: break-word;
-  word-wrap: break-word;
-
-  &::placeholder {
-    color: #71717a;
-  }
+  min-height: 140px;
+  transition: all 0.2s ease;
 
   &:focus {
     outline: none;
     border-color: rgba($primary, 0.4);
+    background: rgba(255, 255, 255, 0.04);
   }
 }
 
 .textarea-icon {
   position: absolute;
-  bottom: 16px;
   left: 16px;
-  pointer-events: none;
-  opacity: 0.5;
-
-  .material-symbols-outlined {
-    font-size: 18px;
-    color: #71717a;
-  }
-}
-
-.ai-button-wrapper {
-  display: flex;
-  justify-content: center;
-  position: relative;
-  z-index: 10;
-  margin: 16px 0;
-}
-
-.ai-suggest-btn {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 24px;
-  border-radius: 9999px;
-  background: rgba(42, 23, 14, 0.8);
-  backdrop-filter: blur(4px);
-  border: 1px solid rgba($primary, 0.3);
-  color: $primary;
-  font-size: 14px;
-  font-weight: 600;
-  font-family: $font-family;
-  cursor: pointer;
-  transition: all 0.3s;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-
-  &::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: 9999px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    transition: all 0.3s;
-  }
-
-  &:hover:not(:disabled) {
-    background: $primary;
-    color: white;
-    border-color: $primary;
-
-    &::before {
-      border-color: transparent;
-    }
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  &__icon {
-    font-size: 18px;
-    font-variation-settings: 'FILL' 1;
-  }
-}
-
-@keyframes sparkle {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(0.9); }
-}
-
-.ai-section {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-// Price input in AI mode
-.ai-section .input-group {
-  margin-top: 0;
-}
-
-.ai-section .price-input-wrapper {
-  margin-top: 0;
-}
-
-.ai-section .price-input {
-  font-size: 3rem; // Smaller than manual mode but still prominent
-  padding: 24px 24px 24px 56px;
-  
-  @media (max-width: 640px) {
-    font-size: 2.5rem;
-    padding: 20px 20px 20px 48px;
-  }
-}
-
-.ai-section .price-currency {
-  font-size: 2.5rem;
-  left: 24px;
-  
-  @media (max-width: 640px) {
-    font-size: 2rem;
-    left: 20px;
-  }
+  bottom: 16px;
+  color: rgba(255, 255, 255, 0.15);
+  font-size: 20px;
 }
 
 .ai-writing-container {
-  padding: 20px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba($ai-purple, 0.1), rgba($ai-purple, 0.05));
-  border: 1px solid rgba($ai-purple, 0.3);
+  padding: 24px;
+  border-radius: 1.5rem;
+  background: rgba(139, 92, 246, 0.05);
+  border: 1px solid rgba(139, 92, 246, 0.2);
   position: relative;
   overflow: hidden;
-
-  &::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, $ai-purple, $orange, $ai-purple);
-    background-size: 200% 100%;
-    animation: gradient-flow 2s linear infinite;
-  }
-}
-
-@keyframes gradient-flow {
-  0% { background-position: 0% 0%; }
-  100% { background-position: 200% 0%; }
-}
-
-.ai-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
 }
 
 .ai-avatar {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 12px;
-  background: linear-gradient(135deg, $ai-purple, darken($ai-purple, 15%));
+  background: $ai-gradient;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  color: white;
+  font-size: 22px;
   position: relative;
-}
-
-.ai-pulse {
-  position: absolute;
-  inset: -2px;
-  border-radius: 14px;
-  border: 2px solid $ai-purple;
-  animation: pulse 1.5s ease-out infinite;
-}
-
-@keyframes pulse {
-  0% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(1.3); opacity: 0; }
-}
-
-.ai-title {
-  flex: 1;
-  font-size: 16px;
-  font-weight: 700;
-  color: $text;
+  z-index: 2;
 }
 
 .ai-badge {
+  background: $ai-gradient;
   padding: 4px 10px;
   border-radius: 8px;
-  background: linear-gradient(135deg, $ai-purple, darken($ai-purple, 10%));
   color: white;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-}
-
-.ai-price-display {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: rgba($ai-purple, 0.15);
-  margin-bottom: 16px;
-}
-
-.ai-price-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: $muted;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.ai-price-range {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.ai-price-value {
-  font-size: 28px;
   font-weight: 900;
-  color: $ai-purple;
-}
-
-.ai-price-separator {
-  font-size: 20px;
-  font-weight: 600;
-  color: $muted;
-}
-
-.ai-price-currency {
-  font-size: 18px;
-  font-weight: 700;
-  margin-right: 2px;
+  font-size: 11px;
 }
 
 .ai-text-display {
-  padding: 14px 16px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 16px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
+  margin: 16px 0;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.ai-text-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: $muted;
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.ai-price-display {
+  background: rgba(139, 92, 246, 0.1);
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(139, 92, 246, 0.2);
 }
 
-.ai-text-content {
-  font-size: 15px;
-  font-weight: 500;
-  color: $text;
-  line-height: 1.7;
-  max-height: 150px;
-  overflow-y: auto;
-  scroll-behavior: smooth;
-  
-  // Hide scrollbar but keep functionality
-  scrollbar-width: thin;
-  scrollbar-color: rgba($ai-purple, 0.3) transparent;
-  
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-  
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  
-  &::-webkit-scrollbar-thumb {
-    background: rgba($ai-purple, 0.3);
-    border-radius: 3px;
-    
-    &:hover {
-      background: rgba($ai-purple, 0.5);
-    }
-  }
-}
-
-.ai-text-stream {
-  white-space: pre-wrap;
-}
-
-.ai-typing-indicator {
-  display: inline-flex;
-  gap: 4px;
-
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: $ai-purple;
-    animation: bounce 1.4s infinite ease-in-out both;
-
-    &:nth-child(1) { animation-delay: -0.32s; }
-    &:nth-child(2) { animation-delay: -0.16s; }
-  }
-}
-
-@keyframes bounce {
-  0%, 80%, 100% { transform: scale(0); }
-  40% { transform: scale(1); }
+.ai-price-value {
+  color: #a78bfa;
+  font-size: 32px;
+  font-weight: 900;
 }
 
 .ai-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+  margin-top: 20px;
 }
 
 .ai-action-btn {
-  padding: 12px 16px;
+  height: 50px;
   border-radius: 12px;
-  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   font-weight: 700;
-  font-family: $font-family;
   cursor: pointer;
-  transition: all 0.2s;
-
+  transition: all 0.2s ease;
+  
   &--secondary {
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    background: rgba(255, 255, 255, 0.06);
-    color: $text;
-
-    &:hover:not(:disabled) {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    
+    &:hover {
+      background: rgba(255, 255, 255, 0.08);
     }
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 }
 
 .cancel-btn {
-  min-width: 80px;
-  padding: 16px;
-  border-radius: 0;
-  border: none;
+  height: 56px;
+  padding: 0 24px;
   background: transparent;
-  color: #71717a;
-  font-size: 14px;
-  font-weight: 500;
-  font-family: $font-family;
+  border: none;
+  color: $muted;
+  font-weight: 700;
+  font-size: 16px;
   cursor: pointer;
   transition: color 0.2s;
 
-  &:hover:not(:disabled) {
-    color: $text;
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  &:hover {
+    color: white;
   }
 }
 
 .submit-btn {
   flex: 1;
-  padding: 16px;
-  border-radius: 1rem;
+  height: 56px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #FF8F00 0%, #FF5F00 100%);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(to right, $primary, $orange2);
   color: white;
-  font-size: 16px;
-  font-weight: 700;
-  font-family: $font-family;
-  cursor: pointer;
-  transition: all 0.2s;
+  font-weight: 800;
+  font-size: 17px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  box-shadow: 0 8px 25px -8px rgba(236, 109, 19, 0.4);
+  gap: 10px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(255, 95, 0, 0.3);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &__content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  i {
+    font-size: 20px;
+  }
 
   &:hover:not(:disabled) {
-    background: linear-gradient(to right, $primary, $primary);
-    transform: scale(0.98);
+    box-shadow: 0 12px 32px rgba(255, 95, 0, 0.45);
+    transform: translateY(-2px);
   }
 
   &:active:not(:disabled) {
-    transform: scale(0.98);
+    transform: translateY(0) scale(0.97);
   }
 
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-    transform: none;
+    box-shadow: none;
   }
+}
 
-  &__content {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-direction: row-reverse;
-  }
-
-  &__icon {
-    font-size: 20px;
-    transition: transform 0.2s;
-  }
-
-  &:hover:not(:disabled) &__icon {
-    transform: translateX(4px);
-  }
-
-  &__loader {
-    width: 20px;
-    height: 20px;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
+.submit-btn__loader {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
-/* Transitions */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
+@keyframes shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+  40%, 60% { transform: translate3d(4px, 0, 0); }
 }
 
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-.slide-up-enter-active {
-  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.slide-up-leave-active {
-  transition: transform 0.25s cubic-bezier(0.4, 0, 1, 1);
-}
-
-.slide-up-enter-from,
-.slide-up-leave-to {
-  transform: translateY(100%);
-}
-
-/* Mobile Responsiveness */
 @media (max-width: 420px) {
   .quotation-modal {
-    max-height: 95vh;
-    border-radius: 20px 20px 0 0;
-
-    &__header {
-      padding: 6px 16px 12px;
-    }
-
-    &__title {
-      font-size: 18px;
-
-      &-icon {
-        font-size: 20px;
-      }
-    }
-
-    &__close {
-      width: 34px;
-      height: 34px;
-      font-size: 16px;
-    }
-
-    &__job-info {
-      padding: 12px 16px;
-    }
-
-    &__content {
-      padding: 16px;
-    }
-
-    &__footer {
-      padding: 12px 16px;
-      padding-bottom: calc(12px + env(safe-area-inset-bottom));
-      gap: 10px;
-    }
+    &__title { font-size: 16px; }
+    &__content { padding: 16px 16px 140px; }
+    &__footer { padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 24px)); }
   }
-
+  
   .job-info-card {
-    padding: 12px;
-
-    &__icon {
-      width: 38px;
-      height: 38px;
-      font-size: 18px;
-    }
-
-    &__title {
-      font-size: 15px;
-    }
-
-    &__location {
-      font-size: 12px;
-    }
-
-    &__desc {
-      font-size: 12px;
-    }
+    &__title { font-size: 15px; }
+    &__image { width: 60px; height: 60px; }
   }
-
-  .input-label {
-    font-size: 13px;
-  }
-
-  .price-input {
-    padding: 14px 44px 14px 14px;
-    font-size: 18px;
-  }
-
-  .price-currency {
-    font-size: 18px;
-  }
-
-  .text-input {
-    padding: 12px 14px;
-    font-size: 14px;
-  }
-
-  .ai-suggest-btn {
-    padding: 14px;
-    font-size: 14px;
-  }
-
-  .ai-writing-container {
-    padding: 16px;
-  }
-
-  .ai-avatar {
-    width: 36px;
-    height: 36px;
-    font-size: 18px;
-  }
-
-  .ai-title {
-    font-size: 14px;
-  }
-
-  .ai-price-value {
-    font-size: 24px;
-  }
-
-  .ai-text-content {
-    font-size: 14px;
-    max-height: 120px;
-  }
-
-  .ai-action-btn {
-    padding: 10px 12px;
-    font-size: 13px;
-  }
-
-  .cancel-btn,
-  .submit-btn {
-    padding: 14px;
-    font-size: 14px;
-  }
+  
+  .price-input { height: 70px; font-size: 32px; }
 }
 </style>
 

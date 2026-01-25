@@ -136,6 +136,11 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
     // - Root-level notification is REQUIRED for the plugin to display notifications
     // - Data field contains action buttons info for native app to handle
     // - NOTE: icon field is NOT supported in root-level notification for native apps
+    
+    // Build click URL for deep linking
+    const jobId = data.jobId || "";
+    const clickUrl = jobId ? `${CLIENT_URL}/job/${jobId}` : `${CLIENT_URL}/Dashboard`;
+    
     const message = {
       // Root-level notification - REQUIRED for Capacitor Push Notifications plugin
       // This is what makes notifications appear in native Android apps
@@ -149,11 +154,13 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
       data: {
         title: title,
         body: body,
+        // Deep link URL - for navigating to job page
+        click_action: clickUrl,
+        url: clickUrl,
         // Action buttons info - will be used by native app to create notification with actions
         action_buttons: JSON.stringify([
-          { action: "skip", title: "דלג" },
-          { action: "accept", title: "קבל" },
-          { action: "view", title: "צפה" }
+          { action: "accept", title: "✅ קבל" },
+          { action: "skip", title: "⏭️ דלג" }
         ]),
         ...data,
         // Convert all data values to strings (FCM requirement)
@@ -170,7 +177,8 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
         notification: {
           channelId: "default", // Required for Android 8.0+ (Oreo)
           sound: "default",
-          // clickAction removed - not needed for Capacitor Push Notifications
+          clickAction: "OPEN_JOB_VIEW", // Custom click action for Android
+          tag: `job_${jobId}`, // Group notifications by job
         },
         // Note: Action buttons are included in data.action_buttons
         // The native app will need to create notification with actions using this data
@@ -188,7 +196,12 @@ async function sendPushNotification(fcmToken, title, body, data = {}) {
               title: title,
               body: body,
             },
+            // Deep link for iOS
+            "mutable-content": 1,
           },
+          // Custom data for iOS deep linking
+          jobId: jobId,
+          url: clickUrl,
         },
       },
     };

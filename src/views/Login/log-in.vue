@@ -140,17 +140,29 @@
           </svg>
         </button>
 
-        <!-- Biometric (only in native app and if available) -->
+        <!-- Biometric (always show in native app, handle errors on click) -->
         <button
-          v-if="isNativeApp && isBiometricAvailable"
+          v-if="isNativeApp"
           type="button"
           class="social-btn social-btn--biometric"
-          @click="handleBiometricLogin"
+          :class="{ 
+            'social-btn--biometric-unavailable': !isBiometricAvailable && !biometricLoading,
+            'social-btn--biometric-ready': hasBiometricCredentials 
+          }"
+          @click="handleBiometricClick"
           :disabled="biometricLoading"
         >
-          <span class="material-symbols-outlined social-btn__icon--biometric">fingerprint</span>
+          <span v-if="biometricLoading" class="social-btn__loader"></span>
+          <span v-else class="material-symbols-outlined social-btn__icon--biometric">fingerprint</span>
         </button>
       </div>
+
+      <!-- Biometric Setup Sheet -->
+      <BiometricSetupSheet
+        :visible="showBiometricSetupSheet"
+        @close="showBiometricSetupSheet = false"
+        @success="onBiometricSetupSuccess"
+      />
 
       <!-- Sign Up Prompt -->
       <div class="login__footer">
@@ -174,50 +186,26 @@ import {
   startRegistration,
   startAuthentication,
 } from "@simplewebauthn/browser";
+import BiometricSetupSheet from "@/components/Login/BiometricSetupSheet.vue";
 
-// Conditional imports for native-only plugins
-// Using dynamic imports to avoid build errors when plugins aren't installed
-let Preferences = null;
-let Biometric = null;
+// Direct imports for Capacitor plugins - they are always available when installed
+import { Preferences } from "@capacitor/preferences";
+import { NativeBiometric } from "@capgo/capacitor-native-biometric";
 
-// Helper function to load native plugins dynamically at runtime
-// This prevents webpack from trying to bundle them during build
+// Use direct references
+const Biometric = NativeBiometric;
+
+// Helper function - no longer needed for loading, but kept for compatibility
 const loadNativePlugins = async () => {
-  if (typeof window === "undefined" || !Capacitor.isNativePlatform()) {
-    return;
-  }
-  
-  try {
-    // Load Preferences plugin using dynamic import
-    if (!Preferences) {
-      try {
-        const PrefsModule = await import(/* webpackIgnore: true */ "@capacitor/preferences");
-        Preferences = PrefsModule.Preferences;
-      } catch (e) {
-        // Plugin not available - will handle gracefully
-        console.log("Preferences plugin not available");
-      }
-    }
-    
-    // Try to load biometric plugin - it might not exist
-    // If it doesn't exist, we'll use WebAuthn as fallback
-    if (!Biometric) {
-      try {
-        const BiometricModule = await import(/* webpackIgnore: true */ "@capgo/capacitor-native-biometric");
-        Biometric = BiometricModule.NativeBiometric;
-      } catch (e) {
-        // Plugin not installed or not available - will use WebAuthn
-        console.log("Biometric plugin not available, will use WebAuthn fallback");
-      }
-    }
-  } catch (error) {
-    // Silently fail - plugins will be null and code will handle it gracefully
-    console.log("Native plugins check failed:", error.message);
-  }
+  // Plugins are now imported directly - nothing to do
+  console.log('[loadNativePlugins] Plugins imported directly, Biometric:', !!Biometric, 'Preferences:', !!Preferences);
 };
 
 export default {
   name: "logIn",
+  components: {
+    BiometricSetupSheet,
+  },
   data() {
     return {
       username: "",
@@ -239,6 +227,8 @@ export default {
       currentUserId: null,
       // For Android IME handling
       lastUsernameValue: "",
+      // Biometric setup sheet
+      showBiometricSetupSheet: false,
     };
   },
   async created() {
@@ -247,17 +237,34 @@ export default {
     this.handleGoogleCallback();
     this.handleFacebookCallback();
     
+    // DEBUG: Show platform info
+    const platformInfo = `Platform: ${Capacitor.getPlatform()}\nisNative: ${Capacitor.isNativePlatform()}\nisNativeApp: ${this.isNativeApp}`;
+    console.log('[Login created] Platform info:', platformInfo);
+    
     // Check for saved biometric credentials in native app
     // Always try to check, even if there might be errors
     if (Capacitor.isNativePlatform()) {
+      console.log('[Login created] Native platform detected, checking biometric...');
       try {
         await this.checkNativeBiometricSupport();
+        console.log('[Login created] Biometric check completed. isBiometricAvailable:', this.isBiometricAvailable, 'hasBiometricCredentials:', this.hasBiometricCredentials);
+        
+        // Auto-show biometric prompt if credentials exist
+        if (this.isBiometricAvailable && this.hasBiometricCredentials) {
+          console.log('[Login created] Biometric credentials found, auto-prompting...');
+          // Small delay to let the UI render first
+          setTimeout(() => {
+            this.handleBiometricLogin();
+          }, 500);
+        }
       } catch (error) {
         console.error('[Login created] Error checking biometric support:', error);
         // Don't block the app - just log the error
         this.isBiometricAvailable = false;
         this.hasBiometricCredentials = false;
       }
+    } else {
+      console.log('[Login created] Not a native platform, skipping biometric check');
     }
     
     // בדוק אם המשתמש הועבר לכאן כי הוא חסום
@@ -297,6 +304,13 @@ export default {
       this.isMobile = isNative || isMobileDevice;
       // Only set isNativeApp to true if actually running in native app (not web)
       this.isNativeApp = isNative;
+      
+      // Debug logs
+      console.log('[checkIfMobile] Capacitor.isNativePlatform():', isNative);
+      console.log('[checkIfMobile] Capacitor.getPlatform():', Capacitor.getPlatform());
+      console.log('[checkIfMobile] userAgent:', userAgent);
+      console.log('[checkIfMobile] isMobile:', this.isMobile);
+      console.log('[checkIfMobile] isNativeApp:', this.isNativeApp);
     },
 
     // Handle Android IME composition end event
@@ -433,6 +447,30 @@ export default {
       await this.checkNativeBiometricSupport();
     },
 
+    handleBiometricClick() {
+      // If biometric credentials already exist, perform login
+      if (this.hasBiometricCredentials) {
+        this.handleBiometricLogin();
+      } else {
+        // Otherwise, show setup sheet
+        this.showBiometricSetupSheet = true;
+      }
+    },
+
+    onBiometricSetupSuccess(userData) {
+      // Close the sheet
+      this.showBiometricSetupSheet = false;
+      
+      // Navigate to dashboard
+      if (userData && userData._id) {
+        this.toast?.showSuccess("התחברות בוצעה בהצלחה!");
+        this.$router.push({
+          name: "Dashboard",
+          params: { id: userData._id },
+        });
+      }
+    },
+
     async handleBiometricLogin() {
       // For native apps, use Capacitor Biometric
       if (Capacitor.isNativePlatform()) {
@@ -529,17 +567,25 @@ export default {
     },
 
     async handleNativeBiometricLogin() {
+      console.log('[handleNativeBiometricLogin] Starting...');
+      console.log('[handleNativeBiometricLogin] Biometric object:', Biometric);
+      console.log('[handleNativeBiometricLogin] Preferences object:', Preferences);
+      
       // Load plugins if not already loaded
       if (!Preferences || !Biometric) {
+        console.log('[handleNativeBiometricLogin] Loading plugins...');
         await loadNativePlugins();
       }
 
       // Check again after loading
       if (!Preferences || !Biometric) {
-        console.log("[Biometric] Plugins not available after loading");
+        console.log("[handleNativeBiometricLogin] Plugins not available after loading");
+        alert('DEBUG: Biometric=' + !!Biometric + ', Preferences=' + !!Preferences);
         this.toast?.showError("תוסף ביומטרי לא זמין. נסה להתחבר עם שם משתמש וסיסמה");
         return;
       }
+      
+      console.log('[handleNativeBiometricLogin] Plugins available, checking biometry...');
 
       // Check if biometric is actually available on the device
       try {
@@ -1360,6 +1406,43 @@ $font-display: "Heebo", "Noto Sans Hebrew", sans-serif;
       opacity: 0.6;
       cursor: not-allowed;
     }
+  }
+
+  &--biometric-unavailable {
+    opacity: 0.4;
+  }
+
+  &--biometric-ready {
+    border-color: rgba(242, 124, 14, 0.6);
+    background: rgba(242, 124, 14, 0.15);
+    box-shadow: 0 0 15px rgba(242, 124, 14, 0.3);
+    animation: biometricPulse 2s ease-in-out infinite;
+
+    .social-btn__icon--biometric {
+      color: #ff9500;
+    }
+  }
+
+  &__loader {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(242, 124, 14, 0.2);
+    border-top-color: #f27c0d;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes biometricPulse {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(242, 124, 14, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(242, 124, 14, 0.5);
   }
 }
 

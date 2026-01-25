@@ -244,25 +244,27 @@
             @click="onAccept"
             :disabled="isAccepting"
           >
-            <span class="material-symbols-outlined">check_circle</span>
+            <i v-if="!isAccepting" class="ph-bold ph-check-circle"></i>
+            <i v-else class="ph-bold ph-spinner animate-spin"></i>
             <span v-if="isAccepting">מעדכן...</span>
             <span v-else>קבל עבודה</span>
           </button>
+          
           <div class="job-action-buttons-row">
+            <button
+              v-if="isHendiman && jobDetails.status === 'open'"
+              class="job-action-btn job-action-btn--skip"
+              @click="onSkip"
+            >
+              <i class="ph-bold ph-skip-forward"></i>
+              דלג
+            </button>
             <button
               class="job-action-btn job-action-btn--secondary"
               @click="onClose"
             >
-              <span class="material-symbols-outlined">close</span>
+              <i class="ph-bold ph-x"></i>
               סגור
-            </button>
-            <button
-              v-if="isHendiman && jobDetails.status === 'open'"
-              class="job-action-btn job-action-btn--secondary"
-              @click="onSkip"
-            >
-              <span class="material-symbols-outlined">skip_next</span>
-              דלג
             </button>
           </div>
         </div>
@@ -1627,35 +1629,46 @@ $danger: #ff3b3b;
 .job-bottom-sheet__actions {
   flex: none;
   width: 100%;
-  background: rgba(24, 20, 17, 0.95);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 20px 20px 32px;
+  background: rgba(18, 18, 18, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 24px));
   display: flex;
   flex-direction: column;
   gap: 12px;
-  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
   z-index: 30;
+
+  @media (min-width: 640px) {
+    padding-bottom: 24px;
+    border-radius: 0 0 2rem 2rem;
+  }
 }
 
 .job-action-btn {
   width: 100%;
-  padding: 16px;
-  border-radius: 0.75rem;
-  font-weight: 700;
-  font-size: 16px;
+  height: 56px;
+  border-radius: 16px;
+  font-weight: 800;
+  font-size: 17px;
   cursor: pointer;
-  transition: transform 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
   color: white;
+  position: relative;
+  overflow: hidden;
+
+  i {
+    font-size: 22px;
+  }
 
   &:active {
-    transform: scale(0.98);
+    transform: scale(0.97);
   }
 
   &:disabled {
@@ -1665,27 +1678,48 @@ $danger: #ff3b3b;
 }
 
 .job-action-btn--primary {
-  background: linear-gradient(135deg, #ff9100 0%, #ff7b00 100%);
-  box-shadow: 0 4px 15px rgba(255, 123, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  background: linear-gradient(135deg, #FF8F00 0%, #FF5F00 100%);
+  box-shadow: 0 8px 24px rgba(255, 95, 0, 0.35);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 
-  .material-symbols-outlined {
-    font-size: 20px;
+  &:hover:not(:disabled) {
+    box-shadow: 0 12px 32px rgba(255, 95, 0, 0.45);
+    transform: translateY(-2px);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0) scale(0.97);
   }
 }
 
 .job-action-btn--secondary {
-  background: rgba(42, 42, 42, 1);
-  border: 1px solid rgba(255, 123, 0, 0.3);
-  color: rgba(209, 213, 219, 1);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
 
   &:hover {
-    background: rgba(51, 51, 51, 1);
-    border-color: rgba(255, 123, 0, 0.6);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
   }
 
-  .material-symbols-outlined {
-    font-size: 18px;
-    color: $primary;
+  i {
+    color: #ff3b3b;
+  }
+}
+
+.job-action-btn--skip {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  i {
+    color: #FF5F00;
   }
 }
 
@@ -1693,6 +1727,15 @@ $danger: #ff3b3b;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .job-rating {

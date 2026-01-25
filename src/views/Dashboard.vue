@@ -1,5 +1,5 @@
 <template>
-  <div class="dash" dir="rtl">
+  <div class="dash" :class="{ 'dash--client': !isHendiman }" dir="rtl">
     <!-- Loading Overlay -->
     <HendimanLoader v-if="isLoading" />
 
@@ -551,15 +551,15 @@
           <!-- Regular Jobs Section -->
           <section class="handyman-dashboard-new__section">
             <h2 class="handyman-dashboard-new__section-title-small">
-              עבודות רגילות
+              שאר עבודות
               <span class="handyman-dashboard-new__jobs-count">
-                {{ regularJobs.length }}
+                {{ displayedRegularJobs.length }}
               </span>
             </h2>
 
             <div class="handyman-dashboard-new__regular-jobs">
               <div
-                v-for="job in regularJobs"
+                v-for="job in displayedRegularJobs"
                 :key="job.id || job._id"
                 class="handyman-dashboard-new__regular-card"
                 @click="onViewJob(job)"
@@ -583,6 +583,22 @@
                   <i class="ph-bold ph-caret-left"></i>
                 </button>
               </div>
+            </div>
+
+            <!-- Load More Button -->
+            <div
+              v-if="hasMoreRegularJobs || isLoadingMoreRegularJobs"
+              class="handyman-dashboard-new__load-more"
+            >
+              <button
+                type="button"
+                class="handyman-dashboard-new__load-more-btn"
+                :disabled="isLoadingMoreRegularJobs"
+                @click="loadMoreRegularJobs"
+              >
+                <span v-if="isLoadingMoreRegularJobs">טוען...</span>
+                <span v-else>ראה עוד</span>
+              </button>
             </div>
           </section>
         </div>
@@ -1738,6 +1754,8 @@ export default {
       },
       jobsPage: 1,
       jobsPageSize: 5,
+      regularJobsDisplayLimit: 5, // Limit for displaying regular jobs
+      isLoadingMoreRegularJobs: false, // Loading state for "load more"
 
       statusTabs: [
         { label: "הכל", value: "all" },
@@ -2360,8 +2378,15 @@ export default {
           const dateA = new Date(a.createdAt || 0);
           const dateB = new Date(b.createdAt || 0);
           return dateB - dateA;
-        })
-        .slice(0, 10); // Show max 10 regular jobs
+        });
+    },
+    displayedRegularJobs() {
+      // Return only the jobs up to the current limit
+      return this.regularJobs.slice(0, this.regularJobsDisplayLimit);
+    },
+    hasMoreRegularJobs() {
+      // Check if there are more jobs to load
+      return this.regularJobs.length > this.regularJobsDisplayLimit;
     },
   },
 
@@ -4666,7 +4691,7 @@ export default {
             });
 
             // Listen for push notification taps and action button clicks
-            PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+            PushNotifications.addListener('pushNotificationActionPerformed', async (action) => {
               try {
                 const actionId = action.actionId;
                 const notificationData = action.notification?.data || {};
@@ -4676,35 +4701,41 @@ export default {
 
                 // Handle different actions
                 if (actionId === "accept") {
-                  // Handle accept action
+                  // Handle accept action - accept the job directly
+                  if (jobId) {
+                    try {
+                      const response = await axios.patch(`${URL}/jobs/${jobId}/assign`, {
+                        handymanId: this.store.user?._id || this.me?._id,
+                      });
+                      if (response.data.success) {
+                        this.toast?.showSuccess("✅ העבודה התקבלה בהצלחה!");
+                        // Refresh jobs
+                        await this.loadJobs();
+                      } else {
+                        this.toast?.showError(response.data.message || "שגיאה בקבלת העבודה");
+                      }
+                    } catch (err) {
+                      logger.error("[Push] Error accepting job:", err);
+                      this.toast?.showError("שגיאה בקבלת העבודה");
+                    }
+                  }
+                } else if (actionId === "view" || actionId === "tap") {
+                  // Handle view action - navigate to JobView page
                   if (jobId) {
                     this.$router.push({
-                      name: "Dashboard",
-                      params: { id: this.store.user?._id || this.me?._id },
-                      query: { action: "accept", jobId: jobId }
+                      name: "JobView",
+                      params: { jobId: jobId }
                     });
                   }
-                  this.toast?.showSuccess("✅ פעולה בוצעה: קבלה");
-                } else if (actionId === "view") {
-                  // Handle view action
-                  if (jobId) {
-                    this.$router.push({
-                      name: "Dashboard",
-                      params: { id: this.store.user?._id || this.me?._id },
-                      query: { action: "view", jobId: jobId }
-                    });
-                  }
-                  this.toast?.showInfo("👁️ פעולה בוצעה: צפייה");
                 } else if (actionId === "skip") {
                   // Handle skip action - just close notification
                   this.toast?.showInfo("⏭️ התראה נדחתה");
                 } else {
-                  // Default click - navigate to dashboard
+                  // Default click (no specific action) - navigate to JobView page
                   if (jobId) {
                     this.$router.push({
-                      name: "Dashboard",
-                      params: { id: this.store.user?._id || this.me?._id },
-                      query: { jobId: jobId }
+                      name: "JobView",
+                      params: { jobId: jobId }
                     });
                   }
                 }
@@ -5643,14 +5674,79 @@ export default {
       return job.locationText || job.city || "מיקום לא זמין";
     },
     formatJobDistance(job) {
-      if (job.distance) {
-        const dist = Number(job.distance);
-        if (Number.isFinite(dist) && dist > 0) {
-          if (dist < 1) return `${Math.round(dist * 1000)} מ'`;
-          return `${dist.toFixed(1)} ק"מ`;
+      if (!job) return "מרחק לא זמין";
+      
+      // First, try to use distanceKm from server
+      let dist = null;
+      if (job.distanceKm !== undefined && job.distanceKm !== null) {
+        dist = Number(job.distanceKm);
+      } else if (job.distance !== undefined && job.distance !== null) {
+        dist = Number(job.distance);
+      }
+      
+      // If we have a valid distance, format it
+      if (dist !== null && Number.isFinite(dist) && dist > 0) {
+        if (dist < 1) return `${Math.round(dist * 1000)} מ'`;
+        return `${dist.toFixed(1)} ק"מ`;
+      }
+      
+      // If no distance from server, try to calculate it using coordinates
+      const handymanCoords = this.isHendiman && this.store.user?.location?.coordinates
+        ? {
+            lng: this.store.user.location.coordinates[0],
+            lat: this.store.user.location.coordinates[1],
+          }
+        : this.isHendiman && this.store.user?.coordinates
+        ? this.store.user.coordinates
+        : this.userCoordinates;
+      
+      if (handymanCoords && handymanCoords.lat && handymanCoords.lng) {
+        // Try to get job coordinates
+        let jobLat = null;
+        let jobLng = null;
+        
+        if (job.location && job.location.coordinates && Array.isArray(job.location.coordinates)) {
+          jobLng = job.location.coordinates[0];
+          jobLat = job.location.coordinates[1];
+        } else if (job.coordinates) {
+          jobLat = job.coordinates.lat;
+          jobLng = job.coordinates.lng;
+        }
+        
+        if (jobLat !== null && jobLng !== null && 
+            !isNaN(jobLat) && !isNaN(jobLng) &&
+            Number.isFinite(jobLat) && Number.isFinite(jobLng)) {
+          // Calculate distance using haversine formula
+          dist = this.haversineKm(
+            handymanCoords.lat,
+            handymanCoords.lng,
+            jobLat,
+            jobLng
+          );
+          
+          if (dist !== null && Number.isFinite(dist) && dist > 0) {
+            if (dist < 1) return `${Math.round(dist * 1000)} מ'`;
+            return `${dist.toFixed(1)} ק"מ`;
+          }
         }
       }
+      
       return "מרחק לא זמין";
+    },
+    haversineKm(lat1, lon1, lat2, lon2) {
+      // Haversine formula to calculate distance between two points
+      const toRad = (v) => (v * Math.PI) / 180;
+      const R = 6371; // Earth radius in km
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) *
+          Math.cos(toRad(lat2)) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
     },
     getJobCategories(job) {
       const categories = [];
@@ -5672,6 +5768,42 @@ export default {
       }
       return "מחיר לפי הצעה";
     },
+    getJobIcon(job) {
+      // Return icon based on job category
+      if (!job) return "ph-fill ph-wrench";
+      
+      if (job.subcategoryInfo && Array.isArray(job.subcategoryInfo) && job.subcategoryInfo.length > 0) {
+        const category =
+          job.subcategoryInfo[0].category ||
+          job.subcategoryInfo[0].subcategory ||
+          "";
+        const categoryLower = category.toLowerCase();
+        
+        if (categoryLower.includes("נזילה") || categoryLower.includes("אינסטלציה") || categoryLower.includes("מים"))
+          return "ph-fill ph-drop";
+        if (categoryLower.includes("חשמל") || categoryLower.includes("תאורה") || categoryLower.includes("ברק"))
+          return "ph-fill ph-lamp";
+        if (categoryLower.includes("צבע") || categoryLower.includes("צביעה"))
+          return "ph-fill ph-paint-brush";
+        if (categoryLower.includes("נגרות") || categoryLower.includes("עץ"))
+          return "ph-fill ph-hammer";
+        if (categoryLower.includes("גבס") || categoryLower.includes("טיח"))
+          return "ph-fill ph-squares-four";
+        if (categoryLower.includes("ריצוף") || categoryLower.includes("אריחים"))
+          return "ph-fill ph-square";
+        if (categoryLower.includes("איטום") || categoryLower.includes("גג"))
+          return "ph-fill ph-house";
+        if (categoryLower.includes("מזגן") || categoryLower.includes("קירור") || categoryLower.includes("חימום"))
+          return "ph-fill ph-wind";
+        if (categoryLower.includes("נעילה") || categoryLower.includes("מנעול"))
+          return "ph-fill ph-lock";
+        if (categoryLower.includes("זכוכית") || categoryLower.includes("חלון"))
+          return "ph-fill ph-window";
+      }
+      
+      // Default icon
+      return "ph-fill ph-wrench";
+    },
     getJobIconForHandyman(job) {
       return this.getJobIcon(job);
     },
@@ -5683,6 +5815,53 @@ export default {
         return now > quotedUntil;
       }
       return false;
+    },
+    async loadMoreRegularJobs() {
+      // If we have more jobs in the current list, just increase the limit
+      if (this.hasMoreRegularJobs) {
+        this.regularJobsDisplayLimit += 5;
+        return;
+      }
+
+      // Otherwise, load more jobs from DB
+      this.isLoadingMoreRegularJobs = true;
+      try {
+        const userId = this.store.user?._id || this.me?._id;
+        if (!userId) {
+          this.toast?.showError("שגיאה: לא נמצא מזהה משתמש");
+          return;
+        }
+
+        // Get current count of regular jobs to know how many to skip
+        const skip = this.regularJobs.length;
+
+        // Load more jobs from DB
+        const coordinates = this.store.user?.location?.coordinates
+          ? {
+              lng: this.store.user.location.coordinates[0],
+              lat: this.store.user.location.coordinates[1],
+            }
+          : this.store.user?.coordinates || this.userCoordinates;
+
+        await this.store.fetchFilteredJobsForHandyman({
+          status: "open",
+          maxKm: this.handymanFilters.maxKm,
+          coordinates: coordinates,
+        });
+
+        // Increase the limit to show the new jobs
+        this.regularJobsDisplayLimit += 5;
+
+        // If still no more jobs, show message
+        if (!this.hasMoreRegularJobs) {
+          this.toast?.showSuccess("אין עוד עבודות להצגה");
+        }
+      } catch (error) {
+        logger.error("Error loading more regular jobs:", error);
+        this.toast?.showError("לא הצלחנו לטעון עוד עבודות");
+      } finally {
+        this.isLoadingMoreRegularJobs = false;
+      }
     },
   },
   async mounted() {
@@ -6685,6 +6864,20 @@ $r2: 26px;
     padding-bottom: calc(12px + env(safe-area-inset-bottom)); // iOS safe area
     padding-top: calc(12px + env(safe-area-inset-top)); // iOS safe area
   }
+
+  // Client view - black background, no padding/margin
+  &--client {
+    padding: 0;
+    margin: 0;
+    background-color: #000;
+    background-image: none;
+
+    @media (max-width: 768px) {
+      padding: 0;
+      padding-bottom: calc(env(safe-area-inset-bottom)); // iOS safe area only
+      padding-top: calc(env(safe-area-inset-top)); // iOS safe area only
+    }
+  }
 }
 
 /* Styles moved to DashboardTopBar component */
@@ -6697,6 +6890,7 @@ $r2: 26px;
   gap: 14px;
   align-items: stretch; // זה יגרום לשני הבלוקים להיות באותו גובה
   justify-items: center; /* Center jobs section */
+  
 
   // For handyman on desktop: jobs centered, filters on right
   @media (min-width: 981px) {
@@ -6722,6 +6916,7 @@ $r2: 26px;
       80px + env(safe-area-inset-bottom)
     ); // Space for bottom nav
     align-items: center; /* Center items on mobile */
+    
   }
 }
 
@@ -11304,6 +11499,37 @@ $r2: 26px;
 .handyman-dashboard-new__regular-arrow:hover {
   color: #fff;
   background: rgba(255, 255, 255, 0.1);
+}
+
+.handyman-dashboard-new__load-more {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.handyman-dashboard-new__load-more-btn {
+  width: 100%;
+  padding: 12px 20px;
+  border-radius: 12px;
+  background: rgba(255, 95, 0, 0.1);
+  border: 1px solid rgba(255, 95, 0, 0.2);
+  color: #FF5F00;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: "Heebo", sans-serif;
+}
+
+.handyman-dashboard-new__load-more-btn:hover:not(:disabled) {
+  background: rgba(255, 95, 0, 0.2);
+  border-color: rgba(255, 95, 0, 0.4);
+  transform: translateY(-1px);
+}
+
+.handyman-dashboard-new__load-more-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* Handyman Bottom Navigation New */

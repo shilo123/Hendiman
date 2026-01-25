@@ -265,22 +265,22 @@ $shadowO: 0 18px 55px rgba(255, 106, 0, 0.2);
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 14px;
+  margin: 0;
   min-width: 0;
   background: #000 !important;
   padding: 10px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0;
+  border: none;
 
   @media (max-width: 768px) {
     flex-wrap: nowrap;
     gap: 8px;
 
-    margin-bottom: 6px;
+    margin: 0;
     padding: 10px 12px;
 
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0;
+    border: none;
     background: #000;
 
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
@@ -920,7 +920,7 @@ $shadowO: 0 18px 55px rgba(255, 106, 0, 0.2);
   gap: 12px;
   padding: 14px 18px;
   margin: -16px -16px 6px;
-  background: rgba(3, 3, 3, 0.9);
+  background: #000;
   backdrop-filter: blur(20px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 
