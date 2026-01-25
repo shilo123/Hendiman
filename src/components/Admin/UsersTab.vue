@@ -1806,6 +1806,234 @@ $violet: #8b5cf6;
   }
 }
 
+/* Mobile Responsive - max-width 500px */
+@media (max-width: 500px) {
+  .users-section {
+    padding: 0;
+  }
+
+  .users-hero {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .users-hero__top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .users-section__title {
+    font-size: 18px;
+  }
+
+  .users-hero__subtitle {
+    font-size: 12px;
+  }
+
+  .users-hero__meta {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .meta-chip {
+    font-size: 11px;
+    padding: 6px 10px;
+    flex: 1;
+    min-width: calc(50% - 4px);
+  }
+
+  .users-hero__controls {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .controls-left {
+    width: 100%;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .search-wrap,
+  .select-wrap {
+    width: 100%;
+  }
+
+  .filter-input,
+  .filter-select {
+    width: 100%;
+    min-width: 100%;
+    font-size: 13px;
+    padding: 9px 10px;
+    padding-right: 32px;
+  }
+
+  .user-type-tabs {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .user-type-tab {
+    flex: 1;
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .users-surface {
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .users-surface__top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .results-hint {
+    font-size: 12px;
+  }
+
+  .users-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .users-table {
+    min-width: 800px;
+    font-size: 11px;
+  }
+
+  .users-table thead th {
+    padding: 10px 8px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .users-table tbody td {
+    padding: 10px 8px;
+    font-size: 11px;
+  }
+
+  .user-cell {
+    min-width: 150px;
+    gap: 8px;
+  }
+
+  .avatar-wrap {
+    width: 28px;
+    height: 28px;
+  }
+
+  .user-name {
+    font-size: 12px;
+    max-width: 120px;
+  }
+
+  .user-sub {
+    font-size: 10px;
+  }
+
+  .specialties-list {
+    gap: 4px;
+  }
+
+  .specialty-badge {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+
+  .rating-pill {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+
+  .count-pill {
+    font-size: 11px;
+    padding: 4px 8px;
+    min-width: 32px;
+  }
+
+  .date-cell {
+    gap: 2px;
+  }
+
+  .date-value {
+    font-size: 11px;
+  }
+
+  .date-tooltip {
+    font-size: 9px;
+  }
+
+  .block-user-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+    gap: 6px;
+  }
+
+  .actions-buttons {
+    gap: 6px;
+  }
+
+  .icon-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+
+  .pagination {
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .pagination-info {
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .pagination-btn {
+    width: 100%;
+    padding: 10px;
+  }
+
+  .modal-content {
+    max-width: 95vw;
+    margin: 10px;
+  }
+
+  .modal-header {
+    padding: 14px;
+  }
+
+  .modal-title {
+    font-size: 16px;
+  }
+
+  .modal-body {
+    padding: 14px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .modal-footer {
+    padding: 14px;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 10px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;

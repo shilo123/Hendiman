@@ -1,32 +1,5 @@
 <template>
   <section class="jobs" id="jobs">
-    <!-- Header -->
-    <header class="jobs__header">
-      <div class="jobs__header-content">
-        <div>
-          <h1 class="jobs__header-title"> עבודות במערכת</h1>
-          <p class="jobs__header-subtitle">
-            {{ filteredJobs.length }} משימות ממתינות לטיפול
-        </p>
-      </div>
-        <button
-          v-if="isHendiman"
-          class="jobs__filter-btn"
-          type="button"
-          @click="openFilterModal"
-        >
-          <span class="material-symbols-outlined">filter_list</span>
-        </button>
-        <button
-          v-else
-          class="jobs__filter-btn"
-          type="button"
-          @click="$emit('refresh')"
-        >
-          <span class="material-symbols-outlined">refresh</span>
-      </button>
-    </div>
-    </header>
 
     <!-- Filters (handyman only) -->
     <div
@@ -222,316 +195,50 @@
 
     <!-- Main Content -->
     <main class="jobs__main">
-      <!-- Urgent Jobs Section -->
-      <section v-if="urgentJobs.length > 0" class="jobs__urgent-section">
-        <div class="jobs__section-header">
-          <span class="jobs__section-dot"></span>
-          <h2 class="jobs__section-title">דחיפות גבוהה</h2>
-        </div>
-        <div class="jobs__urgent-list" ref="urgentListRef" @scroll="handleUrgentScroll">
-          <article
-            v-for="job in urgentJobs"
-            :key="job.id || job._id"
-            class="job job--urgent-card"
-            @click="$emit('view', job)"
-            style="cursor: pointer;"
-          >
-          <div class="job__urgent-glow"></div>
-          <div class="job__content">
-            <div class="job__header">
-              <div class="job__header-left">
-                <div class="job__icon-box">
-                  <span class="material-symbols-outlined job__icon">
-                    {{ getJobIcon(job) }}
-                  </span>
-                </div>
-                <div class="job__info">
-                  <h3 class="job__title" :title="getJobDisplayName(job)">
-                    {{ getJobDisplayName(job) }}
-                  </h3>
-                  <div class="job__location">
-                    <span class="material-symbols-outlined">location_on</span>
-                    <span>{{ formatJobLocation(job) }}</span>
-                  </div>
-                </div>
-              </div>
-              <div class="job__priority-badge">
-                <span class="material-symbols-outlined">priority_high</span>
-              </div>
+      <!-- כותרת פעילות אחרונה -->
+      <h2 v-if="filteredJobs.length > 0" class="recent-activity-title">
+        <span class="recent-activity-title-accent"></span>
+        פעילות אחרונה
+      </h2>
+
+      <!-- רשימת כל העבודות -->
+      <div v-if="filteredJobs.length > 0" class="recent-activity-list">
+        <div
+          v-for="job in filteredJobs"
+          :key="job.id || job._id"
+          class="recent-activity-item"
+          :class="{ 'recent-activity-item--urgent': isUrgentJob(job) }"
+          @click="$emit('view', job)"
+        >
+          <div class="recent-activity-status" :class="getStatusClass(job)">
+            <span class="recent-activity-status-text">{{
+              getJobStatusText(job)
+            }}</span>
+            <i :class="getJobStatusIcon(job)"></i>
           </div>
-
-            <div class="job__tags" v-if="getJobChips(job).length">
-              <span
-                v-for="chip in getJobChips(job)"
-                :key="chip.text"
-                class="job__tag"
-              >
-                {{ chip.text }}
-              </span>
-        </div>
-
-            <div class="job__footer">
-              <div class="job__time">
-                <span class="material-symbols-outlined">schedule</span>
-                <span>{{ getTimeAgo(job) || "לפני זמן מה" }}</span>
-            </div>
-              <div class="job__footer-actions">
-                <button
-                  v-if="isHendiman && isQuotedJob(job)"
-                  class="job__quote-btn"
-                  type="button"
-                  @click="$emit('open-quotation-modal', job)"
-                >
-                  <span class="material-symbols-outlined">attach_money</span>
-                  <span>שלח הצעת מחיר</span>
-                </button>
-                <button
-                  class="job__view-btn"
-                  type="button"
-                  @click="$emit('view', job)"
-                >
-                  <span>צפייה בעבודה</span>
-                  <span class="material-symbols-outlined">arrow_forward</span>
-                </button>
-              </div>
-            </div>
-            </div>
-        </article>
-        <div class="jobs__urgent-spacer"></div>
-          </div>
-        <!-- Dots indicator for scroll -->
-        <div v-if="urgentJobs.length > 0" class="jobs__urgent-dots">
-          <span
-            v-for="(job, index) in urgentJobs"
-            :key="index"
-            class="jobs__urgent-dot"
-            :class="{ 'jobs__urgent-dot--active': currentUrgentIndex === index }"
-            @click="scrollToUrgentJob(index)"
-          ></span>
-        </div>
-      </section>
-
-      <!-- Regular Jobs Section -->
-      <section v-if="regularJobs.length > 0" class="jobs__regular-section">
-        <div class="jobs__section-header">
-          <h2 class="jobs__section-title">משימות נוספות</h2>
-        </div>
-        <div class="jobs__regular-list" ref="regularListRef" @scroll="handleRegularScroll">
-          <article
-            v-for="job in regularJobs"
-            :key="job.id || job._id"
-            class="job job--regular-card"
-            @click="$emit('view', job)"
-            style="cursor: pointer;"
-          >
-            <div class="job__hover-glow"></div>
-            <div class="job__content">
-              <div class="job__header">
-                <div class="job__icon-box job__icon-box--regular">
-                  <span class="material-symbols-outlined job__icon">
-                    {{ getJobIcon(job) }}
-                  </span>
-                </div>
-              <button
-                  v-if="!isHendiman && isClientJob(job)"
-                  class="job__menu-btn"
-                type="button"
-                  @click.stop="toggleJobMenu(job.id || job._id)"
-              >
-                  <span class="material-symbols-outlined">more_horiz</span>
-              </button>
-            </div>
-
-              <h3 class="job__title job__title--regular" :title="getJobDisplayName(job)">
+          <div class="recent-activity-content-wrapper">
+            <div class="recent-activity-content">
+              <h4 class="recent-activity-job-title">
                 {{ getJobDisplayName(job) }}
-              </h3>
-
-              <div class="job__location job__location--regular">
-                <span class="material-symbols-outlined">location_on</span>
-                <span class="job__location-text">{{ formatJobLocation(job) }}</span>
-          </div>
-
-              <div class="job__tags job__tags--regular" v-if="getJobChips(job).length">
-                <span
-                  v-for="chip in getJobChips(job)"
-                  :key="chip.text"
-                  class="job__tag job__tag--regular"
-                >
-                  {{ chip.text }}
-                </span>
-        </div>
-
-              <div class="job__footer job__footer--regular">
-                <span class="job__time job__time--regular">
-                  {{ getTimeAgo(job) || "לפני זמן מה" }}
-                </span>
-                <div class="job__footer-actions job__footer-actions--regular">
-                  <button
-                    v-if="isHendiman && isQuotedJob(job)"
-                    class="job__quote-btn job__quote-btn--regular"
-                    type="button"
-                    @click="$emit('open-quotation-modal', job)"
-                  >
-                    <span class="material-symbols-outlined">attach_money</span>
-                  </button>
-                  <button
-                    class="job__view-btn job__view-btn--regular"
-                    type="button"
-                    @click="$emit('view', job)"
-                  >
-                    <span class="material-symbols-outlined">arrow_forward</span>
-                  </button>
-                </div>
-              </div>
+              </h4>
+              <p class="recent-activity-job-time">
+                {{ getTimeAgo(job) || "לפני זמן מה" }}
+              </p>
             </div>
-
-            <!-- Client job menu dropdown -->
-          <div
-            v-if="!isHendiman && isClientJob(job)"
-            class="job__menu"
-            :class="{
-                'job__menu--open': openJobMenuId === job.id || openJobMenuId === job._id,
-              }"
-            >
-            <div
-              v-if="openJobMenuId === (job.id || job._id)"
-              class="job__menu-dropdown"
-              @click.stop
-            >
-              <button
-                class="job__menu-item"
-                type="button"
-                @click="handleEditJob(job)"
-              >
-                <span class="job__menu-icon">✏️</span>
-                עריכה
-              </button>
-              <button
-                class="job__menu-item"
-                type="button"
-                @click="handleDeleteJob(job)"
-              >
-                <span class="job__menu-icon">🗑️</span>
-                מחיקה
-              </button>
-              <button
-                class="job__menu-item"
-                type="button"
-                @click="handleViewJob(job)"
-              >
-                <span class="job__menu-icon">👁️</span>
-                צפייה
-              </button>
+            <div class="recent-activity-icon">
+              <i :class="getJobIconPhosphor(job)"></i>
             </div>
           </div>
-          </article>
-          <div class="jobs__regular-spacer"></div>
         </div>
-        <!-- Dots indicator for scroll -->
-        <div v-if="regularJobs.length > 0" class="jobs__regular-dots">
-          <span
-            v-for="(job, index) in regularJobs"
-            :key="index"
-            class="jobs__regular-dot"
-            :class="{ 'jobs__regular-dot--active': currentRegularIndex === index }"
-            @click="scrollToRegularJob(index)"
-          ></span>
-        </div>
-      </section>
+      </div>
 
       <!-- Empty State -->
       <div v-if="filteredJobs.length === 0" class="empty">
         <div class="empty__ic" aria-hidden="true">🧰</div>
         <div class="empty__title">אין עבודות להצגה כרגע</div>
         <div class="empty__sub">נסה לרענן או לשנות סינון.</div>
-          </div>
+      </div>
     </main>
-
-        <!-- Client job menu dropdown -->
-        <div
-          v-if="!isHendiman && isClientJob(job)"
-          class="job__menu"
-          :class="{
-            'job__menu--open': openJobMenuId === job.id || openJobMenuId === job._id,
-          }"
-        >
-          <div
-            v-if="openJobMenuId === (job.id || job._id)"
-            class="job__menu-dropdown"
-            @click.stop
-          >
-            <button
-              class="job__menu-item"
-              type="button"
-              @click="handleEditJob(job)"
-            >
-              <span class="job__menu-icon">✏️</span>
-              עריכה
-            </button>
-          <button
-              class="job__menu-item"
-            type="button"
-              @click="handleDeleteJob(job)"
-          >
-              <span class="job__menu-icon">🗑️</span>
-              מחיקה
-          </button>
-          <button
-              class="job__menu-item"
-            type="button"
-              @click="handleViewJob(job)"
-          >
-              <span class="job__menu-icon">👁️</span>
-            צפייה
-          </button>
-      </div>
-    </div>
-
-
-    <!-- Pagination -->
-    <div
-      v-if="jobsPagination && jobsPagination.total > jobsPagination.pageSize"
-      class="pager"
-    >
-      <button
-        class="pageBtn pageBtn--ghost"
-        type="button"
-        :disabled="jobsPagination.page <= 1"
-        @click="$emit('prev-jobs-page')"
-      >
-        ← הקודם
-      </button>
-
-      <div class="pager__mid">
-        <div class="dots" aria-hidden="true">
-          <span
-            v-for="n in Math.max(
-              1,
-              Math.ceil(jobsPagination.total / jobsPagination.pageSize)
-            )"
-            :key="n"
-            class="dot"
-            :class="{ 'dot--on': n === jobsPagination.page }"
-          />
-        </div>
-        <div class="pager__txt">
-          עמוד {{ jobsPagination.page }} מתוך
-          {{ Math.ceil(jobsPagination.total / jobsPagination.pageSize) }}
-        </div>
-      </div>
-
-      <button
-        class="pageBtn pageBtn--primary"
-        type="button"
-        :disabled="
-          jobsPagination.page >=
-          Math.ceil(jobsPagination.total / jobsPagination.pageSize)
-        "
-        @click="$emit('next-jobs-page')"
-      >
-        הבא →
-      </button>
-    </div>
   </section>
 </template>
 
@@ -655,6 +362,9 @@ export default {
     },
     scrollToJob(index) {
       // no-op (carousel removed)
+    },
+    isUrgentJob(job) {
+      return job && (job.urgent || job.isUrgent);
     },
     getJobDisplayName(job) {
       if (!job) return "ללא שם";
@@ -939,6 +649,39 @@ export default {
       };
       return labels[status] || status;
     },
+    getStatusClass(job) {
+      if (job.status === "done") return "recent-activity-status--success";
+      if (job.status === "in_progress" || job.status === "assigned")
+        return "recent-activity-status--primary";
+      return "recent-activity-status--default";
+    },
+    getJobStatusText(job) {
+      if (job.status === "done") return "הושלם";
+      if (job.status === "in_progress" || job.status === "assigned")
+        return "בביצוע";
+      return "פתוח";
+    },
+    getJobStatusIcon(job) {
+      if (job.status === "done") return "ph-fill ph-check-circle";
+      if (job.status === "in_progress" || job.status === "assigned")
+        return "ph-fill ph-spinner";
+      return "ph-fill ph-clock";
+    },
+    getJobIconPhosphor(job) {
+      // Return icon based on job category
+      if (job.subcategoryInfo && Array.isArray(job.subcategoryInfo) && job.subcategoryInfo.length > 0) {
+        const category =
+          job.subcategoryInfo[0].category ||
+          job.subcategoryInfo[0].subcategory ||
+          "";
+        if (category.includes("נזילה") || category.includes("אינסטלציה"))
+          return "ph-fill ph-drop";
+        if (category.includes("חשמל") || category.includes("תאורה"))
+          return "ph-fill ph-lamp";
+        if (category.includes("צבע")) return "ph-fill ph-paint-brush";
+      }
+      return "ph-fill ph-wrench";
+    },
     getTimeAgo(job) {
       if (!job || !job.createdAt) return null;
       const createdAt = new Date(job.createdAt);
@@ -1038,11 +781,10 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   min-height: 0;
   isolation: isolate;
   box-sizing: border-box;
-  background: $bg;
+  background: transparent;
   color: white;
   font-family: 'Heebo', sans-serif;
   min-width: 0;
-  min-height: 100vh;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -1499,8 +1241,10 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   display: flex;
   flex-direction: column;
   gap: 32px;
+  padding: 0;
   padding-bottom: 40px;
   padding-bottom: calc(40px + env(safe-area-inset-bottom, 0));
+  background: transparent;
 
   @media (max-width: 640px) {
     gap: 24px;
@@ -2014,12 +1758,7 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   }
 }
 
-/* Regular Jobs Section */
-.jobs__regular-section {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
+/* Regular Jobs Section - removed wrapper styles */
 
 .jobs__regular-list {
   display: flex;
@@ -3060,6 +2799,172 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   .job__action {
     transition: none !important;
   }
+}
+
+/* Recent Activity Design - New Style */
+.recent-activity-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 24px 0;
+  padding: 0 20px;
+  direction: rtl;
+  letter-spacing: -0.02em;
+  
+  @media (max-width: 640px) {
+    padding: 0 16px;
+  }
+}
+
+.recent-activity-title-accent {
+  width: 4px;
+  height: 16px;
+  background: linear-gradient(180deg, #FF5F00 0%, #FF8F00 100%);
+  border-radius: 2px;
+}
+
+.recent-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  direction: rtl;
+  align-items: stretch;
+  width: 100%;
+  padding: 0 20px;
+  box-sizing: border-box;
+  
+  @media (max-width: 640px) {
+    padding: 0 16px;
+  }
+}
+
+.recent-activity-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: #09090B;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  transition: all 0.3s;
+  cursor: pointer;
+  direction: rtl;
+  text-align: right;
+}
+
+.recent-activity-item:hover {
+  border-color: rgba(255, 95, 0, 0.2);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.recent-activity-item--urgent {
+  border-color: rgba(255, 95, 0, 0.3);
+  background: rgba(255, 95, 0, 0.08);
+}
+
+.recent-activity-item--urgent:hover {
+  border-color: rgba(255, 95, 0, 0.5);
+  background: rgba(255, 95, 0, 0.12);
+}
+
+.recent-activity-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+
+.recent-activity-status--success {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.recent-activity-status--primary {
+  color: #FF5F00;
+  background: rgba(255, 95, 0, 0.1);
+  border-color: rgba(255, 95, 0, 0.2);
+}
+
+.recent-activity-status--default {
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.recent-activity-status-text {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.recent-activity-status i {
+  font-size: 12px;
+}
+
+.recent-activity-status i.ph-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.recent-activity-content-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  direction: rtl;
+  text-align: right;
+}
+
+.recent-activity-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: right;
+  direction: rtl;
+}
+
+.recent-activity-job-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.recent-activity-job-time {
+  font-size: 10px;
+  color: rgba(107, 114, 128, 1);
+  margin: 0;
+}
+
+.recent-activity-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #1f2937;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(156, 163, 175, 1);
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.recent-activity-icon i {
+  font-size: 20px;
 }
 </style>
 

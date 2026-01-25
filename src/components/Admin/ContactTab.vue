@@ -1231,4 +1231,161 @@ $muted: rgba(255, 255, 255, 0.62);
     grid-template-columns: 1fr;
   }
 }
+
+/* Mobile Responsive - max-width 500px */
+@media (max-width: 500px) {
+  .inquiries-section__header {
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .inquiries-section__title {
+    font-size: 18px;
+  }
+
+  .inquiries-section__controls {
+    width: 100%;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .filter-select,
+  .refresh-inquiries-btn {
+    width: 100%;
+    padding: 10px;
+  }
+
+  .inquiries-table-wrapper {
+    border-radius: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .inquiries-table {
+    min-width: 900px;
+    font-size: 11px;
+  }
+
+  .inquiries-table th {
+    padding: 10px 6px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .inquiries-table td {
+    padding: 10px 6px;
+    font-size: 11px;
+  }
+
+  .inquiry-date {
+    font-size: 11px;
+  }
+
+  .inquiry-time {
+    font-size: 9px;
+  }
+
+  .inquiry-title {
+    font-size: 12px;
+  }
+
+  .inquiry-content {
+    max-width: 200px;
+    font-size: 11px;
+  }
+
+  .inquiry-content-mention {
+    font-size: 10px;
+    padding: 2px 4px;
+  }
+
+  .inquiry-user {
+    font-size: 12px;
+  }
+
+  .inquiry-mention-tag {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+
+  .inquiry-status-badge {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+
+  .inquiry-actions {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .inquiry-action-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  .modal-overlay {
+    padding: 10px;
+  }
+
+  .modal-content {
+    max-width: 95vw;
+    margin: 0;
+  }
+
+  .modal-content--large {
+    max-width: 95vw;
+  }
+
+  .modal-header {
+    padding: 14px;
+  }
+
+  .modal-title {
+    font-size: 16px;
+  }
+
+  .modal-body {
+    padding: 14px;
+  }
+
+  .modal-footer {
+    padding: 14px;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 10px;
+  }
+
+  .form-field {
+    margin-bottom: 16px;
+  }
+
+  .form-label {
+    font-size: 13px;
+  }
+
+  .form-input,
+  .form-textarea {
+    font-size: 14px;
+    padding: 10px;
+  }
+
+  .user-details-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .user-details-section {
+    padding-bottom: 16px;
+  }
+
+  .user-details-section__title {
+    font-size: 16px;
+  }
+}
 </style>

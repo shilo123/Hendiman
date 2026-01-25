@@ -1120,4 +1120,148 @@ $muted: rgba(255, 255, 255, 0.62);
     grid-template-columns: 1fr;
   }
 }
+
+/* Mobile Responsive - max-width 500px */
+@media (max-width: 500px) {
+  .jobs-section {
+    padding: 0;
+  }
+
+  .jobs-section__header {
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .jobs-section__title {
+    font-size: 18px;
+  }
+
+  .jobs-section__controls {
+    width: 100%;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .filter-select,
+  .refresh-jobs-btn {
+    width: 100%;
+    padding: 10px;
+  }
+
+  .jobs-table-wrapper {
+    border-radius: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .jobs-table {
+    min-width: 1000px;
+    font-size: 11px;
+  }
+
+  .jobs-table__header-group {
+    display: none;
+  }
+
+  .jobs-table thead th {
+    padding: 10px 6px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .jobs-table tbody td {
+    padding: 10px 6px;
+    font-size: 11px;
+  }
+
+  .job-date {
+    font-size: 11px;
+  }
+
+  .job-time {
+    font-size: 9px;
+  }
+
+  .job-price {
+    font-size: 12px;
+  }
+
+  .job-status {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+
+  .job-view-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .job-details-modal {
+    width: 100vw;
+    max-width: 100vw;
+    border-radius: 0;
+  }
+
+  .job-details-modal__header {
+    padding: 14px 16px;
+  }
+
+  .job-details-modal__title {
+    font-size: 18px;
+  }
+
+  .job-details-modal__close {
+    width: 36px;
+    height: 36px;
+    font-size: 20px;
+  }
+
+  .job-details-modal__body {
+    padding: 16px;
+  }
+
+  .job-details-section {
+    padding: 14px;
+    margin-bottom: 16px;
+  }
+
+  .job-details-section__title {
+    font-size: 15px;
+    margin-bottom: 12px;
+  }
+
+  .job-details-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .job-details-item {
+    padding: 10px;
+  }
+
+  .job-details-item__label {
+    font-size: 11px;
+  }
+
+  .job-details-item__value {
+    font-size: 14px;
+  }
+
+  .job-details-images {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .job-details-image {
+    height: 180px;
+  }
+
+  .image-modal__close {
+    top: -40px;
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+}
 </style>

@@ -1163,6 +1163,98 @@ $font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
   }
 }
 
+/* Mobile Responsive - max-width 500px */
+@media (max-width: 500px) {
+  .status-section__header {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .status-section__title {
+    font-size: 18px;
+  }
+
+  .refresh-status-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 10px;
+  }
+
+  .status-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .status-card {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .status-card__icon {
+    font-size: 36px;
+  }
+
+  .status-card__value {
+    font-size: 24px;
+  }
+
+  .status-card__label {
+    font-size: 12px;
+  }
+
+  .how-did-you-hear-section {
+    padding: 16px;
+    border-radius: 12px;
+    margin-top: 16px;
+  }
+
+  .how-did-you-hear-title {
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+
+  .how-did-you-hear-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .how-did-you-hear-item {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .how-did-you-hear-icon {
+    font-size: 32px;
+  }
+
+  .how-did-you-hear-label {
+    font-size: 12px;
+  }
+
+  .how-did-you-hear-value {
+    font-size: 22px;
+  }
+
+  .status-charts-section {
+    margin-top: 16px;
+    gap: 12px;
+  }
+
+  .status-chart-card {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .status-chart-title {
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+
+  .status-chart-container {
+    height: 280px;
+  }
+}
+
 /* ===== Reduced motion ===== */
 @media (prefers-reduced-motion: reduce) {
   * {

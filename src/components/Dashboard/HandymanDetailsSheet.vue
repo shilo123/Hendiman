@@ -47,6 +47,28 @@
               <span class="hsMetaItem"
                 >{{ handyman?.jobDone || 0 }} עבודות</span
               >
+              <span class="hsDot" aria-hidden="true">•</span>
+              <span class="hsMetaItem"
+                >{{ getCityText(handyman) }}</span
+              >
+            </div>
+            <div class="hsStats" v-if="handyman">
+              <div class="hsStatItem">
+                <span class="hsStatLabel">מספר איחורים:</span>
+                <span class="hsStatValue">{{ handyman.lateArrivals || 0 }}</span>
+              </div>
+              <div class="hsStatItem">
+                <span class="hsStatLabel">יחס איחורים:</span>
+                <span class="hsStatValue">{{ getLateRatio(handyman) }}%</span>
+              </div>
+              <div class="hsStatItem">
+                <span class="hsStatLabel">הגעות בזמן:</span>
+                <span class="hsStatValue">{{ getOnTimeRatio(handyman) }}%</span>
+              </div>
+              <div class="hsStatItem">
+                <span class="hsStatLabel">ציון מערכת:</span>
+                <span class="hsStatValue">{{ getSystemScore(handyman) }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -478,6 +500,90 @@ export default {
       this.avatarErrored = true;
     },
 
+    getCityText(handyman) {
+      // Check direct city field
+      if (handyman?.city) {
+        const city = String(handyman.city).trim();
+        if (city) return city;
+      }
+      
+      // Check address object (can be string or object)
+      const addressObj = handyman?.address ?? handyman?.adress ?? handyman?.Adress ?? null;
+      if (addressObj) {
+        // If address is a string, use it directly
+        if (typeof addressObj === 'string') {
+          const addr = addressObj.trim();
+          if (addr) return addr;
+        }
+        // If address is an object, check various city fields
+        if (typeof addressObj === 'object') {
+          const city = addressObj?.city || 
+                      addressObj?.selectedCity || 
+                      addressObj?.cityName || 
+                      addressObj?.name;
+          if (city) {
+            const cityStr = String(city).trim();
+            if (cityStr) return cityStr;
+          }
+        }
+      }
+      
+      // Check locationText
+      if (handyman?.locationText) {
+        const loc = String(handyman.locationText).trim();
+        if (loc) return loc;
+      }
+      
+      // Check location as string
+      if (handyman?.location && typeof handyman.location === 'string') {
+        const loc = handyman.location.trim();
+        if (loc) return loc;
+      }
+      
+      // Try to get from location.formatted_address if available
+      if (handyman?.location?.formatted_address) {
+        const addr = handyman.location.formatted_address;
+        const parts = addr.split(',');
+        if (parts.length > 0) {
+          const city = parts[0].trim();
+          if (city) return city;
+        }
+      }
+      
+      return "מיקום לא זמין";
+    },
+    getLateRatio(handyman) {
+      const totalJobs = handyman?.jobDone || 0;
+      const lateArrivals = handyman?.lateArrivals || 0;
+      if (totalJobs === 0) return 0;
+      return Math.round((lateArrivals / totalJobs) * 100);
+    },
+    getOnTimeRatio(handyman) {
+      const totalJobs = handyman?.jobDone || 0;
+      const lateArrivals = handyman?.lateArrivals || 0;
+      const onTime = totalJobs - lateArrivals;
+      if (totalJobs === 0) return 100;
+      return Math.round((onTime / totalJobs) * 100);
+    },
+    getSystemScore(handyman) {
+      // Calculate system score based on rating, on-time ratio, and job count
+      const rating = Number(handyman?.rating) || 0;
+      const onTimeRatio = this.getOnTimeRatio(handyman);
+      const totalJobs = handyman?.jobDone || 0;
+      
+      // Base score from rating (0-5 scale, convert to 0-100)
+      let score = rating * 20;
+      
+      // Adjust based on on-time ratio (0-30 points)
+      score += (onTimeRatio / 100) * 30;
+      
+      // Small bonus for experience (0-10 points based on job count)
+      const experienceBonus = Math.min(10, (totalJobs / 10) * 2);
+      score += experienceBonus;
+      
+      // Cap at 100
+      return Math.min(100, Math.round(score));
+    },
     formatRating(val) {
       const n = Number(val);
       if (!Number.isFinite(n)) return "0";
@@ -915,6 +1021,35 @@ $orange2: #ff8a2b;
 
 .hsDot {
   opacity: 0.65;
+}
+
+.hsStats {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+}
+
+.hsStatItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hsStatLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.hsStatValue {
+  font-size: 14px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .hsTabs {

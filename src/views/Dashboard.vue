@@ -143,12 +143,11 @@
         <HandymenList
           v-if="!isHendiman && isMobile"
           :filtered-handymen="filteredHandymen"
-          :recent-jobs="recentJobs"
           @view-details="onViewHandymanDetails"
           @personal-request="onPersonalRequest"
           @block-handyman="onBlockHandyman"
-          @view-job="onViewJob"
         />
+
 
         <!-- Return to job button (mobile only - above jobs) -->
         <button
@@ -6545,6 +6544,12 @@ export default {
       if (error?.stack) {
         logger.error("[Dashboard] Error stack:", error.stack);
       }
+      // ודא ש-isLoading מוגדר ל-false גם אם יש שגיאה
+      try {
+        this.store.isLoading = false;
+      } catch (storeError) {
+        logger.error("[Dashboard] Error setting isLoading to false:", storeError);
+      }
       // Don't redirect - let the component render with error state
       // The component should handle missing data gracefully
     }
@@ -6722,16 +6727,16 @@ $r2: 26px;
 
 /* JOBS */
 .jobs {
-  border-radius: $r2;
-  border: 1px solid $stroke;
-  background: linear-gradient(180deg, $card2, rgba(255, 255, 255, 0.04));
-  box-shadow: $shadow;
-  overflow: hidden;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
 
   @media (max-width: 768px) {
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0;
+    box-shadow: none;
+    border: none;
   }
 
   &__head {

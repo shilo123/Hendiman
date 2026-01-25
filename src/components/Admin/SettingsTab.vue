@@ -442,4 +442,67 @@ $muted: rgba(255, 255, 255, 0.62);
     transform: translateY(0);
   }
 }
+
+/* Mobile Responsive - max-width 500px */
+@media (max-width: 500px) {
+  .settings-section__header {
+    margin-bottom: 16px;
+  }
+
+  .settings-section__title {
+    font-size: 18px;
+  }
+
+  .settings-content {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .settings-card {
+    border-radius: 12px;
+  }
+
+  .settings-card__header {
+    padding: 16px;
+  }
+
+  .settings-card__title {
+    font-size: 16px;
+  }
+
+  .settings-card__description {
+    font-size: 13px;
+  }
+
+  .settings-card__body {
+    padding: 16px;
+  }
+
+  .form-field {
+    margin-bottom: 16px;
+  }
+
+  .form-label {
+    font-size: 13px;
+  }
+
+  .form-input {
+    font-size: 14px;
+    padding: 10px;
+  }
+
+  .current-fee-display {
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+
+  .settings-card__actions {
+    margin-top: 12px;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 10px;
+  }
+}
 </style>

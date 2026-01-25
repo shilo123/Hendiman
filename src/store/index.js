@@ -340,9 +340,12 @@ export const useMainStore = defineStore("main", {
       } catch (error) {
         console.error("[STORE] Fatal error in fetchDashboardData:", error);
         // אם יש שגיאה (כמו ID לא תקין), החזר null
+        // אבל תמיד ודא ש-isLoading מוגדר ל-false
+        this.isLoading = false;
         return null;
       } finally {
         console.log("[STORE] Setting isLoading to false");
+        // ודא ש-isLoading תמיד מוגדר ל-false גם אם יש שגיאה
         this.isLoading = false;
       }
     },

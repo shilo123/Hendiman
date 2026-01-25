@@ -63,10 +63,8 @@
                     {{ handyman.username }}
                   </h3>
                   <div class="client-dashboard-new__card-location">
-                    <i class="ph-fill ph-map-pin"></i>
-                    <span>{{ getCityText(handyman) }}</span>
-                    <span class="client-dashboard-new__location-separator">•</span>
-                    <span>{{ formatDistance(handyman) }}</span>
+                    <i class="ph-fill ph-clock"></i>
+                    <span>{{ formatTravelTime(handyman) }}</span>
                   </div>
                   <div class="client-dashboard-new__card-status">
                     <div class="client-dashboard-new__status-dot"></div>
@@ -129,41 +127,6 @@
         ></div>
       </div>
     </div>
-
-    <!-- Recent Activity Section -->
-    <div class="client-dashboard-new__section">
-      <h2 class="client-dashboard-new__section-title-small">
-        <span class="client-dashboard-new__title-accent-small"></span>
-        פעילות אחרונה
-      </h2>
-      <div class="client-dashboard-new__activity-list">
-        <div
-          v-for="job in recentJobs"
-          :key="job.id || job._id"
-          class="client-dashboard-new__activity-item"
-          :class="getActivityItemClass(job)"
-          @click="$emit('view-job', job)"
-        >
-          <div class="client-dashboard-new__activity-status">
-            <span class="client-dashboard-new__activity-status-text">{{
-              getJobStatusText(job)
-            }}</span>
-            <i :class="getJobStatusIcon(job)"></i>
-          </div>
-          <div class="client-dashboard-new__activity-content">
-            <h4 class="client-dashboard-new__activity-title">
-              {{ getJobTitle(job) }}
-            </h4>
-            <p class="client-dashboard-new__activity-time">
-              {{ formatJobTime(job) }}
-            </p>
-          </div>
-          <div class="client-dashboard-new__activity-icon">
-            <i :class="getJobIcon(job)"></i>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -172,9 +135,8 @@ export default {
   name: "HandymenList",
   props: {
     filteredHandymen: { type: Array, required: true },
-    recentJobs: { type: Array, default: () => [] },
   },
-  emits: ["view-details", "personal-request", "block-handyman", "view-job"],
+  emits: ["view-details", "personal-request", "block-handyman"],
   data() {
     return {
       _currentCarouselPage: 0,
@@ -272,6 +234,29 @@ export default {
       if (!Number.isFinite(rating) || rating <= 0) return "0.0";
       return rating % 1 === 0 ? rating.toFixed(0) : rating.toFixed(1);
     },
+    formatTravelTime(handyman) {
+      // Show travel time from MapBox if available
+      if (handyman?.travelTimeMinutes !== null && handyman?.travelTimeMinutes !== undefined) {
+        const time = Number(handyman.travelTimeMinutes);
+        if (Number.isFinite(time) && time >= 0) {
+          if (time === 0) return "באותו מקום";
+          if (time < 60) return `${time} דק' נסיעה`;
+          const hours = Math.floor(time / 60);
+          const minutes = time % 60;
+          if (minutes === 0) return `${hours} ש' נסיעה`;
+          return `${hours} ש' ${minutes} דק' נסיעה`;
+        }
+      }
+      // Fallback to distance if travel time not available
+      if (handyman?.distance) {
+        const dist = Number(handyman.distance);
+        if (Number.isFinite(dist) && dist > 0) {
+          if (dist < 1) return `${Math.round(dist * 1000)} מ' נסיעה`;
+          return `${dist.toFixed(1)} ק"מ נסיעה`;
+        }
+      }
+      return "זמן נסיעה לא זמין";
+    },
     formatDistance(handyman) {
       // Show travel time from MapBox if available
       if (handyman?.travelTimeMinutes !== null && handyman?.travelTimeMinutes !== undefined) {
@@ -337,57 +322,6 @@ export default {
       if (cardWidth > 0) {
         this.currentCarouselPage = Math.round(scrollLeft / cardWidth);
       }
-    },
-    getActivityItemClass(job) {
-      if (job.status === "done") return "client-dashboard-new__activity-item--success";
-      if (job.status === "in_progress" || job.status === "assigned") return "client-dashboard-new__activity-item--primary";
-      return "";
-    },
-    getJobStatusText(job) {
-      if (job.status === "done") return "הושלם";
-      if (job.status === "in_progress" || job.status === "assigned") return "בביצוע";
-      return "פתוח";
-    },
-    getJobStatusIcon(job) {
-      if (job.status === "done") return "ph-fill ph-check-circle";
-      if (job.status === "in_progress" || job.status === "assigned") return "ph-fill ph-spinner";
-      return "ph-fill ph-clock";
-    },
-    getJobTitle(job) {
-      if (job.subcategoryInfo && job.subcategoryInfo.length > 0) {
-        return job.subcategoryInfo.map(s => s.subcategory || s.category).join(", ");
-      }
-      return job.desc || "עבודה";
-    },
-    formatJobTime(job) {
-      if (!job.createdAt && !job.updatedAt) return "";
-      const date = job.updatedAt || job.createdAt;
-      const jobDate = new Date(date);
-      const now = new Date();
-      const diffMs = now - jobDate;
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-      const hours = jobDate.getHours();
-      const minutes = String(jobDate.getMinutes()).padStart(2, '0');
-      
-      if (diffDays === 0) {
-        return `היום • ${hours}:${minutes}`;
-      } else if (diffDays === 1) {
-        return `אתמול • ${hours}:${minutes}`;
-      } else if (diffDays < 7) {
-        return `לפני ${diffDays} ימים • ${hours}:${minutes}`;
-      }
-      return jobDate.toLocaleDateString('he-IL');
-    },
-    getJobIcon(job) {
-      // Return icon based on job category
-      if (job.subcategoryInfo && job.subcategoryInfo.length > 0) {
-        const category = job.subcategoryInfo[0].category || job.subcategoryInfo[0].subcategory || "";
-        if (category.includes("נזילה") || category.includes("אינסטלציה")) return "ph-fill ph-drop";
-        if (category.includes("חשמל") || category.includes("תאורה")) return "ph-fill ph-lamp";
-        if (category.includes("צבע")) return "ph-fill ph-paint-brush";
-      }
-      return "ph-fill ph-wrench";
     },
   },
 };
@@ -797,104 +731,4 @@ export default {
   box-shadow: 0 0 8px rgba(255, 95, 0, 0.6);
 }
 
-/* Recent Activity */
-.client-dashboard-new__activity-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  direction: rtl;
-  align-items: stretch;
-  width: 100%;
-}
-
-.client-dashboard-new__activity-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: #09090B;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  transition: all 0.3s;
-  cursor: pointer;
-  direction: rtl;
-  text-align: right;
-}
-
-.client-dashboard-new__activity-item:hover {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.client-dashboard-new__activity-item--active {
-  border-color: rgba(255, 95, 0, 0.3);
-  background: rgba(255, 95, 0, 0.05);
-}
-
-.client-dashboard-new__activity-item--success {
-  border-color: rgba(0, 224, 85, 0.3);
-  background: rgba(0, 224, 85, 0.05);
-}
-
-.client-dashboard-new__activity-item--primary {
-  border-color: rgba(255, 95, 0, 0.3);
-  background: rgba(255, 95, 0, 0.05);
-}
-
-.client-dashboard-new__activity-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  flex-shrink: 0;
-}
-
-.client-dashboard-new__activity-status-text {
-  font-size: 10px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.client-dashboard-new__activity-status i {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
-}
-
-.client-dashboard-new__activity-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  text-align: right;
-  direction: rtl;
-}
-
-.client-dashboard-new__activity-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-  margin: 0;
-  line-height: 1.3;
-}
-
-.client-dashboard-new__activity-time {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
-  margin: 0;
-}
-
-.client-dashboard-new__activity-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: rgba(255, 95, 0, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #FF5F00;
-  font-size: 20px;
-  flex-shrink: 0;
-}
 </style>

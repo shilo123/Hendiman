@@ -262,17 +262,16 @@
                 class="ccCard ccCard--loading"
               >
                 <div class="loading-categories">
-                  <div class="loading-categories__spinner" aria-hidden="true">
-                    <div class="spinner-dot"></div>
-                    <div class="spinner-dot"></div>
-                    <div class="spinner-dot"></div>
-                  </div>
-                  <p class="loading-categories__text">
+                  <div class="loading-categories__spinner"></div>
+                  <div class="loading-categories__text">
                     מחפש את התחומים הדרושים לך באמצעות AI
-                  </p>
-                  <p class="loading-categories__subtext">
-                    תוך רגע זה ננעל כמו כפפה
-                  </p>
+                  </div>
+                  <div class="loading-categories__dots">
+                    <span>.</span><span>.</span><span>.</span>
+                  </div>
+                  <div class="loading-categories__progress-bar">
+                    <div class="loading-categories__progress-fill"></div>
+                  </div>
                 </div>
               </section>
 
@@ -1675,9 +1674,12 @@ export default {
         const hasValidRequest = this.call.requests.some(
           (req) => req && req.trim().length > 0
         );
-        if (!hasValidRequest) {
-          this.errors.requests = "יש למלא לפחות בקשה אחת";
-          this.toast?.showError("יש למלא לפחות בקשה אחת");
+        const hasValidDesc = this.call.desc && this.call.desc.trim().length > 0;
+        
+        // Check if either requests or desc is filled (for mobile app compatibility)
+        if (!hasValidRequest && !hasValidDesc) {
+          this.errors.requests = "חייב לכתוב לפחות בקשה אחת";
+          this.toast?.showError("חייב לכתוב לפחות בקשה אחת");
           return;
         }
         this.clearError("requests");
@@ -2198,19 +2200,31 @@ export default {
             const cityName = response.data.city;
             const address = response.data.address || response.data.fullAddress;
             const fullAddress = response.data.fullAddress;
+            const streetNumber = response.data.streetNumber || response.data.houseNumber || response.data.number;
             
+            // Build location string with city and street number
+            let locationString = "";
             if (cityName) {
-              // Use the city name from reverse geocoding
-              this.call.location = cityName;
-              this.detectedLocation = cityName;
+              locationString = cityName;
+              // Add street number if available
+              if (streetNumber) {
+                locationString = `${cityName} ${streetNumber}`;
+              }
+              this.call.location = locationString;
+              this.detectedLocation = locationString;
             } else if (fullAddress) {
               // Try to extract city name from fullAddress if it contains a comma
               const parts = fullAddress.split(',').map(p => p.trim());
               if (parts.length > 1) {
                 // Last part is usually the city
                 const potentialCity = parts[parts.length - 1];
-                this.call.location = potentialCity;
-                this.detectedLocation = potentialCity;
+                locationString = potentialCity;
+                // Add street number if available
+                if (streetNumber) {
+                  locationString = `${potentialCity} ${streetNumber}`;
+                }
+                this.call.location = locationString;
+                this.detectedLocation = locationString;
               } else {
                 // Use full address
                 this.call.location = fullAddress;
@@ -2218,13 +2232,24 @@ export default {
               }
             } else if (address) {
               // Fallback to address if no city found
-              this.call.location = address;
-              this.detectedLocation = address;
+              locationString = address;
+              // Add street number if available
+              if (streetNumber) {
+                locationString = `${address} ${streetNumber}`;
+              }
+              this.call.location = locationString;
+              this.detectedLocation = locationString;
             } else {
               // Fallback if no address data
               this.detectedLocation = "מיקום נוכחי";
               this.call.location = "מיקום נוכחי";
             }
+            
+            // Set house number if available from reverse geocoding
+            if (streetNumber && !this.call.houseNumber) {
+              this.call.houseNumber = streetNumber;
+            }
+            
             this.toast?.showSuccess("מיקום נמצא בהצלחה");
           } else {
             // Fallback if reverse geocoding fails
@@ -4884,6 +4909,14 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   padding: 16px;
 }
 
+.ccCard--loading {
+  background: #000000;
+  border: 3px solid #ff6b00;
+  border-radius: 20px;
+  padding: 0;
+  box-shadow: 0 10px 40px rgba(255, 107, 0, 0.3);
+}
+
 .ccCardHead {
   display: flex;
   align-items: center;
@@ -6301,55 +6334,100 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  position: relative;
-  z-index: 2;
+  text-align: center;
+  padding: 40px 30px;
+
+  @media (max-width: 480px) {
+    padding: 30px 20px;
+  }
 
   &__spinner {
-    display: flex;
-    gap: 8px;
+    width: 60px;
+    height: 60px;
+    margin: 0 auto 20px;
+    border: 4px solid #2d2d2d;
+    border-top: 4px solid #ff6b00;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
   }
 
   &__text {
-    color: $text;
-    font-weight: 1200;
-    font-size: 15px;
-    text-align: center;
+    color: #ff6b00;
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 30px;
+    line-height: 1.5;
+
+    @media (max-width: 480px) {
+      font-size: 18px;
+    }
   }
 
-  &__subtext {
-    margin-top: -8px;
-    color: rgba(255, 255, 255, 0.6);
-    font-weight: 900;
-    font-size: 12px;
-    text-align: center;
+  &__dots {
+    color: #ff6b00;
+    font-size: 30px;
+    letter-spacing: 5px;
+    margin-bottom: 25px;
+
+    span {
+      animation: blink 1.4s infinite;
+
+      &:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+
+      &:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+    }
+  }
+
+  &__progress-bar {
+    width: 100%;
+    height: 6px;
+    background: #2d2d2d;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 0;
+  }
+
+  &__progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ff6b00, #ffaa00);
+    border-radius: 3px;
+    animation: progress 2s ease-in-out infinite;
   }
 }
 
-.spinner-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: $orange;
-  animation: dotPulse 1.35s ease-in-out infinite;
-
-  &:nth-child(2) {
-    animation-delay: 0.2s;
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
   }
-  &:nth-child(3) {
-    animation-delay: 0.4s;
-  }
-}
-
-@keyframes dotPulse {
-  0%,
   100% {
-    opacity: 0.35;
-    transform: scale(0.8);
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes blink {
+  0%,
+  80%,
+  100% {
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+@keyframes progress {
+  0% {
+    width: 0%;
   }
   50% {
-    opacity: 1;
-    transform: scale(1.2);
+    width: 70%;
+  }
+  100% {
+    width: 100%;
   }
 }
 

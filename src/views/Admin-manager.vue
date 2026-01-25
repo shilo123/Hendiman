@@ -2,11 +2,29 @@
   <div class="admin-manager" dir="rtl">
     <div class="admin-manager__container">
       <div class="admin-manager__header">
-        <h1 class="admin-manager__title">ניהול מערכת</h1>
+        <div class="admin-manager__header-content">
+          <h1 class="admin-manager__title">ניהול מערכת</h1>
+          <!-- Mobile Menu Button -->
+          <button
+            class="admin-manager__menu-btn"
+            @click="mobileMenuOpen = !mobileMenuOpen"
+            aria-label="תפריט"
+          >
+            <span class="admin-manager__menu-icon" :class="{ 'admin-manager__menu-icon--open': mobileMenuOpen }">
+              <span></span>
+              <span></span>
+              <span></span>
+            </span>
+          </button>
+        </div>
+        <!-- Mobile Current Tab Title -->
+        <div class="admin-manager__mobile-tab-title">
+          {{ currentTabLabel }}
+        </div>
       </div>
 
-      <!-- Tabs -->
-      <div class="tabs">
+      <!-- Desktop Tabs -->
+      <div class="tabs tabs--desktop">
         <button
           v-for="tab in tabs"
           :key="tab.id"
@@ -16,6 +34,38 @@
         >
           {{ tab.label }}
         </button>
+      </div>
+
+      <!-- Mobile Menu Overlay -->
+      <div
+        v-if="mobileMenuOpen"
+        class="mobile-menu-overlay"
+        @click="mobileMenuOpen = false"
+      ></div>
+
+      <!-- Mobile Menu -->
+      <div class="mobile-menu" :class="{ 'mobile-menu--open': mobileMenuOpen }">
+        <div class="mobile-menu__header">
+          <h2 class="mobile-menu__title">תפריט ניהול</h2>
+          <button
+            class="mobile-menu__close"
+            @click="mobileMenuOpen = false"
+            aria-label="סגור תפריט"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="mobile-menu__content">
+          <button
+            v-for="tab in tabs"
+            :key="tab.id"
+            class="mobile-menu__item"
+            :class="{ 'mobile-menu__item--active': activeTab === tab.id }"
+            @click="selectTab(tab.id)"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
       </div>
 
       <!-- Tab Content -->
@@ -96,6 +146,7 @@ export default {
   data() {
     return {
       activeTab: "users",
+      mobileMenuOpen: false,
       tabs: [
         { id: "users", label: "משתמשים" },
         { id: "categories", label: "ניהול קטגוריות" },
@@ -112,6 +163,12 @@ export default {
       // Status
     };
   },
+  computed: {
+    currentTabLabel() {
+      const tab = this.tabs.find((t) => t.id === this.activeTab);
+      return tab ? tab.label : "ניהול מערכת";
+    },
+  },
   created() {
     this.toast = useToast();
   },
@@ -124,6 +181,10 @@ export default {
     getCategorySpecialties(specialties) {
       if (!specialties || !Array.isArray(specialties)) return [];
       return specialties.filter((s) => s.type === "category");
+    },
+    selectTab(tabId) {
+      this.activeTab = tabId;
+      this.mobileMenuOpen = false;
     },
   },
 };
@@ -153,10 +214,90 @@ $muted: rgba(255, 255, 255, 0.62);
   margin-bottom: 24px;
 }
 
+.admin-manager__header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
 .admin-manager__title {
   font-size: 28px;
   font-weight: 1100;
   color: $text;
+  margin: 0;
+}
+
+.admin-manager__menu-btn {
+  display: none;
+  background: rgba($orange, 0.15);
+  border: 1px solid rgba($orange, 0.3);
+  border-radius: 8px;
+  padding: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: $orange2;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+
+  &:hover {
+    background: rgba($orange, 0.25);
+    border-color: rgba($orange, 0.5);
+  }
+
+  @media (max-width: 500px) {
+    display: flex;
+  }
+}
+
+.admin-manager__menu-icon {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 20px;
+  height: 16px;
+  position: relative;
+
+  span {
+    display: block;
+    width: 100%;
+    height: 2px;
+    background: $orange2;
+    border-radius: 2px;
+    transition: all 0.3s ease;
+  }
+
+  &--open {
+    span:nth-child(1) {
+      transform: rotate(45deg) translate(6px, 6px);
+    }
+
+    span:nth-child(2) {
+      opacity: 0;
+    }
+
+    span:nth-child(3) {
+      transform: rotate(-45deg) translate(6px, -6px);
+    }
+  }
+}
+
+.admin-manager__mobile-tab-title {
+  display: none;
+  font-size: 18px;
+  font-weight: 1000;
+  color: $orange2;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba($orange, 0.2);
+
+  @media (max-width: 500px) {
+    display: block;
+  }
 }
 
 /* Tabs */
@@ -167,6 +308,16 @@ $muted: rgba(255, 255, 255, 0.62);
   margin-bottom: 24px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+
+  @media (max-width: 500px) {
+    display: none;
+  }
+
+  &--desktop {
+    @media (max-width: 500px) {
+      display: none;
+    }
+  }
 }
 
 .tabs::-webkit-scrollbar {
@@ -831,6 +982,119 @@ select.form-input {
   font-weight: 800;
 }
 
+/* Mobile Menu */
+.mobile-menu-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 9998;
+  backdrop-filter: blur(4px);
+
+  @media (max-width: 500px) {
+    display: block;
+  }
+}
+
+.mobile-menu {
+  display: none;
+  position: fixed;
+  top: 0;
+  right: -100%;
+  width: 280px;
+  max-width: 85vw;
+  height: 100vh;
+  background: $bg;
+  border-left: 1px solid rgba($orange, 0.2);
+  z-index: 9999;
+  transition: right 0.3s ease;
+  overflow-y: auto;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.5);
+
+  @media (max-width: 500px) {
+    display: block;
+  }
+
+  &--open {
+    right: 0;
+  }
+}
+
+.mobile-menu__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid rgba($orange, 0.2);
+  background: rgba($orange, 0.05);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.mobile-menu__title {
+  font-size: 20px;
+  font-weight: 1000;
+  color: $orange2;
+  margin: 0;
+}
+
+.mobile-menu__close {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: $text;
+  font-size: 24px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+}
+
+.mobile-menu__content {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobile-menu__item {
+  padding: 16px 20px;
+  border: none;
+  background: rgba(255, 255, 255, 0.04);
+  color: $muted;
+  font-size: 16px;
+  font-weight: 900;
+  cursor: pointer;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  text-align: right;
+  font-family: $font-family;
+  border: 1px solid transparent;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: $orange2;
+  }
+
+  &--active {
+    background: rgba($orange, 0.15);
+    color: $orange2;
+    border-color: rgba($orange, 0.3);
+  }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .admin-manager {
@@ -839,6 +1103,20 @@ select.form-input {
 
   .admin-manager__title {
     font-size: 24px;
+  }
+}
+
+@media (max-width: 500px) {
+  .admin-manager {
+    padding: 12px;
+  }
+
+  .admin-manager__title {
+    font-size: 20px;
+  }
+
+  .admin-manager__mobile-tab-title {
+    font-size: 16px;
   }
 
   .users-section__header {

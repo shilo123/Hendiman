@@ -1438,4 +1438,186 @@ $muted: rgba(255, 255, 255, 0.62);
     min-width: 100%;
   }
 }
+
+/* Mobile Responsive - max-width 500px */
+@media (max-width: 500px) {
+  .payments-section__header {
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .payments-section__title {
+    font-size: 18px;
+  }
+
+  .payments-section__actions {
+    width: 100%;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .download-pdf-btn,
+  .refresh-payments-btn {
+    width: 100%;
+    padding: 10px;
+    justify-content: center;
+  }
+
+  .payments-sub-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .payments-sub-tab {
+    padding: 10px 16px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .payments-section__filters {
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .filter-input,
+  .filter-select {
+    width: 100%;
+    min-width: 100%;
+    padding: 10px;
+  }
+
+  .payments-table-wrapper {
+    border-radius: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .payments-table {
+    min-width: 1200px;
+    font-size: 11px;
+  }
+
+  .payments-table th {
+    padding: 10px 6px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .payments-table td {
+    padding: 10px 6px;
+    font-size: 11px;
+  }
+
+  .date-value {
+    font-size: 11px;
+  }
+
+  .date-tooltip {
+    font-size: 9px;
+  }
+
+  .time-cell {
+    font-size: 11px;
+  }
+
+  .user-cell {
+    font-size: 11px;
+  }
+
+  .job-desc {
+    max-width: 120px;
+    font-size: 11px;
+  }
+
+  .amount-cell {
+    font-size: 11px;
+    padding: 2px 4px;
+  }
+
+  .status-badge {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+
+  .actions-buttons {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .capture-payment-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .delete-payment-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .subscriptions-table-wrapper {
+    border-radius: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .subscriptions-table {
+    min-width: 600px;
+    font-size: 11px;
+  }
+
+  .subscriptions-table th,
+  .subscriptions-table td {
+    padding: 10px 8px;
+    font-size: 11px;
+  }
+
+  .pagination {
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .pagination-info {
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .pagination-btn {
+    width: 100%;
+    padding: 10px;
+  }
+
+  .modal-content {
+    max-width: 95vw;
+    margin: 10px;
+  }
+
+  .modal-header {
+    padding: 14px;
+  }
+
+  .modal-title {
+    font-size: 16px;
+  }
+
+  .modal-body {
+    padding: 14px;
+  }
+
+  .modal-footer {
+    padding: 14px;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 10px;
+  }
+}
 </style>

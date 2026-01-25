@@ -1010,4 +1010,139 @@ $font-family: "Heebo", sans-serif;
     font-size: 12px;
   }
 }
+
+/* Mobile Responsive - max-width 500px */
+@media (max-width: 500px) {
+  .categories-section__header {
+    padding: 0;
+    margin-bottom: 16px;
+  }
+
+  .categories-section__title {
+    font-size: 18px;
+  }
+
+  .add-category-btn {
+    font-size: 13px;
+    padding: 9px 16px;
+  }
+
+  .category-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0;
+    gap: 6px;
+  }
+
+  .category-tab {
+    padding: 10px 14px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .category-panel__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding-bottom: 12px;
+  }
+
+  .category-panel__title {
+    font-size: 18px;
+  }
+
+  .category-panel__actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .category-panel__edit-btn,
+  .category-panel__delete-btn {
+    flex: 1;
+    justify-content: center;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .subcategories-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .subcategories-title {
+    font-size: 15px;
+  }
+
+  .add-subcategory-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 8px 12px;
+  }
+
+  .subcategories-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .subcategory-item {
+    padding: 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .subcategory-item__content {
+    width: 100%;
+  }
+
+  .subcategory-item__name {
+    font-size: 15px;
+  }
+
+  .subcategory-item__details {
+    font-size: 12px;
+    flex-wrap: wrap;
+  }
+
+  .subcategory-item__actions {
+    width: 100%;
+    justify-content: flex-end;
+    opacity: 1;
+  }
+
+  .subcategory-item__edit-btn,
+  .subcategory-item__delete-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .modal-content {
+    max-width: 95vw;
+    margin: 10px;
+  }
+
+  .modal-header {
+    padding: 16px;
+  }
+
+  .modal-title {
+    font-size: 16px;
+  }
+
+  .modal-body {
+    padding: 16px;
+  }
+
+  .modal-footer {
+    padding: 16px;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 10px;
+  }
+}
 </style>

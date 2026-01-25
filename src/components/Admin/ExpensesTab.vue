@@ -2195,4 +2195,244 @@ $font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     background-position: 200% 0%;
   }
 }
+
+/* Mobile Responsive - max-width 500px */
+@media (max-width: 500px) {
+  .financials-hero {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .financials-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .financials-title {
+    font-size: 18px;
+  }
+
+  .header-sub {
+    font-size: 12px;
+  }
+
+  .header-right {
+    width: 100%;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .hero-net {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .hero-net__value {
+    font-size: 16px;
+  }
+
+  .refresh-financials-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .insights-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 0 14px 14px;
+  }
+
+  .insight-card {
+    padding: 12px;
+  }
+
+  .insight-card__icon {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+
+  .insight-card__value {
+    font-size: 14px;
+  }
+
+  .financials-content {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .financials-card__header {
+    padding: 14px;
+  }
+
+  .financials-card__title {
+    font-size: 16px;
+  }
+
+  .card-sub {
+    font-size: 12px;
+  }
+
+  .financials-card__body {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .financial-item {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 12px 0;
+  }
+
+  .financial-item__label {
+    font-size: 13px;
+  }
+
+  .financial-item__value {
+    font-size: 14px;
+  }
+
+  .financial-item__value--total-expense,
+  .financial-item__value--total-revenue {
+    font-size: 18px;
+  }
+
+  .financial-item__actions {
+    justify-content: flex-end;
+  }
+
+  .financial-action-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  .financials-pies {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .pie-card {
+    border-radius: 12px;
+  }
+
+  .pie-header {
+    padding: 14px;
+  }
+
+  .pie-title {
+    font-size: 15px;
+  }
+
+  .pie-body {
+    height: 280px;
+    padding: 12px;
+  }
+
+  .pie-body--small {
+    height: 240px;
+  }
+
+  .financials-summary {
+    margin-top: 16px;
+  }
+
+  .summary-card {
+    padding: 18px;
+    border-radius: 12px;
+  }
+
+  .summary-card__value {
+    font-size: 24px;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .financials-chart {
+    padding: 16px;
+    border-radius: 12px;
+    margin-top: 16px;
+  }
+
+  .chart-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .chart-title {
+    font-size: 16px;
+  }
+
+  .chart-period-selector {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .period-btn {
+    flex: 1;
+    min-width: calc(50% - 3px);
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .chart-container {
+    height: 300px;
+  }
+
+  .modal-content {
+    max-width: 95vw;
+    margin: 10px;
+  }
+
+  .modal-header {
+    padding: 14px;
+  }
+
+  .modal-title {
+    font-size: 16px;
+  }
+
+  .modal-body {
+    padding: 14px;
+  }
+
+  .form-field {
+    margin-bottom: 12px;
+  }
+
+  .form-label {
+    font-size: 13px;
+  }
+
+  .form-input {
+    font-size: 14px;
+    padding: 10px;
+  }
+
+  .current-value {
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+
+  .financial-edit-buttons {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .modal-footer {
+    padding: 14px;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 10px;
+  }
+}
 </style>

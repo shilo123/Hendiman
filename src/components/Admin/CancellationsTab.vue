@@ -910,4 +910,153 @@ $font-family: "Heebo", sans-serif;
     }
   }
 }
+
+/* Mobile Responsive - max-width 500px */
+@media (max-width: 500px) {
+  .cancellations-section__header {
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .cancellations-section__title {
+    font-size: 18px;
+  }
+
+  .refresh-cancellations-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 10px;
+  }
+
+  .cancellations-table-wrapper {
+    border-radius: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .cancellations-table {
+    min-width: 1000px;
+    font-size: 11px;
+  }
+
+  .cancellations-table th {
+    padding: 10px 6px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .cancellations-table td {
+    padding: 10px 6px;
+    font-size: 11px;
+  }
+
+  .date-value {
+    font-size: 11px;
+  }
+
+  .date-tooltip {
+    font-size: 9px;
+  }
+
+  .job-id {
+    font-size: 10px;
+    max-width: 100px;
+  }
+
+  .handyman-id {
+    font-size: 9px;
+  }
+
+  .job-desc {
+    max-width: 120px;
+    font-size: 11px;
+  }
+
+  .person-badge {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+
+  .reason-text {
+    max-width: 150px;
+    font-size: 11px;
+  }
+
+  .status-badge {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+
+  .collect-fine-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .fine-collected-text {
+    font-size: 11px;
+  }
+
+  .pagination {
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .pagination-info {
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .pagination-btn {
+    width: 100%;
+    padding: 10px;
+  }
+
+  .modal-content {
+    max-width: 95vw;
+    margin: 10px;
+  }
+
+  .modal-header {
+    padding: 14px;
+  }
+
+  .modal-title {
+    font-size: 16px;
+  }
+
+  .modal-body {
+    padding: 14px;
+  }
+
+  .confirm-message {
+    font-size: 14px;
+  }
+
+  .form-field {
+    margin-bottom: 16px;
+  }
+
+  .form-label {
+    font-size: 13px;
+  }
+
+  .form-input {
+    font-size: 14px;
+    padding: 10px;
+  }
+
+  .modal-footer {
+    padding: 14px;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 10px;
+  }
+}
 </style>
