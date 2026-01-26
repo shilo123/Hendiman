@@ -2908,14 +2908,15 @@ export default {
         const { URL } = await import("@/Url/url");
         logger.log(`[checkPendingQuotations] API URL: ${URL}/api/clients/${userId}/pending-quotations`);
 
-        // First, check for expired quoted jobs and expire them
-        try {
-          await axios.post(`${URL}/api/jobs/check-expired-quoted`);
-          logger.log("[checkPendingQuotations] Expired jobs checked");
-        } catch (expiredCheckError) {
-          // Silent fail - not critical
-          logger.error("Error checking expired quoted jobs:", expiredCheckError);
-        }
+        // DISABLED: Job expiration has been disabled - jobs never expire
+        // No need to check for expired jobs anymore
+        // try {
+        //   await axios.post(`${URL}/api/jobs/check-expired-quoted`);
+        //   logger.log("[checkPendingQuotations] Expired jobs checked");
+        // } catch (expiredCheckError) {
+        //   // Silent fail - not critical
+        //   logger.error("Error checking expired quoted jobs:", expiredCheckError);
+        // }
 
         // Then, check for pending quotations using new endpoint
         logger.log("[checkPendingQuotations] Fetching pending quotations...");
@@ -4685,6 +4686,8 @@ export default {
               try {
                 // Show in-app notification
                 this.toast?.showInfo("🔔 " + (notification.title || notification.body || "התראה חדשה"));
+                // Note: When user taps the notification itself (not a button), 
+                // it will trigger pushNotificationActionPerformed with actionId = "tap" or empty
               } catch (error) {
                 logger.error("[Push] Error in pushNotificationReceived listener:", error);
               }
@@ -4696,21 +4699,29 @@ export default {
                 const actionId = action.actionId;
                 const notificationData = action.notification?.data || {};
                 const jobId = notificationData.jobId;
+                const userId = this.store.user?._id || this.me?._id;
 
                 logger.log("[Push] Action performed:", actionId, "JobId:", jobId);
 
                 // Handle different actions
                 if (actionId === "accept") {
-                  // Handle accept action - accept the job directly
+                  // Handle accept action - accept the job directly, then navigate to Dashboard
                   if (jobId) {
                     try {
                       const response = await axios.patch(`${URL}/jobs/${jobId}/assign`, {
-                        handymanId: this.store.user?._id || this.me?._id,
+                        handymanId: userId,
                       });
                       if (response.data.success) {
                         this.toast?.showSuccess("✅ העבודה התקבלה בהצלחה!");
                         // Refresh jobs
                         await this.loadJobs();
+                        // Navigate to Dashboard
+                        if (userId) {
+                          this.$router.push({
+                            name: "Dashboard",
+                            params: { id: userId }
+                          });
+                        }
                       } else {
                         this.toast?.showError(response.data.message || "שגיאה בקבלת העבודה");
                       }
@@ -4718,6 +4729,38 @@ export default {
                       logger.error("[Push] Error accepting job:", err);
                       this.toast?.showError("שגיאה בקבלת העבודה");
                     }
+                  }
+                } else if (actionId === "skip") {
+                  // Handle skip action - if it's a personal request, notify the client
+                  if (jobId) {
+                    try {
+                      // First, get job details to check if it's a personal request
+                      const jobResponse = await axios.get(`${URL}/jobs/${jobId}`);
+                      if (jobResponse.data.success && jobResponse.data.job) {
+                        const job = jobResponse.data.job;
+                        const isPersonalRequest = job.handymanIdSpecial && 
+                          String(job.handymanIdSpecial) === String(userId);
+                        
+                        if (isPersonalRequest && job.clientId) {
+                          // This is a personal request that was skipped - notify the client
+                          try {
+                            await axios.post(`${URL}/api/jobs/${jobId}/notify-client-skipped`, {
+                              handymanId: userId
+                            });
+                            logger.log("[Push] Client notified about skipped personal request");
+                          } catch (notifyError) {
+                            logger.error("[Push] Error notifying client:", notifyError);
+                            // Don't show error to handyman - just log it
+                          }
+                        }
+                      }
+                      this.toast?.showInfo("⏭️ התראה נדחתה");
+                    } catch (err) {
+                      logger.error("[Push] Error handling skip:", err);
+                      this.toast?.showInfo("⏭️ התראה נדחתה");
+                    }
+                  } else {
+                    this.toast?.showInfo("⏭️ התראה נדחתה");
                   }
                 } else if (actionId === "view" || actionId === "tap") {
                   // Handle view action - navigate to JobView page
@@ -4727,16 +4770,22 @@ export default {
                       params: { jobId: jobId }
                     });
                   }
-                } else if (actionId === "skip") {
-                  // Handle skip action - just close notification
-                  this.toast?.showInfo("⏭️ התראה נדחתה");
                 } else {
                   // Default click (no specific action) - navigate to JobView page
+                  // This happens when user taps on the notification itself (not on a button)
                   if (jobId) {
                     this.$router.push({
                       name: "JobView",
                       params: { jobId: jobId }
                     });
+                  } else {
+                    // No jobId - navigate to Dashboard
+                    if (userId) {
+                      this.$router.push({
+                        name: "Dashboard",
+                        params: { id: userId }
+                      });
+                    }
                   }
                 }
               } catch (error) {
@@ -5686,9 +5735,9 @@ export default {
       
       // If we have a valid distance, format it
       if (dist !== null && Number.isFinite(dist) && dist > 0) {
-        if (dist < 1) return `${Math.round(dist * 1000)} מ'`;
-        return `${dist.toFixed(1)} ק"מ`;
-      }
+          if (dist < 1) return `${Math.round(dist * 1000)} מ'`;
+          return `${dist.toFixed(1)} ק"מ`;
+        }
       
       // If no distance from server, try to calculate it using coordinates
       const handymanCoords = this.isHendiman && this.store.user?.location?.coordinates
@@ -5808,12 +5857,8 @@ export default {
       return this.getJobIcon(job);
     },
     isJobExpired(job) {
-      // Check if job has quotedUntil and if it's expired
-      if (job.quotedUntil) {
-        const quotedUntil = new Date(job.quotedUntil);
-        const now = new Date();
-        return now > quotedUntil;
-      }
+      // DISABLED: Job expiration has been disabled - jobs never expire
+      // Always return false - jobs never expire
       return false;
     },
     async loadMoreRegularJobs() {

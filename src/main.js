@@ -4,6 +4,8 @@ import App from "./App.vue";
 import "./registerServiceWorker";
 import router from "./router";
 import "./firebase";
+import { Capacitor } from "@capacitor/core";
+import { SplashScreen } from "@capacitor/splash-screen";
 
 // Production diagnostics: report unexpected runtime errors to the server.
 // Helps debug production-only issues (e.g., third-party scripts like core.js).
@@ -113,4 +115,25 @@ const app = createApp(App);
 const pinia = createPinia();
 
 app.component("font-awesome-icon", FontAwesomeIcon);
-app.use(pinia).use(router).mount("#app");
+app.use(pinia).use(router);
+
+// Mount the app first
+app.mount("#app");
+
+// Keep splash screen visible until app is ready
+if (Capacitor.isNativePlatform()) {
+  // Wait for router to be ready, then hide splash screen
+  router.isReady().then(() => {
+    // Additional delay to ensure all components are rendered
+    setTimeout(() => {
+      SplashScreen.hide().catch(() => {
+        // Ignore errors if splash screen is not available
+      });
+    }, 500);
+  }).catch(() => {
+    // If router fails, hide splash after a reasonable timeout
+    setTimeout(() => {
+      SplashScreen.hide().catch(() => {});
+    }, 2000);
+  });
+}

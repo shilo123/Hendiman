@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="app-container">
     <router-view />
   </div>
 </template>
@@ -11,6 +11,13 @@ export default {
 
 <style>
 @import url("https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap");
+
+.app-container {
+  min-height: 100vh;
+  width: 100%;
+  background: #0b0b0f;
+  position: relative;
+}
 
 * {
   font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,

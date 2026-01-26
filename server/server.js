@@ -8580,11 +8580,146 @@ function findAvailablePort(startPort) {
         }
 
         await jobsCol.updateOne({ _id: new ObjectId(jobId) }, updateObj);
+        
+        // If this was a personal request, notify the client
+        if (isSpecialHandyman && job.clientId) {
+          try {
+            const collection = getCollection();
+            const client = await collection.findOne({
+              _id: new ObjectId(job.clientId),
+            });
+            
+            if (client && client.fcmToken) {
+              // Get handyman name
+              const handyman = await collection.findOne({
+                _id: new ObjectId(handymanId),
+              });
+              const handymanName = handyman?.username || handyman?.name || "הנדימן";
+              
+              // Get job subcategory for message
+              let subcategoryText = "עבודה";
+              if (
+                Array.isArray(job.subcategoryInfo) &&
+                job.subcategoryInfo.length > 0
+              ) {
+                subcategoryText = job.subcategoryInfo[0]?.subcategory || "עבודה";
+              }
+              
+              await sendPushNotification(
+                client.fcmToken,
+                "הנדימן לא הסכים לעבודה",
+                `${handymanName} לא הסכים להזמנה האישית שלך - ${subcategoryText}`,
+                {
+                  type: "personal_request_rejected",
+                  jobId: jobId.toString(),
+                }
+              );
+            }
+          } catch (notifyError) {
+            serverLogger.error(
+              "Error notifying client about skipped personal request:",
+              notifyError
+            );
+            // Don't fail the skip request if notification fails
+          }
+        }
+        
         return res.json({ success: true });
       } catch (error) {
         return res.status(500).json({
           success: false,
           message: "Error skipping job",
+          error: error.message,
+        });
+      }
+    });
+    
+    // Endpoint to notify client when handyman skips a personal request (called from push notification)
+    app.post("/api/jobs/:jobId/notify-client-skipped", async (req, res) => {
+      try {
+        const { jobId } = req.params;
+        const { handymanId } = req.body;
+        
+        if (!jobId || !handymanId) {
+          return res.status(400).json({
+            success: false,
+            message: "jobId and handymanId required",
+          });
+        }
+        
+        const jobsCol = getCollectionJobs();
+        const collection = getCollection();
+        
+        // Get job details
+        const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+        if (!job) {
+          return res.status(404).json({
+            success: false,
+            message: "Job not found",
+          });
+        }
+        
+        // Check if this is a personal request
+        const handymanIdString = String(handymanId);
+        const isPersonalRequest =
+          job.handymanIdSpecial &&
+          String(job.handymanIdSpecial) === handymanIdString;
+        
+        if (!isPersonalRequest || !job.clientId) {
+          return res.json({
+            success: true,
+            message: "Not a personal request or no client",
+          });
+        }
+        
+        // Get client and handyman details
+        const client = await collection.findOne({
+          _id: new ObjectId(job.clientId),
+        });
+        const handyman = await collection.findOne({
+          _id: new ObjectId(handymanId),
+        });
+        
+        if (client && client.fcmToken) {
+          const handymanName = handyman?.username || handyman?.name || "הנדימן";
+          
+          // Get job subcategory for message
+          let subcategoryText = "עבודה";
+          if (
+            Array.isArray(job.subcategoryInfo) &&
+            job.subcategoryInfo.length > 0
+          ) {
+            subcategoryText = job.subcategoryInfo[0]?.subcategory || "עבודה";
+          }
+          
+          await sendPushNotification(
+            client.fcmToken,
+            "הנדימן לא הסכים לעבודה",
+            `${handymanName} לא הסכים להזמנה האישית שלך - ${subcategoryText}`,
+            {
+              type: "personal_request_rejected",
+              jobId: jobId.toString(),
+            }
+          );
+          
+          return res.json({
+            success: true,
+            message: "Client notified successfully",
+          });
+        } else {
+          return res.json({
+            success: true,
+            message: "Client has no FCM token",
+          });
+        }
+      } catch (error) {
+        serverLogger.error(
+          "Error in /api/jobs/:jobId/notify-client-skipped:",
+          error
+        );
+        return res.status(500).json({
+          success: false,
+          message: "Error notifying client",
           error: error.message,
         });
       }
@@ -19877,20 +20012,20 @@ ${subcategoryList}
           });
         }
 
-        // Check if quotedUntil has passed - BUT only if job has NO quotations
-        // If job has at least one quotation, it should NOT expire
-        const hasQuotations = Array.isArray(job.quotations) && job.quotations.length > 0;
-        if (job.quotedUntil && new Date(job.quotedUntil) < new Date() && !hasQuotations) {
-          // Auto-expire job only if it has no quotations
-          await jobsCollection.updateOne(
-            { _id: new ObjectId(jobId) },
-            { $set: { status: "expired", updatedAt: new Date() } }
-          );
-          return res.status(400).json({
-            success: false,
-            message: "תם זמן ההצעות לעבודה זו",
-          });
-        }
+        // DISABLED: Job expiration has been disabled - jobs never expire
+        // Check if quotedUntil has passed - DISABLED
+        // const hasQuotations = Array.isArray(job.quotations) && job.quotations.length > 0;
+        // if (job.quotedUntil && new Date(job.quotedUntil) < new Date() && !hasQuotations) {
+        //   // Auto-expire job only if it has no quotations
+        //   await jobsCollection.updateOne(
+        //     { _id: new ObjectId(jobId) },
+        //     { $set: { status: "expired", updatedAt: new Date() } }
+        //   );
+        //   return res.status(400).json({
+        //     success: false,
+        //     message: "תם זמן ההצעות לעבודה זו",
+        //   });
+        // }
 
         // Check if handyman already submitted a quotation
         const existingQuotations = Array.isArray(job.quotations)
@@ -20040,19 +20175,20 @@ ${subcategoryList}
             .limit(10)
             .toArray();
 
-          // Filter out expired jobs - BUT keep jobs that have quotations
-          // A job should NOT be considered expired if it has at least one quotation
-          const validJobs = quotedJobs.filter((job) => {
-            // If job has quotations, it's always valid (doesn't expire)
-            const hasQuotations = Array.isArray(job.quotations) && job.quotations.length > 0;
-            if (hasQuotations) return true;
-            
-            // If no quotedUntil, job is valid
-            if (!job.quotedUntil) return true;
-            
-            // Only check quotedUntil if job has NO quotations
-            return new Date(job.quotedUntil) >= new Date();
-          });
+          // DISABLED: Job expiration has been disabled - jobs never expire
+          // Filter out expired jobs - DISABLED - all jobs are valid now
+          const validJobs = quotedJobs; // All jobs are valid - no expiration check
+          // const validJobs = quotedJobs.filter((job) => {
+          //   // If job has quotations, it's always valid (doesn't expire)
+          //   const hasQuotations = Array.isArray(job.quotations) && job.quotations.length > 0;
+          //   if (hasQuotations) return true;
+          //   
+          //   // If no quotedUntil, job is valid
+          //   if (!job.quotedUntil) return true;
+          //   
+          //   // Only check quotedUntil if job has NO quotations
+          //   return new Date(job.quotedUntil) >= new Date();
+          // });
 
           return res.json({
             success: true,
@@ -20167,13 +20303,13 @@ ${subcategoryList}
               return false; // Quotation already chosen
             }
             
-            // Check if expired - BUT only if job has NO quotations
-            // If job has at least one quotation, it should NOT expire
-            const hasQuotations = Array.isArray(job.quotations) && job.quotations.length > 0;
-            if (job.quotedUntil && new Date(job.quotedUntil) < now && !hasQuotations) {
-              serverLogger.log(`[Pending Quotations] Job ${job._id} filtered out: expired (quotedUntil=${job.quotedUntil}, now=${now}, hasQuotations=${hasQuotations})`);
-              return false; // Expired (only if no quotations)
-            }
+            // DISABLED: Job expiration has been disabled - jobs never expire
+            // Check if expired - DISABLED
+            // const hasQuotations = Array.isArray(job.quotations) && job.quotations.length > 0;
+            // if (job.quotedUntil && new Date(job.quotedUntil) < now && !hasQuotations) {
+            //   serverLogger.log(`[Pending Quotations] Job ${job._id} filtered out: expired (quotedUntil=${job.quotedUntil}, now=${now}, hasQuotations=${hasQuotations})`);
+            //   return false; // Expired (only if no quotations)
+            // }
             
             serverLogger.log(`[Pending Quotations] ✅ Job ${job._id} PASSED all filters!`);
             return true; // All checks passed
@@ -20211,7 +20347,7 @@ ${subcategoryList}
                   handymanIdType: typeof job.handymanId,
                   chosenQuotation: job.chosenQuotation,
                   quotedUntil: job.quotedUntil,
-                  isExpired: job.quotedUntil ? new Date(job.quotedUntil) < now : false,
+                  isExpired: false, // DISABLED: Job expiration has been disabled - jobs never expire
                   now: now.toISOString()
                 });
               });
@@ -20889,130 +21025,15 @@ ${imagesList}
     // ============================================================
     // QUOTATION SYSTEM - Timeout/Expired Jobs Checker
     // ============================================================
-
-    // Function to check and expire quoted jobs (used by both endpoint and periodic task)
+    // DISABLED: Job expiration has been disabled - jobs never expire
+    // Function to check and expire quoted jobs (DISABLED - always returns success with 0 expired)
     async function checkAndExpireQuotedJobs() {
-      try {
-        const jobsCollection = getCollectionJobs();
-        const now = new Date();
-
-        // Find all quoted jobs that passed quotedUntil
-        const candidateJobs = await jobsCollection
-          .find({
-            status: "quoted",
-            quotedUntil: { $exists: true, $lt: now },
-          })
-          .toArray();
-
-        if (candidateJobs.length === 0) {
-          return {
-            success: true,
-            expiredCount: 0,
-            message: "אין עבודות שפג תוקפן",
-          };
-        }
-
-        // Filter out jobs that have at least one quotation
-        // A job should NOT expire if it has quotations
-        const expiredJobs = [];
-        for (const job of candidateJobs) {
-          // Check if job has quotations array with at least one quotation
-          const hasQuotations = 
-            Array.isArray(job.quotations) && 
-            job.quotations.length > 0;
-          
-          if (!hasQuotations) {
-            // Only expire jobs that have NO quotations
-            expiredJobs.push(job);
-          } else {
-            serverLogger.log(
-              `[QUOTATION-EXPIRY] Job ${job._id} has ${job.quotations.length} quotation(s), skipping expiry`
-            );
-          }
-        }
-
-        if (expiredJobs.length === 0) {
-          return {
-            success: true,
-            expiredCount: 0,
-            message: "אין עבודות שפג תוקפן (כל העבודות יש להן הצעות מחיר)",
-          };
-        }
-
-        // Update only jobs without quotations to "expired" status
-        const jobIdsToExpire = expiredJobs.map(job => job._id);
-        const updateResult = await jobsCollection.updateMany(
-          {
-            _id: { $in: jobIdsToExpire },
-            status: "quoted",
-          },
-          {
-            $set: {
-              status: "expired",
-              expiredAt: now, // Store when the job expired
-              updatedAt: now,
-            },
-          }
-        );
-
-        // Send notifications to clients about expired jobs
-        const collection = getCollection();
-        for (const job of expiredJobs) {
-          if (job.clientId) {
-            try {
-              const client = await collection.findOne({
-                _id: new ObjectId(job.clientId),
-              });
-              if (client && client.fcmToken) {
-                // Find the quoted subcategory (price="bid" or price="quoted")
-                let subcategoryText = "עבודה";
-                if (
-                  Array.isArray(job.subcategoryInfo) &&
-                  job.subcategoryInfo.length > 0
-                ) {
-                  const quotedSubcategory = job.subcategoryInfo.find(
-                    (sub) => sub.price === "bid" || sub.price === "quoted"
-                  );
-                  if (quotedSubcategory) {
-                    subcategoryText = quotedSubcategory.subcategory || "עבודה";
-                  } else {
-                    subcategoryText =
-                      job.subcategoryInfo[0]?.subcategory || "עבודה";
-                  }
-                }
-
-                await sendPushNotification(
-                  client.fcmToken,
-                  "פג תוקף הצעות המחיר",
-                  "הקריאה ששלחת פגה תוקף - נסה ליצור קריאה חדשה",
-                  {
-                    type: "quotation_expired",
-                    jobId: job._id.toString(),
-                  }
-                );
-              }
-            } catch (notifyError) {
-              serverLogger.error(
-                "Error sending expired notification:",
-                notifyError
-              );
-            }
-          }
-        }
-
-        return {
-          success: true,
-          expiredCount: updateResult.modifiedCount,
-          message: `עודכנו ${updateResult.modifiedCount} עבודות שפג תוקפן`,
-        };
-      } catch (error) {
-        serverLogger.error("Error in checkAndExpireQuotedJobs:", error);
-        return {
-          success: false,
-          message: "שגיאה בבדיקת עבודות שפג תוקפן",
-          error: error.message,
-        };
-      }
+      // Job expiration is disabled - jobs never expire
+      return {
+        success: true,
+        expiredCount: 0,
+        message: "מנגנון פג תוקף מבוטל - עבודות לא פגות תוקף",
+      };
     }
 
     // Endpoint: Check and expire quoted jobs that passed quotedUntil
@@ -22238,22 +22259,23 @@ ${imagesList}
       }
     });
 
-    // Start periodic task to check and expire quoted jobs (every 5 minutes)
-    setInterval(async () => {
-      try {
-        const result = await checkAndExpireQuotedJobs();
-        if (result.expiredCount > 0) {
-          serverLogger.log(
-            `✅ [QUOTATION-EXPIRY] Expired ${result.expiredCount} quoted job(s)`
-          );
-        }
-      } catch (error) {
-        serverLogger.error(
-          "[QUOTATION-EXPIRY] Error in periodic expiry check:",
-          error
-        );
-      }
-    }, 5 * 60 * 1000); // Every 5 minutes
+    // DISABLED: Periodic task to check and expire quoted jobs has been disabled
+    // Jobs never expire now
+    // setInterval(async () => {
+    //   try {
+    //     const result = await checkAndExpireQuotedJobs();
+    //     if (result.expiredCount > 0) {
+    //       serverLogger.log(
+    //         `✅ [QUOTATION-EXPIRY] Expired ${result.expiredCount} quoted job(s)`
+    //       );
+    //     }
+    //   } catch (error) {
+    //     serverLogger.error(
+    //       "[QUOTATION-EXPIRY] Error in periodic expiry check:",
+    //       error
+    //     );
+    //   }
+    // }, 5 * 60 * 1000); // Every 5 minutes
 
     // Start server
     // In development, listen on all interfaces (0.0.0.0) to allow access via IP
@@ -22275,14 +22297,14 @@ ${imagesList}
             serverLogger.log(`Server is running on port ${PORT}`);
           }
         }
-        // Run initial check on server start
-        checkAndExpireQuotedJobs().then((result) => {
-          if (result.expiredCount > 0) {
-            serverLogger.log(
-              `✅ [QUOTATION-EXPIRY] Initial check: Expired ${result.expiredCount} quoted job(s)`
-            );
-          }
-        });
+        // DISABLED: Initial check on server start has been disabled - jobs never expire
+        // checkAndExpireQuotedJobs().then((result) => {
+        //   if (result.expiredCount > 0) {
+        //     serverLogger.log(
+        //       `✅ [QUOTATION-EXPIRY] Initial check: Expired ${result.expiredCount} quoted job(s)`
+        //     );
+        //   }
+        // });
       })
 
       .on("error", (err) => {

@@ -192,8 +192,7 @@ async function fetchJobs(user, collectionJobs) {
   const pipeline = [];
 
   // Stage 1: Base match - exclude deleted/cancelled
-  // Also exclude expired jobs that expired more than 1 hour ago
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  // DISABLED: Expired jobs filter has been removed - jobs never expire now
   
   // Base conditions that apply to all
   const baseConditions = {
@@ -201,37 +200,13 @@ async function fetchJobs(user, collectionJobs) {
     status: { $ne: "cancelled" },
   };
 
-  // Expired jobs filter - exclude expired jobs that expired more than 1 hour ago
-  const expiredFilter = {
-    $or: [
-      // Not expired at all
-      { status: { $ne: "expired" } },
-      // Expired but within the last hour (use expiredAt if exists, otherwise updatedAt)
-      {
-        $and: [
-          { status: "expired" },
-          {
-            $or: [
-              { expiredAt: { $gte: oneHourAgo } },
-              {
-                $and: [
-                  { expiredAt: { $exists: false } },
-                  { updatedAt: { $gte: oneHourAgo } },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  };
+  // DISABLED: Expired jobs filter - jobs never expire, so we don't filter them out
+  // const expiredFilter = { ... };
 
-  // Combine base conditions with expired filter
+  // Use only base conditions (no expired filter)
+  // Initialize baseMatch with $and array to allow adding more conditions
   const baseMatch = {
-    $and: [
-      baseConditions,
-      expiredFilter,
-    ],
+    $and: [baseConditions],
   };
 
   // Stage 2: Filter by user type and status

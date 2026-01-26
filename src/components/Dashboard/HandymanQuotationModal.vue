@@ -700,7 +700,7 @@ $font-family: "Heebo", "Inter", sans-serif;
     padding: 16px 20px 140px;
     min-height: 0;
     -webkit-overflow-scrolling: touch;
-    
+
     &::-webkit-scrollbar {
       width: 4px;
     }
@@ -764,7 +764,7 @@ $font-family: "Heebo", "Inter", sans-serif;
 
   i {
     font-size: 16px;
-  }
+    }
 
   &:hover:not(:disabled) {
     box-shadow: 0 6px 16px rgba(139, 92, 246, 0.45);
@@ -1029,12 +1029,12 @@ $font-family: "Heebo", "Inter", sans-serif;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
-  
+
   &--secondary {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: white;
-    
+
     &:hover {
       background: rgba(255, 255, 255, 0.08);
     }
@@ -1104,9 +1104,9 @@ $font-family: "Heebo", "Inter", sans-serif;
   width: 24px;
   height: 24px;
   border: 3px solid rgba(255, 255, 255, 0.2);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
@@ -1126,12 +1126,12 @@ $font-family: "Heebo", "Inter", sans-serif;
     &__content { padding: 16px 16px 140px; }
     &__footer { padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 24px)); }
   }
-  
+
   .job-info-card {
     &__title { font-size: 15px; }
     &__image { width: 60px; height: 60px; }
   }
-  
+
   .price-input { height: 70px; font-size: 32px; }
 }
 </style>

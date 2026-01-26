@@ -1002,11 +1002,23 @@ $orange2: #ff8a2b;
   pointer-events: none;
 }
 
+.hsProfileText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .hsName {
   font-size: 20px;
   font-weight: 1100;
   color: rgba(255, 255, 255, 0.96);
   line-height: 1.1;
+  word-wrap: break-word;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  overflow: visible;
+  max-width: 100%;
 }
 
 .hsMeta {

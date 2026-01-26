@@ -37,6 +37,9 @@
                   :disabled="isLoading"
                   autocomplete="username"
                   dir="rtl"
+                  @compositionend="onUsernameCompositionEnd"
+                  @blur="onUsernameBlur"
+                  @input="onUsernameInput"
                 />
               </div>
             </div>
@@ -138,6 +141,8 @@ export default {
       errorMessage: "",
       setupComplete: false,
       userData: null,
+      // For Android IME handling
+      lastUsernameValue: "",
     };
   },
   computed: {
@@ -156,10 +161,44 @@ export default {
         this.errorMessage = "";
         this.setupComplete = false;
         this.userData = null;
+        this.lastUsernameValue = "";
       }
     },
   },
   methods: {
+    // Handle Android IME composition end event
+    onUsernameCompositionEnd(event) {
+      // When IME composition ends, ensure the value is captured
+      const value = event.target.value;
+      this.username = value;
+      this.lastUsernameValue = value;
+    },
+
+    // Handle input event to track username changes
+    onUsernameInput(event) {
+      const value = event.target.value;
+      this.username = value;
+      // Update lastUsernameValue if the value is longer (to catch IME updates)
+      if (value && value.length > (this.lastUsernameValue?.length || 0)) {
+        this.lastUsernameValue = value;
+      }
+    },
+
+    // Handle blur event to preserve username value
+    onUsernameBlur(event) {
+      // On Android, when moving to password field, the value might get truncated
+      // This ensures we keep the correct value
+      const currentValue = event.target.value;
+      if (currentValue && currentValue.length > 0) {
+        this.username = currentValue;
+        this.lastUsernameValue = currentValue;
+      } else if (this.lastUsernameValue) {
+        // If the value was cleared incorrectly, restore it
+        this.username = this.lastUsernameValue;
+        event.target.value = this.lastUsernameValue;
+      }
+    },
+
     handleClose() {
       if (!this.isLoading) {
         this.$emit("close");
@@ -173,14 +212,37 @@ export default {
       this.errorMessage = "";
 
       try {
-        // Step 1: Verify credentials with server
-        const response = await axios.post(`${URL}/login-user`, {
-          username: this.username.trim(),
-          password: this.password,
-        });
+        // Ensure we use the complete username value (handle Android IME issue)
+        const finalUsername = this.lastUsernameValue || this.username.trim();
+        
+        if (!finalUsername || finalUsername.length === 0) {
+          throw new Error("אנא הזן שם משתמש");
+        }
+
+        if (!this.password || this.password.length === 0) {
+          throw new Error("אנא הזן סיסמה");
+        }
+
+        // Step 1: Verify credentials with server (with timeout)
+        const response = await Promise.race([
+          axios.post(`${URL}/login-user`, {
+            username: finalUsername,
+            password: this.password,
+          }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("תם הזמן - נסה שוב")), 15000)
+          )
+        ]);
 
         if (response.data.message !== "Success" || !response.data.user) {
-          throw new Error(response.data.message || "שם משתמש או סיסמה שגויים");
+          const errorMsg = response.data.message || "שם משתמש או סיסמה שגויים";
+          if (errorMsg.includes("NoUser") || errorMsg.includes("NoEmail")) {
+            throw new Error("שם משתמש לא נמצא במערכת");
+          } else if (errorMsg.includes("NoPass")) {
+            throw new Error("סיסמה שגויה");
+          } else {
+            throw new Error(errorMsg);
+          }
         }
 
         const user = response.data.user;
@@ -197,9 +259,24 @@ export default {
           throw new Error("טביעת אצבע זמינה רק באפליקציה");
         }
 
-        const biometryResult = await NativeBiometric.checkBiometry();
+        // Check biometric availability with error handling
+        let biometryResult;
+        try {
+          biometryResult = await NativeBiometric.checkBiometry();
+        } catch (checkError) {
+          // Handle the "not implemented" error on Android
+          if (checkError.message && checkError.message.includes("not implemented")) {
+            // On Android, checkBiometry might not be implemented, but authenticate might work
+            // Try to proceed with authenticate directly
+            console.warn("[BiometricSetup] checkBiometry not implemented, will try authenticate");
+            biometryResult = { isAvailable: true }; // Assume available and try authenticate
+          } else {
+            throw new Error("שגיאה בבדיקת טביעת אצבע: " + (checkError.message || "שגיאה לא ידועה"));
+          }
+        }
         
-        if (!biometryResult.isAvailable) {
+        // Only check isAvailable if we got a valid result
+        if (biometryResult && biometryResult.isAvailable === false) {
           throw new Error("טביעת אצבע לא זמינה במכשיר זה");
         }
 
@@ -223,14 +300,28 @@ export default {
         this.setupComplete = true;
 
       } catch (error) {
-        console.error("[BiometricSetup] Error:", error);
-        
+        // Handle different error types
         if (error.code === "USER_CANCEL" || error.message?.includes("cancel")) {
           this.errorMessage = "האימות בוטל";
+        } else if (error.message?.includes("תם הזמן")) {
+          this.errorMessage = "תם הזמן - נסה שוב";
         } else if (error.response?.data?.message) {
-          this.errorMessage = error.response.data.message;
+          const serverMsg = error.response.data.message;
+          if (serverMsg.includes("NoUser") || serverMsg.includes("NoEmail")) {
+            this.errorMessage = "שם משתמש לא נמצא במערכת";
+          } else if (serverMsg.includes("NoPass")) {
+            this.errorMessage = "סיסמה שגויה";
+          } else if (serverMsg.includes("Blocked")) {
+            this.errorMessage = "המשתמש חסום. פנה להנהלת הנדימן";
+          } else {
+            this.errorMessage = serverMsg;
+          }
+        } else if (error.message) {
+          this.errorMessage = error.message;
+        } else if (error.code === "ECONNREFUSED" || error.message?.includes("Network")) {
+          this.errorMessage = "לא ניתן להתחבר לשרת. אנא ודא שהשרת רץ";
         } else {
-          this.errorMessage = error.message || "שגיאה בהגדרת טביעת אצבע";
+          this.errorMessage = "שגיאה בהגדרת טביעת אצבע. נסה שוב";
         }
       } finally {
         this.isLoading = false;

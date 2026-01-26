@@ -106,6 +106,16 @@
         </button>
       </form>
 
+      <!-- Quick Login as Client Button -->
+      <button 
+        type="button" 
+        class="quick-login-btn"
+        @click="quickLoginAsClient"
+      >
+        <span class="material-symbols-outlined">person</span>
+        <span>היכנס כלקוח</span>
+      </button>
+
       <!-- Social Login Divider -->
       <div class="social-divider">
         <div class="social-divider__line social-divider__line--left"></div>
@@ -231,41 +241,11 @@ export default {
       showBiometricSetupSheet: false,
     };
   },
-  async created() {
+  created() {
     this.toast = useToast();
     this.checkIfMobile();
     this.handleGoogleCallback();
     this.handleFacebookCallback();
-    
-    // DEBUG: Show platform info
-    const platformInfo = `Platform: ${Capacitor.getPlatform()}\nisNative: ${Capacitor.isNativePlatform()}\nisNativeApp: ${this.isNativeApp}`;
-    console.log('[Login created] Platform info:', platformInfo);
-    
-    // Check for saved biometric credentials in native app
-    // Always try to check, even if there might be errors
-    if (Capacitor.isNativePlatform()) {
-      console.log('[Login created] Native platform detected, checking biometric...');
-      try {
-        await this.checkNativeBiometricSupport();
-        console.log('[Login created] Biometric check completed. isBiometricAvailable:', this.isBiometricAvailable, 'hasBiometricCredentials:', this.hasBiometricCredentials);
-        
-        // Auto-show biometric prompt if credentials exist
-        if (this.isBiometricAvailable && this.hasBiometricCredentials) {
-          console.log('[Login created] Biometric credentials found, auto-prompting...');
-          // Small delay to let the UI render first
-          setTimeout(() => {
-            this.handleBiometricLogin();
-          }, 500);
-        }
-      } catch (error) {
-        console.error('[Login created] Error checking biometric support:', error);
-        // Don't block the app - just log the error
-        this.isBiometricAvailable = false;
-        this.hasBiometricCredentials = false;
-      }
-    } else {
-      console.log('[Login created] Not a native platform, skipping biometric check');
-    }
     
     // בדוק אם המשתמש הועבר לכאן כי הוא חסום
     if (this.$route.query.blocked === "true") {
@@ -277,6 +257,26 @@ export default {
       this.toast?.showError("חיבור Facebook לא מוגדר בשרת");
     } else if (this.$route.query.error === "auth_failed") {
       this.toast?.showError("האימות נכשל, נסה שוב");
+    }
+  },
+  async mounted() {
+    // Check for saved biometric credentials in native app (non-blocking)
+    // Do this in mounted() instead of created() to not block initial render
+    if (Capacitor.isNativePlatform()) {
+      // Run in background without blocking UI
+      this.checkNativeBiometricSupport().then(() => {
+        // Auto-show biometric prompt if credentials exist
+        if (this.isBiometricAvailable && this.hasBiometricCredentials) {
+          // Small delay to let the UI render first
+          setTimeout(() => {
+            this.handleBiometricLogin();
+          }, 800);
+        }
+      }).catch(() => {
+        // Silently fail - biometric not available
+        this.isBiometricAvailable = false;
+        this.hasBiometricCredentials = false;
+      });
     }
   },
   watch: {
@@ -926,6 +926,15 @@ export default {
         // בכוונה לא מציגים שגיאה (כמו אצלך)
       }
     },
+
+    quickLoginAsClient() {
+      // Fill in client credentials automatically
+      this.username = "דניאל בן דוד";
+      this.password = "1234567890";
+      
+      // Auto-submit the form
+      this.handleLogin();
+    },
   },
 };
 </script>
@@ -1245,6 +1254,49 @@ $font-display: "Heebo", "Noto Sans Hebrew", sans-serif;
   @media (max-width: 640px) {
     font-size: 16px;
     padding: 14px 20px;
+  }
+}
+
+// Quick Login Button
+.quick-login-btn {
+  width: 100%;
+  padding: 14px 24px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: $text-secondary;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.3s;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  .material-symbols-outlined {
+    font-size: 20px;
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: $text-primary;
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  @media (max-width: 640px) {
+    font-size: 14px;
+    padding: 12px 20px;
+    gap: 6px;
+
+    .material-symbols-outlined {
+      font-size: 18px;
+    }
   }
 }
 
