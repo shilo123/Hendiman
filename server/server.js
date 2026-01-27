@@ -41,6 +41,7 @@ const {
   getCollectionChats,
   getCollectionFinancials,
   getCollectionInquiries,
+  getCollectionSupportChats,
   getCollectionReceipts,
   getCollectionCanceld,
   getDb,
@@ -22425,6 +22426,392 @@ ${imagesList}
         res
           .status(500)
           .json({ success: false, message: "שגיאה בעדכון הסטטוס" });
+      }
+    });
+
+    // ==========================================
+    // SUPPORT CHAT SYSTEM (New)
+    // ==========================================
+
+    // Create new support chat
+    app.post("/api/support/create", async (req, res) => {
+      try {
+        const { userId, userName, userType, channel, title } = req.body;
+
+        if (!userId || !channel || !title) {
+          return res.status(400).json({ 
+            success: false, 
+            message: "userId, channel, and title are required" 
+          });
+        }
+
+        const supportChatsCol = getCollectionSupportChats();
+        const chat = {
+          userId: new ObjectId(userId),
+          userName: userName || "משתמש",
+          userType: userType || "client", // 'client' or 'handyman'
+          channel, // 'ai' or 'human'
+          title,
+          status: "open", // open, assigned, resolved
+          messages: [],
+          assignedTo: null, // { id, name }
+          rating: null, // { score, note, createdAt }
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        const result = await supportChatsCol.insertOne(chat);
+        chat._id = result.insertedId;
+
+        // Notify admins about new support chat
+        io.emit("new-support-chat", chat);
+
+        res.json({ success: true, chat });
+      } catch (error) {
+        serverLogger.error("Error creating support chat:", error);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    // Get support chat by ID
+    app.get("/api/support/:chatId", async (req, res) => {
+      try {
+        const { chatId } = req.params;
+        const supportChatsCol = getCollectionSupportChats();
+
+        const chat = await supportChatsCol.findOne({ _id: new ObjectId(chatId) });
+        if (!chat) {
+          return res.status(404).json({ success: false, message: "Chat not found" });
+        }
+
+        res.json({ success: true, chat });
+      } catch (error) {
+        serverLogger.error("Error fetching support chat:", error);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    // Get all support chats (admin)
+    app.get("/api/support/admin/all", async (req, res) => {
+      try {
+        const supportChatsCol = getCollectionSupportChats();
+        const chats = await supportChatsCol
+          .find({})
+          .sort({ updatedAt: -1 })
+          .toArray();
+
+        res.json({ success: true, chats });
+      } catch (error) {
+        serverLogger.error("Error fetching all support chats:", error);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    // Get user's open support chats
+    app.get("/api/support/user/:userId", async (req, res) => {
+      try {
+        const { userId } = req.params;
+        const supportChatsCol = getCollectionSupportChats();
+
+        const chats = await supportChatsCol
+          .find({ 
+            userId: new ObjectId(userId),
+            status: { $ne: "resolved" }
+          })
+          .sort({ updatedAt: -1 })
+          .toArray();
+
+        res.json({ success: true, chats });
+      } catch (error) {
+        serverLogger.error("Error fetching user support chats:", error);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    // Accept a support chat (admin)
+    app.post("/api/support/:chatId/accept", async (req, res) => {
+      try {
+        const { chatId } = req.params;
+        const { adminName } = req.body;
+
+        if (!adminName) {
+          return res.status(400).json({ success: false, message: "Admin name required" });
+        }
+
+        const supportChatsCol = getCollectionSupportChats();
+        
+        // Check if already assigned
+        const existingChat = await supportChatsCol.findOne({ _id: new ObjectId(chatId) });
+        if (!existingChat) {
+          return res.status(404).json({ success: false, message: "Chat not found" });
+        }
+        if (existingChat.status !== "open") {
+          return res.status(409).json({ success: false, message: "Chat already assigned" });
+        }
+
+        // Update chat
+        const assignedTo = { name: adminName, assignedAt: new Date() };
+        await supportChatsCol.updateOne(
+          { _id: new ObjectId(chatId) },
+          { 
+            $set: { 
+              status: "assigned",
+              assignedTo,
+              updatedAt: new Date()
+            },
+            $push: {
+              messages: {
+                sender: "system",
+                text: `הנציג ${adminName} התחבר לשיחה`,
+                createdAt: new Date()
+              }
+            }
+          }
+        );
+
+        const updatedChat = await supportChatsCol.findOne({ _id: new ObjectId(chatId) });
+
+        // Notify user
+        io.to(`user-${existingChat.userId}`).emit("support-assigned", {
+          chatId,
+          assignedTo
+        });
+
+        // Broadcast update
+        io.emit("support-chat-updated", updatedChat);
+
+        res.json({ success: true, chat: updatedChat });
+      } catch (error) {
+        serverLogger.error("Error accepting support chat:", error);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    // Send message in support chat
+    app.post("/api/support/:chatId/message", async (req, res) => {
+      try {
+        const { chatId } = req.params;
+        const { sender, text } = req.body;
+
+        if (!sender || !text) {
+          return res.status(400).json({ success: false, message: "Sender and text required" });
+        }
+
+        const supportChatsCol = getCollectionSupportChats();
+        const message = {
+          sender,
+          text,
+          createdAt: new Date()
+        };
+
+        await supportChatsCol.updateOne(
+          { _id: new ObjectId(chatId) },
+          { 
+            $push: { messages: message },
+            $set: { updatedAt: new Date() }
+          }
+        );
+
+        // Broadcast message
+        io.to(`support-${chatId}`).emit("support-message", { chatId, message });
+
+        // Also notify admin room
+        io.emit("support-message", { chatId, message });
+
+        res.json({ success: true, message });
+      } catch (error) {
+        serverLogger.error("Error sending support message:", error);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    // AI response endpoint (placeholder - sends empty response for now)
+    app.post("/api/support/:chatId/ai-response", async (req, res) => {
+      try {
+        const { chatId } = req.params;
+        const { userMessage } = req.body;
+
+        // Placeholder AI response - will be implemented later
+        const aiMessage = {
+          sender: "ai",
+          text: "תודה על פנייתך. כרגע אני לא יכול לעזור עם זה. האם תרצה לדבר עם נציג אנושי?",
+          createdAt: new Date()
+        };
+
+        const supportChatsCol = getCollectionSupportChats();
+        await supportChatsCol.updateOne(
+          { _id: new ObjectId(chatId) },
+          { 
+            $push: { messages: aiMessage },
+            $set: { updatedAt: new Date() }
+          }
+        );
+
+        // Broadcast message
+        io.to(`support-${chatId}`).emit("support-message", { chatId, message: aiMessage });
+
+        res.json({ success: true, aiMessage });
+      } catch (error) {
+        serverLogger.error("Error getting AI response:", error);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    // Resolve support chat
+    app.post("/api/support/:chatId/resolve", async (req, res) => {
+      try {
+        const { chatId } = req.params;
+
+        const supportChatsCol = getCollectionSupportChats();
+        
+        await supportChatsCol.updateOne(
+          { _id: new ObjectId(chatId) },
+          { 
+            $set: { 
+              status: "resolved",
+              resolvedAt: new Date(),
+              updatedAt: new Date()
+            },
+            $push: {
+              messages: {
+                sender: "system",
+                text: "השיחה הסתיימה. תודה על פנייתך!",
+                createdAt: new Date()
+              }
+            }
+          }
+        );
+
+        const chat = await supportChatsCol.findOne({ _id: new ObjectId(chatId) });
+
+        // Notify user
+        io.to(`user-${chat.userId}`).emit("support-resolved", { chatId });
+        io.to(`support-${chatId}`).emit("support-resolved", { chatId });
+
+        // Broadcast update
+        io.emit("support-chat-updated", chat);
+
+        res.json({ success: true, chat });
+      } catch (error) {
+        serverLogger.error("Error resolving support chat:", error);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    // Rate support chat
+    app.post("/api/support/:chatId/rate", async (req, res) => {
+      try {
+        const { chatId } = req.params;
+        const { score, note } = req.body;
+
+        if (!score || score < 1 || score > 5) {
+          return res.status(400).json({ success: false, message: "Score 1-5 required" });
+        }
+
+        const supportChatsCol = getCollectionSupportChats();
+        await supportChatsCol.updateOne(
+          { _id: new ObjectId(chatId) },
+          { 
+            $set: { 
+              rating: {
+                score,
+                note: note || "",
+                createdAt: new Date()
+              },
+              updatedAt: new Date()
+            }
+          }
+        );
+
+        res.json({ success: true, message: "Rating saved" });
+      } catch (error) {
+        serverLogger.error("Error rating support chat:", error);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    // ==========================================
+    // FCM ADMIN TOKENS
+    // ==========================================
+
+    // Add FCM token to admin list
+    app.post("/api/admin/fcm-token/add", async (req, res) => {
+      try {
+        const { token } = req.body;
+        
+        if (!token) {
+          return res.status(400).json({ success: false, message: "Token required" });
+        }
+
+        // Read dry-data.json - use correct path relative to server folder
+        const fs = require("fs").promises;
+        const path = require("path");
+        // __dirname is the server folder, so API/dry-data.json is correct
+        const dryDataPath = path.resolve(__dirname, "API", "dry-data.json");
+        
+        serverLogger.log("FCM Token Add - Path:", dryDataPath);
+        
+        let dryData;
+        try {
+          const content = await fs.readFile(dryDataPath, "utf8");
+          dryData = JSON.parse(content);
+          serverLogger.log("FCM Token Add - Current data:", JSON.stringify(dryData));
+        } catch (e) {
+          serverLogger.error("FCM Token Add - Error reading file:", e.message);
+          dryData = { FEE: 7, maam: 18, "Monthly-subscriptions": 49.9, FCM_TOKENS: [] };
+        }
+
+        // Add token if not exists
+        if (!dryData.FCM_TOKENS) {
+          dryData.FCM_TOKENS = [];
+        }
+
+        if (!dryData.FCM_TOKENS.includes(token)) {
+          dryData.FCM_TOKENS.push(token);
+          const jsonContent = JSON.stringify(dryData, null, 2);
+          await fs.writeFile(dryDataPath, jsonContent, "utf8");
+          serverLogger.log("FCM Token Add - Token added successfully");
+        } else {
+          serverLogger.log("FCM Token Add - Token already exists");
+        }
+
+        res.json({ success: true, message: "Token added successfully" });
+      } catch (error) {
+        serverLogger.error("Error adding FCM token:", error);
+        res.status(500).json({ success: false, message: "Server error", error: error.message });
+      }
+    });
+
+    // Remove FCM token from admin list
+    app.post("/api/admin/fcm-token/remove", async (req, res) => {
+      try {
+        const { token } = req.body;
+        
+        if (!token) {
+          return res.status(400).json({ success: false, message: "Token required" });
+        }
+
+        const fs = require("fs").promises;
+        const path = require("path");
+        const dryDataPath = path.join(__dirname, "API", "dry-data.json");
+        
+        let dryData;
+        try {
+          const content = await fs.readFile(dryDataPath, "utf8");
+          dryData = JSON.parse(content);
+        } catch (e) {
+          return res.json({ success: true, message: "Token not found" });
+        }
+
+        if (dryData.FCM_TOKENS) {
+          dryData.FCM_TOKENS = dryData.FCM_TOKENS.filter(t => t !== token);
+          await fs.writeFile(dryDataPath, JSON.stringify(dryData, null, 2));
+        }
+
+        res.json({ success: true, message: "Token removed successfully" });
+      } catch (error) {
+        serverLogger.error("Error removing FCM token:", error);
+        res.status(500).json({ success: false, message: "Server error" });
       }
     });
 

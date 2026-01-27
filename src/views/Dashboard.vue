@@ -1133,6 +1133,15 @@
       @reject="onRejectHandyman"
     />
 
+    <!-- Support Chat -->
+    <SupportChat
+      v-if="showSupportChat"
+      :userId="store.user?._id || me?._id"
+      :userName="store.user?.username || me?.username || ''"
+      :userType="isHendiman ? 'handyman' : 'client'"
+      @close="showSupportChat = false"
+    />
+
     <!-- Block Handyman Confirmation Modal -->
     <div
       v-if="showBlockHandymanModal"
@@ -1607,10 +1616,10 @@
           @click="handleNavItemClick({ action: 'openHandymenChat' })"
         >
           <div class="client-bottom-nav-new__icon-wrapper">
-            <span class="material-icons-round text-2xl">chat_bubble_outline</span>
+            <i class="ph-fill ph-headset"></i>
             <span class="client-bottom-nav-new__badge"></span>
           </div>
-          <span class="client-bottom-nav-new__label">צ'אט</span>
+          <span class="client-bottom-nav-new__label">תמיכה</span>
       </button>
         <div class="client-bottom-nav-new__home-wrapper">
           <button
@@ -1671,10 +1680,10 @@
           @click="handleNavItemClick({ action: 'openHandymenChat' })"
         >
           <div class="handyman-bottom-nav-new__icon-wrapper">
-            <i class="ph ph-chat-circle-dots"></i>
+            <i class="ph-fill ph-headset"></i>
             <span class="handyman-bottom-nav-new__badge"></span>
           </div>
-          <span class="handyman-bottom-nav-new__label">הודעות</span>
+          <span class="handyman-bottom-nav-new__label">תמיכה</span>
         </button>
         <button
           type="button"
@@ -1722,6 +1731,7 @@ import HandymanQuotationModal from "@/components/Dashboard/HandymanQuotationModa
 import ProfileSheet from "@/components/Dashboard/ProfileSheet.vue";
 import JobChat from "@/components/Dashboard/JobChat.vue";
 import JobChatMobile from "@/components/Dashboard/JobChatMobile.vue";
+import SupportChat from "@/components/Dashboard/SupportChat.vue";
 import MinimizableNotification from "@/components/Global/MinimizableNotification.vue";
 import HendimanLoader from "@/components/Global/HendimanLoader.vue";
 import ProblemReportModal from "@/components/Dashboard/ProblemReportModal.vue";
@@ -1756,6 +1766,7 @@ export default {
     ProfileSheet,
     JobChat,
     JobChatMobile,
+    SupportChat,
     AddressAutocomplete,
     MinimizableNotification,
     HendimanLoader,
@@ -1915,6 +1926,8 @@ export default {
       handymanForApproval: null,
       jobPendingApproval: null,
       isApprovingHandyman: false,
+      // Support Chat
+      showSupportChat: false,
     };
   },
 
@@ -2647,7 +2660,9 @@ export default {
       this.showProfileSheet = true;
     },
 
-    onOpenHandymenChat() {},
+    onOpenHandymenChat() {
+      this.showSupportChat = true;
+    },
 
     onOpenAllUsersChat() {},
 
@@ -12530,6 +12545,11 @@ $r2: 26px;
 
 .client-bottom-nav-new__icon-wrapper {
   position: relative;
+
+  i {
+    font-size: 24px;
+    color: rgba(255, 255, 255, 0.75);
+  }
 }
 
 .client-bottom-nav-new__badge {

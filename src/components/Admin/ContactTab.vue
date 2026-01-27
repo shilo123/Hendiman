@@ -1,326 +1,290 @@
 <template>
-  <div class="inquiries-section">
-    <div class="inquiries-section__header">
-      <h2 class="inquiries-section__title">פניות</h2>
-      <div class="inquiries-section__controls">
-        <select v-model="inquiryFilters.status" class="filter-select">
-          <option value="all">כל הסטטוסים</option>
-          <option value="pending">ממתין</option>
-          <option value="responded">נענה</option>
-          <option value="resolved">טופל</option>
+  <div class="support-admin">
+    <!-- Header -->
+    <div class="support-admin__header">
+      <h2 class="support-admin__title">פניות תמיכה</h2>
+      <div class="support-admin__controls">
+        <select v-model="statusFilter" class="support-admin__filter">
+          <option value="all">כל הפניות</option>
+          <option value="open">ממתינות</option>
+          <option value="assigned">בטיפול</option>
+          <option value="resolved">נסגרו</option>
         </select>
-        <button
-          class="refresh-inquiries-btn"
-          type="button"
-          @click="loadInquiries"
-        >
-          ↻ רענן
+        <select v-model="channelFilter" class="support-admin__filter">
+          <option value="all">כל הערוצים</option>
+          <option value="human">נציג אנושי</option>
+          <option value="ai">AI</option>
+        </select>
+        <button class="support-admin__refresh-btn" @click="loadChats">
+          <i class="ph-bold ph-arrows-clockwise"></i>
+          רענן
         </button>
       </div>
     </div>
 
-    <div v-if="isLoadingInquiries" class="loading-state">טוען פניות...</div>
+    <!-- Stats -->
+    <div class="support-admin__stats">
+      <div class="support-admin__stat support-admin__stat--waiting">
+        <span class="support-admin__stat-value">{{ openChats.length }}</span>
+        <span class="support-admin__stat-label">ממתינות</span>
+      </div>
+      <div class="support-admin__stat support-admin__stat--active">
+        <span class="support-admin__stat-value">{{ assignedChats.length }}</span>
+        <span class="support-admin__stat-label">בטיפול</span>
+      </div>
+      <div class="support-admin__stat support-admin__stat--resolved">
+        <span class="support-admin__stat-value">{{ resolvedChats.length }}</span>
+        <span class="support-admin__stat-label">נסגרו</span>
+      </div>
+    </div>
 
-    <div v-else class="inquiries-table-wrapper">
-      <table class="inquiries-table">
-        <thead>
-          <tr>
-            <th>תאריך</th>
-            <th>נושא</th>
-            <th>תוכן</th>
-            <th>משתמש</th>
-            <th>תגיות משתמשים</th>
-            <th>סטטוס</th>
-            <th>פעולות</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="inquiry in filteredInquiries"
-            :key="inquiry._id"
-            class="inquiries-table__row"
+    <!-- Loading -->
+    <div v-if="isLoading" class="support-admin__loading">
+      טוען פניות...
+    </div>
+
+    <!-- Chat Grid -->
+    <div v-else class="support-admin__grid">
+      <!-- Open Chats Section -->
+      <div v-if="filteredOpenChats.length > 0" class="support-admin__section">
+        <h3 class="support-admin__section-title">
+          <span class="support-admin__section-dot support-admin__section-dot--waiting"></span>
+          ממתינות לנציג ({{ filteredOpenChats.length }})
+        </h3>
+        <div class="support-admin__cards">
+          <div 
+            v-for="chat in filteredOpenChats" 
+            :key="chat._id"
+            class="support-admin__card support-admin__card--open"
+            @click="openChatModal(chat)"
           >
-            <td>
-              <div class="inquiry-date">
-                {{ formatDate(inquiry.createdAt) }}
-              </div>
-              <div class="inquiry-time">
-                {{ formatTime(inquiry.createdAt) }}
-              </div>
-            </td>
-            <td>
-              <div class="inquiry-title">{{ inquiry.Title }}</div>
-            </td>
-            <td>
-              <div class="inquiry-content">
-                <template
-                  v-for="(token, idx) in parseInquiryContent(inquiry)"
-                  :key="idx"
-                >
-                  <span v-if="token.type === 'text'">{{ token.content }}</span>
-                  <button
-                    v-else-if="token.type === 'mention'"
-                    type="button"
-                    class="inquiry-content-mention"
-                    @click="openUserDetailsModal(token.user)"
-                    :title="`לחץ לצפייה בפרטי ${token.userName}`"
-                  >
-                    {{ token.userName }}
-                  </button>
-                </template>
-              </div>
-            </td>
-            <td>
-              <div class="inquiry-user">
-                {{
-                  inquiry.SenderName ||
-                  inquiry.user?.username ||
-                  inquiry.user?.email ||
-                  "-"
-                }}
-              </div>
-            </td>
-            <td>
-              <div
-                v-if="
-                  inquiry.mentionedUsers && inquiry.mentionedUsers.length > 0
-                "
-                class="inquiry-mentions"
-              >
-                <button
-                  v-for="(user, idx) in inquiry.mentionedUsers"
-                  :key="user._id"
-                  type="button"
-                  class="inquiry-mention-tag inquiry-mention-tag--clickable"
-                  @click="openUserDetailsModal(user)"
-                  :title="`לחץ לצפייה בפרטי ${user.username || user.email}`"
-                >
-                  {{ user.username || user.email }}
-                  <span v-if="idx < inquiry.mentionedUsers.length - 1">, </span>
-                </button>
-              </div>
-              <span v-else class="inquiry-no-mentions">-</span>
-            </td>
-            <td>
-              <span
-                class="inquiry-status-badge"
-                :class="`inquiry-status-badge--${inquiry.status}`"
-              >
-                {{ getStatusLabel(inquiry.status) }}
+            <div class="support-admin__card-header">
+              <span class="support-admin__card-channel" :class="`support-admin__card-channel--${chat.channel}`">
+                <i :class="chat.channel === 'ai' ? 'ph-fill ph-robot' : 'ph-fill ph-headset'"></i>
+                {{ chat.channel === 'ai' ? 'AI' : 'נציג' }}
               </span>
-            </td>
-            <td>
-              <div class="inquiry-actions">
-                <button
-                  class="inquiry-action-btn inquiry-action-btn--push"
-                  type="button"
-                  @click="openPushModal(inquiry)"
-                  title="שלח פוש"
-                >
-                  📱
-                </button>
-                <button
-                  class="inquiry-action-btn inquiry-action-btn--email"
-                  type="button"
-                  @click="openEmailModal(inquiry)"
-                  title="שלח מייל"
-                >
-                  ✉️
-                </button>
-                <button
-                  class="inquiry-action-btn inquiry-action-btn--respond"
-                  type="button"
-                  @click="markAsResponded(inquiry)"
-                  :disabled="inquiry.status === 'responded'"
-                  title="סמן כנענה"
-                >
-                  ✓
-                </button>
-                <button
-                  class="inquiry-action-btn inquiry-action-btn--delete"
-                  type="button"
-                  @click="confirmDeleteInquiry(inquiry)"
-                  title="מחק"
-                >
-                  <font-awesome-icon :icon="['fas', 'trash']" />
-                </button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="filteredInquiries.length === 0">
-            <td colspan="7" class="no-data">אין פניות להצגה</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
+              <span class="support-admin__card-time">{{ formatTimeAgo(chat.createdAt) }}</span>
+            </div>
+            <h4 class="support-admin__card-title">{{ chat.title }}</h4>
+            <p class="support-admin__card-user">
+              <i class="ph-fill ph-user"></i>
+              {{ chat.userName || 'משתמש אנונימי' }}
+              <span class="support-admin__user-type" :class="`support-admin__user-type--${chat.userType || 'client'}`">
+                {{ chat.userType === 'handyman' ? 'הנדימן' : 'לקוח' }}
+              </span>
+            </p>
+            <p class="support-admin__card-preview">{{ getLastMessage(chat) }}</p>
+            <button class="support-admin__card-accept-btn" @click.stop="openAcceptModal(chat)">
+              <i class="ph-bold ph-check"></i>
+              קבל פנייה
+            </button>
+          </div>
+        </div>
+      </div>
 
-  <!-- Push Modal -->
-  <div v-if="showPushModal" class="modal-overlay" @click.self="closePushModal">
-    <div class="modal-content" dir="rtl">
-      <div class="modal-header">
-        <h3 class="modal-title">שלח הודעת פוש</h3>
-        <button
-          class="modal-close"
-          type="button"
-          @click="closePushModal"
-          aria-label="סגור"
-        >
-          ✕
-        </button>
-      </div>
-      <div class="modal-body">
-        <div class="form-field">
-          <label class="form-label">הודעה</label>
-          <textarea
-            v-model="pushMessage"
-            class="form-textarea"
-            rows="4"
-            placeholder="הזן את תוכן ההודעה..."
-          ></textarea>
+      <!-- Assigned Chats Section -->
+      <div v-if="filteredAssignedChats.length > 0" class="support-admin__section">
+        <h3 class="support-admin__section-title">
+          <span class="support-admin__section-dot support-admin__section-dot--active"></span>
+          בטיפול ({{ filteredAssignedChats.length }})
+        </h3>
+        <div class="support-admin__cards">
+          <div 
+            v-for="chat in filteredAssignedChats" 
+            :key="chat._id"
+            class="support-admin__card support-admin__card--assigned"
+            @click="openChatModal(chat)"
+          >
+            <div class="support-admin__card-header">
+              <span class="support-admin__card-channel" :class="`support-admin__card-channel--${chat.channel}`">
+                <i :class="chat.channel === 'ai' ? 'ph-fill ph-robot' : 'ph-fill ph-headset'"></i>
+                {{ chat.channel === 'ai' ? 'AI' : 'נציג' }}
+              </span>
+              <span class="support-admin__card-agent">
+                <i class="ph-fill ph-user-circle"></i>
+                {{ chat.assignedTo?.name }}
+              </span>
+            </div>
+            <h4 class="support-admin__card-title">{{ chat.title }}</h4>
+            <p class="support-admin__card-user">
+              <i class="ph-fill ph-user"></i>
+              {{ chat.userName || 'משתמש אנונימי' }}
+              <span class="support-admin__user-type" :class="`support-admin__user-type--${chat.userType || 'client'}`">
+                {{ chat.userType === 'handyman' ? 'הנדימן' : 'לקוח' }}
+              </span>
+            </p>
+            <p class="support-admin__card-preview">{{ getLastMessage(chat) }}</p>
+          </div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button
-          class="btn btn--cancel"
-          type="button"
-          @click="closePushModal"
-          :disabled="isSendingPush"
-        >
-          ביטול
-        </button>
-        <button
-          class="btn btn--primary"
-          type="button"
-          @click="sendPush"
-          :disabled="!pushMessage.trim() || isSendingPush"
-        >
-          {{ isSendingPush ? "שולח..." : "שלח" }}
-        </button>
-      </div>
-    </div>
-  </div>
 
-  <!-- Email Modal -->
-  <div
-    v-if="showEmailModal"
-    class="modal-overlay"
-    @click.self="closeEmailModal"
-  >
-    <div class="modal-content" dir="rtl">
-      <div class="modal-header">
-        <h3 class="modal-title">שלח מייל</h3>
-        <button
-          class="modal-close"
-          type="button"
-          @click="closeEmailModal"
-          aria-label="סגור"
-        >
-          ✕
-        </button>
-      </div>
-      <div class="modal-body">
-        <div class="form-field">
-          <label class="form-label">כתובת מייל</label>
-          <input
-            v-model="emailRecipient"
-            type="email"
-            class="form-input"
-            placeholder="הזן כתובת מייל..."
-          />
-        </div>
-        <div class="form-field">
-          <label class="form-label">תוכן המייל</label>
-          <textarea
-            v-model="emailContent"
-            class="form-textarea"
-            rows="6"
-            placeholder="הזן את תוכן המייל..."
-          ></textarea>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button
-          class="btn btn--cancel"
-          type="button"
-          @click="closeEmailModal"
-          :disabled="isSendingEmail"
-        >
-          ביטול
-        </button>
-        <button
-          class="btn btn--primary"
-          type="button"
-          @click="sendEmail"
-          :disabled="
-            !emailContent.trim() || !emailRecipient.trim() || isSendingEmail
-          "
-        >
-          {{ isSendingEmail ? "שולח..." : "שלח" }}
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- User Details Modal -->
-  <div
-    v-if="showUserDetailsModal"
-    class="modal-overlay modal-content--large"
-    @click.self="closeUserDetailsModal"
-  >
-    <div class="modal-content" dir="rtl">
-      <div class="modal-header">
-        <h3 class="modal-title">פרטי משתמש</h3>
-        <button
-          class="modal-close"
-          type="button"
-          @click="closeUserDetailsModal"
-          aria-label="סגור"
-        >
-          ✕
-        </button>
-      </div>
-      <div class="modal-body">
-        <div v-if="isLoadingUserDetails" class="loading-state">
-          טוען פרטים...
-        </div>
-        <div v-else-if="userDetails" class="user-details-content">
-          <div class="user-details-section">
-            <h4 class="user-details-section__title">מידע בסיסי</h4>
-            <div class="user-details-grid">
-              <div class="user-detail-item">
-                <span class="user-detail-label">שם משתמש</span>
-                <span class="user-detail-value">{{
-                  userDetails.username || "-"
-                }}</span>
-              </div>
-              <div class="user-detail-item">
-                <span class="user-detail-label">אימייל</span>
-                <span class="user-detail-value">{{
-                  userDetails.email || "-"
-                }}</span>
-              </div>
-              <div class="user-detail-item">
-                <span class="user-detail-label">טלפון</span>
-                <span class="user-detail-value">{{
-                  userDetails.phone || "-"
-                }}</span>
-              </div>
-              <div class="user-detail-item">
-                <span class="user-detail-label">סטטוס</span>
-                <span
-                  class="user-detail-value"
-                  :class="
-                    userDetails.isBlocked
-                      ? 'user-status--blocked'
-                      : 'user-status--active'
-                  "
-                >
-                  {{ userDetails.isBlocked ? "חסום" : "פעיל" }}
-                </span>
+      <!-- Resolved Chats Section -->
+      <div v-if="filteredResolvedChats.length > 0" class="support-admin__section">
+        <h3 class="support-admin__section-title">
+          <span class="support-admin__section-dot support-admin__section-dot--resolved"></span>
+          נסגרו ({{ filteredResolvedChats.length }})
+        </h3>
+        <div class="support-admin__cards">
+          <div 
+            v-for="chat in filteredResolvedChats" 
+            :key="chat._id"
+            class="support-admin__card support-admin__card--resolved"
+            @click="openChatModal(chat)"
+          >
+            <div class="support-admin__card-header">
+              <span class="support-admin__card-channel" :class="`support-admin__card-channel--${chat.channel}`">
+                <i :class="chat.channel === 'ai' ? 'ph-fill ph-robot' : 'ph-fill ph-headset'"></i>
+                {{ chat.channel === 'ai' ? 'AI' : 'נציג' }}
+              </span>
+              <div class="support-admin__card-rating" v-if="chat.rating">
+                <i class="ph-fill ph-star"></i>
+                {{ chat.rating.score }}/5
               </div>
             </div>
+            <h4 class="support-admin__card-title">{{ chat.title }}</h4>
+            <p class="support-admin__card-user">
+              <i class="ph-fill ph-user"></i>
+              {{ chat.userName || 'משתמש אנונימי' }}
+              <span class="support-admin__user-type" :class="`support-admin__user-type--${chat.userType || 'client'}`">
+                {{ chat.userType === 'handyman' ? 'הנדימן' : 'לקוח' }}
+              </span>
+            </p>
+            <p class="support-admin__card-agent-info">
+              <i class="ph-fill ph-user-circle"></i>
+              טופל ע"י: {{ chat.assignedTo?.name || 'AI' }}
+            </p>
           </div>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div v-if="filteredChats.length === 0" class="support-admin__empty">
+        <i class="ph-fill ph-chat-circle-dots"></i>
+        <p>אין פניות להצגה</p>
+      </div>
+    </div>
+
+    <!-- Accept Modal -->
+    <div v-if="showAcceptModal" class="support-admin__modal-overlay" @click.self="closeAcceptModal">
+      <div class="support-admin__modal" dir="rtl">
+        <div class="support-admin__modal-header">
+          <h3>קבלת פנייה</h3>
+          <button class="support-admin__modal-close" @click="closeAcceptModal">
+            <i class="ph-bold ph-x"></i>
+          </button>
+        </div>
+        <div class="support-admin__modal-body">
+          <div class="support-admin__form-field">
+            <label>שם הנציג</label>
+            <input 
+              v-model="agentName" 
+              type="text" 
+              placeholder="הזן את שמך..."
+              class="support-admin__form-input"
+            />
+          </div>
+        </div>
+        <div class="support-admin__modal-footer">
+          <button class="support-admin__btn support-admin__btn--cancel" @click="closeAcceptModal">
+            ביטול
+          </button>
+          <button 
+            class="support-admin__btn support-admin__btn--primary" 
+            :disabled="!agentName.trim() || isAccepting"
+            @click="acceptChat"
+          >
+            {{ isAccepting ? 'מקבל...' : 'קבל פנייה' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat View Modal -->
+    <div v-if="showChatModal" class="support-admin__chat-overlay" @click.self="closeChatModal">
+      <div class="support-admin__chat-modal" dir="rtl">
+        <div class="support-admin__chat-header">
+          <div class="support-admin__chat-header-info">
+            <h3>{{ selectedChat?.title }}</h3>
+            <span class="support-admin__chat-user">{{ selectedChat?.userName }}</span>
+          </div>
+          <div class="support-admin__chat-header-actions">
+            <button 
+              v-if="selectedChat?.status === 'assigned'"
+              class="support-admin__btn support-admin__btn--resolve"
+              @click="resolveChat"
+              :disabled="isResolving"
+            >
+              <i class="ph-bold ph-check-circle"></i>
+              {{ isResolving ? 'סוגר...' : 'סגור פנייה' }}
+            </button>
+            <button class="support-admin__chat-close" @click="closeChatModal">
+              <i class="ph-bold ph-x"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="support-admin__chat-info">
+          <span class="support-admin__chat-info-item">
+            <i class="ph-fill ph-clock"></i>
+            {{ formatDate(selectedChat?.createdAt) }}
+          </span>
+          <span class="support-admin__chat-info-item support-admin__chat-info-item--user-type" :class="`support-admin__chat-info-item--${selectedChat?.userType || 'client'}`">
+            <i :class="selectedChat?.userType === 'handyman' ? 'ph-fill ph-wrench' : 'ph-fill ph-user'"></i>
+            {{ selectedChat?.userType === 'handyman' ? 'הנדימן' : 'לקוח' }}
+          </span>
+          <span class="support-admin__chat-info-item" :class="`support-admin__chat-info-item--${selectedChat?.status}`">
+            <i class="ph-fill ph-circle"></i>
+            {{ getStatusLabel(selectedChat?.status) }}
+          </span>
+          <span v-if="selectedChat?.assignedTo" class="support-admin__chat-info-item">
+            <i class="ph-fill ph-user-circle"></i>
+            {{ selectedChat.assignedTo.name }}
+          </span>
+          <span v-if="selectedChat?.rating" class="support-admin__chat-info-item support-admin__chat-info-item--rating">
+            <i class="ph-fill ph-star"></i>
+            {{ selectedChat.rating.score }}/5
+            <span v-if="selectedChat.rating.note" class="support-admin__rating-note">
+              "{{ selectedChat.rating.note }}"
+            </span>
+          </span>
+        </div>
+
+        <div class="support-admin__chat-messages" ref="chatMessages">
+          <div 
+            v-for="(msg, idx) in selectedChat?.messages" 
+            :key="idx"
+            class="support-admin__chat-message"
+            :class="getMessageClass(msg)"
+          >
+            <div class="support-admin__chat-message-avatar" v-if="msg.sender !== 'user'">
+              <i v-if="msg.sender === 'ai'" class="ph-fill ph-robot"></i>
+              <i v-else-if="msg.sender === 'admin'" class="ph-fill ph-headset"></i>
+              <i v-else class="ph-fill ph-info"></i>
+            </div>
+            <div class="support-admin__chat-message-content">
+              <span class="support-admin__chat-message-sender">{{ getSenderName(msg) }}</span>
+              <p class="support-admin__chat-message-text">{{ msg.text }}</p>
+              <span class="support-admin__chat-message-time">{{ formatTime(msg.createdAt) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Admin Input -->
+        <div v-if="selectedChat?.status === 'assigned'" class="support-admin__chat-input-area">
+          <input
+            v-model="adminMessage"
+            type="text"
+            placeholder="הקלד הודעה..."
+            class="support-admin__chat-input"
+            @keyup.enter="sendAdminMessage"
+          />
+          <button 
+            class="support-admin__chat-send-btn"
+            @click="sendAdminMessage"
+            :disabled="!adminMessage.trim() || isSendingMessage"
+          >
+            <i class="ph-fill ph-paper-plane-tilt"></i>
+          </button>
         </div>
       </div>
     </div>
@@ -331,797 +295,1031 @@
 import axios from "axios";
 import { URL } from "@/Url/url";
 import { useToast } from "@/composables/useToast";
-import logger from "@/utils/logger";
+import { io } from "socket.io-client";
 
 export default {
   name: "ContactTab",
   data() {
     return {
       toast: null,
-      inquiries: [],
-      isLoadingInquiries: false,
-      inquiryFilters: {
-        status: "all",
-      },
-      showPushModal: false,
-      pushInquiry: null,
-      pushMessage: "",
-      isSendingPush: false,
-      showEmailModal: false,
-      emailInquiry: null,
-      emailRecipient: "",
-      emailContent: "",
-      isSendingEmail: false,
-      showUserDetailsModal: false,
-      selectedUser: null,
-      userDetails: null,
-      isLoadingUserDetails: false,
+      socket: null,
+      chats: [],
+      isLoading: false,
+      statusFilter: "all",
+      channelFilter: "all",
+      
+      // Accept Modal
+      showAcceptModal: false,
+      selectedChatForAccept: null,
+      agentName: "",
+      isAccepting: false,
+      
+      // Chat Modal
+      showChatModal: false,
+      selectedChat: null,
+      adminMessage: "",
+      isSendingMessage: false,
+      isResolving: false
     };
+  },
+  computed: {
+    openChats() {
+      return this.chats.filter(c => c.status === "open");
+    },
+    assignedChats() {
+      return this.chats.filter(c => c.status === "assigned");
+    },
+    resolvedChats() {
+      return this.chats.filter(c => c.status === "resolved");
+    },
+    filteredChats() {
+      let filtered = [...this.chats];
+      
+      if (this.statusFilter !== "all") {
+        filtered = filtered.filter(c => c.status === this.statusFilter);
+      }
+      
+      if (this.channelFilter !== "all") {
+        filtered = filtered.filter(c => c.channel === this.channelFilter);
+      }
+      
+      return filtered;
+    },
+    filteredOpenChats() {
+      return this.filteredChats.filter(c => c.status === "open");
+    },
+    filteredAssignedChats() {
+      return this.filteredChats.filter(c => c.status === "assigned");
+    },
+    filteredResolvedChats() {
+      return this.filteredChats.filter(c => c.status === "resolved");
+    }
   },
   created() {
     this.toast = useToast();
-    this.loadInquiries();
+    this.loadChats();
+    this.initSocket();
   },
-  computed: {
-    filteredInquiries() {
-      let filtered = [...this.inquiries];
-      if (this.inquiryFilters.status && this.inquiryFilters.status !== "all") {
-        filtered = filtered.filter(
-          (inquiry) => inquiry.status === this.inquiryFilters.status
-        );
-      }
-      return filtered;
-    },
+  beforeUnmount() {
+    if (this.socket) {
+      this.socket.disconnect();
+    }
   },
   methods: {
-    formatDate(date) {
-      if (!date) return "-";
-      const d = new Date(date);
-      return d.toLocaleDateString("he-IL", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
+    initSocket() {
+      this.socket = io(URL, {
+        transports: ["websocket", "polling"],
+        reconnection: true
+      });
+
+      this.socket.on("connect", () => {
+        this.socket.emit("join-admin-support");
+      });
+
+      // Listen for new support chats
+      this.socket.on("new-support-chat", (chat) => {
+        this.chats.unshift(chat);
+        this.toast?.showInfo(`פנייה חדשה: ${chat.title}`);
+      });
+
+      // Listen for chat updates
+      this.socket.on("support-chat-updated", (updatedChat) => {
+        const idx = this.chats.findIndex(c => c._id === updatedChat._id);
+        if (idx !== -1) {
+          this.chats[idx] = updatedChat;
+        }
+        if (this.selectedChat?._id === updatedChat._id) {
+          this.selectedChat = updatedChat;
+        }
+      });
+
+      // Listen for new messages
+      this.socket.on("support-message", (data) => {
+        const chat = this.chats.find(c => c._id === data.chatId);
+        if (chat) {
+          chat.messages.push(data.message);
+        }
+        if (this.selectedChat?._id === data.chatId) {
+          this.selectedChat.messages.push(data.message);
+          this.$nextTick(() => this.scrollToBottom());
+        }
       });
     },
-    formatTime(date) {
-      if (!date) return "-";
-      const d = new Date(date);
-      return d.toLocaleTimeString("he-IL", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+
+    async loadChats() {
+      this.isLoading = true;
+      try {
+        const { data } = await axios.get(`${URL}/api/support/admin/all`);
+        if (data.success) {
+          this.chats = data.chats || [];
+        }
+      } catch (error) {
+        this.toast?.showError("שגיאה בטעינת הפניות");
+      } finally {
+        this.isLoading = false;
+      }
     },
-    getStatusLabel(status) {
-      const statusMap = {
-        pending: "ממתין",
-        responded: "נענה",
-        resolved: "טופל",
-        deleted: "נמחק",
+
+    openAcceptModal(chat) {
+      this.selectedChatForAccept = chat;
+      this.agentName = "";
+      this.showAcceptModal = true;
+    },
+
+    closeAcceptModal() {
+      this.showAcceptModal = false;
+      this.selectedChatForAccept = null;
+      this.agentName = "";
+    },
+
+    async acceptChat() {
+      if (!this.agentName.trim() || this.isAccepting) return;
+
+      this.isAccepting = true;
+      try {
+        const { data } = await axios.post(`${URL}/api/support/${this.selectedChatForAccept._id}/accept`, {
+          adminName: this.agentName.trim()
+        });
+
+        if (data.success) {
+          this.toast?.showSuccess("הפנייה התקבלה בהצלחה");
+          this.closeAcceptModal();
+          // Open the chat
+          this.openChatModal(data.chat);
+        } else {
+          this.toast?.showError(data.message || "שגיאה בקבלת הפנייה");
+        }
+      } catch (error) {
+        if (error.response?.status === 409) {
+          this.toast?.showError("הפנייה כבר התקבלה ע\"י נציג אחר");
+          this.loadChats();
+        } else {
+          this.toast?.showError("שגיאה בקבלת הפנייה");
+        }
+      } finally {
+        this.isAccepting = false;
+      }
+    },
+
+    openChatModal(chat) {
+      this.selectedChat = chat;
+      this.showChatModal = true;
+      this.adminMessage = "";
+      
+      if (this.socket) {
+        this.socket.emit("join-support-chat", chat._id);
+      }
+      
+      this.$nextTick(() => this.scrollToBottom());
+    },
+
+    closeChatModal() {
+      if (this.socket && this.selectedChat) {
+        this.socket.emit("leave-support-chat", this.selectedChat._id);
+      }
+      this.showChatModal = false;
+      this.selectedChat = null;
+      this.adminMessage = "";
+    },
+
+    async sendAdminMessage() {
+      if (!this.adminMessage.trim() || this.isSendingMessage) return;
+
+      const text = this.adminMessage.trim();
+      this.adminMessage = "";
+      this.isSendingMessage = true;
+
+      try {
+        await axios.post(`${URL}/api/support/${this.selectedChat._id}/message`, {
+          sender: "admin",
+          text: text
+        });
+      } catch (error) {
+        this.toast?.showError("שגיאה בשליחת ההודעה");
+        this.adminMessage = text; // Restore message on error
+      } finally {
+        this.isSendingMessage = false;
+      }
+    },
+
+    async resolveChat() {
+      if (this.isResolving) return;
+
+      this.isResolving = true;
+      try {
+        const { data } = await axios.post(`${URL}/api/support/${this.selectedChat._id}/resolve`);
+        if (data.success) {
+          this.toast?.showSuccess("הפנייה נסגרה בהצלחה");
+          this.selectedChat.status = "resolved";
+        }
+      } catch (error) {
+        this.toast?.showError("שגיאה בסגירת הפנייה");
+      } finally {
+        this.isResolving = false;
+      }
+    },
+
+    getLastMessage(chat) {
+      if (!chat.messages || chat.messages.length === 0) return "אין הודעות";
+      const lastMsg = chat.messages[chat.messages.length - 1];
+      const text = lastMsg.text || "";
+      return text.length > 60 ? text.substring(0, 60) + "..." : text;
+    },
+
+    getMessageClass(msg) {
+      return {
+        "support-admin__chat-message--user": msg.sender === "user",
+        "support-admin__chat-message--ai": msg.sender === "ai",
+        "support-admin__chat-message--admin": msg.sender === "admin",
+        "support-admin__chat-message--system": msg.sender === "system"
       };
-      return statusMap[status] || status;
     },
-    async loadInquiries() {
-      this.isLoadingInquiries = true;
-      try {
-        const response = await axios.get(`${URL}/api/inquiries`);
-        if (response.data.success) {
-          this.inquiries = response.data.inquiries || [];
-        }
-      } catch (error) {
-        this.toast?.showError(" לא הצלחנו לטעון את הפניות");
-      } finally {
-        this.isLoadingInquiries = false;
+
+    getSenderName(msg) {
+      const names = {
+        user: "משתמש",
+        ai: "AI",
+        admin: "נציג",
+        system: "מערכת"
+      };
+      return names[msg.sender] || msg.sender;
+    },
+
+    getStatusLabel(status) {
+      const labels = {
+        open: "ממתין",
+        assigned: "בטיפול",
+        resolved: "נסגר"
+      };
+      return labels[status] || status;
+    },
+
+    formatTimeAgo(date) {
+      if (!date) return "";
+      const now = new Date();
+      const d = new Date(date);
+      const diff = Math.floor((now - d) / 1000 / 60);
+      
+      if (diff < 1) return "עכשיו";
+      if (diff < 60) return `לפני ${diff} דקות`;
+      if (diff < 1440) return `לפני ${Math.floor(diff / 60)} שעות`;
+      return `לפני ${Math.floor(diff / 1440)} ימים`;
+    },
+
+    formatDate(date) {
+      if (!date) return "";
+      return new Date(date).toLocaleDateString("he-IL", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    },
+
+    formatTime(date) {
+      if (!date) return "";
+      return new Date(date).toLocaleTimeString("he-IL", {
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    },
+
+    scrollToBottom() {
+      const container = this.$refs.chatMessages;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
       }
-    },
-    openPushModal(inquiry) {
-      this.pushInquiry = inquiry;
-      this.pushMessage = "";
-      this.showPushModal = true;
-    },
-    closePushModal() {
-      this.showPushModal = false;
-      this.pushInquiry = null;
-      this.pushMessage = "";
-    },
-    async sendPush() {
-      if (!this.pushMessage.trim() || !this.pushInquiry || this.isSendingPush)
-        return;
-
-      this.isSendingPush = true;
-      try {
-        const userId =
-          this.pushInquiry.userId?.toString() ||
-          this.pushInquiry.user?._id?.toString();
-        if (!userId) {
-          this.toast?.showError("לא ניתן לשלוח פוש - אין מזהה משתמש");
-          return;
-        }
-
-        await axios.post(
-          `${URL}/api/inquiries/${this.pushInquiry._id}/send-push`,
-          {
-            message: this.pushMessage,
-            userId: userId,
-          }
-        );
-
-        this.toast?.showSuccess("ההודעה נשלחה בהצלחה");
-        this.closePushModal();
-      } catch (error) {
-        this.toast?.showError(
-          error.response?.data?.message || " לא הצלחנו לשלוח את ההודעה"
-        );
-      } finally {
-        this.isSendingPush = false;
-      }
-    },
-    openEmailModal(inquiry) {
-      this.emailInquiry = inquiry;
-      this.emailContent = "";
-      this.emailRecipient = inquiry.user?.email || "";
-      this.showEmailModal = true;
-    },
-    closeEmailModal() {
-      this.showEmailModal = false;
-      this.emailInquiry = null;
-      this.emailContent = "";
-      this.emailRecipient = "";
-    },
-    async sendEmail() {
-      if (
-        !this.emailContent.trim() ||
-        !this.emailRecipient.trim() ||
-        !this.emailInquiry ||
-        this.isSendingEmail
-      )
-        return;
-
-      this.isSendingEmail = true;
-      try {
-        await axios.post(
-          `${URL}/api/inquiries/${this.emailInquiry._id}/send-email`,
-          {
-            emailContent: this.emailContent,
-            recipientEmail: this.emailRecipient,
-          }
-        );
-
-        this.toast?.showSuccess("המייל נשלח בהצלחה");
-        this.closeEmailModal();
-      } catch (error) {
-        this.toast?.showError(
-          error.response?.data?.message || " לא הצלחנו לשלוח את המייל"
-        );
-      } finally {
-        this.isSendingEmail = false;
-      }
-    },
-    async markAsResponded(inquiry) {
-      try {
-        await axios.patch(`${URL}/api/inquiries/${inquiry._id}/status`, {
-          status: "responded",
-        });
-        this.toast?.showSuccess("הפנייה סומנה כנענה");
-        await this.loadInquiries();
-      } catch (error) {
-        this.toast?.showError(" לא הצלחנו לעדכן את הסטטוס");
-      }
-    },
-    confirmDeleteInquiry(inquiry) {
-      if (
-        confirm(
-          "האם אתה בטוח שאתה רוצה למחוק את הפנייה הזו? פעולה זו לא ניתנת לביטול!"
-        )
-      ) {
-        this.deleteInquiry(inquiry);
-      }
-    },
-    async deleteInquiry(inquiry) {
-      try {
-        await axios.delete(`${URL}/api/inquiries/${inquiry._id}`);
-        this.toast?.showSuccess("הפנייה נמחקה בהצלחה");
-        await this.loadInquiries();
-      } catch (error) {
-        this.toast?.showError(
-          error.response?.data?.message || " לא הצלחנו למחוק את הפנייה"
-        );
-      }
-    },
-    async openUserDetailsModal(user) {
-      this.selectedUser = user;
-      this.showUserDetailsModal = true;
-      await this.loadUserDetails(user._id || user.id);
-    },
-    closeUserDetailsModal() {
-      this.showUserDetailsModal = false;
-      this.selectedUser = null;
-      this.userDetails = null;
-    },
-    async loadUserDetails(userId) {
-      this.isLoadingUserDetails = true;
-      try {
-        const response = await axios.get(`${URL}/admin/users/${userId}`);
-        if (response.data.success) {
-          this.userDetails = response.data.user;
-        } else {
-          this.toast?.showError(" לא הצלחנו לטעון את פרטי המשתמש");
-        }
-      } catch (error) {
-        this.toast?.showError(" לא הצלחנו לטעון את פרטי המשתמש");
-      } finally {
-        this.isLoadingUserDetails = false;
-      }
-    },
-    parseInquiryContent(inquiry) {
-      if (!inquiry.Content) return [];
-
-      let content = inquiry.Content;
-
-      // Create a map of userId to user details
-      const userMap = new Map();
-      if (inquiry.mentionedUsers && Array.isArray(inquiry.mentionedUsers)) {
-        inquiry.mentionedUsers.forEach((user) => {
-          const userId = user._id?.toString() || user.id?.toString();
-          if (userId) {
-            userMap.set(userId, user);
-          }
-        });
-      }
-
-      // Parse content into tokens (text or mention)
-      // Pattern: @ followed by ObjectId (24 hex characters)
-      const mentionPattern = /@([a-fA-F0-9]{24})/g;
-      const tokens = [];
-      let lastIndex = 0;
-      let match;
-
-      while ((match = mentionPattern.exec(content)) !== null) {
-        // Add text before mention
-        if (match.index > lastIndex) {
-          tokens.push({
-            type: "text",
-            content: content.substring(lastIndex, match.index),
-          });
-        }
-
-        // Add mention
-        const userId = match[1];
-        const user = userMap.get(userId);
-        if (user) {
-          const userName = user.username || user.name || user.email || userId;
-          tokens.push({
-            type: "mention",
-            userId: userId,
-            userName: userName,
-            user: user,
-          });
-        } else {
-          // If user not found, keep as text
-          tokens.push({
-            type: "text",
-            content: match[0],
-          });
-        }
-
-        lastIndex = mentionPattern.lastIndex;
-      }
-
-      // Add remaining text
-      if (lastIndex < content.length) {
-        tokens.push({
-          type: "text",
-          content: content.substring(lastIndex),
-        });
-      }
-
-      // If no mentions found, return the whole content as text
-      if (tokens.length === 0) {
-        tokens.push({
-          type: "text",
-          content: content,
-        });
-      }
-
-      return tokens;
-    },
-  },
+    }
+  }
 };
 </script>
 
 <style lang="scss" scoped>
-$font-family: "Heebo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-  "Helvetica Neue", Arial, sans-serif;
 $bg: #0b0b0f;
+$bg-light: #131318;
 $orange: #ff6a00;
 $orange2: #ff8a2b;
 $text: rgba(255, 255, 255, 0.92);
-$muted: rgba(255, 255, 255, 0.62);
+$muted: rgba(255, 255, 255, 0.6);
+$green: #10b981;
+$blue: #3b82f6;
+$yellow: #fbbf24;
+$red: #ef4444;
 
-.filter-select {
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba($orange, 0.3);
-  background: rgba(255, 255, 255, 0.06);
-  color: $text;
-  font-size: 14px;
-  font-weight: 800;
-  font-family: $font-family;
-  cursor: pointer;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ff8a2b' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: left 12px center;
-  padding-left: 36px;
-  background-size: 12px;
-
-  option {
-    background: $bg;
-    color: $text;
-    padding: 8px;
-  }
-
-  &:hover {
-    border-color: rgba($orange, 0.5);
-  }
+.support-admin {
+  padding: 0;
 }
 
-.loading-state {
-  text-align: center;
-  padding: 40px;
-  color: $muted;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.no-data {
-  text-align: center;
-  padding: 40px;
-  color: $muted;
-  font-size: 14px;
-}
-
-.inquiries-section__header {
+// Header
+.support-admin__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   gap: 16px;
   flex-wrap: wrap;
 }
 
-.inquiries-section__title {
-  font-size: 20px;
-  font-weight: 1000;
+.support-admin__title {
+  font-size: 24px;
+  font-weight: 900;
   color: $orange2;
+  margin: 0;
 }
 
-.inquiries-section__controls {
+.support-admin__controls {
   display: flex;
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
 }
 
-.refresh-inquiries-btn {
-  padding: 8px 16px;
-  border-radius: 8px;
+.support-admin__filter {
+  padding: 10px 36px 10px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba($orange, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+  color: $text;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ff8a2b' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 12px center;
+
+  option {
+    background: $bg;
+    color: $text;
+  }
+}
+
+.support-admin__refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 10px;
   border: 1px solid rgba($orange, 0.3);
   background: rgba($orange, 0.15);
   color: $orange2;
   font-size: 14px;
-  font-weight: 900;
+  font-weight: 800;
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: $font-family;
+  transition: all 0.2s;
 
   &:hover {
     background: rgba($orange, 0.25);
-    border-color: rgba($orange, 0.5);
     transform: translateY(-1px);
   }
 }
 
-.inquiries-table-wrapper {
-  overflow-x: auto;
-  border-radius: 12px;
-  border: 1px solid rgba($orange, 0.2);
+// Stats
+.support-admin__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.support-admin__stat {
+  padding: 20px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.04);
-}
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: center;
 
-.inquiries-table {
-  width: 100%;
-  border-collapse: collapse;
-
-  thead {
-    background: rgba($orange, 0.1);
+  &--waiting {
+    border-color: rgba($yellow, 0.3);
+    background: rgba($yellow, 0.05);
   }
 
-  th {
-    padding: 14px 12px;
-    text-align: right;
-    font-size: 13px;
-    font-weight: 1000;
-    color: $orange2;
-    border-bottom: 1px solid rgba($orange, 0.2);
-    white-space: nowrap;
-  }
-
-  td {
-    padding: 12px;
-    text-align: right;
-    font-size: 13px;
-    font-weight: 800;
-    color: $text;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    vertical-align: middle;
-  }
-
-  tbody tr {
-    transition: background 0.2s ease;
-
-    &:hover {
-      background: rgba($orange, 0.05);
-    }
-
-    &:last-child td {
-      border-bottom: none;
-    }
-  }
-}
-
-.inquiry-date {
-  font-weight: 800;
-  color: $text;
-  font-size: 13px;
-}
-
-.inquiry-time {
-  font-size: 11px;
-  color: $muted;
-  margin-top: 4px;
-}
-
-.inquiry-title {
-  font-weight: 900;
-  color: $text;
-  font-size: 13px;
-}
-
-.inquiry-content {
-  color: $text;
-  font-size: 12px;
-  line-height: 1.4;
-  max-width: 300px;
-  word-wrap: break-word;
-}
-
-.inquiry-content-mention {
-  display: inline;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba($orange, 0.2);
-  border: 1px solid rgba($orange, 0.4);
-  color: $orange2;
-  font-size: 12px;
-  font-weight: 900;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-decoration: none;
-  margin: 0 2px;
-  font-family: $font-family;
-  vertical-align: baseline;
-
-  &:hover {
-    background: rgba($orange, 0.3);
-    border-color: rgba($orange, 0.6);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba($orange, 0.3);
-  }
-}
-
-.inquiry-user {
-  font-weight: 800;
-  color: $text;
-  font-size: 13px;
-
-  &--anonymous {
-    color: $muted;
-    font-style: italic;
-  }
-}
-
-.inquiry-mentions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
-.inquiry-mention-tag {
-  padding: 4px 8px;
-  border-radius: 6px;
-  background: rgba($orange, 0.15);
-  border: 1px solid rgba($orange, 0.3);
-  font-size: 11px;
-  font-weight: 800;
-  color: $orange2;
-  white-space: nowrap;
-  display: inline-block;
-
-  &--clickable {
-    cursor: pointer;
-    transition: all 0.2s ease;
-    border: 1px solid rgba($orange, 0.3);
-    background: rgba($orange, 0.15);
-
-    &:hover {
-      background: rgba($orange, 0.25);
-      border-color: rgba($orange, 0.5);
-      transform: translateY(-1px);
-      box-shadow: 0 2px 8px rgba($orange, 0.3);
-    }
-  }
-}
-
-.inquiry-no-mentions {
-  color: $muted;
-  font-size: 12px;
-}
-
-.inquiry-status-badge {
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 900;
-  display: inline-block;
-  border: 1px solid;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-
-  &--pending {
-    background: rgba(255, 193, 7, 0.15);
-    color: #ffc107;
-    border-color: rgba(255, 193, 7, 0.3);
-  }
-
-  &--responded {
-    background: rgba(16, 185, 129, 0.15);
-    color: #10b981;
-    border-color: rgba(16, 185, 129, 0.3);
+  &--active {
+    border-color: rgba($blue, 0.3);
+    background: rgba($blue, 0.05);
   }
 
   &--resolved {
-    background: rgba(59, 130, 246, 0.15);
-    color: #3b82f6;
-    border-color: rgba(59, 130, 246, 0.3);
-  }
-
-  &--deleted {
-    background: rgba(107, 114, 128, 0.15);
-    color: #6b7280;
-    border-color: rgba(107, 114, 128, 0.3);
+    border-color: rgba($green, 0.3);
+    background: rgba($green, 0.05);
   }
 }
 
-.inquiry-actions {
+.support-admin__stat-value {
+  display: block;
+  font-size: 32px;
+  font-weight: 900;
+  color: $text;
+}
+
+.support-admin__stat-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: $muted;
+}
+
+// Loading & Empty
+.support-admin__loading,
+.support-admin__empty {
+  padding: 60px;
+  text-align: center;
+  color: $muted;
+  font-size: 16px;
+  font-weight: 700;
+
+  i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    display: block;
+    color: rgba(255, 255, 255, 0.2);
+  }
+}
+
+// Sections
+.support-admin__section {
+  margin-bottom: 32px;
+}
+
+.support-admin__section-title {
   display: flex;
-  gap: 8px;
   align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 800;
+  color: $text;
+  margin: 0 0 16px 0;
+}
+
+.support-admin__section-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+
+  &--waiting {
+    background: $yellow;
+    animation: pulse 2s infinite;
+  }
+
+  &--active {
+    background: $blue;
+  }
+
+  &--resolved {
+    background: $green;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+// Cards
+.support-admin__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.support-admin__card {
+  padding: 20px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px);
+  }
+
+  &--open {
+    border-color: rgba($yellow, 0.3);
+  }
+
+  &--assigned {
+    border-color: rgba($blue, 0.3);
+  }
+
+  &--resolved {
+    border-color: rgba($green, 0.3);
+    opacity: 0.8;
+  }
+}
+
+.support-admin__card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.support-admin__card-channel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+
+  &--ai {
+    background: rgba($blue, 0.15);
+    color: $blue;
+  }
+
+  &--human {
+    background: rgba($green, 0.15);
+    color: $green;
+  }
+}
+
+.support-admin__card-time {
+  font-size: 12px;
+  color: $muted;
+}
+
+.support-admin__card-agent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: $blue;
+  font-weight: 700;
+}
+
+.support-admin__card-rating {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: $yellow;
+  font-weight: 700;
+}
+
+.support-admin__card-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: $text;
+  margin: 0 0 8px 0;
+}
+
+.support-admin__card-user {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: $muted;
+  margin: 0 0 8px 0;
   flex-wrap: wrap;
 }
 
-.inquiry-action-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  border: 1px solid;
-  background: transparent;
-  color: $text;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  font-size: 16px;
+.support-admin__user-type {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-right: auto;
 
-  &:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  &--client {
+    background: rgba($blue, 0.15);
+    color: $blue;
   }
 
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  &--push {
-    border-color: rgba(59, 130, 246, 0.3);
-    background: rgba(59, 130, 246, 0.15);
-    color: #3b82f6;
-
-    &:hover:not(:disabled) {
-      background: rgba(59, 130, 246, 0.25);
-      border-color: rgba(59, 130, 246, 0.5);
-    }
-  }
-
-  &--email {
-    border-color: rgba(234, 67, 53, 0.3);
-    background: rgba(234, 67, 53, 0.15);
-    color: #ea4335;
-
-    &:hover:not(:disabled) {
-      background: rgba(234, 67, 53, 0.25);
-      border-color: rgba(234, 67, 53, 0.5);
-    }
-  }
-
-  &--respond {
-    border-color: rgba(16, 185, 129, 0.3);
-    background: rgba(16, 185, 129, 0.15);
-    color: #10b981;
-
-    &:hover:not(:disabled) {
-      background: rgba(16, 185, 129, 0.25);
-      border-color: rgba(16, 185, 129, 0.5);
-    }
-  }
-
-  &--delete {
-    border-color: rgba(239, 68, 68, 0.3);
-    background: rgba(239, 68, 68, 0.15);
-    color: #ef4444;
-
-    &:hover:not(:disabled) {
-      background: rgba(239, 68, 68, 0.25);
-      border-color: rgba(239, 68, 68, 0.5);
-    }
+  &--handyman {
+    background: rgba($orange, 0.15);
+    color: $orange2;
   }
 }
 
-/* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.75);
+.support-admin__card-preview {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0 0 12px 0;
+  line-height: 1.4;
+}
+
+.support-admin__card-agent-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: $green;
+  margin: 0;
+}
+
+.support-admin__card-accept-btn {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, $orange, $orange2);
+  color: white;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba($orange, 0.3);
+  }
+}
+
+// Modals
+.support-admin__modal-overlay,
+.support-admin__chat-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
   z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 20px;
 }
 
-.modal-content {
+.support-admin__modal {
   background: $bg;
-  border-radius: 16px;
+  border-radius: 20px;
   border: 1px solid rgba($orange, 0.2);
-  max-width: 500px;
   width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  max-width: 400px;
+  overflow: hidden;
 }
 
-.modal-content--large {
-  max-width: 700px;
-}
-
-.modal-header {
+.support-admin__modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 20px;
-  border-bottom: 1px solid rgba($orange, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+
+  h3 {
+    font-size: 18px;
+    font-weight: 800;
+    color: $text;
+    margin: 0;
+  }
 }
 
-.modal-title {
-  font-size: 20px;
-  font-weight: 1000;
-  color: $orange2;
-}
-
-.modal-close {
+.support-admin__modal-close {
   width: 32px;
   height: 32px;
   border-radius: 8px;
   border: none;
   background: rgba(255, 255, 255, 0.1);
   color: $text;
-  font-size: 24px;
+  font-size: 16px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
 
   &:hover {
     background: rgba(255, 255, 255, 0.2);
   }
 }
 
-.modal-body {
+.support-admin__modal-body {
   padding: 20px;
 }
 
-.modal-footer {
+.support-admin__modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
   padding: 20px;
-  border-top: 1px solid rgba($orange, 0.2);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.form-field {
-  margin-bottom: 20px;
+.support-admin__form-field {
+  label {
+    display: block;
+    font-size: 14px;
+    font-weight: 700;
+    color: $text;
+    margin-bottom: 8px;
+  }
+}
+
+.support-admin__form-input {
   width: 100%;
-  box-sizing: border-box;
-}
-
-.form-label {
-  display: block;
-  font-size: 14px;
-  font-weight: 900;
-  color: $text;
-  margin-bottom: 8px;
-}
-
-.form-input,
-.form-textarea {
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: 12px 16px;
+  border-radius: 10px;
   border: 1px solid rgba($orange, 0.3);
   background: rgba(255, 255, 255, 0.06);
   color: $text;
   font-size: 14px;
-  font-weight: 800;
-  font-family: $font-family;
-  box-sizing: border-box;
+  font-weight: 600;
 
   &:focus {
     outline: none;
     border-color: $orange;
-    box-shadow: 0 0 0 3px rgba($orange, 0.2);
+  }
+
+  &::placeholder {
+    color: $muted;
   }
 }
 
-.form-textarea {
-  resize: vertical;
-  min-height: 80px;
-}
-
-.btn {
-  padding: 10px 20px;
-  border-radius: 8px;
+.support-admin__btn {
+  padding: 12px 24px;
+  border-radius: 10px;
   font-size: 14px;
-  font-weight: 900;
+  font-weight: 800;
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: $font-family;
+  transition: all 0.2s;
   border: none;
 
   &--cancel {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.1);
     color: $text;
-    border: 1px solid rgba(255, 255, 255, 0.2);
 
-    &:hover:not(:disabled) {
-      background: rgba(255, 255, 255, 0.1);
+    &:hover {
+      background: rgba(255, 255, 255, 0.15);
     }
   }
 
   &--primary {
-    background: rgba($orange, 0.15);
-    color: $orange2;
-    border: 1px solid rgba($orange, 0.3);
+    background: linear-gradient(135deg, $orange, $orange2);
+    color: white;
 
     &:hover:not(:disabled) {
-      background: rgba($orange, 0.25);
-      border-color: rgba($orange, 0.5);
+      transform: translateY(-2px);
     }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &--resolve {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba($green, 0.15);
+    border: 1px solid rgba($green, 0.3);
+    color: $green;
+
+    &:hover:not(:disabled) {
+      background: rgba($green, 0.25);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+}
+
+// Chat Modal
+.support-admin__chat-modal {
+  background: $bg;
+  border-radius: 20px;
+  border: 1px solid rgba($orange, 0.2);
+  width: 100%;
+  max-width: 600px;
+  height: 80vh;
+  max-height: 700px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.support-admin__chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba($orange, 0.05);
+}
+
+.support-admin__chat-header-info {
+  h3 {
+    font-size: 16px;
+    font-weight: 800;
+    color: $text;
+    margin: 0 0 4px 0;
+  }
+}
+
+.support-admin__chat-user {
+  font-size: 13px;
+  color: $muted;
+}
+
+.support-admin__chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.support-admin__chat-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: $text;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+}
+
+.support-admin__chat-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.support-admin__chat-info-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: $muted;
+
+  &--open { color: $yellow; }
+  &--assigned { color: $blue; }
+  &--resolved { color: $green; }
+  &--rating { color: $yellow; }
+  
+  &--user-type {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-weight: 700;
+  }
+
+  &--client {
+    background: rgba($blue, 0.15);
+    color: $blue;
+  }
+
+  &--handyman {
+    background: rgba($orange, 0.15);
+    color: $orange2;
+  }
+}
+
+.support-admin__rating-note {
+  font-style: italic;
+  margin-right: 8px;
+}
+
+.support-admin__chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.support-admin__chat-message {
+  display: flex;
+  gap: 10px;
+  max-width: 85%;
+
+  &--user {
+    align-self: flex-start;
+    flex-direction: row-reverse;
+
+    .support-admin__chat-message-content {
+      background: linear-gradient(135deg, $orange, $orange2);
+      border-radius: 16px 16px 4px 16px;
+    }
+  }
+
+  &--ai, &--admin {
+    align-self: flex-end;
+
+    .support-admin__chat-message-content {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 16px 16px 16px 4px;
+    }
+  }
+
+  &--system {
+    align-self: center;
+    max-width: 90%;
+
+    .support-admin__chat-message-content {
+      background: rgba($green, 0.15);
+      border: 1px solid rgba($green, 0.3);
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .support-admin__chat-message-text {
+      color: $green;
+      font-size: 13px;
+    }
+  }
+}
+
+.support-admin__chat-message-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: $orange2;
+  flex-shrink: 0;
+}
+
+.support-admin__chat-message-content {
+  padding: 12px 16px;
+}
+
+.support-admin__chat-message-sender {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 4px;
+}
+
+.support-admin__chat-message-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: $text;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.support-admin__chat-message-time {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 4px;
+  display: block;
+}
+
+.support-admin__chat-input-area {
+  display: flex;
+  gap: 10px;
+  padding: 16px;
+  background: $bg-light;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.support-admin__chat-input {
+  flex: 1;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  color: $text;
+  font-size: 14px;
+  font-weight: 600;
+
+  &:focus {
+    outline: none;
+    border-color: rgba($orange, 0.5);
+  }
+
+  &::placeholder {
+    color: $muted;
+  }
+}
+
+.support-admin__chat-send-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, $orange, $orange2);
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+
+  &:hover:not(:disabled) {
+    transform: scale(1.05);
   }
 
   &:disabled {
@@ -1130,262 +1328,36 @@ $muted: rgba(255, 255, 255, 0.62);
   }
 }
 
-.user-details-content {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.user-details-section {
-  padding-bottom: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-
-  &:last-child {
-    border-bottom: none;
-    padding-bottom: 0;
-  }
-}
-
-.user-details-section__title {
-  font-size: 18px;
-  font-weight: 1000;
-  color: $orange2;
-  margin: 0 0 16px 0;
-}
-
-.user-details-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-}
-
-.user-detail-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.user-detail-label {
-  font-size: 12px;
-  font-weight: 800;
-  color: $muted;
-}
-
-.user-detail-value {
-  font-size: 14px;
-  font-weight: 900;
-  color: $text;
-}
-
-.user-status--active {
-  color: #10b981;
-}
-
-.user-status--blocked {
-  color: #ef4444;
-}
-
+// Responsive
 @media (max-width: 768px) {
-  .inquiries-section__header {
+  .support-admin__header {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .inquiries-section__controls {
+  .support-admin__controls {
     width: 100%;
     flex-direction: column;
   }
 
-  .refresh-inquiries-btn {
+  .support-admin__filter,
+  .support-admin__refresh-btn {
     width: 100%;
-    justify-content: center;
   }
 
-  .inquiries-table-wrapper {
-    font-size: 12px;
-  }
-
-  .inquiries-table {
-    th,
-    td {
-      padding: 8px 6px;
-      font-size: 11px;
-    }
-  }
-
-  .inquiry-content {
-    max-width: 150px;
-  }
-
-  .inquiry-action-btn {
-    width: 28px;
-    height: 28px;
-    font-size: 14px;
-  }
-
-  .modal-content--large {
-    max-width: 95%;
-  }
-
-  .user-details-grid {
+  .support-admin__stats {
     grid-template-columns: 1fr;
   }
-}
 
-/* Mobile Responsive - max-width 500px */
-@media (max-width: 500px) {
-  .inquiries-section__header {
-    flex-direction: column;
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-
-  .inquiries-section__title {
-    font-size: 18px;
-  }
-
-  .inquiries-section__controls {
-    width: 100%;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .filter-select,
-  .refresh-inquiries-btn {
-    width: 100%;
-    padding: 10px;
-  }
-
-  .inquiries-table-wrapper {
-    border-radius: 12px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .inquiries-table {
-    min-width: 900px;
-    font-size: 11px;
-  }
-
-  .inquiries-table th {
-    padding: 10px 6px;
-    font-size: 10px;
-    white-space: nowrap;
-  }
-
-  .inquiries-table td {
-    padding: 10px 6px;
-    font-size: 11px;
-  }
-
-  .inquiry-date {
-    font-size: 11px;
-  }
-
-  .inquiry-time {
-    font-size: 9px;
-  }
-
-  .inquiry-title {
-    font-size: 12px;
-  }
-
-  .inquiry-content {
-    max-width: 200px;
-    font-size: 11px;
-  }
-
-  .inquiry-content-mention {
-    font-size: 10px;
-    padding: 2px 4px;
-  }
-
-  .inquiry-user {
-    font-size: 12px;
-  }
-
-  .inquiry-mention-tag {
-    font-size: 10px;
-    padding: 3px 6px;
-  }
-
-  .inquiry-status-badge {
-    font-size: 10px;
-    padding: 4px 8px;
-  }
-
-  .inquiry-actions {
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-
-  .inquiry-action-btn {
-    width: 32px;
-    height: 32px;
-    font-size: 14px;
-  }
-
-  .modal-overlay {
-    padding: 10px;
-  }
-
-  .modal-content {
-    max-width: 95vw;
-    margin: 0;
-  }
-
-  .modal-content--large {
-    max-width: 95vw;
-  }
-
-  .modal-header {
-    padding: 14px;
-  }
-
-  .modal-title {
-    font-size: 16px;
-  }
-
-  .modal-body {
-    padding: 14px;
-  }
-
-  .modal-footer {
-    padding: 14px;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .btn {
-    width: 100%;
-    padding: 10px;
-  }
-
-  .form-field {
-    margin-bottom: 16px;
-  }
-
-  .form-label {
-    font-size: 13px;
-  }
-
-  .form-input,
-  .form-textarea {
-    font-size: 14px;
-    padding: 10px;
-  }
-
-  .user-details-grid {
+  .support-admin__cards {
     grid-template-columns: 1fr;
-    gap: 12px;
   }
 
-  .user-details-section {
-    padding-bottom: 16px;
-  }
-
-  .user-details-section__title {
-    font-size: 16px;
+  .support-admin__chat-modal {
+    max-width: 100%;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
   }
 }
 </style>

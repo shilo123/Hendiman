@@ -112,6 +112,45 @@
           </div>
         </div>
       </div>
+
+      <!-- FCM Push Notifications Card -->
+      <div class="settings-card settings-card--push">
+        <div class="settings-card__header">
+          <h3 class="settings-card__title">
+            <i class="ph-fill ph-bell-ringing"></i>
+            התראות פוש
+          </h3>
+          <p class="settings-card__description">
+            קבל התראות על פניות חדשות בטלפון שלך
+          </p>
+        </div>
+        <div class="settings-card__body">
+          <div class="push-status" :class="{ 'push-status--active': isPushRegistered }">
+            <i :class="isPushRegistered ? 'ph-fill ph-check-circle' : 'ph-fill ph-bell-slash'"></i>
+            <span>{{ isPushRegistered ? 'התראות פעילות' : 'התראות לא פעילות' }}</span>
+          </div>
+          <div class="settings-card__actions">
+            <button
+              v-if="!isPushRegistered"
+              class="btn btn--success"
+              @click="registerForPush"
+              :disabled="isRegisteringPush"
+            >
+              <i class="ph-bold ph-plus"></i>
+              {{ isRegisteringPush ? 'מרשם...' : 'הוסף את הטלפון שלי לפושים' }}
+            </button>
+            <button
+              v-else
+              class="btn btn--danger"
+              @click="unregisterFromPush"
+              :disabled="isUnregisteringPush"
+            >
+              <i class="ph-bold ph-minus"></i>
+              {{ isUnregisteringPush ? 'מסיר...' : 'הסר את הטלפון שלי' }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -135,6 +174,11 @@ export default {
       currentMonthlySubscription: 49.9,
       isUpdatingMonthlySubscription: false,
       toast: null,
+      // FCM Push
+      isPushRegistered: false,
+      isRegisteringPush: false,
+      isUnregisteringPush: false,
+      currentFcmToken: null,
     };
   },
   created() {
@@ -142,6 +186,7 @@ export default {
     this.loadPlatformFee();
     this.loadMaamPercent();
     this.loadMonthlySubscription();
+    this.checkPushStatus();
   },
   methods: {
     async loadPlatformFee() {
@@ -278,6 +323,91 @@ export default {
         );
       } finally {
         this.isUpdatingMonthlySubscription = false;
+      }
+    },
+    async checkPushStatus() {
+      // Check if we have a stored FCM token
+      const storedToken = localStorage.getItem("adminFcmToken");
+      if (storedToken) {
+        this.currentFcmToken = storedToken;
+        this.isPushRegistered = true;
+      }
+    },
+    async registerForPush() {
+      this.isRegisteringPush = true;
+      try {
+        // Request notification permission
+        if (!("Notification" in window)) {
+          this.toast?.showError("הדפדפן שלך לא תומך בהתראות");
+          return;
+        }
+
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") {
+          this.toast?.showError("יש לאשר התראות כדי לקבל פוש");
+          return;
+        }
+
+        // Get FCM token
+        const { getMessaging, getToken } = await import("firebase/messaging");
+        const { initializeApp, getApps } = await import("firebase/app");
+        
+        // Firebase config - same as in App.vue
+        const firebaseConfig = {
+          apiKey: "AIzaSyBmwL8Wr-_HLOtKEODDNX_fBLh1qYDscPM",
+          authDomain: "hendiman-6c7a2.firebaseapp.com",
+          projectId: "hendiman-6c7a2",
+          storageBucket: "hendiman-6c7a2.firebasestorage.app",
+          messagingSenderId: "1020313135015",
+          appId: "1:1020313135015:web:a26d34afceef39647dfeb7",
+          measurementId: "G-19F94FCYSK",
+        };
+
+        let app;
+        if (!getApps().length) {
+          app = initializeApp(firebaseConfig);
+        } else {
+          app = getApps()[0];
+        }
+
+        const messaging = getMessaging(app);
+        const token = await getToken(messaging, {
+          vapidKey: "BNgTI9PG3C0vU_aH_OqxVZ3hd0-RI2dhNbYAPO94rCt-bJhGpXPQO2_zzZTQJIrlvdqpHlz1Vr6rvdZ0q2Tgwvk"
+        });
+
+        if (token) {
+          // Send token to server
+          const response = await axios.post(`${URL}/api/admin/fcm-token/add`, { token });
+          if (response.data.success) {
+            localStorage.setItem("adminFcmToken", token);
+            this.currentFcmToken = token;
+            this.isPushRegistered = true;
+            this.toast?.showSuccess("נרשמת בהצלחה להתראות פוש!");
+          }
+        }
+      } catch (error) {
+        console.error("Error registering for push:", error);
+        this.toast?.showError("שגיאה בהרשמה להתראות");
+      } finally {
+        this.isRegisteringPush = false;
+      }
+    },
+    async unregisterFromPush() {
+      this.isUnregisteringPush = true;
+      try {
+        if (this.currentFcmToken) {
+          await axios.post(`${URL}/api/admin/fcm-token/remove`, { token: this.currentFcmToken });
+        }
+        
+        localStorage.removeItem("adminFcmToken");
+        this.currentFcmToken = null;
+        this.isPushRegistered = false;
+        this.toast?.showSuccess("הוסרת מרשימת ההתראות");
+      } catch (error) {
+        console.error("Error unregistering from push:", error);
+        this.toast?.showError("שגיאה בהסרה מההתראות");
+      } finally {
+        this.isUnregisteringPush = false;
       }
     },
   },
@@ -429,6 +559,81 @@ $muted: rgba(255, 255, 255, 0.62);
       cursor: not-allowed;
       background: rgba($orange, 0.1);
     }
+  }
+
+  &--success {
+    background: rgba(#10b981, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(#10b981, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    &:hover:not(:disabled) {
+      background: rgba(#10b981, 0.25);
+      border-color: rgba(#10b981, 0.5);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &--danger {
+    background: rgba(#ef4444, 0.15);
+    color: #ef4444;
+    border: 1px solid rgba(#ef4444, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    &:hover:not(:disabled) {
+      background: rgba(#ef4444, 0.25);
+      border-color: rgba(#ef4444, 0.5);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+}
+
+.settings-card--push {
+  .settings-card__title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    i {
+      color: $orange2;
+      font-size: 22px;
+    }
+  }
+}
+
+.push-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: rgba(#ef4444, 0.1);
+  border: 1px solid rgba(#ef4444, 0.2);
+  color: #ef4444;
+  font-weight: 800;
+  font-size: 14px;
+  margin-bottom: 16px;
+
+  i {
+    font-size: 20px;
+  }
+
+  &--active {
+    background: rgba(#10b981, 0.1);
+    border-color: rgba(#10b981, 0.2);
+    color: #10b981;
   }
 }
 
