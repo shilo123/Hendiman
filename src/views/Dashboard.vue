@@ -54,11 +54,13 @@
       <div class="handyman-header-new__actions">
         <button
           class="handyman-header-new__action-btn handyman-header-new__action-btn--notifications"
+          :class="{ 'handyman-header-new__action-btn--unavailable': !isAvailable }"
           type="button"
           aria-label="התראות"
+          @click="toggleAvailabilityFromBell"
         >
-          <i class="ph ph-bell"></i>
-          <span class="handyman-header-new__notification-dot"></span>
+          <i :class="isAvailable ? 'ph ph-bell' : 'ph ph-bell-slash'"></i>
+          <span v-if="isAvailable" class="handyman-header-new__notification-dot"></span>
         </button>
       </div>
     </header>
@@ -1738,10 +1740,10 @@
         <button
           type="button"
           class="handyman-bottom-nav-new__item"
-          @click="handleNavItemClick({ action: 'viewCalendar' })"
+          @click="handleNavItemClick({ action: 'viewRatings' })"
         >
-          <i class="ph ph-calendar-check"></i>
-          <span class="handyman-bottom-nav-new__label">יומן</span>
+          <i class="ph ph-star"></i>
+          <span class="handyman-bottom-nav-new__label">איזור אישי</span>
         </button>
         <button
           type="button"
@@ -2673,10 +2675,6 @@ export default {
               this.toast?.showError('לא ניתן לשתף');
             });
           }
-          break;
-        case 'viewCalendar':
-          // Navigate to calendar or show calendar modal
-          this.toast?.showInfo('יומן - תכונה בקרוב');
           break;
         case 'viewWallet':
           // Navigate to wallet/income details
@@ -5737,12 +5735,39 @@ export default {
       }
     },
     // Handyman new design methods
-    toggleAvailability() {
-      this.isAvailable = !this.isAvailable;
-      // TODO: Save availability to server
-      this.toast?.showInfo(
-        this.isAvailable ? "אתה כעת זמין לעבודה" : "אתה כעת לא זמין לעבודה"
-      );
+    async toggleAvailability() {
+      const newAvailability = !this.isAvailable;
+      try {
+        const userId = this.store.user?._id || this.me?._id || this.$route.params.id;
+        if (!userId) {
+          this.toast?.showError("לא ניתן לעדכן את הסטטוס");
+          return;
+        }
+
+        const response = await axios.post(`${URL}/handyman/update-availability`, {
+          handymanId: userId,
+          available: newAvailability,
+        });
+
+        if (response.data?.success) {
+          this.isAvailable = newAvailability;
+          this.toast?.showInfo(
+            newAvailability ? "אתה כעת זמין לעבודה" : "אתה כעת לא זמין לעבודה"
+          );
+          // עדכן גם ב-store אם קיים
+          if (this.store.user) {
+            this.store.user.available = newAvailability;
+          }
+        } else {
+          this.toast?.showError(response.data?.message || "שגיאה בעדכון הסטטוס");
+        }
+      } catch (error) {
+        this.toast?.showError("שגיאה בעדכון הסטטוס");
+      }
+    },
+    async toggleAvailabilityFromBell() {
+      // אותה פונקציה כמו toggleAvailability
+      await this.toggleAvailability();
     },
     onAcceptJob(job) {
       this.jobToAccept = job;
@@ -5761,19 +5786,21 @@ export default {
       try {
         const { URL } = await import("@/Url/url");
         const axios = (await import("axios")).default;
-        const { data } = await axios.post(`${URL}/jobs/handyman-wants-to-accept`, {
+        const response = await axios.post(`${URL}/jobs/handyman-wants-to-accept`, {
           jobId: String(jobId),
           handymanId: String(handymanId)
         }, {
-          timeout: 10000
+          timeout: 10000,
+          validateStatus: (status) => status < 500
         });
         
-        if (data.success) {
+        const data = response.data;
+        if (data && data.success) {
           this.toast?.showSuccess("הבקשה נשלחה ללקוח, ממתין לאישור...");
           this.showJobAcceptanceSheet = false;
           this.jobToAccept = null;
         } else {
-          this.toast?.showError(data.message || "שגיאה בשליחת הבקשה");
+          this.toast?.showError(data?.message || "שגיאה בשליחת הבקשה");
         }
       } catch (error) {
         if (error.response?.status === 400 && error.response?.data?.needsOnboarding) {
@@ -5792,24 +5819,53 @@ export default {
       }
     },
     async onApproveHandyman() {
+      if (!this.jobPendingApproval || !this.handymanForApproval) {
+        this.toast?.showError("חסרים פרטים לאישור העבודה");
+        return;
+      }
+      
+      const jobId = this.jobPendingApproval._id || this.jobPendingApproval.id;
+      const handymanId = this.handymanForApproval.id || this.handymanForApproval._id;
+      
+      if (!jobId || !handymanId) {
+        this.toast?.showError("חסרים פרטים לאישור העבודה");
+        return;
+      }
+      
       this.isApprovingHandyman = true;
       try {
         const { URL } = await import("@/Url/url");
         const axios = (await import("axios")).default;
-        const { data } = await axios.post(`${URL}/jobs/client-approval-response`, {
-          jobId: this.jobPendingApproval._id || this.jobPendingApproval.id,
-          handymanId: this.handymanForApproval.id,
+        const response = await axios.post(`${URL}/jobs/client-approval-response`, {
+          jobId: String(jobId),
+          handymanId: String(handymanId),
           approved: true
+        }, {
+          timeout: 10000,
+          validateStatus: (status) => status < 500
         });
         
-        if (data.success) {
+        const data = response.data;
+        if (data && data.success) {
           this.toast?.showSuccess("העבודה שובצה בהצלחה!");
           this.showClientApprovalSheet = false;
+          this.jobPendingApproval = null;
+          this.handymanForApproval = null;
         } else {
-          this.toast?.showError(data.message || "שגיאה באישור ההנדימן");
+          this.toast?.showError(data?.message || "שגיאה באישור ההנדימן");
         }
       } catch (error) {
-        this.toast?.showError("שגיאה בתקשורת עם השרת");
+        if (error.response?.status === 400 && error.response?.data?.message) {
+          this.toast?.showError(error.response.data.message);
+        } else if (error.response?.data?.message) {
+          this.toast?.showError(error.response.data.message);
+        } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+          this.toast?.showError("תם הזמן - נסה שוב");
+        } else if (error.code === 'ECONNREFUSED' || error.message?.includes('Network')) {
+          this.toast?.showError("לא ניתן להתחבר לשרת. אנא ודא שהשרת רץ");
+        } else {
+          this.toast?.showError("שגיאה בתקשורת עם השרת");
+        }
       } finally {
         this.isApprovingHandyman = false;
       }
@@ -6491,6 +6547,8 @@ export default {
         this.me.trialExpiresAt = data.User.trialExpiresAt;
         this.me.billingStartDate = data.User.billingStartDate;
         this.isHendiman = data.User.isHandyman;
+        // טען available מהשרת (ברירת מחדל true)
+        this.isAvailable = data.User.available !== undefined ? data.User.available : true;
 
         // Check for pending quotations (for clients only) - with 1 second delay after isHendiman is set
         if (!this.isHendiman) {
@@ -11235,6 +11293,11 @@ $r2: 26px;
 
 .handyman-header-new__action-btn--notifications {
   position: relative;
+}
+
+.handyman-header-new__action-btn--unavailable {
+  opacity: 0.6;
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .handyman-header-new__notification-dot {

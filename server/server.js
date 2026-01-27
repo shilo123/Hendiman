@@ -1361,7 +1361,7 @@ function findAvailablePort(startPort) {
         } catch (geoError) {
           // Fallback: get all handymen and filter manually
           const allHandymen = await usersCollection
-            .find({ isHandyman: true })
+            .find({ isHandyman: true, available: { $ne: false } }) // רק הנדימנים זמינים
             .toArray();
 
           relevantHandymen = allHandymen.filter((handyman) => {
@@ -1404,8 +1404,11 @@ function findAvailablePort(startPort) {
 
         // Send push notifications to all relevant handymen
         console.log("[NewJob] Sending push notifications to", relevantHandymen.length, "handymen");
-        const handymenWithTokens = relevantHandymen.filter((handyman) => handyman.fcmToken);
-        console.log("[NewJob] Handymen with FCM tokens:", handymenWithTokens.length);
+        // סנן רק הנדימנים זמינים (available !== false) ויש להם FCM token
+        const handymenWithTokens = relevantHandymen.filter(
+          (handyman) => handyman.fcmToken && (handyman.available !== false)
+        );
+        console.log("[NewJob] Handymen with FCM tokens and available:", handymenWithTokens.length);
         
         const notificationPromises = handymenWithTokens
           .map(async (handyman) => {
@@ -2519,6 +2522,8 @@ function findAvailablePort(startPort) {
           // הוסף שדות דירוג ומספר עבודות עם ערך התחלתי של 0
           userData.rating = 0;
           userData.jobsDone = 0;
+          // הוסף שדה available - ברירת מחדל true
+          userData.available = true;
 
           // בדוק אם זה אחד מ-100 הנדימנים הראשונים
           const handymenCount = await collection.countDocuments({
@@ -3617,6 +3622,59 @@ function findAvailablePort(startPort) {
         return res.status(500).json({
           success: false,
           message: "Error counting handymen",
+          error: error.message,
+        });
+      }
+    });
+
+    // Endpoint to update handyman availability
+    app.post("/handyman/update-availability", async (req, res) => {
+      try {
+        if (!collection) {
+          return res.status(500).json({
+            success: false,
+            message: "Database not connected",
+          });
+        }
+
+        const { handymanId, available } = req.body;
+
+        if (!handymanId) {
+          return res.status(400).json({
+            success: false,
+            message: "handymanId is required",
+          });
+        }
+
+        if (typeof available !== "boolean") {
+          return res.status(400).json({
+            success: false,
+            message: "available must be a boolean",
+          });
+        }
+
+        const handymanObjectId = new ObjectId(handymanId);
+        const result = await collection.updateOne(
+          { _id: handymanObjectId, isHandyman: true },
+          { $set: { available: available } }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({
+            success: false,
+            message: "Handyman not found",
+          });
+        }
+
+        return res.json({
+          success: true,
+          message: `Availability updated to ${available ? "available" : "unavailable"}`,
+          available: available,
+        });
+      } catch (error) {
+        return res.status(500).json({
+          success: false,
+          message: "Error updating availability",
           error: error.message,
         });
       }
@@ -4906,10 +4964,14 @@ function findAvailablePort(startPort) {
           totalPrice += 10;
         }
 
-        const amountAgorot = Math.round(totalPrice * 100);
+        // Client pays only the original price (totalPrice)
+        // Platform fee is deducted from handyman, not added to client
+        const originalPriceAgorot = Math.round(totalPrice * 100);
         const platformFeeAgorot = Math.round(
-          (amountAgorot * getPlatformFeePercent()) / 100
+          (originalPriceAgorot * getPlatformFeePercent()) / 100
         );
+        // Amount handyman receives = original price - platform fee
+        const amountAgorot = originalPriceAgorot - platformFeeAgorot;
 
         if (amountAgorot <= 0) {
           return res.status(400).json({
@@ -4924,7 +4986,7 @@ function findAvailablePort(startPort) {
         const stripeMode = isTestMode ? "TEST" : "LIVE";
 
         // Create Escrow Payment Intent
-
+        // Client pays: amountAgorot + platformFeeAgorot = originalPriceAgorot
         const paymentIntentParams = {
           amountAgorot,
           currency: "ils",
@@ -4948,10 +5010,10 @@ function findAvailablePort(startPort) {
         const maamPercent = getMaamPercent();
         const amountILS = amountAgorot / 100;
         const platformFeeILS = platformFeeAgorot / 100;
-        // Total amount client pays = price + platform fee
-        const totalAmountClientPays = amountILS + platformFeeILS;
+        // Client pays only the original price (not price + fee)
+        const totalAmountClientPays = originalPriceAgorot / 100;
         
-        // Calculate VAT on the total amount client pays
+        // Calculate VAT on the amount client pays (original price)
         const vatCalculation = calculateVAT(totalAmountClientPays, maamPercent);
 
         // Save payment record
@@ -4961,9 +5023,9 @@ function findAvailablePort(startPort) {
           clientId: new ObjectId(job.clientId),
           handymanId: new ObjectId(handymanId),
           paymentIntentId: paymentIntentId,
-          amount: amountILS, // Base price (what handyman receives before fee)
-          totalAmount: totalAmountClientPays, // Total amount client pays (price + platform fee)
-          originalPrice: amountILS, // Initial price (will be updated if price changes)
+          amount: amountILS, // Amount handyman receives (original price - platform fee)
+          totalAmount: totalAmountClientPays, // Total amount client pays (original price only)
+          originalPrice: totalAmountClientPays, // Original price (what client pays, will be updated if price changes)
           priceChangePercent: 0, // No change initially
           amountWithoutVAT: vatCalculation.amountWithoutVAT,
           amountWithVAT: vatCalculation.amountWithVAT,
@@ -8031,7 +8093,10 @@ function findAvailablePort(startPort) {
           return res.status(400).json({ success: false, message: "העבודה כבר לא פנויה" });
         }
 
-        const clientId = job.clientId;
+        const clientId = job.clientId?.toString() || job.clientId;
+        if (!clientId) {
+          return res.status(400).json({ success: false, message: "Job has no client ID" });
+        }
         const handymanName = handyman.username || handyman.name || "הנדימן";
 
         // Update job status to pending_approval and store the interested handyman
@@ -8047,12 +8112,23 @@ function findAvailablePort(startPort) {
         );
 
         // Notify client via WebSocket
-        io.to(`user-${clientId}`).emit("handyman-request-approval", {
-          jobId,
-          job,
-          handymanId,
+        const clientIdStr = clientId.toString();
+        io.to(`user-${clientIdStr}`).emit("handyman-request-approval", {
+          jobId: jobId.toString(),
+          job: {
+            _id: job._id,
+            id: job._id,
+            clientId: job.clientId,
+            status: "pending_approval",
+            subcategoryInfo: job.subcategoryInfo,
+            locationText: job.locationText,
+            description: job.description,
+            price: job.price
+          },
+          handymanId: handymanId.toString(),
           handyman: {
-            id: handyman._id,
+            id: handyman._id.toString(),
+            _id: handyman._id.toString(),
             username: handymanName,
             avatar: handyman.avatar || handyman.image,
             rating: handyman.rating,
@@ -8061,9 +8137,9 @@ function findAvailablePort(startPort) {
         });
 
         // Notify client via Push
-        if (clientId) {
+        if (clientIdStr) {
           const { sendPushToUser } = require("./services/pushNotificationService");
-          sendPushToUser(clientId, {
+          sendPushToUser(clientIdStr, {
             title: "הנדימן רוצה לקבל את העבודה שלך!",
             body: `${handymanName} מוכן להתחיל. האם אתה מאשר?`,
             data: {
@@ -8153,9 +8229,15 @@ function findAvailablePort(startPort) {
           status: "assigned",
         };
 
-        io.to(`job-${jobId}`).emit("job-accepted", responseData);
-        io.to(`user-${handymanId}`).emit("job-accepted", responseData);
-        io.to(`user-${job.clientId}`).emit("job-accepted", responseData);
+        const jobIdStr = jobId.toString();
+        const handymanIdStr = handymanId.toString();
+        const clientIdStr = job.clientId?.toString() || job.clientId;
+        
+        io.to(`job-${jobIdStr}`).emit("job-accepted", responseData);
+        io.to(`user-${handymanIdStr}`).emit("job-accepted", responseData);
+        if (clientIdStr) {
+          io.to(`user-${clientIdStr}`).emit("job-accepted", responseData);
+        }
 
         // Push to handyman
         const { sendPushToUser } = require("./services/pushNotificationService");
@@ -8516,9 +8598,9 @@ function findAvailablePort(startPort) {
                 clientId: new ObjectId(job.clientId),
                 handymanId: new ObjectId(handymanId),
                 paymentIntentId: paymentIntentId,
-                amount: amountILSForPayment, // Base price (what handyman receives before fee)
-                totalAmount: totalAmountClientPays, // Total amount client pays (price + platform fee)
-                originalPrice: amountILSForPayment, // Initial price (will be updated if price changes)
+                amount: amountILSForPayment, // Amount handyman receives (original price - platform fee)
+                totalAmount: totalAmountClientPays, // Total amount client pays (original price only)
+                originalPrice: totalAmountClientPays, // Original price (what client pays, will be updated if price changes)
                 priceChangePercent: 0,
                 amountWithoutVAT: vatCalculationForPayment.amountWithoutVAT,
                 amountWithVAT: vatCalculationForPayment.amountWithVAT,
@@ -10296,10 +10378,14 @@ function findAvailablePort(startPort) {
           const totalPrice = calculatedTotalPrice;
 
           if (totalPrice > 0) {
-            const amountAgorot = Math.round(totalPrice * 100);
+            // Client pays only the original price (totalPrice)
+            // Platform fee is deducted from handyman, not added to client
+            const originalPriceAgorot = Math.round(totalPrice * 100);
             const platformFeeAgorot = Math.round(
-              (amountAgorot * getPlatformFeePercent()) / 100
+              (originalPriceAgorot * getPlatformFeePercent()) / 100
             );
+            // Amount handyman receives = original price - platform fee
+            const amountAgorot = originalPriceAgorot - platformFeeAgorot;
 
             try {
               const result = await createEscrowPaymentIntent({
@@ -10329,8 +10415,10 @@ function findAvailablePort(startPort) {
               // Calculate VAT (MAAM) for payment record
               const maamPercentForApprove = getMaamPercent();
               const amountILSForApprove = amountAgorot / 100;
+              // Client pays only the original price (not price + fee)
+              const totalAmountClientPays = originalPriceAgorot / 100;
               const vatCalculationForApprove = calculateVAT(
-                amountILSForApprove,
+                totalAmountClientPays,
                 maamPercentForApprove
               );
 
@@ -10342,8 +10430,9 @@ function findAvailablePort(startPort) {
                 clientId: new ObjectId(job.clientId),
                 handymanId: new ObjectId(handymanIdForPayment),
                 paymentIntentId: result.paymentIntentId,
-                amount: amountILSForApprove,
-                originalPrice: amountILSForApprove,
+                amount: amountILSForApprove, // Amount handyman receives (original price - platform fee)
+                totalAmount: totalAmountClientPays, // Total amount client pays (original price only)
+                originalPrice: totalAmountClientPays, // Original price (what client pays)
                 priceChangePercent: 0,
                 amountWithoutVAT: vatCalculationForApprove.amountWithoutVAT,
                 amountWithVAT: vatCalculationForApprove.amountWithVAT,
@@ -10779,15 +10868,19 @@ function findAvailablePort(startPort) {
                 paymentIntent.transfer_data.destination;
 
               // Calculate amounts from the already-captured payment
-              // In Stripe Connect, when application_fee_amount is set, client pays: amount + application_fee_amount
-              const baseAmount = paymentIntent.amount / 100; // Base price (what handyman receives before fee)
+              // In Stripe Connect, client pays: amount + application_fee_amount
+              // But we want client to pay only the original price, so:
+              // amount = originalPrice - platformFee
+              // application_fee_amount = platformFee
+              // Client pays = amount + application_fee_amount = originalPrice
+              const baseAmount = paymentIntent.amount / 100; // Amount handyman receives (original price - platform fee)
               const applicationFee = paymentIntent.application_fee_amount
                 ? paymentIntent.application_fee_amount / 100
                 : 0;
-              // Total amount client actually paid = base amount + platform fee
+              // Total amount client actually paid = original price (amount + application_fee_amount)
               const totalAmount = baseAmount + applicationFee;
 
-              // Calculate VAT (MAAM) for payment record - על הסכום הכולל שהלקוח שילם
+              // Calculate VAT (MAAM) for payment record - על המחיר המקורי שהלקוח שילם
               const maamPercentForSucceeded = getMaamPercent();
               const vatCalculationForSucceeded = calculateVAT(
                 totalAmount,
@@ -10913,13 +11006,17 @@ function findAvailablePort(startPort) {
             }
 
             // Calculate amounts
-            // In Stripe Connect, when application_fee_amount is set, client pays: amount + application_fee_amount
-            const baseAmount = capturedPayment.amount / 100; // Base price (what handyman receives before fee)
+            // In Stripe Connect, client pays: amount + application_fee_amount
+            // But we want client to pay only the original price, so:
+            // amount = originalPrice - platformFee
+            // application_fee_amount = platformFee
+            // Client pays = amount + application_fee_amount = originalPrice
+            const baseAmount = capturedPayment.amount / 100; // Amount handyman receives (original price - platform fee)
             const applicationFee = (capturedPayment.application_fee_amount || 0) / 100;
-            // Total amount client actually paid = base amount + platform fee
+            // Total amount client actually paid = original price (amount + application_fee_amount)
             const totalAmount = baseAmount + applicationFee;
 
-            // Calculate VAT (MAAM) for payment record - על הסכום הכולל שהלקוח שילם
+            // Calculate VAT (MAAM) for payment record - על המחיר המקורי שהלקוח שילם
             const maamPercentForCaptured = getMaamPercent();
             const vatCalculationForCaptured = calculateVAT(
               totalAmount,
@@ -14938,6 +15035,9 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           const categoryToMatchLower = categoryToMatch.trim().toLowerCase();
 
           const matchingHandymen = allHandymenInDB.filter((handyman) => {
+            // בדוק קודם שההנדימן זמין (available !== false)
+            if (handyman.available === false) return false;
+            
             // בדוק fullCategories
             if (
               handyman.fullCategories &&
@@ -16045,8 +16145,11 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           const result = await jobsCollection.insertOne(jobData);
 
           // Find all handymen that match this subcategory group
+          // סנן רק הנדימנים זמינים (available !== false)
           const matchingHandymen = handymenWithMatches
-            .filter(({ matchingSubcategories: match }) => {
+            .filter(({ matchingSubcategories: match, handyman }) => {
+              // בדוק קודם שההנדימן זמין
+              if (handyman.available === false) return false;
               const matchKeys = match
                 .map((s) => `${s.category || ""}_${s.subcategory || ""}`)
                 .sort()
@@ -16062,8 +16165,9 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
           });
 
           // Send push notification to all matching handymen (in background, don't wait)
+          // רק הנדימנים זמינים (available !== false) יקבלו התראות
           for (const handyman of matchingHandymen) {
-            if (handyman.fcmToken) {
+            if (handyman.fcmToken && (handyman.available !== false)) {
               (async () => {
                 try {
                   const subcategoryNames = subcategoryGroup

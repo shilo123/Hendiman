@@ -5134,6 +5134,7 @@ export default {
 /* MESSAGES */
 .chat__messages {
   flex: 1;
+  min-height: 0;
   padding: 14px 12px 12px;
   overflow-y: auto;
   scroll-behavior: smooth;

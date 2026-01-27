@@ -159,16 +159,10 @@
             <button
               type="button"
               class="perf__link"
-              @click="loadMoreRatings"
-              :disabled="!pagination.hasMore || isMoreLoading"
+              @click="openAllRatingsModal"
+              :disabled="ratings.length === 0"
             >
-              {{
-                pagination.hasMore
-                  ? isMoreLoading
-                    ? "טוען…"
-                    : "ראה הכל"
-                  : "זה הכל"
-              }}
+              ראה הכל
             </button>
           </div>
 
@@ -258,6 +252,13 @@
         <div class="perf__spacer" aria-hidden="true"></div>
       </template>
     </main>
+
+    <!-- All Ratings Modal -->
+    <AllRatingsModal
+      :isVisible="showAllRatingsModal"
+      :handymanId="userId"
+      @close="showAllRatingsModal = false"
+    />
   </div>
 </template>
 
@@ -265,15 +266,20 @@
 import axios from "axios";
 import { URL } from "@/Url/url";
 import { useMainStore } from "@/store/index";
+import AllRatingsModal from "@/components/Dashboard/AllRatingsModal.vue";
 
 export default {
   name: "HandymanRatings",
+  components: {
+    AllRatingsModal,
+  },
   data() {
     return {
       store: null,
       ratings: [],
       isLoading: true,
       isMoreLoading: false,
+      showAllRatingsModal: false,
       pagination: {
         skip: 0,
         limit: 8,
@@ -435,16 +441,8 @@ export default {
         this.isLoading = false;
       }
     },
-    async loadMoreRatings() {
-      if (!this.pagination.hasMore || this.isMoreLoading) return;
-      this.isMoreLoading = true;
-      try {
-        await this.loadRatings({ reset: false });
-      } catch (error) {
-        // ignore
-      } finally {
-        this.isMoreLoading = false;
-      }
+    openAllRatingsModal() {
+      this.showAllRatingsModal = true;
     },
     async loadSparkData() {
       try {
@@ -472,8 +470,10 @@ export default {
       const span = max - min || 1;
 
       const points = arr.map((v, i) => {
-        const x = (i / (arr.length - 1)) * 100;
-        // map to y range [8..40] (lower is higher)
+        // RTL: x starts from right (100) to left (0)
+        const x = 100 - (i / (arr.length - 1)) * 100;
+        // map to y range [8..40] (higher value = lower y position, normal)
+        // In SVG, y=0 is top, so higher values should be at bottom (higher y)
         const y = 40 - ((v - min) / span) * 32;
         return { x, y };
       });
@@ -485,7 +485,8 @@ export default {
         )
         .join(" ");
 
-      const area = `${line} L100 50 L0 50 Z`;
+      // RTL: area path should close from right to left
+      const area = `${line} L0 50 L100 50 Z`;
       return { line, area };
     },
     formatMoney(value) {
