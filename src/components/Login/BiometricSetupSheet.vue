@@ -259,24 +259,9 @@ export default {
           throw new Error("טביעת אצבע זמינה רק באפליקציה");
         }
 
-        // Check biometric availability with error handling
-        let biometryResult;
-        try {
-          biometryResult = await NativeBiometric.checkBiometry();
-        } catch (checkError) {
-          // Handle the "not implemented" error on Android
-          if (checkError.message && checkError.message.includes("not implemented")) {
-            // On Android, checkBiometry might not be implemented, but authenticate might work
-            // Try to proceed with authenticate directly
-            console.warn("[BiometricSetup] checkBiometry not implemented, will try authenticate");
-            biometryResult = { isAvailable: true }; // Assume available and try authenticate
-          } else {
-            throw new Error("שגיאה בבדיקת טביעת אצבע: " + (checkError.message || "שגיאה לא ידועה"));
-          }
-        }
+        const biometryResult = await NativeBiometric.checkBiometry();
         
-        // Only check isAvailable if we got a valid result
-        if (biometryResult && biometryResult.isAvailable === false) {
+        if (!biometryResult.isAvailable) {
           throw new Error("טביעת אצבע לא זמינה במכשיר זה");
         }
 

@@ -16,7 +16,7 @@
         @click="$emit('how-it-works')"
         aria-label="איך זה עובד"
       >
-        <span class="tile__txt">איך זה עובד</span>
+        <span class="tile__txt">איך זה עובד?</span>
       </button>
     </div>
   </section>
@@ -30,9 +30,6 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-$orange: #f97316;
-$orange2: #ea580c;
-
 .clientCta {
   background: transparent;
   border: none;
@@ -41,18 +38,19 @@ $orange2: #ea580c;
 }
 
 .ctaRow {
-  display: flex;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
   align-items: stretch;
 }
 
 .tile {
   flex: 1 1 0;
   min-width: 0;
-  width: 0;
-  height: 64px;
-  border-radius: 18px;
-  padding: 10px 20px;
+  height: auto;
+  min-height: 64px;
+  border-radius: 1rem;
+  padding: 16px;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -61,8 +59,9 @@ $orange2: #ea580c;
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  transition: transform 120ms ease, filter 120ms ease;
+  transition: all 0.2s ease;
   box-sizing: border-box;
+  border: none;
 
   &:active {
     transform: scale(0.98);
@@ -70,33 +69,41 @@ $orange2: #ea580c;
 }
 
 .tile--primary {
-  background: linear-gradient(135deg, #fb923c, $orange);
-  box-shadow: 0 10px 25px rgba(249, 115, 22, 0.3);
-  color: #0b0b0f;
+  background: #ff6a00;
+  box-shadow: 0 0 15px -3px rgba(255, 106, 0, 0.3);
+  color: #fff;
   border: none;
+  font-weight: 700;
+  font-size: 18px;
+
+  &:hover {
+    background: #cc5500;
+  }
 }
 
 .tile--secondary {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(10px);
+  background: rgba(21, 21, 23, 1);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.92);
+  color: #fff;
+  font-weight: 500;
+  font-size: 18px;
 
-  flex-direction: row;
-  gap: 10px;
+  &:hover {
+    background: rgba(35, 35, 37, 1);
+  }
 }
 
 .tile__txt {
   white-space: nowrap;
-  font-weight: 1100;
-  font-size: 17px;
+  font-weight: inherit;
+  font-size: inherit;
   letter-spacing: -0.2px;
 }
 
 @media (max-width: 420px) {
   .tile {
-    height: 60px;
-    padding: 9px 16px;
+    min-height: 60px;
+    padding: 14px 16px;
   }
   .tile__txt {
     font-size: 16px;

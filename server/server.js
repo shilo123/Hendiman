@@ -7983,6 +7983,188 @@ function findAvailablePort(startPort) {
         });
       }
     });
+    // --- NEW: Handyman wants to accept (Confirmation step) ---
+    app.post("/jobs/handyman-wants-to-accept", async (req, res) => {
+      try {
+        const { jobId, handymanId } = req.body;
+        if (!jobId || !handymanId) {
+          return res.status(400).json({ success: false, message: "jobId and handymanId required" });
+        }
+
+        const jobsCol = getCollectionJobs();
+        const usersCol = getCollection();
+
+        const handyman = await usersCol.findOne({ _id: new ObjectId(handymanId) });
+        if (!handyman) {
+          return res.status(404).json({ success: false, message: "Handyman not found" });
+        }
+
+        // Stripe check (copied from jobs/accept)
+        if (!handyman.stripeAccountId) {
+          try {
+            const accountId = await getOrCreateConnectedAccount(handyman, usersCol);
+            if (!accountId) {
+              return res.status(400).json({
+                success: false,
+                message: "Stripe Connect לא מופעל. לא ניתן לקבל עבודה ללא הגדרת תשלומים.",
+                needsOnboarding: true,
+              });
+            }
+            // ... (Stripe onboarding link generation logic would go here if needed)
+            return res.status(400).json({
+              success: false,
+              message: "עליך להשלים את הגדרת חשבון התשלומים לפני קבלת עבודה",
+              needsOnboarding: true,
+            });
+          } catch (e) {
+            return res.status(400).json({ success: false, message: "שגיאה בבדיקת תשלומים" });
+          }
+        }
+
+        const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+        if (!job) {
+          return res.status(404).json({ success: false, message: "Job not found" });
+        }
+
+        if (job.status !== "pending") {
+          return res.status(400).json({ success: false, message: "העבודה כבר לא פנויה" });
+        }
+
+        const clientId = job.clientId;
+        const handymanName = handyman.username || handyman.name || "הנדימן";
+
+        // Update job status to pending_approval and store the interested handyman
+        await jobsCol.updateOne(
+          { _id: new ObjectId(jobId) },
+          { 
+            $set: { 
+              status: "pending_approval",
+              pendingHandymanId: new ObjectId(handymanId),
+              pendingHandymanName: handymanName
+            } 
+          }
+        );
+
+        // Notify client via WebSocket
+        io.to(`user-${clientId}`).emit("handyman-request-approval", {
+          jobId,
+          job,
+          handymanId,
+          handyman: {
+            id: handyman._id,
+            username: handymanName,
+            avatar: handyman.avatar || handyman.image,
+            rating: handyman.rating,
+            jobDone: handyman.jobDone
+          }
+        });
+
+        // Notify client via Push
+        if (clientId) {
+          const { sendPushToUser } = require("./services/pushNotificationService");
+          sendPushToUser(clientId, {
+            title: "הנדימן רוצה לקבל את העבודה שלך!",
+            body: `${handymanName} מוכן להתחיל. האם אתה מאשר?`,
+            data: {
+              type: "approval_request",
+              jobId: jobId.toString(),
+              handymanId: handymanId.toString()
+            }
+          }).catch(err => serverLogger.error("Push error:", err));
+        }
+
+        res.json({ success: true, message: "בקשה נשלחה ללקוח" });
+      } catch (error) {
+        serverLogger.error("Error in handyman-wants-to-accept:", error);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    app.post("/jobs/client-approval-response", async (req, res) => {
+      try {
+        const { jobId, handymanId, approved } = req.body;
+        if (!jobId || !handymanId) {
+          return res.status(400).json({ success: false, message: "Missing params" });
+        }
+
+        if (!approved) {
+          // If client rejected, we just notify handyman (optional)
+          io.to(`user-${handymanId}`).emit("approval-rejected", { jobId });
+          return res.json({ success: true, message: "הבקשה נדחתה" });
+        }
+
+        // If approved, we proceed to assign the job (similar to jobs/accept)
+        // We can just call the logic or redirect internally? 
+        // For simplicity, let's copy the core assignment logic or just tell the client to call jobs/accept?
+        // Actually, the user wants it to happen automatically when client clicks "Yes".
+        
+        // I'll call a helper function or just duplicate the logic for now to be safe.
+        // Re-using the logic from jobs/accept:
+        
+        const jobsCol = getCollectionJobs();
+        const usersCol = getCollection();
+        const handyman = await usersCol.findOne({ _id: new ObjectId(handymanId) });
+        const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
+
+        if (!handyman || !job) {
+          return res.status(404).json({ success: false, message: "Not found" });
+        }
+
+        if (job.status !== "pending") {
+          return res.status(400).json({ success: false, message: "העבודה כבר לא פנויה" });
+        }
+
+        const handymanName = handyman.username || handyman.name || "הנדימן";
+        let handymanIdArray = Array.isArray(job.handymanId) ? [...job.handymanId] : (job.handymanId ? [job.handymanId] : []);
+        let handymanNameArray = Array.isArray(job.handymanName) ? [...job.handymanName] : (job.handymanName ? [job.handymanName] : []);
+
+        if (!handymanIdArray.some(id => id.toString() === handymanId)) {
+          handymanIdArray.push(new ObjectId(handymanId));
+          handymanNameArray.push(handymanName);
+        }
+
+        await jobsCol.updateOne(
+          { _id: new ObjectId(jobId) },
+          { 
+            $set: { 
+              status: "assigned", 
+              handymanId: handymanIdArray, 
+              handymanName: handymanNameArray 
+            },
+            $unset: { cancel: "" }
+          }
+        );
+
+        // Notify both parties
+        const responseData = {
+          jobId: jobId,
+          handymanId: handymanId,
+          handymanName: handymanName,
+          status: "assigned",
+        };
+
+        io.to(`job-${jobId}`).emit("job-accepted", responseData);
+        io.to(`user-${handymanId}`).emit("job-accepted", responseData);
+        io.to(`user-${job.clientId}`).emit("job-accepted", responseData);
+
+        // Push to handyman
+        const { sendPushToUser } = require("./services/pushNotificationService");
+        sendPushToUser(handymanId, {
+          title: "העבודה שובצה בהצלחה!",
+          body: `הלקוח אישר את הצעתך. הצ'אט נפתח.`,
+          data: {
+            type: "job_assigned",
+            jobId: jobId.toString()
+          }
+        }).catch(err => serverLogger.error("Push error:", err));
+
+        res.json({ success: true, message: "העבודה שובצה בהצלחה" });
+      } catch (error) {
+        serverLogger.error("Error in client-approval-response:", error);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
     app.post("/jobs/accept", async (req, res) => {
       try {
         const { jobId, handymanId } = req.body;
@@ -9960,7 +10142,7 @@ function findAvailablePort(startPort) {
     // Client approval endpoint - releases Escrow payment after client confirms job completion
     app.post("/api/jobs/approve", async (req, res) => {
       try {
-        const { jobId, clientId } = req.body;
+        const { jobId, clientId, hoursWorked, hourlyPrice, totalPrice } = req.body;
 
         if (!jobId || !clientId) {
           return res.status(400).json({
@@ -10052,39 +10234,56 @@ function findAvailablePort(startPort) {
           }
 
           // Calculate job price
-          let totalPrice = 0;
-          if (
-            job.subcategoryInfo &&
-            Array.isArray(job.subcategoryInfo) &&
-            job.subcategoryInfo.length > 0
-          ) {
-            totalPrice = job.subcategoryInfo.reduce((sum, subcat) => {
-              const price = subcat?.price || 0;
-              return (
-                sum +
-                (typeof price === "number" ? price : parseFloat(price) || 0)
-              );
-            }, 0);
-          } else if (
-            job.subcategoryInfo &&
-            typeof job.subcategoryInfo === "object" &&
-            job.subcategoryInfo.price
-          ) {
-            totalPrice =
-              typeof job.subcategoryInfo.price === "number"
-                ? job.subcategoryInfo.price
-                : parseFloat(job.subcategoryInfo.price) || 0;
-          } else if (job.price) {
-            totalPrice =
-              typeof job.price === "number"
-                ? job.price
-                : parseFloat(job.price) || 0;
+          // If hoursWorked, hourlyPrice, and totalPrice are provided (for hourly work), use them
+          let calculatedTotalPrice = 0;
+          if (hoursWorked && hourlyPrice && totalPrice) {
+            // Use the totalPrice provided by client (already calculated: hoursWorked * hourlyPrice)
+            calculatedTotalPrice = parseFloat(totalPrice);
+            serverLogger.log(
+              `[jobs/approve] Using hourly work pricing: ${hoursWorked} hours × ${hourlyPrice} ₪ = ${calculatedTotalPrice} ₪`
+            );
+          } else {
+            // Calculate from subcategoryInfo (for fixed price jobs)
+            if (
+              job.subcategoryInfo &&
+              Array.isArray(job.subcategoryInfo) &&
+              job.subcategoryInfo.length > 0
+            ) {
+              calculatedTotalPrice = job.subcategoryInfo.reduce((sum, subcat) => {
+                const price = subcat?.price || 0;
+                // Skip "bid" or "quoted" prices
+                if (price === "bid" || price === "quoted") return sum;
+                return (
+                  sum +
+                  (typeof price === "number" ? price : parseFloat(price) || 0)
+                );
+              }, 0);
+            } else if (
+              job.subcategoryInfo &&
+              typeof job.subcategoryInfo === "object" &&
+              job.subcategoryInfo.price
+            ) {
+              const price = job.subcategoryInfo.price;
+              if (price !== "bid" && price !== "quoted") {
+                calculatedTotalPrice =
+                  typeof price === "number"
+                    ? price
+                    : parseFloat(price) || 0;
+              }
+            } else if (job.price) {
+              calculatedTotalPrice =
+                typeof job.price === "number"
+                  ? job.price
+                  : parseFloat(job.price) || 0;
+            }
           }
 
           // Add urgent fee if applicable
           if (job.urgent) {
-            totalPrice += 10;
+            calculatedTotalPrice += 10;
           }
+          
+          const totalPrice = calculatedTotalPrice;
 
           if (totalPrice > 0) {
             const amountAgorot = Math.round(totalPrice * 100);
@@ -10146,6 +10345,14 @@ function findAvailablePort(startPort) {
                 createdAt: new Date(),
                 updatedAt: new Date(),
               };
+              
+              // Add hourly work data if provided
+              if (hoursWorked && hourlyPrice && totalPrice) {
+                paymentRecord.hoursWorked = parseFloat(hoursWorked);
+                paymentRecord.hourlyPrice = parseFloat(hourlyPrice);
+                paymentRecord.hoursTotalPrice = parseFloat(totalPrice);
+              }
+              
               await paymentsCol.insertOne(paymentRecord);
 
               // Reload job to get updated paymentIntentId
@@ -10176,17 +10383,29 @@ function findAvailablePort(startPort) {
         // Update job - mark as client approved (only if not already approved)
         // If already approved, we'll just release the payment
 
-        if (job.clientApproved !== true) {
+        // Update job - mark as client approved and save hourly work data if provided
+        const updateData = {
+          clientApproved: true,
+          // Status remains "done" until payment is captured, then becomes "paid"
+        };
+        
+        // Add hourly work data if provided
+        if (hoursWorked && hourlyPrice && totalPrice) {
+          updateData.hoursWorked = parseFloat(hoursWorked);
+          updateData.hourlyPrice = parseFloat(hourlyPrice);
+          updateData.hoursTotalPrice = parseFloat(totalPrice);
+          serverLogger.log(
+            `[jobs/approve] Saving hourly work data: ${hoursWorked} hours × ${hourlyPrice} ₪ = ${totalPrice} ₪`
+          );
+        }
+        
+        if (job.clientApproved !== true || (hoursWorked && hourlyPrice && totalPrice)) {
           await jobsCol.updateOne(
             { _id: new ObjectId(jobId) },
             {
-              $set: {
-                clientApproved: true,
-                // Status remains "done" until payment is captured, then becomes "paid"
-              },
+              $set: updateData,
             }
           );
-        } else {
         }
 
         // Now capture the payment (if paymentIntentId exists)
@@ -21029,11 +21248,11 @@ ${imagesList}
     // Function to check and expire quoted jobs (DISABLED - always returns success with 0 expired)
     async function checkAndExpireQuotedJobs() {
       // Job expiration is disabled - jobs never expire
-      return {
-        success: true,
-        expiredCount: 0,
+          return {
+            success: true,
+            expiredCount: 0,
         message: "מנגנון פג תוקף מבוטל - עבודות לא פגות תוקף",
-      };
+        };
     }
 
     // Endpoint: Check and expire quoted jobs that passed quotedUntil

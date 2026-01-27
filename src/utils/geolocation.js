@@ -1,9 +1,74 @@
+import { Capacitor } from "@capacitor/core";
+
 /**
- * Get current user location using browser geolocation API
+ * Get current user location using Capacitor Geolocation or browser API
  * Tries with high accuracy first, then falls back to standard accuracy if timeout
  * @returns {Promise<{lat: number, lon: number, accuracy: number}>}
  */
 export async function getCurrentLocation() {
+  // Check if we're running on a native platform
+  if (Capacitor.isNativePlatform()) {
+    return getNativeLocation();
+  }
+  
+  // Web browser - use navigator.geolocation
+  return getBrowserLocation();
+}
+
+/**
+ * Get location using Capacitor Geolocation plugin (for native apps)
+ */
+async function getNativeLocation() {
+  try {
+    // Dynamically import Capacitor Geolocation to avoid issues if not installed
+    const { Geolocation } = await import("@capacitor/geolocation");
+    
+    // Check and request permissions first
+    let permissionStatus = await Geolocation.checkPermissions();
+    console.log("[Geolocation] Permission status:", permissionStatus);
+    
+    if (permissionStatus.location !== "granted") {
+      // Request permission
+      permissionStatus = await Geolocation.requestPermissions();
+      console.log("[Geolocation] Permission after request:", permissionStatus);
+      
+      if (permissionStatus.location !== "granted") {
+        throw new Error("הרשאת מיקום לא אושרה. אנא אשר גישה למיקום בהגדרות.");
+      }
+    }
+    
+    // Get current position with high accuracy
+    const position = await Geolocation.getCurrentPosition({
+      enableHighAccuracy: true,
+      timeout: 20000,
+      maximumAge: 0,
+    });
+    
+    console.log("[Geolocation] Got position:", position);
+    
+    return {
+      lat: position.coords.latitude,
+      lon: position.coords.longitude,
+      accuracy: position.coords.accuracy,
+    };
+  } catch (error) {
+    console.error("[Geolocation] Native location error:", error);
+    
+    // If Capacitor Geolocation fails, try fallback to browser API
+    console.log("[Geolocation] Trying browser API fallback...");
+    try {
+      return await getBrowserLocation();
+    } catch (fallbackError) {
+      // If both fail, throw a user-friendly error
+      throw new Error("לא הצלחנו לקבל את המיקום. אנא ודא שהרשאת המיקום מופעלת.");
+    }
+  }
+}
+
+/**
+ * Get location using browser navigator.geolocation API
+ */
+function getBrowserLocation() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       return reject(new Error("Geolocation not supported"));
@@ -202,6 +267,91 @@ function calculateBestPosition(positions, bestPosition) {
  * @returns {Promise<{lat: number, lon: number, accuracy: number}>}
  */
 export async function getImprovedLocation(duration = 5000) {
+  // For native platforms, use Capacitor Geolocation
+  if (Capacitor.isNativePlatform()) {
+    return getImprovedNativeLocation(duration);
+  }
+  
+  // For web, use browser API
+  return getImprovedBrowserLocation(duration);
+}
+
+/**
+ * Get improved location on native platform using Capacitor Geolocation
+ */
+async function getImprovedNativeLocation(duration = 5000) {
+  try {
+    const { Geolocation } = await import("@capacitor/geolocation");
+    
+    // Check permissions first
+    let permissionStatus = await Geolocation.checkPermissions();
+    if (permissionStatus.location !== "granted") {
+      permissionStatus = await Geolocation.requestPermissions();
+      if (permissionStatus.location !== "granted") {
+        throw new Error("הרשאת מיקום לא אושרה");
+      }
+    }
+    
+    const positions = [];
+    let bestPosition = null;
+    const startTime = Date.now();
+    const stabilizationTime = duration * 0.3;
+    
+    // Watch position for the specified duration
+    const watchId = await Geolocation.watchPosition(
+      { enableHighAccuracy: true, timeout: duration + 5000, maximumAge: 0 },
+      (position, err) => {
+        if (err) {
+          console.error("[Geolocation] Watch error:", err);
+          return;
+        }
+        
+        const elapsed = Date.now() - startTime;
+        const pos = {
+          lat: position.coords.latitude,
+          lon: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          timestamp: Date.now(),
+          elapsed: elapsed,
+        };
+        
+        positions.push(pos);
+        
+        if (!bestPosition || pos.accuracy < bestPosition.accuracy) {
+          bestPosition = pos;
+        }
+      }
+    );
+    
+    // Wait for duration
+    await new Promise(resolve => setTimeout(resolve, duration));
+    
+    // Clear watch
+    await Geolocation.clearWatch({ id: watchId });
+    
+    // Calculate best position
+    const accuratePositions = positions.filter(p => 
+      p.accuracy < 50 && p.elapsed >= stabilizationTime
+    );
+    
+    const result = calculateBestPosition(
+      accuratePositions.length > 0 ? accuratePositions : positions,
+      bestPosition
+    );
+    
+    return result || bestPosition || await getCurrentLocation();
+    
+  } catch (error) {
+    console.error("[Geolocation] Native improved location error:", error);
+    // Fallback to simple getCurrentLocation
+    return getCurrentLocation();
+  }
+}
+
+/**
+ * Get improved location on web using browser API
+ */
+function getImprovedBrowserLocation(duration = 5000) {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       return reject(new Error("Geolocation not supported"));

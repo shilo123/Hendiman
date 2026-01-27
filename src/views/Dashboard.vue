@@ -76,7 +76,6 @@
     >
       <div class="client-header-new__left">
         <div class="relative group cursor-pointer" @click="onOpenProfile">
-          <div class="client-header-new__avatar-glow"></div>
           <img
             v-if="me?.avatarUrl"
             :src="me.avatarUrl"
@@ -84,6 +83,7 @@
             class="client-header-new__avatar"
           />
           <span v-else class="client-header-new__avatar-placeholder">👤</span>
+          <div class="client-header-new__status-dot"></div>
         </div>
         <div class="client-header-new__info">
           <span class="client-header-new__badge">
@@ -95,26 +95,19 @@
         </div>
       </div>
       <div class="client-header-new__actions">
-      <button
-          class="client-header-new__action-btn"
-        type="button"
-          aria-label="חיפוש"
-      >
-          <i class="ph ph-magnifying-glass"></i>
-      </button>
         <button
           class="client-header-new__action-btn client-header-new__action-btn--notifications"
           type="button"
           aria-label="התראות"
         >
-          <i class="ph ph-bell"></i>
+          <span class="material-icons-round text-xl">notifications</span>
           <span class="client-header-new__notification-dot"></span>
         </button>
       </div>
     </header>
 
     <!-- MAIN -->
-    <main class="grid">
+    <main class="grid main-content">
       <!-- Job Chat (when job is assigned) -->
       <component
         :is="isMobile ? 'JobChatMobile' : 'JobChat'"
@@ -408,64 +401,73 @@
               </span>
             </div>
 
-            <div
-              v-for="job in urgentJobs"
-              :key="job.id || job._id"
-              class="handyman-dashboard-new__urgent-card"
-            >
-              <div class="handyman-dashboard-new__urgent-card-content">
-                <div class="handyman-dashboard-new__urgent-card-header">
-                  <div class="handyman-dashboard-new__urgent-client-info">
-                    <div class="handyman-dashboard-new__urgent-avatar">
-                      <img
-                        :src="getClientAvatar(job)"
-                        :alt="job.clientName"
-                        class="handyman-dashboard-new__urgent-avatar-img"
-                      />
+            <div class="handyman-dashboard-new__urgent-carousel">
+              <div
+                v-for="job in urgentJobs"
+                :key="job.id || job._id"
+                class="handyman-dashboard-new__urgent-card"
+              >
+                <!-- Card Content -->
+                <div class="handyman-dashboard-new__urgent-card-content">
+                  <div class="handyman-dashboard-new__urgent-card-header">
+                    <div class="handyman-dashboard-new__urgent-client-info">
+                      <div class="handyman-dashboard-new__urgent-avatar">
+                        <img
+                          :src="getClientAvatar(job)"
+                          :alt="job.clientName"
+                          class="handyman-dashboard-new__urgent-avatar-img"
+                        />
+                      </div>
+                      <div>
+                        <h3 class="handyman-dashboard-new__urgent-title">
+                          {{ getJobTitleForHandyman(job) }}
+                        </h3>
+                        <p class="handyman-dashboard-new__urgent-subtitle">
+                          אצל {{ job.clientName }} • {{ formatJobTimeAgo(job) }}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 class="handyman-dashboard-new__urgent-title">
-                        {{ getJobTitleForHandyman(job) }}
-                      </h3>
-                      <p class="handyman-dashboard-new__urgent-subtitle">
-                        אצל {{ job.clientName }} • {{ formatJobTimeAgo(job) }}
-                      </p>
+                    <div class="handyman-dashboard-new__urgent-badge">
+                      SOS
                     </div>
                   </div>
-                  <div class="handyman-dashboard-new__urgent-badge">
-                    SOS
-                  </div>
-                </div>
 
-                <div class="handyman-dashboard-new__urgent-meta">
-                  <div class="handyman-dashboard-new__urgent-meta-item">
-                    <i class="ph-fill ph-map-pin"></i>
-                    <span>{{ getJobLocation(job) }}</span>
+                  <div class="handyman-dashboard-new__urgent-meta">
+                    <div class="handyman-dashboard-new__urgent-meta-item">
+                      <i class="ph-fill ph-map-pin"></i>
+                      <span>{{ getJobLocation(job) }}</span>
+                    </div>
+                    <div class="handyman-dashboard-new__urgent-meta-separator"></div>
+                    <div class="handyman-dashboard-new__urgent-meta-item">
+                      <i class="ph-fill ph-navigation-arrow"></i>
+                      <span>{{ formatJobDistance(job) }}</span>
+                    </div>
                   </div>
-                  <div class="handyman-dashboard-new__urgent-meta-separator"></div>
-                  <div class="handyman-dashboard-new__urgent-meta-item">
-                    <i class="ph-fill ph-navigation-arrow"></i>
-                    <span>{{ formatJobDistance(job) }}</span>
-                  </div>
-                </div>
 
-                <div class="handyman-dashboard-new__urgent-actions">
-                  <button
-                    type="button"
-                    class="handyman-dashboard-new__urgent-btn handyman-dashboard-new__urgent-btn--reject"
-                    @click="onRejectJob(job)"
-                  >
-                    דחה
-                  </button>
-                  <button
-                    type="button"
-                    class="handyman-dashboard-new__urgent-btn handyman-dashboard-new__urgent-btn--accept"
-                    @click="onAcceptJob(job)"
-                  >
-                    <i class="ph-fill ph-phone-call"></i>
-                    קבל קריאה
-                  </button>
+                  <div class="handyman-dashboard-new__urgent-actions">
+                    <button
+                      type="button"
+                      class="handyman-dashboard-new__urgent-btn handyman-dashboard-new__urgent-btn--reject"
+                      @click="onRejectJob(job)"
+                    >
+                      דחה
+                    </button>
+                    <button
+                      type="button"
+                      class="handyman-dashboard-new__urgent-btn handyman-dashboard-new__urgent-btn--accept"
+                      @click="onAcceptJob(job)"
+                    >
+                      <i class="ph-fill ph-phone-call"></i>
+                      קבל קריאה
+                    </button>
+                  </div>
                 </div>
+              </div>
+              
+              <!-- Carousel Hint for scrolling -->
+              <div v-if="urgentJobs.length > 1" class="handyman-dashboard-new__carousel-hint">
+                <span>גלילה לעוד</span>
+                <i class="ph-bold ph-caret-left"></i>
               </div>
             </div>
           </section>
@@ -1113,6 +1115,24 @@
       </template>
     </main>
 
+    <!-- NEW: Job Acceptance Sheets -->
+    <JobAcceptanceSheet
+      v-if="showJobAcceptanceSheet"
+      :job="jobToAccept"
+      :loading="acceptingJobId === (jobToAccept?._id || jobToAccept?.id)"
+      @close="showJobAcceptanceSheet = false"
+      @confirm="onConfirmAcceptJob"
+    />
+
+    <ClientApprovalSheet
+      v-if="showClientApprovalSheet"
+      :handyman="handymanForApproval"
+      :job="jobPendingApproval"
+      :loading="isApprovingHandyman"
+      @approve="onApproveHandyman"
+      @reject="onRejectHandyman"
+    />
+
     <!-- Block Handyman Confirmation Modal -->
     <div
       v-if="showBlockHandymanModal"
@@ -1578,7 +1598,7 @@
           class="client-bottom-nav-new__item"
           @click="handleNavItemClick({ action: 'openProfile' })"
         >
-          <i class="ph ph-user"></i>
+          <span class="material-icons-round text-2xl">person</span>
           <span class="client-bottom-nav-new__label">חשבון</span>
       </button>
         <button
@@ -1587,27 +1607,29 @@
           @click="handleNavItemClick({ action: 'openHandymenChat' })"
         >
           <div class="client-bottom-nav-new__icon-wrapper">
-            <i class="ph ph-chat-circle-dots"></i>
+            <span class="material-icons-round text-2xl">chat_bubble_outline</span>
             <span class="client-bottom-nav-new__badge"></span>
           </div>
           <span class="client-bottom-nav-new__label">צ'אט</span>
       </button>
-        <button
-          type="button"
-          class="client-bottom-nav-new__item client-bottom-nav-new__item--home"
-          @click="$router.push('/')"
-        >
-          <div class="client-bottom-nav-new__home-icon">
-            <i class="ph-fill ph-house"></i>
-          </div>
-          <span class="client-bottom-nav-new__label client-bottom-nav-new__label--home">דף הבית</span>
-      </button>
+        <div class="client-bottom-nav-new__home-wrapper">
+          <button
+            type="button"
+            class="client-bottom-nav-new__item client-bottom-nav-new__item--home"
+            @click="$router.push('/')"
+          >
+            <div class="client-bottom-nav-new__home-icon">
+              <span class="material-icons-round text-3xl">home</span>
+            </div>
+            <span class="client-bottom-nav-new__label client-bottom-nav-new__label--home">דף הבית</span>
+          </button>
+        </div>
         <button
           type="button"
           class="client-bottom-nav-new__item"
           @click="handleNavItemClick({ action: 'viewHistory' })"
         >
-          <i class="ph ph-clock-counter-clockwise"></i>
+          <span class="material-icons-round text-2xl">history</span>
           <span class="client-bottom-nav-new__label">היסטוריה</span>
         </button>
         <button
@@ -1615,10 +1637,11 @@
           class="client-bottom-nav-new__item"
           @click="handleNavItemClick({ action: 'share' })"
         >
-          <i class="ph ph-share-network"></i>
+          <span class="material-icons-round text-2xl">share</span>
           <span class="client-bottom-nav-new__label">שתף</span>
         </button>
       </div>
+      <div class="client-bottom-nav-new__spacer"></div>
     </nav>
 
     <!-- Handyman Bottom Navigation (new design) -->
@@ -1692,6 +1715,8 @@ import HandymenList from "@/components/Dashboard/HandymenList.vue";
 import ClientActions from "@/components/Dashboard/ClientActions.vue";
 import HandymanTools from "@/components/Dashboard/HandymanTools.vue";
 import HandymanDetailsSheet from "@/components/Dashboard/HandymanDetailsSheet.vue";
+import JobAcceptanceSheet from "@/components/Dashboard/JobAcceptanceSheet.vue";
+import ClientApprovalSheet from "@/components/Dashboard/ClientApprovalSheet.vue";
 import ViewJob from "@/components/Dashboard/ViewJob.vue";
 import HandymanQuotationModal from "@/components/Dashboard/HandymanQuotationModal.vue";
 import ProfileSheet from "@/components/Dashboard/ProfileSheet.vue";
@@ -1724,6 +1749,8 @@ export default {
     ClientActions,
     HandymanTools,
     HandymanDetailsSheet,
+    JobAcceptanceSheet,
+    ClientApprovalSheet,
     ViewJob,
     HandymanQuotationModal,
     ProfileSheet,
@@ -1881,6 +1908,13 @@ export default {
       handymanToBlockName: null,
       isBlockingHandyman: false,
       isUnblockingHandyman: false,
+      // New acceptance flow state
+      showJobAcceptanceSheet: false,
+      jobToAccept: null,
+      showClientApprovalSheet: false,
+      handymanForApproval: null,
+      jobPendingApproval: null,
+      isApprovingHandyman: false,
     };
   },
 
@@ -2908,15 +2942,14 @@ export default {
         const { URL } = await import("@/Url/url");
         logger.log(`[checkPendingQuotations] API URL: ${URL}/api/clients/${userId}/pending-quotations`);
 
-        // DISABLED: Job expiration has been disabled - jobs never expire
-        // No need to check for expired jobs anymore
-        // try {
-        //   await axios.post(`${URL}/api/jobs/check-expired-quoted`);
-        //   logger.log("[checkPendingQuotations] Expired jobs checked");
-        // } catch (expiredCheckError) {
-        //   // Silent fail - not critical
-        //   logger.error("Error checking expired quoted jobs:", expiredCheckError);
-        // }
+        // First, check for expired quoted jobs and expire them
+        try {
+          await axios.post(`${URL}/api/jobs/check-expired-quoted`);
+          logger.log("[checkPendingQuotations] Expired jobs checked");
+        } catch (expiredCheckError) {
+          // Silent fail - not critical
+          logger.error("Error checking expired quoted jobs:", expiredCheckError);
+        }
 
         // Then, check for pending quotations using new endpoint
         logger.log("[checkPendingQuotations] Fetching pending quotations...");
@@ -4052,6 +4085,11 @@ export default {
           return;
         }
 
+        // If we are showing the approval sheet, close it
+        if (this.showClientApprovalSheet && String(this.jobPendingApproval?._id || this.jobPendingApproval?.id) === jobId) {
+          this.showClientApprovalSheet = false;
+        }
+
         // Refresh to get updated job data
         await this.onRefresh();
         // Wait for next tick to ensure store.jobs is updated
@@ -4149,6 +4187,15 @@ export default {
 
         // Also use checkForAssignedJob as fallback to catch any other assigned jobs
         await this.checkForAssignedJob();
+      });
+
+      // Listen for handyman interest (for client)
+      this.socket.on("handyman-request-approval", (data) => {
+        if (!this.isHendiman) {
+          this.jobPendingApproval = data.job;
+          this.handymanForApproval = data.handyman;
+          this.showClientApprovalSheet = true;
+        }
       });
 
       // Listen for job done event (for clients) - show approval modal and navigate to JobSummary
@@ -4686,8 +4733,6 @@ export default {
               try {
                 // Show in-app notification
                 this.toast?.showInfo("🔔 " + (notification.title || notification.body || "התראה חדשה"));
-                // Note: When user taps the notification itself (not a button), 
-                // it will trigger pushNotificationActionPerformed with actionId = "tap" or empty
               } catch (error) {
                 logger.error("[Push] Error in pushNotificationReceived listener:", error);
               }
@@ -4699,29 +4744,21 @@ export default {
                 const actionId = action.actionId;
                 const notificationData = action.notification?.data || {};
                 const jobId = notificationData.jobId;
-                const userId = this.store.user?._id || this.me?._id;
 
                 logger.log("[Push] Action performed:", actionId, "JobId:", jobId);
 
                 // Handle different actions
                 if (actionId === "accept") {
-                  // Handle accept action - accept the job directly, then navigate to Dashboard
+                  // Handle accept action - accept the job directly
                   if (jobId) {
                     try {
                       const response = await axios.patch(`${URL}/jobs/${jobId}/assign`, {
-                        handymanId: userId,
+                        handymanId: this.store.user?._id || this.me?._id,
                       });
                       if (response.data.success) {
                         this.toast?.showSuccess("✅ העבודה התקבלה בהצלחה!");
                         // Refresh jobs
                         await this.loadJobs();
-                        // Navigate to Dashboard
-                        if (userId) {
-                          this.$router.push({
-                            name: "Dashboard",
-                            params: { id: userId }
-                          });
-                        }
                       } else {
                         this.toast?.showError(response.data.message || "שגיאה בקבלת העבודה");
                       }
@@ -4730,62 +4767,50 @@ export default {
                       this.toast?.showError("שגיאה בקבלת העבודה");
                     }
                   }
-                } else if (actionId === "skip") {
-                  // Handle skip action - if it's a personal request, notify the client
+                } else if (actionId === "view" || actionId === "tap" || notificationData.type === "approval_request") {
+                  // Handle view action - navigate to JobView page or show approval sheet
                   if (jobId) {
-                    try {
-                      // First, get job details to check if it's a personal request
-                      const jobResponse = await axios.get(`${URL}/jobs/${jobId}`);
-                      if (jobResponse.data.success && jobResponse.data.job) {
-                        const job = jobResponse.data.job;
-                        const isPersonalRequest = job.handymanIdSpecial && 
-                          String(job.handymanIdSpecial) === String(userId);
-                        
-                        if (isPersonalRequest && job.clientId) {
-                          // This is a personal request that was skipped - notify the client
-                          try {
-                            await axios.post(`${URL}/api/jobs/${jobId}/notify-client-skipped`, {
-                              handymanId: userId
-                            });
-                            logger.log("[Push] Client notified about skipped personal request");
-                          } catch (notifyError) {
-                            logger.error("[Push] Error notifying client:", notifyError);
-                            // Don't show error to handyman - just log it
+                    if (notificationData.type === "approval_request" && !this.isHendiman) {
+                      // Fetch job details and show approval sheet
+                      try {
+                        const { URL } = await import("@/Url/url");
+                        const axios = (await import("axios")).default;
+                        const response = await axios.get(`${URL}/jobs/${jobId}`);
+                        if (response.data?.success && response.data?.job) {
+                          this.jobPendingApproval = response.data.job;
+                          // Find handyman info (might need another fetch or be in notification data)
+                          if (notificationData.handymanId) {
+                            const hResp = await axios.get(`${URL}/Gethandyman/${notificationData.handymanId}`);
+                            if (hResp.data?.success) {
+                              this.handymanForApproval = {
+                                id: notificationData.handymanId,
+                                username: hResp.data.handyman.username,
+                                avatar: hResp.data.handyman.avatar || hResp.data.handyman.image
+                              };
+                              this.showClientApprovalSheet = true;
+                            }
                           }
                         }
+                      } catch (err) {
+                        logger.error("[Push] Error loading approval job:", err);
                       }
-                      this.toast?.showInfo("⏭️ התראה נדחתה");
-                    } catch (err) {
-                      logger.error("[Push] Error handling skip:", err);
-                      this.toast?.showInfo("⏭️ התראה נדחתה");
-                    }
-                  } else {
-                    this.toast?.showInfo("⏭️ התראה נדחתה");
-                  }
-                } else if (actionId === "view" || actionId === "tap") {
-                  // Handle view action - navigate to JobView page
-                  if (jobId) {
-                    this.$router.push({
-                      name: "JobView",
-                      params: { jobId: jobId }
-                    });
-                  }
-                } else {
-                  // Default click (no specific action) - navigate to JobView page
-                  // This happens when user taps on the notification itself (not on a button)
-                  if (jobId) {
-                    this.$router.push({
-                      name: "JobView",
-                      params: { jobId: jobId }
-                    });
-                  } else {
-                    // No jobId - navigate to Dashboard
-                    if (userId) {
+                    } else {
                       this.$router.push({
-                        name: "Dashboard",
-                        params: { id: userId }
+                        name: "JobView",
+                        params: { jobId: jobId }
                       });
                     }
+                  }
+                } else if (actionId === "skip") {
+                  // Handle skip action - just close notification
+                  this.toast?.showInfo("⏭️ התראה נדחתה");
+                } else {
+                  // Default click (no specific action) - navigate to JobView page
+                  if (jobId) {
+                    this.$router.push({
+                      name: "JobView",
+                      params: { jobId: jobId }
+                    });
                   }
                 }
               } catch (error) {
@@ -5641,7 +5666,64 @@ export default {
       );
     },
     onAcceptJob(job) {
-      this.onAccept(job);
+      this.jobToAccept = job;
+      this.showJobAcceptanceSheet = true;
+    },
+    async onConfirmAcceptJob() {
+      const jobId = this.jobToAccept?._id || this.jobToAccept?.id;
+      const handymanId = this.store.user?._id || this.me?._id;
+      
+      this.acceptingJobId = jobId;
+      try {
+        const { URL } = await import("@/Url/url");
+        const axios = (await import("axios")).default;
+        const { data } = await axios.post(`${URL}/jobs/handyman-wants-to-accept`, {
+          jobId,
+          handymanId
+        });
+        
+        if (data.success) {
+          this.toast?.showSuccess("הבקשה נשלחה ללקוח, ממתין לאישור...");
+          this.showJobAcceptanceSheet = false;
+        } else {
+          this.toast?.showError(data.message || "שגיאה בשליחת הבקשה");
+        }
+      } catch (error) {
+        if (error.response?.data?.needsOnboarding) {
+           this.toast?.showError(error.response.data.message || "עליך להשלים את הגדרת חשבון התשלומים");
+        } else {
+           this.toast?.showError("שגיאה בתקשורת עם השרת");
+        }
+      } finally {
+        this.acceptingJobId = null;
+      }
+    },
+    async onApproveHandyman() {
+      this.isApprovingHandyman = true;
+      try {
+        const { URL } = await import("@/Url/url");
+        const axios = (await import("axios")).default;
+        const { data } = await axios.post(`${URL}/jobs/client-approval-response`, {
+          jobId: this.jobPendingApproval._id || this.jobPendingApproval.id,
+          handymanId: this.handymanForApproval.id,
+          approved: true
+        });
+        
+        if (data.success) {
+          this.toast?.showSuccess("העבודה שובצה בהצלחה!");
+          this.showClientApprovalSheet = false;
+        } else {
+          this.toast?.showError(data.message || "שגיאה באישור ההנדימן");
+        }
+      } catch (error) {
+        this.toast?.showError("שגיאה בתקשורת עם השרת");
+      } finally {
+        this.isApprovingHandyman = false;
+      }
+    },
+    async onRejectHandyman() {
+       this.showClientApprovalSheet = false;
+       this.toast?.showInfo("הבקשה נדחתה");
     },
     onRejectJob(job) {
       // TODO: Implement reject job functionality
@@ -5857,8 +5939,12 @@ export default {
       return this.getJobIcon(job);
     },
     isJobExpired(job) {
-      // DISABLED: Job expiration has been disabled - jobs never expire
-      // Always return false - jobs never expire
+      // Check if job has quotedUntil and if it's expired
+      if (job.quotedUntil) {
+        const quotedUntil = new Date(job.quotedUntil);
+        const now = new Date();
+        return now > quotedUntil;
+      }
       return false;
     },
     async loadMoreRegularJobs() {
@@ -6962,6 +7048,13 @@ $r2: 26px;
     ); // Space for bottom nav
     align-items: center; /* Center items on mobile */
     
+  }
+}
+
+.main-content {
+  @media (max-width: 768px) {
+    padding: 24px 20px 0;
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
   }
 }
 
@@ -8402,8 +8495,8 @@ $r2: 26px;
     position: relative;
     z-index: 100;
     padding: 0;
-    margin: 10px auto;
-    width: 80%;
+    margin: 0 0 32px 0;
+    width: 100%;
     backdrop-filter: none;
   }
 }
@@ -11155,8 +11248,49 @@ $r2: 26px;
   border-radius: 9999px;
 }
 
+/* Urgent Carousel */
+.handyman-dashboard-new__urgent-carousel {
+  display: flex;
+  overflow-x: auto;
+  gap: 16px;
+  padding: 4px 4px 16px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.handyman-dashboard-new__urgent-carousel::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+.handyman-dashboard-new__carousel-hint {
+  flex: 0 0 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+  font-weight: 700;
+  padding-right: 16px;
+}
+
+.handyman-dashboard-new__carousel-hint i {
+  font-size: 20px;
+  animation: slideLeft 1.5s infinite;
+}
+
+@keyframes slideLeft {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-8px); }
+}
+
 /* Urgent Card */
 .handyman-dashboard-new__urgent-card {
+  flex: 0 0 88%; /* Show most of the card and a hint of the next one */
+  scroll-snap-align: center;
   position: relative;
   border-radius: 24px;
   background: linear-gradient(145deg, rgba(40, 5, 5, 0.95) 0%, rgba(10, 0, 0, 0.95) 100%);
@@ -11176,6 +11310,7 @@ $r2: 26px;
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   pointer-events: none;
 }
 
@@ -11340,6 +11475,7 @@ $r2: 26px;
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   pointer-events: none;
 }
 
@@ -11689,16 +11825,18 @@ $r2: 26px;
 
 /* Client Header New */
 .client-header-new {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(5, 5, 5, 0.9);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
   padding: 16px 20px;
-  position: relative;
-  z-index: 10;
-  background: #000 !important;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 0;
+  border-radius: 0;
 }
 
 .client-header-new__left {
@@ -11711,37 +11849,14 @@ $r2: 26px;
   position: relative;
 }
 
-.client-header-new__avatar-glow {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 95, 0, 0.4) 0%, transparent 70%);
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-@keyframes pulse-glow {
-  0%, 100% {
-    opacity: 0.6;
-    transform: translate(-50%, -50%) scale(1);
-  }
-  50% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1.1);
-  }
-}
-
 .client-header-new__avatar {
   width: 48px;
   height: 48px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid rgba(255, 95, 0, 0.3);
+  border: 2px solid #ff6a00;
+  box-shadow: 0 0 0 2px rgba(5, 5, 5, 1);
   position: relative;
-  z-index: 1;
 }
 
 .client-header-new__avatar-placeholder {
@@ -11753,44 +11868,53 @@ $r2: 26px;
   align-items: center;
   justify-content: center;
   font-size: 24px;
-  border: 2px solid rgba(255, 95, 0, 0.3);
+  border: 2px solid #ff6a00;
+  box-shadow: 0 0 0 2px rgba(5, 5, 5, 1);
   position: relative;
+}
+
+.client-header-new__status-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  background: #22c55e;
+  border: 2px solid rgba(5, 5, 5, 1);
+  border-radius: 50%;
   z-index: 1;
 }
 
 .client-header-new__info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .client-header-new__badge {
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #FF5F00;
-  background: rgba(255, 95, 0, 0.1);
+  font-size: 12px;
+  font-weight: 500;
+  color: #ff6a00;
+  background: rgba(255, 106, 0, 0.1);
   padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 95, 0, 0.3);
+  border-radius: 9999px;
   display: inline-block;
   width: fit-content;
+  margin-bottom: 2px;
 }
 
 .client-header-new__name {
   font-size: 18px;
-  font-weight: 900;
+  font-weight: 700;
   color: #fff;
   margin: 0;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 .client-header-new__actions {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 4px;
+  gap: 0;
 }
 
 .client-header-new__action-btn {
@@ -11798,20 +11922,19 @@ $r2: 26px;
   height: 40px;
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: #09090B;
+  background: rgba(35, 35, 37, 1);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.4);
-  transition: all 0.3s;
+  color: rgba(255, 255, 255, 0.7);
+  transition: all 0.2s;
   cursor: pointer;
-  font-size: 20px;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .client-header-new__action-btn:hover {
-  border-color: rgba(255, 95, 0, 0.5);
-  color: #FF5F00;
-  transform: scale(1.1);
+  background: rgba(55, 55, 57, 1);
 }
 
 .client-header-new__action-btn--notifications {
@@ -11820,13 +11943,13 @@ $r2: 26px;
 
 .client-header-new__notification-dot {
   position: absolute;
-  top: 10px;
+  top: 8px;
   right: 10px;
-  width: 6px;
-  height: 6px;
-  background: #FF5F00;
+  width: 8px;
+  height: 8px;
+  background: #ef4444;
   border-radius: 50%;
-  box-shadow: 0 0 8px rgba(255, 95, 0, 0.8);
+  border: 1px solid rgba(35, 35, 37, 1);
 }
 
 /* Client Dashboard New */
@@ -12357,43 +12480,52 @@ $r2: 26px;
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(0, 0, 0, 0.9);
-  backdrop-filter: blur(24px);
+  background: rgba(21, 21, 23, 1);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-bottom: 24px;
-  padding-top: 16px;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding-top: 8px;
   z-index: 50;
 }
 
 .client-bottom-nav-new__container {
   display: flex;
-  justify-content: space-around;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  height: 64px;
+  padding: 0 24px;
   max-width: 100%;
-  margin: 0 auto;
-  padding: 0 8px;
 }
 
 .client-bottom-nav-new__item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  color: rgba(255, 255, 255, 0.5);
-  transition: color 0.3s;
+  justify-content: center;
+  gap: 4px;
+  color: rgba(255, 255, 255, 0.4);
+  transition: color 0.2s;
   background: none;
   border: none;
   cursor: pointer;
   padding: 0;
-  font-size: 24px;
+  width: 48px;
 }
 
 .client-bottom-nav-new__item:hover {
-  color: #fff;
+  color: #ff6a00;
+}
+
+.client-bottom-nav-new__home-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: -24px;
 }
 
 .client-bottom-nav-new__item--home {
-  margin-top: -32px;
+  margin-top: 0;
 }
 
 .client-bottom-nav-new__icon-wrapper {
@@ -12402,46 +12534,47 @@ $r2: 26px;
 
 .client-bottom-nav-new__badge {
   position: absolute;
-  top: -4px;
-  right: -4px;
+  top: 0;
+  right: 2px;
   width: 8px;
   height: 8px;
-  background: #FF5F00;
+  background: #ff6a00;
   border-radius: 50%;
-  animation: pulse 2s infinite;
 }
 
 .client-bottom-nav-new__home-icon {
-  width: 56px;
-  height: 56px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
-  background: #FF5F00;
+  background: #ff6a00;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #000;
-  box-shadow: 0 0 20px rgba(255, 95, 0, 0.6);
-  border: 4px solid #000;
-  transition: all 0.3s;
-  font-size: 24px;
+  color: #fff;
+  box-shadow: 0 0 15px -3px rgba(255, 106, 0, 0.3);
+  transition: all 0.2s;
+  border: 4px solid rgba(5, 5, 5, 1);
 }
 
 .client-bottom-nav-new__item--home:hover .client-bottom-nav-new__home-icon {
-  transform: scale(1.1);
-  box-shadow: 0 0 30px rgba(255, 95, 0, 0.8);
+  transform: scale(1.05);
 }
 
 .client-bottom-nav-new__label {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 500;
 }
 
 .client-bottom-nav-new__label--home {
-  color: #FF5F00;
-  margin-top: 8px;
-  text-shadow: 0 0 8px rgba(255, 95, 0, 0.5);
+  position: absolute;
+  bottom: -20px;
+  color: #ff6a00;
+  font-weight: 500;
+}
+
+.client-bottom-nav-new__spacer {
+  height: 16px;
+  width: 100%;
 }
 
 /* Responsive adjustments for client */

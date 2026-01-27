@@ -196,10 +196,19 @@
     <!-- Main Content -->
     <main class="jobs__main">
       <!-- כותרת פעילות אחרונה -->
-      <h2 v-if="filteredJobs.length > 0" class="recent-activity-title">
-        <span class="recent-activity-title-accent"></span>
-        פעילות אחרונה
-      </h2>
+      <div v-if="filteredJobs.length > 0" class="recent-activity-header">
+        <h2 class="recent-activity-title">
+          פעילות אחרונה
+        </h2>
+        <button
+          v-if="!isHendiman"
+          class="recent-activity-history-btn"
+          type="button"
+          aria-label="היסטוריה"
+        >
+          <span class="material-icons-round text-lg">history</span>
+        </button>
+      </div>
 
       <!-- רשימת כל העבודות -->
       <div v-if="filteredJobs.length > 0" class="recent-activity-list">
@@ -210,24 +219,23 @@
           :class="{ 'recent-activity-item--urgent': isUrgentJob(job) }"
           @click="$emit('view', job)"
         >
+          <div class="recent-activity-icon">
+            <span class="material-icons-round">{{ getJobIconMaterial(job) }}</span>
+          </div>
+          <div class="recent-activity-content">
+            <h4 class="recent-activity-job-title">
+              {{ getJobDisplayName(job) }}
+            </h4>
+            <p class="recent-activity-job-time">
+              {{ getTimeAgo(job) || "לפני זמן מה" }}
+            </p>
+          </div>
           <div class="recent-activity-status" :class="getStatusClass(job)">
+            <span v-if="getJobStatusText(job) === 'פתוח'" class="recent-activity-status-dot"></span>
+            <span v-else-if="getJobStatusText(job) === 'הושלם'" class="material-icons-round text-xs text-green-500">check_circle</span>
             <span class="recent-activity-status-text">{{
               getJobStatusText(job)
             }}</span>
-            <i :class="getJobStatusIcon(job)"></i>
-          </div>
-          <div class="recent-activity-content-wrapper">
-            <div class="recent-activity-content">
-              <h4 class="recent-activity-job-title">
-                {{ getJobDisplayName(job) }}
-              </h4>
-              <p class="recent-activity-job-time">
-                {{ getTimeAgo(job) || "לפני זמן מה" }}
-              </p>
-            </div>
-            <div class="recent-activity-icon">
-              <i :class="getJobIconPhosphor(job)"></i>
-            </div>
           </div>
         </div>
       </div>
@@ -681,6 +689,21 @@ export default {
         if (category.includes("צבע")) return "ph-fill ph-paint-brush";
       }
       return "ph-fill ph-wrench";
+    },
+    getJobIconMaterial(job) {
+      // Return Material Icons icon based on job category
+      if (job.subcategoryInfo && Array.isArray(job.subcategoryInfo) && job.subcategoryInfo.length > 0) {
+        const category =
+          job.subcategoryInfo[0].category ||
+          job.subcategoryInfo[0].subcategory ||
+          "";
+        if (category.includes("נזילה") || category.includes("אינסטלציה"))
+          return "water_drop";
+        if (category.includes("חשמל") || category.includes("תאורה"))
+          return "emoji_objects";
+        if (category.includes("צבע")) return "format_paint";
+      }
+      return "build";
     },
     getTimeAgo(job) {
       if (!job || !job.createdAt) return null;
@@ -2802,28 +2825,46 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 }
 
 /* Recent Activity Design - New Style */
-.recent-activity-title {
-  font-size: 20px;
-  font-weight: 900;
-  color: #fff;
+.recent-activity-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 0 0 24px 0;
+  justify-content: space-between;
+  margin-bottom: 16px;
   padding: 0 20px;
   direction: rtl;
-  letter-spacing: -0.02em;
   
   @media (max-width: 640px) {
     padding: 0 16px;
   }
 }
 
-.recent-activity-title-accent {
-  width: 4px;
-  height: 16px;
-  background: linear-gradient(180deg, #FF5F00 0%, #FF8F00 100%);
-  border-radius: 2px;
+.recent-activity-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+  border-right: 4px solid #ff6a00;
+  padding-right: 12px;
+  direction: rtl;
+}
+
+.recent-activity-history-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(35, 35, 37, 1);
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  
+  &:hover {
+    background: rgba(55, 55, 57, 1);
+    color: rgba(255, 255, 255, 0.7);
+  }
 }
 
 .recent-activity-list {
@@ -2844,20 +2885,20 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 .recent-activity-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 16px;
   padding: 16px;
-  background: #09090B;
+  background: rgba(21, 21, 23, 1);
   border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  transition: all 0.3s;
+  border-radius: 1rem;
+  transition: all 0.2s;
   cursor: pointer;
   direction: rtl;
   text-align: right;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .recent-activity-item:hover {
-  border-color: rgba(255, 95, 0, 0.2);
-  background: rgba(255, 255, 255, 0.02);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .recent-activity-item--urgent {
@@ -2873,38 +2914,42 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
 .recent-activity-status {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.4);
   flex-shrink: 0;
 }
 
 .recent-activity-status--success {
-  color: #10b981;
-  background: rgba(16, 185, 129, 0.1);
-  border-color: rgba(16, 185, 129, 0.2);
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .recent-activity-status--primary {
-  color: #FF5F00;
-  background: rgba(255, 95, 0, 0.1);
-  border-color: rgba(255, 95, 0, 0.2);
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .recent-activity-status--default {
   color: rgba(255, 255, 255, 0.6);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.4);
   border-color: rgba(255, 255, 255, 0.1);
 }
 
-.recent-activity-status-text {
-  font-size: 10px;
-  font-weight: 700;
+.recent-activity-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(156, 163, 175, 1);
 }
 
-.recent-activity-status i {
+.recent-activity-status-text {
   font-size: 12px;
+  font-weight: 500;
 }
 
 .recent-activity-status i.ph-spinner {
@@ -2920,51 +2965,49 @@ $shadowO: 0 22px 80px rgba(255, 106, 0, 0.18);
   }
 }
 
-.recent-activity-content-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  direction: rtl;
-  text-align: right;
-}
-
 .recent-activity-content {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   text-align: right;
   direction: rtl;
+  min-width: 0;
 }
 
 .recent-activity-job-title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   color: #fff;
   margin: 0;
-  line-height: 1.3;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .recent-activity-job-time {
-  font-size: 10px;
-  color: rgba(107, 114, 128, 1);
-  margin: 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 2px 0 0 0;
 }
 
 .recent-activity-icon {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  background: #1f2937;
+  background: rgba(59, 130, 246, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(156, 163, 175, 1);
-  font-size: 20px;
+  color: rgba(59, 130, 246, 1);
+  font-size: 24px;
   flex-shrink: 0;
+  transition: transform 0.2s;
 }
 
-.recent-activity-icon i {
-  font-size: 20px;
+.recent-activity-item:hover .recent-activity-icon {
+  transform: scale(1.1);
 }
 </style>
 

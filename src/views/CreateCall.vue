@@ -598,17 +598,49 @@
                     </div>
                   </div>
 
-                  <!-- Autocomplete -->
+                  <!-- Location Buttons (3 options) -->
                   <div
-                    v-if="!isLoadingLocation && isEditingLocation"
+                    v-if="!isLoadingLocation && !detectedLocation && !selectedMapLocation"
+                    class="ccLocBtnsMain"
+                  >
+                    <button
+                      class="ccLocBtnMain ccLocBtnMain--primary"
+                      type="button"
+                      @click="setMyLocation"
+                      :disabled="isLoadingLocation"
+                    >
+                      <span class="material-symbols-outlined ccIcon">near_me</span>
+                      <span>מיקום נוכחי</span>
+                    </button>
+
+                    <button
+                      class="ccLocBtnMain"
+                      type="button"
+                      @click="openMapPicker"
+                    >
+                      <span class="material-symbols-outlined ccIcon">map</span>
+                      <span>מיקום במפה</span>
+                    </button>
+
+                    <button
+                      class="ccLocBtnMain"
+                      type="button"
+                      @click="isEditingLocation = true"
+                    >
+                      <span class="material-symbols-outlined ccIcon">edit_location_alt</span>
+                      <span>בחר ידנית</span>
+                    </button>
+                  </div>
+
+                  <!-- Manual Location Input (only shown when "בחר ידנית" is clicked) -->
+                  <div
+                    v-if="!isLoadingLocation && isEditingLocation && !detectedLocation && !selectedMapLocation"
                     class="ccLocInput"
                   >
                     <AddressAutocomplete
                       v-model="call.location"
                       input-id="call-location"
-                      :placeholder="
-                        usingMyLocation ? 'המיקום שלי' : 'הכנס שם ישוב'
-                      "
+                      :placeholder="'הכנס שם ישוב'"
                       :required="!usingMyLocation && !selectedMapLocation"
                       @update:modelValue="onLocationChange"
                       @update:englishName="onEnglishNameUpdate"
@@ -616,37 +648,31 @@
                       @focus="onLocationInputFocus"
                       @blur="onLocationInputBlur"
                     />
-                  </div>
-
-                  <!-- House number -->
-                  <div
-                    v-if="
-                      call.location &&
-                      call.location !== 'המיקום שלי' &&
-                      !isLoadingLocation &&
-                      !detectedLocation &&
-                      isEditingLocation
-                    "
-                    class="house-number-input"
-                  >
-                    <input
-                      type="text"
-                      v-model="call.houseNumber"
-                      @input="onHouseNumberInput"
-                      @focus="onHouseNumberFocus"
-                      @blur="onHouseNumberBlur"
-                      placeholder="מספר בית\\בלוק"
-                      class="ccInput"
-                      :class="{ 'ccInput--error': errors.houseNumber }"
-                    />
-                    <div v-if="errors.houseNumber" class="ccErr">
-                      {{ errors.houseNumber }}
+                    
+                    <!-- House number -->
+                    <div
+                      v-if="call.location && call.location.length > 0"
+                      class="house-number-input"
+                    >
+                      <input
+                        type="text"
+                        v-model="call.houseNumber"
+                        @input="onHouseNumberInput"
+                        @focus="onHouseNumberFocus"
+                        @blur="onHouseNumberBlur"
+                        placeholder="מספר בית / בלוק"
+                        class="ccInput"
+                        :class="{ 'ccInput--error': errors.houseNumber }"
+                      />
+                      <div v-if="errors.houseNumber" class="ccErr">
+                        {{ errors.houseNumber }}
+                      </div>
                     </div>
                   </div>
 
-                  <!-- Actions -->
+                  <!-- Selected Location Preview (shown when location is set) -->
                   <div
-                    v-if="!isLoadingLocation"
+                    v-if="!isLoadingLocation && (detectedLocation || selectedMapLocation || (call.location && !isEditingLocation))"
                     class="ccLocPreview"
                   >
                     <div class="ccLocMap">
@@ -670,32 +696,15 @@
                       </div>
                     </div>
 
-                    <div class="ccLocBtns">
-                      <button
-                        class="ccLocBtn"
-                        type="button"
-                        @click="setMyLocation"
-                        :disabled="isLoadingLocation"
-                      >
-                        <span
-                          class="material-symbols-outlined ccIcon ccIcon--primary"
-                          >near_me</span
-                        >
-                        <span>מיקום נוכחי</span>
-                      </button>
-
-                      <button
-                        class="ccLocBtn"
-                        type="button"
-                        @click="openMapPicker"
-                      >
-                        <span
-                          class="material-symbols-outlined ccIcon ccIcon--primary"
-                          >map</span
-                        >
-                        <span>בחירה במפה</span>
-                      </button>
-                    </div>
+                    <!-- Change location button -->
+                    <button
+                      class="ccLocChangeBtn"
+                      type="button"
+                      @click="resetLocation"
+                    >
+                      <span class="material-symbols-outlined ccIcon">refresh</span>
+                      <span>שנה מיקום</span>
+                    </button>
                   </div>
                 </div>
 
@@ -2268,8 +2277,9 @@ export default {
         this.isEditingLocation = false;
 
       } catch (error) {
+        console.error("[CreateCall] Location error:", error);
         this.toast?.showError(
-          "לא הצלחנו לקבל את המיקום. אנא נסה שוב או בחר מיקום ידנית."
+          error.message || "לא הצלחנו לקבל את המיקום. אנא נסה שוב או בחר מיקום ידנית."
         );
         this.usingMyLocation = false;
         this.detectedLocation = null;
@@ -2277,6 +2287,18 @@ export default {
       } finally {
         this.isLoadingLocation = false;
       }
+    },
+    
+    // Reset location to allow selecting a new one
+    resetLocation() {
+      this.detectedLocation = null;
+      this.selectedMapLocation = null;
+      this.call.location = "";
+      this.call.houseNumber = "";
+      this.usingMyLocation = false;
+      this.isEditingLocation = false;
+      this.geoCoordinates = null;
+      this.clearError("location");
     },
     async improveLocation() {
       // Show loading state for improving location
@@ -5272,6 +5294,87 @@ $shadowOrange: 0 18px 52px rgba(255, 106, 0, 0.16);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Main Location Buttons (3 options) */
+.ccLocBtnsMain {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.ccLocBtnMain {
+  height: 60px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(26, 26, 26, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  cursor: pointer;
+  color: #fff;
+  font-weight: 800;
+  font-size: 16px;
+  transition: all 0.2s ease;
+
+  .ccIcon {
+    font-size: 24px;
+    color: #ff8c00;
+  }
+
+  &:hover {
+    border-color: rgba(255, 140, 0, 0.5);
+    background: rgba(255, 140, 0, 0.08);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+  
+  &--primary {
+    background: linear-gradient(135deg, #ff8c00 0%, #ff6a00 100%);
+    border: none;
+    color: #000;
+    
+    .ccIcon {
+      color: #000;
+    }
+    
+    &:hover {
+      background: linear-gradient(135deg, #ffa033 0%, #ff8020 100%);
+    }
+  }
+}
+
+/* Change location button */
+.ccLocChangeBtn {
+  margin-top: 12px;
+  height: 48px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 700;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  width: 100%;
+
+  .ccIcon {
+    font-size: 20px;
+    color: #ff8c00;
+  }
+
+  &:hover {
+    border-color: rgba(255, 140, 0, 0.5);
+    color: #fff;
+  }
 }
 
 .ccLocBtns {

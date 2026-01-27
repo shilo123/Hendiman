@@ -205,11 +205,43 @@
           ההנדימן סימן את העבודה כהושלמה. האם העבודה הושלמה בהצלחה ואתה מאשר
           לשחרר את התשלום?
         </p>
+        
+        <!-- Hours Worked Input (for hourly work) -->
+        <div v-if="isPendingJobHourly" class="clientApprovalModal__hoursSection">
+          <label class="clientApprovalModal__hoursLabel">
+            כמה שעות ההנדימן עבד?
+          </label>
+          <div class="clientApprovalModal__hoursInputWrapper">
+            <input
+              type="number"
+              v-model.number="hoursWorkedForApproval"
+              min="0.5"
+              step="0.5"
+              placeholder="0.5"
+              class="clientApprovalModal__hoursInput"
+              @input="onHoursWorkedInput"
+            />
+            <span class="clientApprovalModal__hoursUnit">שעות</span>
+          </div>
+          <div v-if="hoursWorkedForApproval > 0 && hourlyPriceForApproval > 0" class="clientApprovalModal__priceDisplay">
+            <div class="clientApprovalModal__priceRow">
+              <span class="clientApprovalModal__priceLabel">מחיר לשעה:</span>
+              <span class="clientApprovalModal__priceValue">{{ hourlyPriceForApproval.toFixed(2) }} ₪</span>
+            </div>
+            <div class="clientApprovalModal__priceRow clientApprovalModal__priceRow--total">
+              <span class="clientApprovalModal__priceLabel">סה"כ לתשלום:</span>
+              <span class="clientApprovalModal__priceValue clientApprovalModal__priceValue--total">
+                {{ totalPriceForApproval.toFixed(2) }} ₪
+              </span>
+            </div>
+          </div>
+        </div>
+        
         <div class="clientApprovalModal__actions">
           <button
             class="clientApprovalModal__btn clientApprovalModal__btn--approve"
             type="button"
-            :disabled="isApprovingPayment"
+            :disabled="isApprovingPayment || (isPendingJobHourly && (!hoursWorkedForApproval || hoursWorkedForApproval <= 0))"
             @click="handleClientApprove"
           >
             <span v-if="!isApprovingPayment">כן, אשר ושחרר תשלום</span>
@@ -269,6 +301,7 @@ export default {
       showProblemReportModal: false,
       pendingApprovalJob: null,
       isApprovingPayment: false,
+      hoursWorkedForApproval: null, // Hours worked for hourly jobs (client approval)
     };
   },
   computed: {
@@ -305,6 +338,51 @@ export default {
       const price = this.jobInfo?.price || 0;
       // ה-urgentFee משולם על ידי הלקוח, לא מופחת מההנדימן
       return price - this.commission;
+    },
+    
+    // Check if pending approval job is hourly work
+    isPendingJobHourly() {
+      if (!this.pendingApprovalJob) return false;
+      
+      const subcategoryInfo = this.pendingApprovalJob.subcategoryInfo;
+      if (Array.isArray(subcategoryInfo)) {
+        return subcategoryInfo.some(
+          (sub) => sub?.workType === "לשעה" || sub?.workType === "hourly"
+        );
+      }
+      
+      return (
+        subcategoryInfo?.workType === "לשעה" ||
+        subcategoryInfo?.workType === "hourly"
+      );
+    },
+    
+    // Get hourly price for pending approval job
+    hourlyPriceForApproval() {
+      if (!this.pendingApprovalJob || !this.isPendingJobHourly) return 0;
+      
+      const subcategoryInfo = this.pendingApprovalJob.subcategoryInfo;
+      if (Array.isArray(subcategoryInfo)) {
+        const hourlySub = subcategoryInfo.find(
+          (sub) => sub?.workType === "לשעה" || sub?.workType === "hourly"
+        );
+        return parseFloat(hourlySub?.price || 0);
+      }
+      
+      if (
+        subcategoryInfo?.workType === "לשעה" ||
+        subcategoryInfo?.workType === "hourly"
+      ) {
+        return parseFloat(subcategoryInfo?.price || 0);
+      }
+      
+      return 0;
+    },
+    
+    // Calculate total price for approval
+    totalPriceForApproval() {
+      if (!this.hoursWorkedForApproval || !this.hourlyPriceForApproval) return 0;
+      return this.hoursWorkedForApproval * this.hourlyPriceForApproval;
     },
   },
   async mounted() {
@@ -397,12 +475,14 @@ export default {
           // Show approval modal immediately
           if (this.jobInfo) {
             this.pendingApprovalJob = this.jobInfo;
+            this.hoursWorkedForApproval = null; // Reset hours when opening modal
             this.showClientApprovalModal = true;
           } else {
             // If jobInfo not loaded yet, fetch it
             await this.loadJobSummary();
             if (this.jobInfo) {
               this.pendingApprovalJob = this.jobInfo;
+              this.hoursWorkedForApproval = null; // Reset hours when opening modal
               this.showClientApprovalModal = true;
             }
           }
@@ -425,9 +505,21 @@ export default {
         !this.jobInfo.handymanReceivedPayment
       ) {
         this.pendingApprovalJob = this.jobInfo;
+        this.hoursWorkedForApproval = null; // Reset hours when opening modal
         this.showClientApprovalModal = true;
       }
     },
+    onHoursWorkedInput() {
+      // Ensure hours is a valid number
+      if (this.hoursWorkedForApproval < 0.5) {
+        this.hoursWorkedForApproval = 0.5;
+      }
+      // Round to nearest 0.5
+      if (this.hoursWorkedForApproval) {
+        this.hoursWorkedForApproval = Math.round(this.hoursWorkedForApproval * 2) / 2;
+      }
+    },
+    
     async handleClientApprove() {
       if (!this.pendingApprovalJob || this.isApprovingPayment) return;
 
@@ -444,13 +536,33 @@ export default {
         return;
       }
 
+      // Validate hours for hourly work
+      if (this.isPendingJobHourly) {
+        if (!this.hoursWorkedForApproval || this.hoursWorkedForApproval <= 0) {
+          if (this.store?.toast) {
+            this.store.toast.showError("אנא הזן את מספר השעות שעבד ההנדימן");
+          }
+          return;
+        }
+      }
+
       this.isApprovingPayment = true;
 
       try {
-        const response = await axios.post(`${URL}/api/jobs/approve`, {
+        // Prepare approval data
+        const approvalData = {
           jobId,
           clientId,
-        });
+        };
+        
+        // Add hours worked data for hourly jobs
+        if (this.isPendingJobHourly && this.hoursWorkedForApproval) {
+          approvalData.hoursWorked = this.hoursWorkedForApproval;
+          approvalData.hourlyPrice = this.hourlyPriceForApproval;
+          approvalData.totalPrice = this.totalPriceForApproval;
+        }
+        
+        const response = await axios.post(`${URL}/api/jobs/approve`, approvalData);
 
         if (response.data && response.data.success) {
           if (this.store?.toast) {
@@ -459,6 +571,7 @@ export default {
           this.showClientApprovalModal = false;
           this.showProblemReportModal = false;
           this.pendingApprovalJob = null;
+          this.hoursWorkedForApproval = null; // Reset hours
 
           // Reload job summary to get updated payment info
           await this.loadJobSummary();
@@ -1084,6 +1197,110 @@ $muted: rgba(255, 255, 255, 0.62);
   color: rgba(255, 255, 255, 0.8);
   margin: 0 0 24px 0;
   line-height: 1.6;
+}
+
+.clientApprovalModal__hoursSection {
+  margin: 24px 0;
+  padding: 20px;
+  background: rgba(255, 140, 0, 0.08);
+  border: 1px solid rgba(255, 140, 0, 0.2);
+  border-radius: 16px;
+  text-align: right;
+}
+
+.clientApprovalModal__hoursLabel {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 12px;
+  text-align: right;
+}
+
+.clientApprovalModal__hoursInputWrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.clientApprovalModal__hoursInput {
+  flex: 1;
+  height: 56px;
+  padding: 0 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 140, 0, 0.3);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 800;
+  text-align: center;
+  transition: all 0.2s ease;
+
+  &:focus {
+    outline: none;
+    border-color: rgba(255, 140, 0, 0.6);
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 0 4px rgba(255, 140, 0, 0.15);
+  }
+
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  &::-webkit-inner-spin-button,
+  &::-webkit-outer-spin-button {
+    opacity: 1;
+    height: 30px;
+  }
+}
+
+.clientApprovalModal__hoursUnit {
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  min-width: 50px;
+  text-align: right;
+}
+
+.clientApprovalModal__priceDisplay {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.clientApprovalModal__priceRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  &--total {
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 2px solid rgba(255, 140, 0, 0.3);
+  }
+}
+
+.clientApprovalModal__priceLabel {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.clientApprovalModal__priceValue {
+  font-size: 16px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.9);
+
+  &--total {
+    font-size: 20px;
+    color: #ff8c00;
+  }
 }
 
 .clientApprovalModal__actions {

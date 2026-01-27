@@ -4,17 +4,14 @@
     <div class="client-dashboard-new__section">
       <div class="client-dashboard-new__section-header">
         <h2 class="client-dashboard-new__section-title">
-          <span class="client-dashboard-new__title-accent"></span>
           מומלצים עבורך
         </h2>
-        <button
-          type="button"
-          class="client-dashboard-new__filter-btn"
-          aria-label="סינון"
+        <a
+          href="#"
+          class="client-dashboard-new__view-all"
         >
-          סינון
-          <i class="ph ph-sliders-horizontal"></i>
-        </button>
+          הצג הכל
+        </a>
       </div>
 
       <!-- Handymen Carousel -->
@@ -32,85 +29,99 @@
           <div class="client-dashboard-new__card-content">
             <div class="client-dashboard-new__card-top">
               <div class="client-dashboard-new__card-header">
-                <div class="client-dashboard-new__avatar-wrapper">
-                  <div
-                    class="client-dashboard-new__avatar-border"
-                    :class="{
-                      'client-dashboard-new__avatar-border--pro': index === 0,
-                      'client-dashboard-new__avatar-border--hover': index > 0
-                    }"
-                  >
+                <div class="client-dashboard-new__header-main">
+                  <div class="client-dashboard-new__avatar-wrapper">
                     <img
                       :src="getHandymanImage(handyman)"
                       :alt="handyman.username"
                       class="client-dashboard-new__avatar-img"
-                      :class="{
-                        'client-dashboard-new__avatar-img--grayscale': index === 2,
-                        'client-dashboard-new__avatar-img--sepia': index === 3
-                      }"
                       @error="onHandymanImageError"
                     />
                   </div>
-                  <div class="client-dashboard-new__rating-badge">
-                    <span class="client-dashboard-new__rating-value">{{
-                      formatHandymanRating(handyman)
-                    }}</span>
-                    <i class="ph-fill ph-star client-dashboard-new__rating-star"></i>
-                  </div>
-                </div>
-                <div class="client-dashboard-new__card-info">
-                  <h3 class="client-dashboard-new__card-name">
-                    {{ handyman.username }}
-                  </h3>
-                  <div class="client-dashboard-new__card-location">
-                    <i class="ph-fill ph-clock"></i>
-                    <span>{{ formatTravelTime(handyman) }}</span>
-                  </div>
-                  <div class="client-dashboard-new__card-status">
-                    <div class="client-dashboard-new__status-dot"></div>
-                    <span class="client-dashboard-new__status-text">
-                      {{ getStatusText(handyman) }}
-                    </span>
+                  <div class="client-dashboard-new__card-info">
+                    <h3 class="client-dashboard-new__card-name">
+                      {{ handyman.username }}
+                    </h3>
+                    <div class="client-dashboard-new__card-location">
+                      <span class="material-icons-round client-dashboard-new__meta-ic">schedule</span>
+                      <span>{{ formatTravelTime(handyman) }}</span>
+                    </div>
                   </div>
                 </div>
                 <button
                   type="button"
                   class="client-dashboard-new__details-btn"
                   @click="$emit('view-details', handyman.id || handyman._id)"
+                  aria-label="פרטים"
                 >
-                  פרטים
-                  <i class="ph-bold ph-caret-left"></i>
+                  <span>פרטים</span>
+                  <span class="material-icons-round client-dashboard-new__details-ic">chevron_left</span>
                 </button>
               </div>
-              <div
-                v-if="getCategories(handyman).length"
-                class="client-dashboard-new__card-categories"
-              >
+              <div class="client-dashboard-new__card-status-row">
                 <span
-                  v-for="category in getVisibleCategories(handyman, 2)"
+                  v-if="getStatusText(handyman) === 'זמין עכשיו'"
+                  class="client-dashboard-new__status-badge"
+                >
+                  <span class="client-dashboard-new__status-dot"></span>
+                  זמין עכשיו
+                </span>
+                <span
+                  v-for="category in getDisplayCategories(handyman)"
                   :key="category"
                   class="client-dashboard-new__category-tag"
                 >
                   {{ category }}
                 </span>
+                <button
+                  v-if="getRemainingCategoriesCount(handyman) > 0 && !isCategoriesExpanded(handyman)"
+                  type="button"
+                  class="client-dashboard-new__more-tag"
+                  @click.stop="toggleCategories(handyman)"
+                >
+                  +{{ getRemainingCategoriesCount(handyman) }}
+                </button>
+                <button
+                  v-if="isCategoriesExpanded(handyman) && getAllCategories(handyman).length > 2"
+                  type="button"
+                  class="client-dashboard-new__more-tag client-dashboard-new__more-tag--collapse"
+                  @click.stop="toggleCategories(handyman)"
+                >
+                  פחות
+                </button>
               </div>
             </div>
+
+            <div class="client-dashboard-new__card-footer">
+              <div class="client-dashboard-new__rating" aria-label="דירוג">
+                <span class="client-dashboard-new__rating-stars" aria-hidden="true">
+                  <span
+                    v-for="n in 5"
+                    :key="n"
+                    class="material-icons-round client-dashboard-new__star"
+                    :class="{ 'client-dashboard-new__star--on': n <= getRatingStars(handyman) }"
+                  >star</span>
+                </span>
+                <span class="client-dashboard-new__rating-number">{{
+                  formatHandymanRating(handyman)
+                }}</span>
+              </div>
+            </div>
+
             <div class="client-dashboard-new__card-actions">
+              <button
+                type="button"
+                class="client-dashboard-new__action-btn client-dashboard-new__action-btn--block"
+                @click="$emit('block-handyman', handyman.id || handyman._id, handyman.isBlocked)"
+              >
+                חסום
+              </button>
               <button
                 type="button"
                 class="client-dashboard-new__action-btn client-dashboard-new__action-btn--primary"
                 @click="$emit('personal-request', handyman.id || handyman._id)"
               >
                 שלח קריאה
-                <i class="ph-fill ph-paper-plane-left"></i>
-              </button>
-              <button
-                type="button"
-                class="client-dashboard-new__action-btn client-dashboard-new__action-btn--block"
-                @click="$emit('block-handyman', handyman.id || handyman._id, handyman.isBlocked)"
-              >
-                <i class="ph-bold ph-prohibit"></i>
-                חסום
               </button>
             </div>
           </div>
@@ -140,6 +151,7 @@ export default {
   data() {
     return {
       _currentCarouselPage: 0,
+      expandedCategories: {},
     };
   },
   computed: {
@@ -158,6 +170,9 @@ export default {
     },
   },
   methods: {
+    getHandymanKey(handyman) {
+      return (handyman && (handyman.id || handyman._id)) || "";
+    },
     getHandymanImage(handyman) {
       const defaultImage = "/img/Hendima-logo.png";
       if (!handyman || !handyman.imageUrl) return defaultImage;
@@ -233,6 +248,12 @@ export default {
       const rating = Number(handyman?.rating);
       if (!Number.isFinite(rating) || rating <= 0) return "0.0";
       return rating % 1 === 0 ? rating.toFixed(0) : rating.toFixed(1);
+    },
+    getRatingStars(handyman) {
+      const rating = Number(handyman?.rating);
+      if (!Number.isFinite(rating) || rating <= 0) return 0;
+      // Show 0..5 full stars; rounding to nearest looks best for UI
+      return Math.max(0, Math.min(5, Math.round(rating)));
     },
     formatTravelTime(handyman) {
       // Show travel time from MapBox if available
@@ -313,6 +334,31 @@ export default {
       const cats = this.getCategories(handyman);
       return cats.slice(0, max);
     },
+    getAllCategories(handyman) {
+      return this.getCategories(handyman);
+    },
+    isCategoriesExpanded(handyman) {
+      const key = this.getHandymanKey(handyman);
+      return !!this.expandedCategories[key];
+    },
+    toggleCategories(handyman) {
+      const key = this.getHandymanKey(handyman);
+      if (!key) return;
+      const next = !this.expandedCategories[key];
+      // Vue 2 reactivity-safe
+      if (typeof this.$set === "function") this.$set(this.expandedCategories, key, next);
+      else this.expandedCategories[key] = next;
+    },
+    getDisplayCategories(handyman) {
+      const all = this.getAllCategories(handyman);
+      if (this.isCategoriesExpanded(handyman)) return all;
+      return all.slice(0, 2);
+    },
+    getRemainingCategoriesCount(handyman) {
+      const all = this.getAllCategories(handyman);
+      const remaining = all.length - 2;
+      return remaining > 0 ? remaining : 0;
+    },
     onCarouselScroll() {
       // Update current carousel page based on scroll position
       const carousel = this.$refs.handymanCarousel;
@@ -362,20 +408,25 @@ export default {
 
 .client-dashboard-new__section-title {
   font-size: 20px;
-  font-weight: 900;
+  font-weight: 700;
   color: #fff;
   display: flex;
   align-items: center;
-  gap: 8px;
   margin: 0;
   direction: rtl;
+  border-right: 4px solid #ff6a00;
+  padding-right: 12px;
 }
 
-.client-dashboard-new__title-accent {
-  width: 4px;
-  height: 20px;
-  background: linear-gradient(180deg, #FF5F00 0%, #FF8F00 100%);
-  border-radius: 2px;
+.client-dashboard-new__view-all {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.5);
+  text-decoration: none;
+  transition: color 0.2s;
+  
+  &:hover {
+    color: #ff6a00;
+  }
 }
 
 .client-dashboard-new__section-title-small {
@@ -446,18 +497,30 @@ export default {
 }
 
 .client-dashboard-new__card {
-  flex: 0 0 calc(100% - 24px);
-  min-width: calc(100% - 24px);
-  max-width: calc(100% - 24px);
+  flex: 0 0 288px;
+  min-width: 288px;
+  max-width: 288px;
   scroll-snap-align: start;
-  background: #09090B;
+  background: rgba(21, 21, 23, 1);
   border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 20px;
-  padding: 20px;
+  border-radius: 1.5rem;
+  padding: 16px;
   transition: all 0.3s;
   direction: rtl;
   text-align: right;
   box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+}
+
+.client-dashboard-new__card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(to right, #ff6a00, rgba(255, 106, 0, 0.3));
 }
 
 .client-dashboard-new__card--blocked {
@@ -479,8 +542,16 @@ export default {
 
 .client-dashboard-new__card-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.client-dashboard-new__header-main {
+  display: flex;
+  align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
 .client-dashboard-new__avatar-wrapper {
@@ -488,81 +559,64 @@ export default {
   flex-shrink: 0;
 }
 
-.client-dashboard-new__avatar-border {
-  position: relative;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  padding: 3px;
-  background: rgba(255, 255, 255, 0.05);
-  transition: all 0.3s;
-}
-
-.client-dashboard-new__avatar-border--pro {
-  background: linear-gradient(135deg, #FF5F00 0%, #FF8F00 100%);
-  box-shadow: 0 0 20px rgba(255, 95, 0, 0.4);
-}
-
-.client-dashboard-new__avatar-border--hover:hover {
-  background: rgba(255, 95, 0, 0.2);
-}
-
 .client-dashboard-new__avatar-img {
-  width: 100%;
-  height: 100%;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid #09090B;
+  border: 2px solid rgba(255, 106, 0, 0.5);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
 }
 
-.client-dashboard-new__avatar-img--grayscale {
-  filter: grayscale(100%);
+.client-dashboard-new__meta-ic {
+  font-size: 16px;
   opacity: 0.7;
+  color: rgba(255, 255, 255, 0.75);
 }
 
-.client-dashboard-new__avatar-img--sepia {
-  filter: sepia(100%);
-  opacity: 0.8;
-}
-
-.client-dashboard-new__rating-badge {
-  position: absolute;
-  bottom: -4px;
-  right: -4px;
-  display: flex;
+.client-dashboard-new__details-btn {
+  display: inline-flex;
   align-items: center;
-  gap: 2px;
-  background: #09090B;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(35, 35, 37, 1);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 4px 8px;
-  z-index: 2;
-}
-
-.client-dashboard-new__rating-value {
-  font-size: 11px;
-  font-weight: 900;
-  color: #FFD700;
-}
-
-.client-dashboard-new__rating-star {
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
   font-size: 12px;
-  color: #FFD700;
+  font-weight: 700;
+}
+
+.client-dashboard-new__details-btn:hover {
+  background: rgba(55, 55, 57, 1);
+  border-color: rgba(255, 106, 0, 0.25);
+  color: #fff;
+}
+
+.client-dashboard-new__details-ic {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .client-dashboard-new__card-info {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
+  min-width: 0;
 }
 
 .client-dashboard-new__card-name {
   font-size: 18px;
-  font-weight: 900;
+  font-weight: 700;
   color: #fff;
   margin: 0;
-  line-height: 1.2;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .client-dashboard-new__card-location {
@@ -571,138 +625,149 @@ export default {
   gap: 4px;
   font-size: 12px;
   color: rgba(255, 255, 255, 0.5);
+  margin-top: 2px;
 }
 
-.client-dashboard-new__card-location i {
-  font-size: 14px;
-  color: rgba(255, 95, 0, 0.6);
-}
-
-.client-dashboard-new__location-separator {
-  margin: 0 4px;
-  color: rgba(255, 255, 255, 0.3);
-}
-
-.client-dashboard-new__card-status {
+.client-dashboard-new__card-status-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
 }
 
-.client-dashboard-new__status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #00E055;
-  box-shadow: 0 0 8px rgba(0, 224, 85, 0.6);
-  animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.7;
-    transform: scale(1.1);
-  }
-}
-
-.client-dashboard-new__status-text {
-  font-size: 11px;
-  font-weight: 700;
-  color: #00E055;
-}
-
-.client-dashboard-new__details-btn {
+.client-dashboard-new__status-badge {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  color: rgba(255, 255, 255, 0.7);
   font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.3s;
-  flex-shrink: 0;
+  font-weight: 500;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
+  padding: 4px 8px;
+  border-radius: 0.375rem;
 }
 
-.client-dashboard-new__details-btn:hover {
-  background: rgba(255, 95, 0, 0.1);
-  border-color: rgba(255, 95, 0, 0.3);
-  color: #FF5F00;
-}
-
-.client-dashboard-new__details-btn i {
-  font-size: 14px;
-}
-
-.client-dashboard-new__card-categories {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.client-dashboard-new__status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
 }
 
 .client-dashboard-new__category-tag {
+  font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+  padding: 4px 8px;
+  border-radius: 0.375rem;
+}
+
+.client-dashboard-new__more-tag {
+  font-size: 12px;
   padding: 4px 10px;
-  background: rgba(255, 95, 0, 0.1);
-  border: 1px solid rgba(255, 95, 0, 0.2);
-  border-radius: 8px;
-  font-size: 10px;
-  font-weight: 700;
-  color: #FF5F00;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.client-dashboard-new__more-tag:hover {
+  background: rgba(35, 35, 37, 1);
+  border-color: rgba(255, 106, 0, 0.25);
+  color: #fff;
+}
+
+.client-dashboard-new__more-tag--collapse {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.client-dashboard-new__card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start; /* bottom-right in RTL */
+  margin-top: -4px;
+}
+
+.client-dashboard-new__rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(10px);
+}
+
+.client-dashboard-new__rating-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.client-dashboard-new__star {
+  font-size: 18px;
+  color: rgba(250, 204, 21, 0.25);
+}
+
+.client-dashboard-new__star--on {
+  color: #facc15;
+  text-shadow: 0 0 10px rgba(250, 204, 21, 0.25);
+}
+
+.client-dashboard-new__rating-number {
+  font-size: 13px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .client-dashboard-new__card-actions {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  gap: 8px;
   margin-top: auto;
 }
 
 .client-dashboard-new__action-btn {
-  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 12px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 700;
+  padding: 10px;
+  border-radius: 0.75rem;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s;
   border: none;
+  white-space: nowrap;
 }
 
 .client-dashboard-new__action-btn--block {
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.6);
+  flex: 1;
+  background: rgba(35, 35, 37, 1);
+  color: rgba(255, 255, 255, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 13px;
 }
 
 .client-dashboard-new__action-btn--block:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(55, 55, 57, 1);
   color: #fff;
 }
 
 .client-dashboard-new__action-btn--primary {
   flex: 2;
-  background: linear-gradient(135deg, #FF5F00 0%, #FF8F00 100%);
-  color: #000;
-  box-shadow: 0 4px 12px rgba(255, 95, 0, 0.3);
+  background: #ff6a00;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(255, 106, 0, 0.3);
 }
 
 .client-dashboard-new__action-btn--primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(255, 95, 0, 0.4);
-}
-
-.client-dashboard-new__action-btn i {
-  font-size: 16px;
+  background: #cc5500;
 }
 
 /* Carousel Pagination */
