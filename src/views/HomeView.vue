@@ -138,16 +138,11 @@ export default {
       this.$router.push({ name: "About" });
     },
     goToGuest() {
-      // There is currently no guest route / guest backend session.
-      // Provide a clear UX action instead of a dead button.
-      try {
-        window.localStorage.setItem("hendiman_guest_mode", "1");
-      } catch (e) {
-        // ignore
-      }
-
-      // Until a guest flow exists, route to login with an explanation.
-      this.$router.push({ name: "logIn", query: { guest: "true" } });
+      // Navigate to Dashboard as guest
+      this.$router.push({ 
+        name: "Dashboard", 
+        params: { id: "אורח" } 
+      });
     },
   },
 };

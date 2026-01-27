@@ -143,26 +143,29 @@ export default {
   computed: {
     // Base amount (what handyman receives before fee) - this is the job price
     totalAmount() {
-      // Use 'amount' field (base price) if available, otherwise fallback to totalAmount or job price
-      return this.paymentInfo?.amount || this.paymentInfo?.totalAmount || this.jobInfo?.price || 0;
+      // Use 'amount' field (base price) - this is the job price without platform fee
+      return this.paymentInfo?.amount || this.jobInfo?.price || 0;
     },
     commission() {
-      // Use platformFee from paymentInfo if available, otherwise calculate from totalAmount
+      // Use platformFee from paymentInfo if available (most accurate)
       if (this.paymentInfo?.platformFee !== undefined) {
         return this.paymentInfo.platformFee;
       }
+      // Otherwise calculate from base amount (not totalAmount which includes fees)
       if (this.platformFeePercent === null) return 0; // Wait for API call
+      const baseAmount = this.totalAmount;
       const feeRate = this.platformFeePercent / 100;
-      return Math.round(this.totalAmount * feeRate * 100) / 100;
+      return Math.round(baseAmount * feeRate * 100) / 100;
     },
     urgentFee() {
       return this.jobInfo?.urgent ? 10 : 0;
     },
     totalEarned() {
-      // Use spacious_H (handyman revenue) if available
+      // Use spacious_H (handyman revenue) if available (most accurate)
       if (this.paymentInfo && this.paymentInfo.spacious_H !== undefined) {
         return this.paymentInfo.spacious_H;
       }
+      // Otherwise calculate: base amount - commission
       // ה-urgentFee משולם על ידי הלקוח, לא מופחת מההנדימן
       return this.totalAmount - this.commission;
     },

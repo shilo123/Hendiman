@@ -1142,6 +1142,46 @@
       @close="showSupportChat = false"
     />
 
+    <!-- Guest Login Sheet -->
+    <div
+      v-if="showGuestLoginSheet"
+      class="guest-login-sheet-overlay"
+      @click.self="showGuestLoginSheet = false"
+    >
+      <div class="guest-login-sheet">
+        <div class="guest-login-sheet__handle-area">
+          <div class="guest-login-sheet__handle"></div>
+        </div>
+        <div class="guest-login-sheet__content">
+          <h2 class="guest-login-sheet__title">התחברות נדרשת</h2>
+          <p class="guest-login-sheet__subtitle">עליך להתחבר כדי להשתמש בתכונה זו</p>
+          <button
+            type="button"
+            class="guest-login-sheet__btn guest-login-sheet__btn--primary"
+            @click="goToLogin"
+          >
+            <span class="material-symbols-outlined">login</span>
+            <span>התחברות</span>
+          </button>
+          <button
+            type="button"
+            class="guest-login-sheet__btn guest-login-sheet__btn--secondary"
+            @click="goToRegister"
+          >
+            <span class="material-symbols-outlined">person_add</span>
+            <span>הרשמה</span>
+          </button>
+          <button
+            type="button"
+            class="guest-login-sheet__close"
+            @click="showGuestLoginSheet = false"
+          >
+            ביטול
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Block Handyman Confirmation Modal -->
     <div
       v-if="showBlockHandymanModal"
@@ -1928,6 +1968,8 @@ export default {
       isApprovingHandyman: false,
       // Support Chat
       showSupportChat: false,
+      // Guest mode
+      showGuestLoginSheet: false,
     };
   },
 
@@ -1946,6 +1988,9 @@ export default {
       : [];
   },
   computed: {
+    isGuest() {
+      return this.$route.params.id === "אורח";
+    },
     displayMaxKm() {
       // Show local value while dragging, otherwise show the actual value
       return this.localMaxKm !== null
@@ -2559,6 +2604,13 @@ export default {
 
     handleNavItemClick(item) {
       if (!item.action) return;
+      
+      // Check if guest and show login sheet for any action
+      if (this.isGuest && item.action !== 'home') {
+        this.showGuestLoginSheet = true;
+        return;
+      }
+      
       switch (item.action) {
         case 'openProfile':
           this.onOpenProfile();
@@ -2648,6 +2700,10 @@ export default {
       }
     },
     onOpenProfile() {
+      if (this.isGuest) {
+        this.showGuestLoginSheet = true;
+        return;
+      }
       this.profileForm = {
         name: this.store.user?.username || this.store.user?.name || "",
         phone: this.store.user?.phone || "",
@@ -2661,6 +2717,10 @@ export default {
     },
 
     onOpenHandymenChat() {
+      if (this.isGuest) {
+        this.showGuestLoginSheet = true;
+        return;
+      }
       this.showSupportChat = true;
     },
 
@@ -4657,6 +4717,10 @@ export default {
       }
     },
     onCreateCallCta() {
+      if (this.isGuest) {
+        this.showGuestLoginSheet = true;
+        return;
+      }
       this.$router.push({
         name: "CreateCall",
         params: { id: this.$route.params.id },
@@ -5124,8 +5188,8 @@ export default {
     },
 
     onAcceptJobFromModal(job) {
-      this.onAccept(job);
       this.onCloseJobDetails();
+      this.onAcceptJob(job);
     },
 
     onSkipJobFromModal(job) {
@@ -5688,26 +5752,40 @@ export default {
       const jobId = this.jobToAccept?._id || this.jobToAccept?.id;
       const handymanId = this.store.user?._id || this.me?._id;
       
+      if (!jobId || !handymanId) {
+        this.toast?.showError("חסרים פרטים לקבלת העבודה");
+        return;
+      }
+      
       this.acceptingJobId = jobId;
       try {
         const { URL } = await import("@/Url/url");
         const axios = (await import("axios")).default;
         const { data } = await axios.post(`${URL}/jobs/handyman-wants-to-accept`, {
-          jobId,
-          handymanId
+          jobId: String(jobId),
+          handymanId: String(handymanId)
+        }, {
+          timeout: 10000
         });
         
         if (data.success) {
           this.toast?.showSuccess("הבקשה נשלחה ללקוח, ממתין לאישור...");
           this.showJobAcceptanceSheet = false;
+          this.jobToAccept = null;
         } else {
           this.toast?.showError(data.message || "שגיאה בשליחת הבקשה");
         }
       } catch (error) {
-        if (error.response?.data?.needsOnboarding) {
-           this.toast?.showError(error.response.data.message || "עליך להשלים את הגדרת חשבון התשלומים");
+        if (error.response?.status === 400 && error.response?.data?.needsOnboarding) {
+          this.toast?.showError(error.response.data.message || "עליך להשלים את הגדרת חשבון התשלומים");
+        } else if (error.response?.data?.message) {
+          this.toast?.showError(error.response.data.message);
+        } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+          this.toast?.showError("תם הזמן - נסה שוב");
+        } else if (error.code === 'ECONNREFUSED' || error.message?.includes('Network')) {
+          this.toast?.showError("לא ניתן להתחבר לשרת. אנא ודא שהשרת רץ");
         } else {
-           this.toast?.showError("שגיאה בתקשורת עם השרת");
+          this.toast?.showError("שגיאה בתקשורת עם השרת");
         }
       } finally {
         this.acceptingJobId = null;
@@ -5736,9 +5814,17 @@ export default {
         this.isApprovingHandyman = false;
       }
     },
-    async onRejectHandyman() {
+    async     onRejectHandyman() {
        this.showClientApprovalSheet = false;
        this.toast?.showInfo("הבקשה נדחתה");
+    },
+    goToLogin() {
+      this.showGuestLoginSheet = false;
+      this.$router.push({ name: "logIn" });
+    },
+    goToRegister() {
+      this.showGuestLoginSheet = false;
+      this.$router.push({ name: "Register" });
     },
     onRejectJob(job) {
       // TODO: Implement reject job functionality
@@ -6248,6 +6334,18 @@ export default {
         this.$router.push("/");
         return;
       }
+      
+      // Check if user is guest
+      if (routeId === "אורח") {
+        logger.log("[Dashboard] Guest mode - skipping data fetch");
+        this.isLoading = false;
+        // Set default guest data
+        this.me.name = "אורח";
+        this.me.username = "אורח";
+        this.isHendiman = false;
+        return;
+      }
+      
       logger.log("[Dashboard] Fetching initial dashboard data for user:", routeId);
       const initialData = await this.store.fetchDashboardData(routeId);
       logger.log("[Dashboard] Initial data received:", !!initialData, "User:", !!initialData?.User);
@@ -12607,6 +12705,124 @@ $r2: 26px;
   .client-header-new {
     padding-left: 20px;
     padding-right: 20px;
+  }
+}
+
+// Guest Login Sheet Styles
+.guest-login-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  align-items: flex-end;
+}
+
+.guest-login-sheet {
+  width: 100%;
+  background: #0b0b0f;
+  border-radius: 24px 24px 0 0;
+  padding: 12px 20px 40px;
+  animation: slideUp 0.3s ease-out;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.guest-login-sheet__handle-area {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 20px;
+}
+
+.guest-login-sheet__handle {
+  width: 40px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+.guest-login-sheet__content {
+  text-align: center;
+}
+
+.guest-login-sheet__title {
+  font-size: 24px;
+  font-weight: 800;
+  color: white;
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
+
+.guest-login-sheet__subtitle {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 32px;
+  line-height: 1.5;
+}
+
+.guest-login-sheet__btn {
+  width: 100%;
+  height: 56px;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.guest-login-sheet__btn--primary {
+  background: linear-gradient(135deg, #ff7a00, #ff9500);
+  color: #0b0b0f;
+}
+
+.guest-login-sheet__btn--primary:hover {
+  background: linear-gradient(135deg, #ff9500, #ff7a00);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 122, 0, 0.3);
+}
+
+.guest-login-sheet__btn--secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.guest-login-sheet__btn--secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.guest-login-sheet__close {
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.guest-login-sheet__close:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
   }
 }
 </style>

@@ -8027,7 +8027,7 @@ function findAvailablePort(startPort) {
           return res.status(404).json({ success: false, message: "Job not found" });
         }
 
-        if (job.status !== "pending") {
+        if (job.status !== "pending" && job.status !== "open") {
           return res.status(400).json({ success: false, message: "העבודה כבר לא פנויה" });
         }
 
@@ -8111,8 +8111,17 @@ function findAvailablePort(startPort) {
           return res.status(404).json({ success: false, message: "Not found" });
         }
 
-        if (job.status !== "pending") {
+        if (job.status !== "pending" && job.status !== "pending_approval" && job.status !== "open") {
           return res.status(400).json({ success: false, message: "העבודה כבר לא פנויה" });
+        }
+        
+        // Check if this handyman is the pending handyman
+        if (job.status === "pending_approval" && job.pendingHandymanId) {
+          const pendingHandymanIdStr = job.pendingHandymanId.toString();
+          const handymanIdStr = handymanId.toString();
+          if (pendingHandymanIdStr !== handymanIdStr) {
+            return res.status(400).json({ success: false, message: "העבודה ממתינה לאישור מהנדימן אחר" });
+          }
         }
 
         const handymanName = handyman.username || handyman.name || "הנדימן";

@@ -96,7 +96,7 @@
                   <div
                     class="financialItem__value financialItem__value--positive"
                   >
-                    +{{ formatMoney(jobInfo?.price || 0) }} ₪
+                    +{{ formatMoney(paymentInfo?.amount || jobInfo?.price || 0) }} ₪
                   </div>
                 </div>
                 <div class="financialItem">
@@ -140,11 +140,7 @@
                 <div class="financialItem__value financialItem__value--client">
                   {{
                     formatMoney(
-                      paymentInfo?.totalAmount ||
-                      paymentInfo?.amountWithVAT ||
-                      (paymentInfo?.amount && paymentInfo?.platformFee
-                        ? paymentInfo.amount + paymentInfo.platformFee
-                        : null) ||
+                      paymentInfo?.amount ||
                       jobInfo?.price ||
                       0
                     )
@@ -326,18 +322,25 @@ export default {
       return this.jobInfo?.urgent ? 10 : 0;
     },
     commission() {
+      // Use platformFee from paymentInfo if available (most accurate)
+      if (this.paymentInfo?.platformFee !== undefined) {
+        return this.paymentInfo.platformFee;
+      }
+      // Otherwise calculate from base amount (not totalAmount)
       if (this.platformFeePercent === null) return 0; // Wait for API call
-      const price = this.paymentInfo?.totalAmount || this.jobInfo?.price || 0;
+      const baseAmount = this.paymentInfo?.amount || this.jobInfo?.price || 0;
       const feeRate = this.platformFeePercent / 100;
-      return Math.round(price * feeRate * 100) / 100;
+      return Math.round(baseAmount * feeRate * 100) / 100;
     },
     totalEarned() {
+      // Use spacious_H from paymentInfo if available (most accurate)
       if (this.paymentInfo && this.paymentInfo.spacious_H !== undefined) {
         return this.paymentInfo.spacious_H;
       }
-      const price = this.jobInfo?.price || 0;
+      // Otherwise calculate: base amount - commission
+      const baseAmount = this.paymentInfo?.amount || this.jobInfo?.price || 0;
       // ה-urgentFee משולם על ידי הלקוח, לא מופחת מההנדימן
-      return price - this.commission;
+      return baseAmount - this.commission;
     },
     
     // Check if pending approval job is hourly work

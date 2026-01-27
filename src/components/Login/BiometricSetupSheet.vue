@@ -259,24 +259,20 @@ export default {
           throw new Error("טביעת אצבע זמינה רק באפליקציה");
         }
 
-        const biometryResult = await NativeBiometric.checkBiometry();
+        const biometryResult = await NativeBiometric.isAvailable();
         
         if (!biometryResult.isAvailable) {
           throw new Error("טביעת אצבע לא זמינה במכשיר זה");
         }
 
         // Step 3: Prompt for biometric authentication
-        const authResult = await NativeBiometric.authenticate({
+        await NativeBiometric.verifyIdentity({
           reason: "אמת את זהותך להגדרת כניסה מהירה",
           title: "אימות טביעת אצבע",
           subtitle: "הנח את האצבע על הסורק",
           description: "זה ישמור את פרטי ההתחברות שלך בצורה מאובטחת",
           negativeButtonText: "ביטול",
         });
-
-        if (!authResult.isSuccess) {
-          throw new Error("האימות בוטל");
-        }
 
         // Step 4: Save credentials securely
         await this.saveCredentials(user);

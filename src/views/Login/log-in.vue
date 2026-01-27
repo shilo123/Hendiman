@@ -106,15 +106,26 @@
         </button>
       </form>
 
-      <!-- Quick Login as Client Button -->
-      <button 
-        type="button" 
-        class="quick-login-btn"
-        @click="quickLoginAsClient"
-      >
-        <span class="material-symbols-outlined">person</span>
-        <span>היכנס כלקוח</span>
-      </button>
+      <!-- Quick Login Buttons -->
+      <div class="quick-login-buttons">
+        <button 
+          type="button" 
+          class="quick-login-btn"
+          @click="quickLoginAsClient"
+        >
+          <span class="material-symbols-outlined">person</span>
+          <span>היכנס כלקוח</span>
+        </button>
+        
+        <button 
+          type="button" 
+          class="quick-login-btn"
+          @click="quickLoginAsHandyman"
+        >
+          <span class="material-symbols-outlined">build</span>
+          <span>היכנס כהנדימן</span>
+        </button>
+      </div>
 
       <!-- Social Login Divider -->
       <div class="social-divider">
@@ -375,9 +386,9 @@ export default {
         // Check if biometric is available first
         let available = null;
         try {
-          // @capgo/capacitor-native-biometric uses checkBiometry() without parameters
-          available = await Biometric.checkBiometry();
-          console.log('[checkNativeBiometricSupport] checkBiometry result:', JSON.stringify(available));
+          // @capgo/capacitor-native-biometric uses isAvailable()
+          available = await Biometric.isAvailable();
+          console.log('[checkNativeBiometricSupport] isAvailable result:', JSON.stringify(available));
         } catch (error) {
           console.error('[checkNativeBiometricSupport] Error checking biometric:', error);
           console.error('[checkNativeBiometricSupport] Error details:', error.message, error.stack);
@@ -388,7 +399,7 @@ export default {
         }
         
         if (!available) {
-          console.log('[checkNativeBiometricSupport] No result from checkBiometry');
+          console.log('[checkNativeBiometricSupport] No result from isAvailable');
           this.isBiometricAvailable = false;
           this.hasBiometricCredentials = false;
           return;
@@ -589,8 +600,8 @@ export default {
 
       // Check if biometric is actually available on the device
       try {
-        const available = await Biometric.checkBiometry();
-        console.log("[Biometric] checkBiometry result:", JSON.stringify(available));
+        const available = await Biometric.isAvailable();
+        console.log("[Biometric] isAvailable result:", JSON.stringify(available));
         
         if (!available.isAvailable) {
           // Give specific error message based on reason
@@ -628,17 +639,17 @@ export default {
         }
 
         // Authenticate with biometric
-        const result = await Biometric.authenticate({
-          reason: 'אנא זהה את עצמך להתחברות',
-          title: 'אימות ביומטרי',
-          subtitle: 'התחברות מהירה',
-          description: 'השתמש בטביעת האצבע שלך כדי להתחבר',
-        });
-
-        if (!result.isSuccess) {
-          if (result.error === 'USER_CANCEL') {
-            // User cancelled - don't show error
-          } else {
+        try {
+          await Biometric.verifyIdentity({
+            reason: 'אנא זהה את עצמך להתחברות',
+            title: 'אימות ביומטרי',
+            subtitle: 'התחברות מהירה',
+            description: 'השתמש בטביעת האצבע שלך כדי להתחבר',
+            negativeButtonText: 'ביטול',
+          });
+        } catch (authError) {
+          // User cancelled or authentication failed
+          if (authError?.code !== 'USER_CANCEL') {
             this.toast?.showError("האימות בוטל או נכשל");
           }
           this.biometricLoading = false;
@@ -831,7 +842,7 @@ export default {
                   }
 
                   // Check if biometric is available
-                  const available = await Biometric.checkBiometry();
+                  const available = await Biometric.isAvailable();
 
                   if (available.isAvailable && !this.ifGoogleUser && !this.ifFacebookUser) {
                     // Save username and userId for biometric login
@@ -930,6 +941,15 @@ export default {
     quickLoginAsClient() {
       // Fill in client credentials automatically
       this.username = "דניאל בן דוד";
+      this.password = "1234567890";
+      
+      // Auto-submit the form
+      this.handleLogin();
+    },
+
+    quickLoginAsHandyman() {
+      // Fill in handyman credentials automatically
+      this.username = "איתן פרץ";
       this.password = "1234567890";
       
       // Auto-submit the form
@@ -1257,6 +1277,18 @@ $font-display: "Heebo", "Noto Sans Hebrew", sans-serif;
   }
 }
 
+// Quick Login Buttons Container
+.quick-login-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+
+  @media (max-width: 640px) {
+    gap: 8px;
+  }
+}
+
 // Quick Login Button
 .quick-login-btn {
   width: 100%;
@@ -1269,7 +1301,6 @@ $font-display: "Heebo", "Noto Sans Hebrew", sans-serif;
   font-size: 15px;
   cursor: pointer;
   transition: all 0.3s;
-  margin-top: 12px;
   display: flex;
   align-items: center;
   justify-content: center;

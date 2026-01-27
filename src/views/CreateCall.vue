@@ -600,7 +600,7 @@
 
                   <!-- Location Buttons (3 options) -->
                   <div
-                    v-if="!isLoadingLocation && !detectedLocation && !selectedMapLocation"
+                    v-if="!isLoadingLocation && !detectedLocation && !selectedMapLocation && !isEditingLocation"
                     class="ccLocBtnsMain"
                   >
                     <button
@@ -1410,7 +1410,7 @@ export default {
       pulseInterval: null, // Interval for pulse animation
       call: {
         requests: [""], // Array of requests
-        desc: "123456789078",
+        desc: "",
         location: "", // Will be set in created() hook to user's city
         urgent: false,
         images: [], // Array of image files
