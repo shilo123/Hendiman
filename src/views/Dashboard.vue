@@ -12,56 +12,67 @@
         !showIncomeDetailModal &&
         isMobile
       "
-      class="handyman-header-new"
+      class="handyman-header-pro"
     >
-      <div class="handyman-header-new__left">
-        <div class="relative group cursor-pointer" @click="onOpenProfile">
-          <div class="handyman-header-new__avatar-glow"></div>
-          <img
-            v-if="me?.avatarUrl"
-            :src="me.avatarUrl"
-            alt="User Avatar"
-            class="handyman-header-new__avatar"
-          />
-          <span v-else class="handyman-header-new__avatar-placeholder">👤</span>
-          <div
-            v-if="isAvailable"
-            class="handyman-header-new__status-dot"
-          ></div>
-        </div>
-        <div class="handyman-header-new__info">
-          <span class="handyman-header-new__greeting">שלום,</span>
-          <h1 class="handyman-header-new__name">
-            {{ me?.name || me?.username || "הנדימן" }}
-          </h1>
-          <div
-            class="handyman-header-new__availability"
-            :class="{ 'handyman-header-new__availability--available': isAvailable }"
-            @click="toggleAvailability"
-          >
-            <div class="handyman-header-new__availability-toggle">
-              <div
-                class="handyman-header-new__availability-dot"
-                :class="{ 'handyman-header-new__availability-dot--active': isAvailable }"
-              ></div>
-            </div>
-            <span class="handyman-header-new__availability-text">
-              {{ isAvailable ? "זמין לעבודה" : "לא זמין" }}
+      <div class="handyman-header-pro__bg"></div>
+      <div class="handyman-header-pro__content">
+        <!-- Profile Section -->
+        <div class="handyman-header-pro__profile" @click="onOpenProfile">
+          <div class="handyman-header-pro__avatar-container">
+            <div class="handyman-header-pro__avatar-ring"></div>
+            <img
+              v-if="me?.avatarUrl"
+              :src="me.avatarUrl"
+              alt="User Avatar"
+              class="handyman-header-pro__avatar"
+            />
+            <span v-else class="handyman-header-pro__avatar-placeholder">
+              <i class="ph ph-user"></i>
             </span>
+            <div
+              class="handyman-header-pro__status-indicator"
+              :class="{ 'handyman-header-pro__status-indicator--available': isAvailable }"
+            ></div>
+          </div>
+          <div class="handyman-header-pro__info">
+            <span class="handyman-header-pro__label">הנדימן</span>
+            <h1 class="handyman-header-pro__name">
+              {{ me?.name || me?.username || "הנדימן" }}
+            </h1>
           </div>
         </div>
-      </div>
-      <div class="handyman-header-new__actions">
-        <button
-          class="handyman-header-new__action-btn handyman-header-new__action-btn--notifications"
-          :class="{ 'handyman-header-new__action-btn--unavailable': !isAvailable }"
-          type="button"
-          aria-label="התראות"
-          @click="toggleAvailabilityFromBell"
-        >
-          <i :class="isAvailable ? 'ph ph-bell' : 'ph ph-bell-slash'"></i>
-          <span v-if="isAvailable" class="handyman-header-new__notification-dot"></span>
-        </button>
+
+        <!-- Actions Section -->
+        <div class="handyman-header-pro__actions">
+          <!-- Availability Toggle -->
+          <div
+            class="handyman-header-pro__availability"
+            :class="{ 'handyman-header-pro__availability--available': isAvailable }"
+            @click="toggleAvailability"
+          >
+            <div class="handyman-header-pro__toggle">
+              <div
+                class="handyman-header-pro__toggle-knob"
+                :class="{ 'handyman-header-pro__toggle-knob--active': isAvailable }"
+              ></div>
+            </div>
+            <span class="handyman-header-pro__availability-label">
+              {{ isAvailable ? "זמין" : "לא זמין" }}
+            </span>
+          </div>
+
+          <!-- Bell Button -->
+          <button
+            class="handyman-header-pro__bell"
+            :class="{ 'handyman-header-pro__bell--unavailable': !isAvailable }"
+            type="button"
+            aria-label="התראות"
+            @click="toggleAvailabilityFromBell"
+          >
+            <i :class="isAvailable ? 'ph ph-bell-ringing' : 'ph ph-bell-slash'"></i>
+            <span v-if="isAvailable" class="handyman-header-pro__bell-dot"></span>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -11115,200 +11126,285 @@ $r2: 26px;
    NEW HANDYMAN DASHBOARD DESIGN
    ============================================ */
 
-/* Handyman Header New */
-.handyman-header-new {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 32px;
-  padding: 0 20px;
+/* Handyman Header Pro */
+.handyman-header-pro {
   position: relative;
+  margin: 0 12px 24px;
+  border-radius: 20px;
+  overflow: hidden;
   z-index: 10;
 }
 
-.handyman-header-new__left {
+.handyman-header-pro__bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, 
+    rgba(255, 95, 0, 0.15) 0%, 
+    rgba(15, 15, 18, 0.95) 50%,
+    rgba(255, 95, 0, 0.08) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 95, 0, 0.2);
+  border-radius: 20px;
+}
+
+.handyman-header-pro__bg::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255, 95, 0, 0.5), 
+    transparent);
+}
+
+.handyman-header-pro__content {
+  position: relative;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
   gap: 16px;
-  text-align: right;
 }
 
-.handyman-header-new__avatar-glow {
-  position: absolute;
-  inset: -2px;
-  background: linear-gradient(to bottom right, #FF5F00, transparent);
-  border-radius: 50%;
-  opacity: 0.7;
-  filter: blur(4px);
-  transition: opacity 0.3s;
+.handyman-header-pro__profile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
 }
 
-.handyman-header-new__left:hover .handyman-header-new__avatar-glow {
-  opacity: 1;
-}
-
-.handyman-header-new__avatar {
+.handyman-header-pro__avatar-container {
   position: relative;
-  width: 56px;
-  height: 56px;
+  flex-shrink: 0;
+}
+
+.handyman-header-pro__avatar-ring {
+  position: absolute;
+  inset: -3px;
   border-radius: 50%;
-  border: 2px solid #000;
+  background: linear-gradient(135deg, #FF5F00, #FF8C42, #FF5F00);
+  animation: ring-rotate 3s linear infinite;
+  opacity: 0.8;
+}
+
+@keyframes ring-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.handyman-header-pro__avatar {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid #0f0f12;
   object-fit: cover;
   z-index: 1;
 }
 
-.handyman-header-new__avatar-placeholder {
+.handyman-header-pro__avatar-placeholder {
   position: relative;
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
-  border: 2px solid #000;
-  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid #0f0f12;
+  background: linear-gradient(135deg, rgba(255, 95, 0, 0.2), rgba(255, 95, 0, 0.05));
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
   z-index: 1;
 }
 
-.handyman-header-new__status-dot {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 16px;
-  height: 16px;
-  background: #00E055;
-  border: 2px solid #000;
-  border-radius: 50%;
-  z-index: 2;
+.handyman-header-pro__avatar-placeholder i {
+  font-size: 24px;
+  color: rgba(255, 95, 0, 0.7);
 }
 
-.handyman-header-new__info {
+.handyman-header-pro__status-indicator {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #0f0f12;
+  background: rgba(255, 255, 255, 0.3);
+  z-index: 2;
+  transition: all 0.3s ease;
+}
+
+.handyman-header-pro__status-indicator--available {
+  background: #00E055;
+  box-shadow: 0 0 10px rgba(0, 224, 85, 0.6);
+  animation: status-pulse 2s ease-in-out infinite;
+}
+
+@keyframes status-pulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(0, 224, 85, 0.6); }
+  50% { box-shadow: 0 0 18px rgba(0, 224, 85, 0.9); }
+}
+
+.handyman-header-pro__info {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
 }
 
-.handyman-header-new__greeting {
+.handyman-header-pro__label {
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: rgba(255, 255, 255, 0.4);
-  margin-bottom: 2px;
+  letter-spacing: 0.15em;
+  color: #FF5F00;
 }
 
-.handyman-header-new__name {
-  font-size: 20px;
+.handyman-header-pro__name {
+  font-size: 18px;
   font-weight: 900;
-  line-height: 1;
   color: #fff;
   letter-spacing: -0.02em;
-  margin-bottom: 8px;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
 }
 
-.handyman-header-new__availability {
+.handyman-header-pro__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.handyman-header-pro__availability {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(9, 9, 11, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 9999px;
-  padding-left: 12px;
-  padding-right: 4px;
-  padding-top: 4px;
-  padding-bottom: 4px;
-  backdrop-filter: blur(12px);
-  transition: all 0.3s;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 6px 12px 6px 8px;
   cursor: pointer;
+  transition: all 0.3s ease;
 }
 
-.handyman-header-new__availability:hover {
-  border-color: rgba(0, 224, 85, 0.3);
+.handyman-header-pro__availability:hover {
+  border-color: rgba(255, 95, 0, 0.3);
+  background: rgba(0, 0, 0, 0.5);
 }
 
-.handyman-header-new__availability-toggle {
+.handyman-header-pro__availability--available {
+  border-color: rgba(0, 224, 85, 0.2);
+}
+
+.handyman-header-pro__availability--available:hover {
+  border-color: rgba(0, 224, 85, 0.4);
+}
+
+.handyman-header-pro__toggle {
   position: relative;
-  width: 32px;
-  height: 16px;
-  background: rgba(0, 224, 85, 0.2);
-  border-radius: 9999px;
-  transition: background 0.3s;
+  width: 36px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  transition: background 0.3s ease;
 }
 
-.handyman-header-new__availability-dot {
+.handyman-header-pro__availability--available .handyman-header-pro__toggle {
+  background: rgba(0, 224, 85, 0.25);
+}
+
+.handyman-header-pro__toggle-knob {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  background: #00E055;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.5);
   border-radius: 50%;
-  box-shadow: 0 0 8px rgba(0, 224, 85, 0.8);
-  transition: transform 0.3s;
+  transition: all 0.3s ease;
 }
 
-.handyman-header-new__availability-dot--active {
-  transform: translateX(16px);
+.handyman-header-pro__toggle-knob--active {
+  left: 19px;
+  background: #00E055;
+  box-shadow: 0 0 8px rgba(0, 224, 85, 0.6);
 }
 
-.handyman-header-new__availability-text {
-  font-size: 10px;
+.handyman-header-pro__availability-label {
+  font-size: 11px;
   font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 0.3s ease;
+  white-space: nowrap;
+}
+
+.handyman-header-pro__availability--available .handyman-header-pro__availability-label {
   color: #00E055;
-  transition: color 0.3s;
 }
 
-.handyman-header-new__availability:hover .handyman-header-new__availability-text {
-  color: #fff;
-}
-
-.handyman-header-new__actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 4px;
-}
-
-.handyman-header-new__action-btn {
-  width: 40px;
-  height: 40px;
+.handyman-header-pro__bell {
+  position: relative;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: #09090B;
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.4);
-  transition: all 0.3s;
   cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.handyman-header-pro__bell i {
   font-size: 20px;
+  color: rgba(255, 255, 255, 0.6);
+  transition: all 0.3s ease;
 }
 
-.handyman-header-new__action-btn:hover {
-  border-color: rgba(255, 95, 0, 0.5);
+.handyman-header-pro__bell:hover {
+  border-color: rgba(255, 95, 0, 0.4);
+  background: rgba(255, 95, 0, 0.1);
+  transform: scale(1.05);
+}
+
+.handyman-header-pro__bell:hover i {
   color: #FF5F00;
-  transform: scale(1.1);
 }
 
-.handyman-header-new__action-btn--notifications {
-  position: relative;
+.handyman-header-pro__bell--unavailable {
+  opacity: 0.5;
 }
 
-.handyman-header-new__action-btn--unavailable {
-  opacity: 0.6;
-  color: rgba(255, 255, 255, 0.5);
+.handyman-header-pro__bell--unavailable i {
+  color: rgba(255, 255, 255, 0.3);
 }
 
-.handyman-header-new__notification-dot {
+.handyman-header-pro__bell-dot {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 6px;
-  height: 6px;
+  top: 8px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
   background: #FF5F00;
   border-radius: 50%;
+  border: 2px solid #0f0f12;
   box-shadow: 0 0 8px rgba(255, 95, 0, 0.8);
+  animation: bell-dot-pulse 2s ease-in-out infinite;
+}
+
+@keyframes bell-dot-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
 }
 
 /* Handyman Dashboard New */
@@ -11989,9 +12085,17 @@ $r2: 26px;
     padding-right: 20px;
   }
   
-  .handyman-header-new {
-    padding-left: 20px;
-    padding-right: 20px;
+  .handyman-header-pro {
+    margin: 0 8px 20px;
+  }
+  
+  .handyman-header-pro__name {
+    max-width: 120px;
+    font-size: 16px;
+  }
+  
+  .handyman-header-pro__availability-label {
+    display: none;
   }
 }
 
