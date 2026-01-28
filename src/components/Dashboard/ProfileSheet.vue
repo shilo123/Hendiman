@@ -127,6 +127,65 @@
           </template>
         </section>
 
+        <!-- Handyman Score Section -->
+        <section v-if="isHandyman && handymanScore" class="ps__scoreSection">
+          <div class="ps__scoreHeader">
+            <h3 class="ps__scoreTitle">ציון פנימי של המערכת</h3>
+            <button 
+              class="ps__scoreBreakdownBtn" 
+              type="button" 
+              @click="showScoreBreakdown = !showScoreBreakdown"
+            >
+              {{ showScoreBreakdown ? 'הסתר' : 'לפירוט' }}
+            </button>
+          </div>
+          
+          <!-- Score Progress Bar -->
+          <div class="ps__scoreBarContainer">
+            <div class="ps__scoreBarTrack">
+              <div 
+                class="ps__scoreBarFill" 
+                :style="{ width: handymanScore.score + '%' }"
+                :class="getScoreClass(handymanScore.score)"
+              ></div>
+              <div 
+                class="ps__scoreBarGlow" 
+                :style="{ width: handymanScore.score + '%' }"
+                :class="getScoreClass(handymanScore.score)"
+              ></div>
+            </div>
+            <div class="ps__scoreValue">
+              <span class="ps__scoreNumber">{{ handymanScore.score }}</span>
+              <span class="ps__scoreMax">/100</span>
+            </div>
+          </div>
+          
+          <!-- Score Breakdown (Collapsible) -->
+          <div v-if="showScoreBreakdown && handymanScore.breakdown" class="ps__scoreBreakdown">
+            <div class="ps__breakdownItem">
+              <span class="ps__breakdownLabel">השלמת עבודות (30%)</span>
+              <span class="ps__breakdownValue">{{ handymanScore.breakdown.completion || 0 }}</span>
+            </div>
+            <div class="ps__breakdownItem">
+              <span class="ps__breakdownLabel">הגעה בזמן (25%)</span>
+              <span class="ps__breakdownValue">{{ handymanScore.breakdown.onTime || 0 }}</span>
+            </div>
+            <div class="ps__breakdownItem">
+              <span class="ps__breakdownLabel">דירוג לקוחות (25%)</span>
+              <span class="ps__breakdownValue">{{ handymanScore.breakdown.rating || 0 }}</span>
+            </div>
+            <div class="ps__breakdownItem">
+              <span class="ps__breakdownLabel">ביטולים (20%)</span>
+              <span class="ps__breakdownValue">{{ handymanScore.breakdown.cancellations || 0 }}</span>
+            </div>
+            <div class="ps__breakdownDivider"></div>
+            <div class="ps__breakdownItem ps__breakdownItem--stats">
+              <span class="ps__breakdownLabel">מספר איחורים</span>
+              <span class="ps__breakdownValue">{{ user?.lateArrivals || 0 }}</span>
+            </div>
+          </div>
+        </section>
+
         <!-- Specialties Section (handyman only) -->
         <section v-if="isHandyman" class="ps__specialties">
           <div class="ps__specialtiesHeader">
@@ -592,6 +651,10 @@ export default {
         totalOrders: 0,
         favoriteHandymen: 0,
       },
+      
+      // Handyman Score
+      handymanScore: null,
+      showScoreBreakdown: false,
     };
   },
   computed: {
@@ -659,9 +722,11 @@ export default {
         this.specOpen = false;
         this.cityError = '';
         this.showEditModal = false;
+        this.showScoreBreakdown = false;
       } else if (v && this.isHandyman) {
         this.checkOnboardingStatus();
         this.loadHandymanStats();
+        this.fetchHandymanScore();
       } else if (v && !this.isHandyman) {
         this.loadClientStats();
       }
@@ -724,6 +789,30 @@ export default {
       } catch (error) {
         logger.error('[ProfileSheet] Error loading handyman stats:', error);
       }
+    },
+
+    async fetchHandymanScore() {
+      const handymanId = this.user?._id || this.user?.id;
+      if (!handymanId) return;
+
+      try {
+        const response = await axios.get(`${URL}/api/handyman/${handymanId}/score`);
+        if (response.data && response.data.success && response.data.handymanScore) {
+          this.handymanScore = response.data.handymanScore;
+        } else {
+          this.handymanScore = null;
+        }
+      } catch (error) {
+        logger.error('[ProfileSheet] Error fetching handyman score:', error);
+        this.handymanScore = null;
+      }
+    },
+
+    getScoreClass(score) {
+      if (score >= 85) return 'ps__scoreBar--excellent';
+      if (score >= 60) return 'ps__scoreBar--good';
+      if (score >= 40) return 'ps__scoreBar--average';
+      return 'ps__scoreBar--low';
     },
 
     async loadClientStats() {
@@ -1360,6 +1449,160 @@ $stroke: rgba(255, 255, 255, 0.1);
   font-weight: 500;
   color: rgba(255, 255, 255, 0.5);
   margin: 0;
+}
+
+/* Handyman Score Section */
+.ps__scoreSection {
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
+}
+
+.ps__scoreHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.ps__scoreTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0;
+}
+
+.ps__scoreBreakdownBtn {
+  background: rgba($primary, 0.15);
+  border: 1px solid rgba($primary, 0.3);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: $primary;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba($primary, 0.25);
+    transform: translateY(-1px);
+  }
+}
+
+/* Score Progress Bar */
+.ps__scoreBarContainer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ps__scoreBarTrack {
+  flex: 1;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+}
+
+.ps__scoreBarFill {
+  height: 100%;
+  border-radius: 12px;
+  transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  z-index: 2;
+}
+
+.ps__scoreBarGlow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 12px;
+  filter: blur(8px);
+  opacity: 0.6;
+  z-index: 1;
+}
+
+/* Score Color Classes */
+.ps__scoreBar--excellent {
+  background: linear-gradient(90deg, #4ade80, #22c55e);
+}
+
+.ps__scoreBar--good {
+  background: linear-gradient(90deg, $primary, #ff6a00);
+}
+
+.ps__scoreBar--average {
+  background: linear-gradient(90deg, #fb923c, #f97316);
+}
+
+.ps__scoreBar--low {
+  background: linear-gradient(90deg, #f87171, #ef4444);
+}
+
+.ps__scoreValue {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  min-width: 55px;
+  justify-content: flex-end;
+}
+
+.ps__scoreNumber {
+  font-size: 26px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.95);
+  font-variant-numeric: tabular-nums;
+}
+
+.ps__scoreMax {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Score Breakdown */
+.ps__scoreBreakdown {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ps__breakdownItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ps__breakdownItem--stats {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.ps__breakdownLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.ps__breakdownValue {
+  font-size: 15px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.9);
+  font-variant-numeric: tabular-nums;
+}
+
+.ps__breakdownDivider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 4px 0;
 }
 
 // Specialties

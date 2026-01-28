@@ -399,6 +399,22 @@
           v-if="isHendiman && isMobile"
           class="handyman-dashboard-new"
         >
+          <!-- Empty state (no jobs at all) -->
+          <div
+            v-if="
+              !isLoading &&
+              urgentJobs.length === 0 &&
+              quotedJobs.length === 0 &&
+              regularJobs.length === 0
+            "
+            class="empty-state"
+          >
+            אין עבודות עדיין
+          </div>
+
+          <template
+            v-else
+          >
           <!-- Urgent Jobs Section -->
           <section
             v-if="urgentJobs.length > 0"
@@ -566,7 +582,11 @@
           <!-- Regular Jobs Section -->
           <section class="handyman-dashboard-new__section">
             <h2 class="handyman-dashboard-new__section-title-small">
-              שאר עבודות
+              {{
+                quotedJobs.length === 0 && urgentJobs.length === 0
+                  ? "עבודות"
+                  : "שאר עבודות"
+              }}
               <span class="handyman-dashboard-new__jobs-count">
                 {{ displayedRegularJobs.length }}
               </span>
@@ -616,9 +636,17 @@
               </button>
             </div>
           </section>
+          </template>
         </div>
 
         <!-- LEFT ~60% JOBS (Desktop or fallback) -->
+        <div
+          v-if="(!isMobile || !isHendiman) && !isLoading && filteredJobs.length === 0"
+          class="empty-state"
+          style="margin-top: 12px;"
+        >
+          אין עבודות עדיין
+        </div>
         <JobsSection
           v-if="!isMobile || !isHendiman"
           :isHendiman="isHendiman"
@@ -669,11 +697,6 @@
         <!-- HANDYMAN: Tools section at the bottom -->
         <aside v-if="isHendiman" class="side side--bottom">
           <section class="panel">
-            <div class="panel__head">
-              <h2 class="h2">כלים להנדימן</h2>
-              <p class="sub">עבודות מופיעות רק לפי ההתמחויות שבחרת בהרשמה</p>
-            </div>
-
             <HandymanTools
               :specialties="me.specialties"
               @edit-profile="onGoProfile"
@@ -1009,28 +1032,58 @@
           v-if="showClientApprovalModal && !isHendiman && pendingApprovalJob"
           class="clientApprovalModal"
           dir="rtl"
-          @click.self="showClientApprovalModal = false"
         >
           <div class="clientApprovalModal__content">
-            <button
-              class="clientApprovalModal__close"
-              type="button"
-              @click="showClientApprovalModal = false"
-              aria-label="סגור"
-            >
-              ✕
-            </button>
             <div class="clientApprovalModal__icon">✅</div>
             <h2 class="clientApprovalModal__title">ההנדימן סיים את העבודה</h2>
             <p class="clientApprovalModal__message">
               ההנדימן סימן את העבודה כהושלמה. האם העבודה הושלמה בהצלחה ואתה מאשר
               לשחרר את התשלום?
             </p>
+            
+            <!-- Hourly Work Hours Input -->
+            <div v-if="pendingJobIsHourly" class="clientApprovalModal__hourly">
+              <label class="clientApprovalModal__hourlyLabel">כמה שעות עבד ההנדימן?</label>
+              <div class="clientApprovalModal__hourlyRow">
+                <button
+                  type="button"
+                  class="clientApprovalModal__hourlyBtn"
+                  :disabled="isApprovingPayment"
+                  @click="clientHoursWorked = Math.max(0.5, (parseFloat(clientHoursWorked) || 0) - 0.5)"
+                  aria-label="הפחת 0.5 שעות"
+                >−</button>
+
+                <input
+                  class="clientApprovalModal__hourlyField"
+                  type="number"
+                  inputmode="decimal"
+                  step="0.5"
+                  min="0.5"
+                  :disabled="isApprovingPayment"
+                  v-model.number="clientHoursWorked"
+                />
+
+                <button
+                  type="button"
+                  class="clientApprovalModal__hourlyBtn"
+                  :disabled="isApprovingPayment"
+                  @click="clientHoursWorked = (parseFloat(clientHoursWorked) || 0) + 0.5"
+                  aria-label="הוסף 0.5 שעות"
+                >+</button>
+              </div>
+              <div class="clientApprovalModal__hourlyPrice">
+                <span>מחיר לשעה: {{ pendingJobHourlyPrice }} ₪</span>
+                <span class="clientApprovalModal__hourlyTotal">
+                  סה"כ: {{ (clientHoursWorked * pendingJobHourlyPrice).toFixed(2) }} ₪
+                </span>
+              </div>
+            </div>
+            
             <div class="clientApprovalModal__actions">
               <button
                 class="clientApprovalModal__btn clientApprovalModal__btn--approve"
                 type="button"
-                :disabled="isApprovingPayment"
+                :disabled="isApprovingPayment || (pendingJobIsHourly && clientHoursWorked <= 0)"
                 @click="handleClientApprove"
               >
                 <span v-if="!isApprovingPayment">כן, אשר ושחרר תשלום</span>
@@ -1624,23 +1677,6 @@
       @close="showClientPaymentNotification = false"
     />
 
-    <!-- Mobile client: floating + and bottom nav (screenshot-like UI) -->
-    <button
-      v-if="
-        !isHendiman &&
-        isMobile &&
-        !isLoading &&
-        (!currentAssignedJob || isChatMinimized) &&
-        showFabAfterScroll
-      "
-      class="fab"
-      type="button"
-      aria-label="צור קריאה"
-      @click="onCreateCallCta"
-    >
-      <span class="fab__plus" aria-hidden="true">+</span>
-      <span class="fab__label">צור קריאה</span>
-    </button>
 
     <!-- Client Bottom Navigation (new design) -->
     <nav
@@ -1882,7 +1918,6 @@ export default {
       dirFilters: { q: "", minRating: 0, minJobs: 0 },
       activeAssignedJob: null,
       isChatMinimized: false,
-      showFabAfterScroll: false,
       pendingActiveJobId: null, // Store active job ID from fast check
       doneJobsCache: [], // Cache for done jobs that need client approval (persists after refresh)
       showJobCancelledModal: false,
@@ -1892,6 +1927,9 @@ export default {
       showClientApprovalModal: false, // Show approval popup for client
       pendingApprovalJob: null, // Job that needs client approval
       isApprovingPayment: false, // Loading state for payment approval
+      // Hourly work approval
+      clientHoursWorked: 1, // Hours worked input by client
+      isHourlyApproval: false, // Flag if current approval is for hourly work
       showProblemReportModal: false, // Show problem report modal
       showIncomeDetailModal: false, // Show income detail modal for handyman
       incomeDetailJob: null, // Job for income detail
@@ -2034,6 +2072,33 @@ export default {
     },
     isLoading() {
       return this.store.isLoading;
+    },
+    // Check if pending approval job is hourly work
+    pendingJobIsHourly() {
+      if (!this.pendingApprovalJob) return false;
+      const subcategoryInfo = this.pendingApprovalJob.subcategoryInfo;
+      if (Array.isArray(subcategoryInfo)) {
+        return subcategoryInfo.some(
+          (sub) => sub?.workType === "לשעה" || sub?.workType === "hourly"
+        );
+      }
+      return subcategoryInfo?.workType === "לשעה" || subcategoryInfo?.workType === "hourly";
+    },
+    // Get hourly price from pending approval job
+    pendingJobHourlyPrice() {
+      if (!this.pendingApprovalJob) return 0;
+      const subcategoryInfo = this.pendingApprovalJob.subcategoryInfo;
+      let price = 0;
+      if (Array.isArray(subcategoryInfo)) {
+        const hourlySub = subcategoryInfo.find(
+          (sub) => sub?.workType === "לשעה" || sub?.workType === "hourly"
+        );
+        price = hourlySub?.price || 0;
+      } else if (subcategoryInfo?.workType === "לשעה" || subcategoryInfo?.workType === "hourly") {
+        price = subcategoryInfo?.price || 0;
+      }
+      // Ensure it's a number
+      return typeof price === 'number' ? price : parseFloat(price) || 0;
     },
     handymenPagination() {
       return this.store.handymenPagination;
@@ -2501,15 +2566,6 @@ export default {
     },
     handleResize() {
       this.isMobile = window.innerWidth <= 768;
-    },
-    handleFabScroll() {
-      const y =
-        window.scrollY ??
-        window.pageYOffset ??
-        document.documentElement?.scrollTop ??
-        document.body?.scrollTop ??
-        0;
-      this.showFabAfterScroll = y > 10;
     },
     async onRefresh() {
       // שמור את ה-jobId הנוכחי לפני refresh (אם יש)
@@ -4169,9 +4225,17 @@ export default {
           return;
         }
 
-        // If we are showing the approval sheet, close it
+        // Close all acceptance/approval sheets when job is accepted
         if (this.showClientApprovalSheet && String(this.jobPendingApproval?._id || this.jobPendingApproval?.id) === jobId) {
           this.showClientApprovalSheet = false;
+          this.jobPendingApproval = null;
+          this.handymanForApproval = null;
+        }
+        
+        // Also close handyman's acceptance sheet if showing
+        if (this.showJobAcceptanceSheet && String(this.jobToAccept?._id || this.jobToAccept?.id) === jobId) {
+          this.showJobAcceptanceSheet = false;
+          this.jobToAccept = null;
         }
 
         // Refresh to get updated job data
@@ -4613,10 +4677,41 @@ export default {
 
       try {
         const { URL } = await import("@/Url/url");
-        const response = await axios.post(`${URL}/api/jobs/approve`, {
+        
+        // Build request data
+        const requestData = {
           jobId,
           clientId,
-        });
+        };
+        
+        // Add hourly work data if applicable
+        if (this.pendingJobIsHourly) {
+          const hours = parseFloat(this.clientHoursWorked) || 0;
+          const hourlyRate = parseFloat(this.pendingJobHourlyPrice) || 0;
+          const total = hours * hourlyRate;
+          
+          console.log('[handleClientApprove] Hourly work detected:', {
+            hours,
+            hourlyRate,
+            total,
+            pendingJobIsHourly: this.pendingJobIsHourly,
+            subcategoryInfo: this.pendingApprovalJob?.subcategoryInfo
+          });
+          
+          if (hours > 0 && hourlyRate > 0) {
+            requestData.hoursWorked = hours;
+            requestData.hourlyPrice = hourlyRate;
+            requestData.totalPrice = total;
+          } else {
+            console.error('[handleClientApprove] Invalid hourly data:', { hours, hourlyRate });
+            this.toast?.showError('שגיאה בנתוני שעות העבודה. אנא נסה שוב.');
+            this.isApprovingPayment = false;
+            return;
+          }
+        }
+        
+        console.log('[handleClientApprove] Sending request:', requestData);
+        const response = await axios.post(`${URL}/api/jobs/approve`, requestData);
 
         if (response.data && response.data.success) {
           this.toast?.showSuccess("העבודה אושרה והתשלום שוחרר");
@@ -4640,20 +4735,49 @@ export default {
           error.message ||
           "שגיאה באישור העבודה";
 
-        // If payment method is required, redirect to CreateCall to add a new card
+        // If payment method is required, show error and close modal
         if (error.response?.data?.requiresPaymentMethod) {
+          // Close modals first to prevent black screen
+          this.showClientApprovalModal = false;
+          this.showProblemReportModal = false;
+          this.isApprovingPayment = false;
+          
           this.toast?.showError(
-            "אמצעי התשלום השמור לא יכול לשמש. אנא הוסף כרטיס אשראי חדש."
+            "נדרש להוסיף אמצעי תשלום. אנא הוסף כרטיס אשראי בעמוד יצירת קריאה."
           );
+          
           // Redirect to CreateCall page to add a new payment method
           setTimeout(() => {
             const userId =
               this.store?.user?._id ||
               this.store?.user?.id ||
               this.$route.params.id;
-            this.$router.push(`/create-call/${userId}`);
-          }, 2000);
+            if (userId) {
+              this.$router.push(`/Dashboard/${userId}/create-call`);
+            } else {
+              console.error('[handleClientApprove] No userId for redirect');
+            }
+          }, 2500);
         } else {
+          // Check if payment was actually successful despite the error
+          // This can happen if the payment succeeded but a subsequent operation failed
+          try {
+            const { URL } = await import("@/Url/url");
+            const checkResponse = await axios.get(`${URL}/payment/${jobId}`);
+            if (checkResponse.data?.payment?.status === 'captured' || 
+                checkResponse.data?.payment?.status === 'succeeded' ||
+                checkResponse.data?.payment?.status === 'paid') {
+              // Payment actually succeeded! Close the modal
+              this.toast?.showSuccess("העבודה אושרה והתשלום שוחרר");
+              this.showClientApprovalModal = false;
+              this.showProblemReportModal = false;
+              this.pendingApprovalJob = null;
+              await this.onRefresh();
+              return;
+            }
+          } catch (checkError) {
+            // Ignore check error, show original error
+          }
           this.toast?.showError(errorMessage);
         }
       } finally {
@@ -6377,9 +6501,6 @@ export default {
     // Listen for window resize to update mobile state
     window.addEventListener("resize", this.handleResize);
 
-    // Show the create-call FAB only after the user scrolls down
-    this.handleFabScroll();
-    window.addEventListener("scroll", this.handleFabScroll, { passive: true });
 
     // Get current GPS location for handymen (if "myLocation" is selected)
     if (this.isHendiman) {
@@ -7048,7 +7169,6 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener("resize", this.handleResize);
-    window.removeEventListener("scroll", this.handleFabScroll);
     this.disconnectWebSocket();
     // Clear quotations polling interval
     if (this.quotationsPollingInterval) {
@@ -8940,38 +9060,6 @@ $r2: 26px;
   cursor: pointer;
 }
 
-/* Floating + */
-.fab {
-  position: fixed;
-  right: 24px;
-  bottom: calc(58px + 10px + env(safe-area-inset-bottom));
-  height: 40px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 2px solid rgba(255, 255, 255, 0.18);
-  background: linear-gradient(135deg, $orange, $orange2);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.65);
-  color: #0b0b0f;
-  z-index: 2600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  cursor: pointer;
-}
-
-.fab__plus {
-  font-size: 22px;
-  font-weight: 1200;
-  line-height: 1;
-}
-
-.fab__label {
-  font-size: 13px;
-  font-weight: 1100;
-  line-height: 1;
-  white-space: nowrap;
-}
 
 /* Bottom nav */
 .mNav {
@@ -9262,16 +9350,16 @@ $r2: 26px;
   );
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
-  padding: 32px;
-  max-width: 450px;
-  width: calc(100% - 40px);
+  padding: 28px 24px;
+  max-width: 340px;
+  width: calc(100% - 32px);
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
   text-align: center;
 
   @media (max-width: 768px) {
-    padding: 24px;
+    padding: 24px 20px;
     border-radius: 16px;
-    max-width: 100%;
+    max-width: 320px;
   }
 }
 
@@ -9327,6 +9415,104 @@ $r2: 26px;
     font-size: 14px;
     margin-bottom: 20px;
   }
+}
+
+/* Hourly work input in approval modal */
+.clientApprovalModal__hourly {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.clientApprovalModal__hourlyLabel {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: $text;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.clientApprovalModal__hourlyRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.clientApprovalModal__hourlyBtn {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: $text;
+  font-size: 26px;
+  font-weight: 300;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: all 0.15s ease;
+  
+  &:hover {
+    background: rgba(255, 106, 0, 0.2);
+    border-color: rgba(255, 106, 0, 0.5);
+    color: $orange;
+  }
+  
+  &:active {
+    transform: scale(0.92);
+    background: rgba(255, 106, 0, 0.3);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+}
+
+.clientApprovalModal__hourlyField {
+  width: 120px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.18);
+  color: $text;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 800;
+  outline: none;
+  box-sizing: border-box;
+  appearance: textfield;
+}
+
+.clientApprovalModal__hourlyField:focus {
+  border-color: rgba($orange, 0.55);
+  box-shadow: 0 0 0 3px rgba($orange, 0.18);
+}
+
+.clientApprovalModal__hourlyField::-webkit-outer-spin-button,
+.clientApprovalModal__hourlyField::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.clientApprovalModal__hourlyPrice {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: $muted;
+}
+
+.clientApprovalModal__hourlyTotal {
+  font-weight: 700;
+  color: $orange;
+  font-size: 15px;
 }
 
 .clientApprovalModal__actions {
@@ -12993,3 +13179,4 @@ $r2: 26px;
   }
 }
 </style>
+

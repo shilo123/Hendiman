@@ -23,6 +23,24 @@
         </div>
       </div>
 
+      <!-- Reset Button -->
+      <div class="admin-manager__reset-section">
+        <button
+          class="admin-manager__reset-btn"
+          type="button"
+          @click="handleReset"
+          :disabled="isResetting"
+        >
+          <span class="admin-manager__reset-icon">🔄</span>
+          <span class="admin-manager__reset-text">
+            {{ isResetting ? 'מאפס...' : 'איפוס מערכת' }}
+          </span>
+        </button>
+        <p class="admin-manager__reset-warning">
+          ⚠️ פעולה זו תמחק את כל הנתונים ותאפס את כל המשתמשים!
+        </p>
+      </div>
+
       <!-- Desktop Tabs -->
       <div class="tabs tabs--desktop">
         <button
@@ -160,6 +178,7 @@ export default {
         { id: "free-handyman", label: "רישום הנדימן חבר בחינם" },
       ],
       toast: null,
+      isResetting: false,
       // Status
     };
   },
@@ -185,6 +204,46 @@ export default {
     selectTab(tabId) {
       this.activeTab = tabId;
       this.mobileMenuOpen = false;
+    },
+    async handleReset() {
+      // Double confirmation
+      const confirmMessage = "⚠️ אזהרה! פעולה זו תמחק את כל הנתונים ותאפס את כל המשתמשים!\n\n" +
+        "זה כולל:\n" +
+        "• מחיקת כל העבודות, תשלומים, דירוגים, פניות, קבלות, צ'אטים וביטולים\n" +
+        "• איפוס דירוגים ומספר עבודות של כל ההנדימנים\n" +
+        "• איפוס מספר הזמנות וחסימות של כל הלקוחות\n\n" +
+        "האם אתה בטוח שברצונך להמשיך?";
+      
+      if (!confirm(confirmMessage)) {
+        return;
+      }
+
+      const finalConfirm = confirm("⚠️ זהו אישור סופי! פעולה זו אינה הפיכה!\n\nלחץ OK רק אם אתה בטוח לחלוטין.");
+      if (!finalConfirm) {
+        return;
+      }
+
+      this.isResetting = true;
+      try {
+        const response = await axios.post(`${URL}/admin/reset`);
+        
+        if (response.data && response.data.success) {
+          this.toast?.showSuccess(
+            `איפוס הושלם בהצלחה! ${response.data.results.handymenReset} הנדימנים ו-${response.data.results.clientsReset} לקוחות אופסו.`
+          );
+          logger.log("[AdminManager] System reset completed:", response.data.results);
+        } else {
+          this.toast?.showError("שגיאה באיפוס המערכת");
+          logger.error("[AdminManager] Reset failed:", response.data);
+        }
+      } catch (error) {
+        logger.error("[AdminManager] Error resetting system:", error);
+        this.toast?.showError(
+          error.response?.data?.message || "שגיאה באיפוס המערכת"
+        );
+      } finally {
+        this.isResetting = false;
+      }
     },
   },
 };
@@ -298,6 +357,86 @@ $muted: rgba(255, 255, 255, 0.62);
   @media (max-width: 500px) {
     display: block;
   }
+}
+
+/* Reset Section */
+.admin-manager__reset-section {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
+  border: 2px solid rgba(239, 68, 68, 0.3);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.15);
+}
+
+.admin-manager__reset-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 28px;
+  border-radius: 12px;
+  border: 2px solid rgba(239, 68, 68, 0.4);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.15) 100%);
+  color: #ef4444;
+  font-size: 16px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: $font-family;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0%, rgba(239, 68, 68, 0.2) 100%);
+    border-color: rgba(239, 68, 68, 0.6);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.3);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+}
+
+.admin-manager__reset-icon {
+  font-size: 20px;
+  animation: spin 2s linear infinite;
+  
+  .admin-manager__reset-btn:disabled & {
+    animation: spin 1s linear infinite;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.admin-manager__reset-text {
+  font-weight: 1000;
+  letter-spacing: 0.5px;
+}
+
+.admin-manager__reset-warning {
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(239, 68, 68, 0.9);
+  margin: 0;
+  text-align: center;
+  line-height: 1.5;
 }
 
 /* Tabs */

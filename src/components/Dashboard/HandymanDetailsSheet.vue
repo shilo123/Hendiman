@@ -52,22 +52,63 @@
                 >{{ getCityText(handyman) }}</span
               >
             </div>
-            <div class="hsStats" v-if="handyman">
-              <div class="hsStatItem">
-                <span class="hsStatLabel">מספר איחורים:</span>
-                <span class="hsStatValue">{{ handyman.lateArrivals || 0 }}</span>
+            <!-- Handyman Score Display -->
+            <div class="hsScoreSection" v-if="handyman">
+              <div class="hsScoreHeader">
+                <span class="hsScoreLabel">ציון פנימי של המערכת</span>
+                <button 
+                  class="hsScoreBreakdownBtn" 
+                  type="button" 
+                  @click="showScoreBreakdown = !showScoreBreakdown"
+                >
+                  {{ showScoreBreakdown ? 'הסתר' : 'לפירוט' }}
+                </button>
               </div>
-              <div class="hsStatItem">
-                <span class="hsStatLabel">יחס איחורים:</span>
-                <span class="hsStatValue">{{ getLateRatio(handyman) }}%</span>
+              
+              <!-- Score Progress Bar -->
+              <div class="hsScoreBarContainer">
+                <div class="hsScoreBarTrack">
+                  <div 
+                    class="hsScoreBarFill" 
+                    :style="{ width: getSystemScore(handyman) + '%' }"
+                    :class="getScoreClass(getSystemScore(handyman))"
+                  ></div>
+                  <div 
+                    class="hsScoreBarGlow" 
+                    :style="{ width: getSystemScore(handyman) + '%' }"
+                    :class="getScoreClass(getSystemScore(handyman))"
+                  ></div>
+                </div>
+                <div class="hsScoreValue">
+                  <span class="hsScoreNumber">{{ getSystemScore(handyman) }}</span>
+                  <span class="hsScoreMax">/100</span>
+                </div>
               </div>
-              <div class="hsStatItem">
-                <span class="hsStatLabel">הגעות בזמן:</span>
-                <span class="hsStatValue">{{ getOnTimeRatio(handyman) }}%</span>
-              </div>
-              <div class="hsStatItem">
-                <span class="hsStatLabel">ציון מערכת:</span>
-                <span class="hsStatValue">{{ getSystemScore(handyman) }}</span>
+              
+              <!-- Score Breakdown (Collapsible) -->
+              <div v-if="showScoreBreakdown" class="hsScoreBreakdown">
+                <div class="hsBreakdownItem">
+                  <span class="hsBreakdownLabel">השלמת עבודות (30%)</span>
+                  <span class="hsBreakdownValue">{{ scoreBreakdown.completion || 0 }}</span>
+                </div>
+                <div class="hsBreakdownItem">
+                  <span class="hsBreakdownLabel">הגעה בזמן (25%)</span>
+                  <span class="hsBreakdownValue">{{ scoreBreakdown.onTime || 0 }}</span>
+                </div>
+                <div class="hsBreakdownItem">
+                  <span class="hsBreakdownLabel">דירוג לקוחות (25%)</span>
+                  <span class="hsBreakdownValue">{{ scoreBreakdown.rating || 0 }}</span>
+                </div>
+                <div class="hsBreakdownItem">
+                  <span class="hsBreakdownLabel">ביטולים (20%)</span>
+                  <span class="hsBreakdownValue">{{ scoreBreakdown.cancellations || 0 }}</span>
+                </div>
+                <div class="hsBreakdownDivider"></div>
+                <div class="hsBreakdownItem hsBreakdownItem--stats">
+                  <span class="hsBreakdownLabel">מספר איחורים</span>
+                  <span class="hsBreakdownValue">{{ handyman.lateArrivals || 0 }}</span>
+                </div>
+                <div v-if="!hasScoreData" class="hsNoData">אין נתונים עדיין</div>
               </div>
             </div>
           </div>
@@ -362,6 +403,16 @@ export default {
       dragStartY: 0,
       dragOffsetY: 0,
       avatarErrored: false,
+      
+      // Score-related data
+      showScoreBreakdown: false,
+      scoreBreakdown: {
+        completion: 0,
+        onTime: 0,
+        rating: 0,
+        cancellations: 0,
+      },
+      hasScoreData: false,
     };
   },
   computed: {
@@ -444,6 +495,7 @@ export default {
       immediate: true,
       async handler() {
         await this.loadAll();
+        await this.fetchHandymanScore();
       },
     },
     activeTab() {
@@ -566,23 +618,52 @@ export default {
       return Math.round((onTime / totalJobs) * 100);
     },
     getSystemScore(handyman) {
-      // Calculate system score based on rating, on-time ratio, and job count
+      // Use server-calculated score if available
+      if (handyman?.handymanScore?.score !== undefined) {
+        return handyman.handymanScore.score;
+      }
+      // Fallback to local calculation if server score not available
       const rating = Number(handyman?.rating) || 0;
       const onTimeRatio = this.getOnTimeRatio(handyman);
       const totalJobs = handyman?.jobDone || 0;
       
-      // Base score from rating (0-5 scale, convert to 0-100)
       let score = rating * 20;
-      
-      // Adjust based on on-time ratio (0-30 points)
       score += (onTimeRatio / 100) * 30;
-      
-      // Small bonus for experience (0-10 points based on job count)
       const experienceBonus = Math.min(10, (totalJobs / 10) * 2);
       score += experienceBonus;
       
-      // Cap at 100
       return Math.min(100, Math.round(score));
+    },
+    getScoreClass(score) {
+      if (score >= 85) return 'hsScoreBar--excellent';
+      if (score >= 60) return 'hsScoreBar--good';
+      if (score >= 40) return 'hsScoreBar--average';
+      return 'hsScoreBar--low';
+    },
+    async fetchHandymanScore() {
+      if (!this.handymanId) return;
+      try {
+        const res = await axios.get(`${process.env.VUE_APP_API_URL}/api/handyman/${this.handymanId}/score`);
+        if (res.data.success && res.data.handymanScore) {
+          const score = res.data.handymanScore;
+          this.scoreBreakdown = score.breakdown || {
+            completion: 0,
+            onTime: 0,
+            rating: 0,
+            cancellations: 0,
+          };
+          this.hasScoreData = true;
+          // Update handyman object with the fetched score
+          if (this.handyman) {
+            this.handyman.handymanScore = score;
+          }
+        } else {
+          this.hasScoreData = false;
+        }
+      } catch (error) {
+        console.error('Error fetching handyman score:', error);
+        this.hasScoreData = false;
+      }
     },
     formatRating(val) {
       const n = Number(val);
@@ -1035,33 +1116,166 @@ $orange2: #ff8a2b;
   opacity: 0.65;
 }
 
-.hsStats {
+/* Handyman Score Section */
+.hsScoreSection {
   margin-top: 12px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
 }
 
-.hsStatItem {
+.hsScoreHeader {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
 }
 
-.hsStatLabel {
+.hsScoreLabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.hsScoreBreakdownBtn {
+  background: rgba(255, 200, 87, 0.15);
+  border: 1px solid rgba(255, 200, 87, 0.3);
+  border-radius: 8px;
+  padding: 6px 12px;
   font-size: 11px;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.5);
+  color: #ffc857;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.hsStatValue {
-  font-size: 14px;
+.hsScoreBreakdownBtn:hover {
+  background: rgba(255, 200, 87, 0.25);
+  transform: translateY(-1px);
+}
+
+/* Score Progress Bar */
+.hsScoreBarContainer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.hsScoreBarTrack {
+  flex: 1;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.hsScoreBarFill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  z-index: 2;
+}
+
+.hsScoreBarGlow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 10px;
+  filter: blur(6px);
+  opacity: 0.6;
+  z-index: 1;
+}
+
+/* Score Color Classes */
+.hsScoreBar--excellent {
+  background: linear-gradient(90deg, #4ade80, #22c55e);
+}
+
+.hsScoreBar--good {
+  background: linear-gradient(90deg, #ffc857, #f59e0b);
+}
+
+.hsScoreBar--average {
+  background: linear-gradient(90deg, #fb923c, #f97316);
+}
+
+.hsScoreBar--low {
+  background: linear-gradient(90deg, #f87171, #ef4444);
+}
+
+.hsScoreValue {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  min-width: 50px;
+  justify-content: flex-end;
+}
+
+.hsScoreNumber {
+  font-size: 22px;
   font-weight: 900;
   color: rgba(255, 255, 255, 0.95);
+  font-variant-numeric: tabular-nums;
+}
+
+.hsScoreMax {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Score Breakdown */
+.hsScoreBreakdown {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hsBreakdownItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hsBreakdownItem--stats {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.hsBreakdownLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.hsBreakdownValue {
+  font-size: 14px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.9);
+  font-variant-numeric: tabular-nums;
+}
+
+.hsBreakdownDivider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 4px 0;
+}
+
+.hsNoData {
+  text-align: center;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
+  padding: 8px 0;
 }
 
 .hsTabs {

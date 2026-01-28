@@ -269,6 +269,223 @@ function findAvailablePort(startPort) {
   });
 }
 
+// ============================================================================
+// HANDYMAN SCORE SYSTEM
+// Internal score (0-100) for:
+// - Smart job assignment (who gets the job first)
+// - Client display ("Recommended")
+// - Filtering out unreliable handymen
+// ============================================================================
+
+/**
+ * Calculate handyman score based on:
+ * - Completion Rate (jobs completed / jobs assigned) – 30%
+ * - On-Time / ETA (arrived on time) – 25%
+ * - Rating Average (client ratings) – 25%
+ * - Cancellation Penalty (handyman-initiated cancellations) – 20%
+ * 
+ * @param {string|ObjectId} handymanId - The handyman's ID
+ * @returns {Promise<Object>} - The calculated score and breakdown
+ */
+async function calculateHandymanScore(handymanId) {
+  try {
+    const { getCollection, getCollectionJobs, getCollectionCanceld } = require("./dbConfig");
+    const usersCol = getCollection();
+    const jobsCol = getCollectionJobs();
+    const canceldCol = getCollectionCanceld();
+    
+    const handymanObjectId = handymanId instanceof ObjectId 
+      ? handymanId 
+      : new ObjectId(handymanId);
+    
+    // Get handyman data
+    const handyman = await usersCol.findOne({ _id: handymanObjectId });
+    if (!handyman) {
+      return { score: 0, breakdown: { completion: 0, onTime: 0, rating: 0, cancellations: 100 } };
+    }
+    
+    // Get all jobs assigned to this handyman
+    const allAssignedJobs = await jobsCol.find({
+      $or: [
+        { handymanId: handymanObjectId },
+        { handymanId: handymanId.toString() },
+        { handymanId: { $in: [handymanObjectId, handymanId.toString()] } }
+      ]
+    }).toArray();
+    
+    // Get completed jobs
+    const completedJobs = allAssignedJobs.filter(job => 
+      job.status === "done" || job.status === "completed" || job.status === "paid"
+    );
+    
+    // Get jobs where handyman arrived on time (wasLate === false or no wasLate field but has arrivedAt)
+    const jobsWithArrival = completedJobs.filter(job => job.arrivedAt);
+    const onTimeJobs = jobsWithArrival.filter(job => job.wasLate === false);
+    
+    // Get handyman-initiated cancellations
+    const handymanCancellations = await canceldCol.countDocuments({
+      handymanId: { $in: [handymanObjectId, handymanId.toString()] },
+      personcancel: "handyman"
+    });
+    
+    // Calculate each component (0-100)
+    const totalAssigned = allAssignedJobs.length;
+    const totalCompleted = completedJobs.length;
+    const totalWithArrival = jobsWithArrival.length;
+    const totalOnTime = onTimeJobs.length;
+    const lateArrivals = handyman.lateArrivals || 0;
+    const rating = handyman.rating || 0;
+    
+    // Completion Rate (30%) - jobs completed / jobs assigned
+    let completionScore = 0;
+    if (totalAssigned > 0) {
+      completionScore = Math.round((totalCompleted / totalAssigned) * 100);
+    } else {
+      completionScore = 0; // No data
+    }
+    
+    // On-Time Rate (25%) - arrived on time / total arrivals
+    let onTimeScore = 0;
+    if (totalWithArrival > 0) {
+      onTimeScore = Math.round((totalOnTime / totalWithArrival) * 100);
+    } else if (totalCompleted > 0 && lateArrivals === 0) {
+      // If has completed jobs but no arrival data and no late arrivals, assume on time
+      onTimeScore = 100;
+    } else if (totalCompleted > 0) {
+      // Calculate from lateArrivals vs total completed
+      onTimeScore = Math.round(((totalCompleted - lateArrivals) / totalCompleted) * 100);
+      onTimeScore = Math.max(0, onTimeScore);
+    } else {
+      onTimeScore = 0; // No data
+    }
+    
+    // Rating Average (25%) - convert 0-5 rating to 0-100
+    let ratingScore = 0;
+    if (rating > 0) {
+      ratingScore = Math.round((rating / 5) * 100);
+    } else {
+      ratingScore = 0; // No data
+    }
+    
+    // Cancellation Penalty (20%) - higher score = better (fewer cancellations)
+    // Penalty: each cancellation reduces score by 20 points (max 5 cancellations = 0)
+    let cancellationScore = 100;
+    if (handymanCancellations > 0) {
+      cancellationScore = Math.max(0, 100 - (handymanCancellations * 20));
+    }
+    
+    // Calculate weighted average
+    const weights = {
+      completion: 0.30,
+      onTime: 0.25,
+      rating: 0.25,
+      cancellations: 0.20
+    };
+    
+    const weightedScore = 
+      (completionScore * weights.completion) +
+      (onTimeScore * weights.onTime) +
+      (ratingScore * weights.rating) +
+      (cancellationScore * weights.cancellations);
+    
+    // Clamp to 0-100
+    const finalScore = Math.min(100, Math.max(0, Math.round(weightedScore)));
+    
+    return {
+      score: finalScore,
+      breakdown: {
+        completion: completionScore,
+        onTime: onTimeScore,
+        rating: ratingScore,
+        cancellations: cancellationScore
+      },
+      stats: {
+        totalAssigned,
+        totalCompleted,
+        totalOnTime,
+        lateArrivals,
+        handymanCancellations,
+        avgRating: rating
+      }
+    };
+  } catch (error) {
+    serverLogger.error(`[calculateHandymanScore] Error:`, error.message);
+    return { score: 0, breakdown: { completion: 0, onTime: 0, rating: 0, cancellations: 100 } };
+  }
+}
+
+/**
+ * Recalculate and update handyman score in the database
+ * Called after job completion, cancellation, rating, or late arrival
+ * 
+ * @param {string|ObjectId} handymanId - The handyman's ID
+ */
+async function recalculateHandymanScore(handymanId) {
+  try {
+    const { getCollection } = require("./dbConfig");
+    const usersCol = getCollection();
+    
+    const scoreData = await calculateHandymanScore(handymanId);
+    
+    const handymanObjectId = handymanId instanceof ObjectId 
+      ? handymanId 
+      : new ObjectId(handymanId);
+    
+    await usersCol.updateOne(
+      { _id: handymanObjectId },
+      { 
+        $set: { 
+          handymanScore: {
+            score: scoreData.score,
+            breakdown: scoreData.breakdown,
+            lastUpdatedAt: new Date()
+          }
+        } 
+      }
+    );
+    
+    serverLogger.log(`[recalculateHandymanScore] Updated score for handyman ${handymanId}: ${scoreData.score}`);
+    return scoreData;
+  } catch (error) {
+    serverLogger.error(`[recalculateHandymanScore] Error:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Get push notification delay based on handyman score and registration date
+ * - New handymen (< 10 days) or score > 85: 0 (immediate)
+ * - Score 60-85: 90 seconds (1.5 minutes)
+ * - Score < 50: 180 seconds (3 minutes)
+ * 
+ * @param {Object} handyman - The handyman object with handymanScore and createdAt
+ * @returns {number} - Delay in milliseconds
+ */
+function getPushDelayForHandyman(handyman) {
+  // Check if handyman is new (< 10 days)
+  const createdAt = handyman.createdAt ? new Date(handyman.createdAt) : null;
+  if (createdAt) {
+    const daysSinceRegistration = (Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSinceRegistration < 10) {
+      return 0; // Immediate push for new handymen
+    }
+  }
+  
+  // Get handyman score
+  const score = handyman.handymanScore?.score ?? 50; // Default to 50 if no score
+  
+  if (score > 85) {
+    return 0; // Immediate push for high scorers
+  } else if (score >= 60 && score <= 85) {
+    return 90 * 1000; // 1.5 minutes delay
+  } else if (score < 50) {
+    return 180 * 1000; // 3 minutes delay
+  } else {
+    // Score between 50-60, use 1 minute delay
+    return 60 * 1000;
+  }
+}
+
 // Start server with available port
 (async () => {
   try {
@@ -3705,6 +3922,97 @@ function findAvailablePort(startPort) {
         return res.status(500).json({
           success: false,
           message: "Error fetching handyman",
+          error: error.message,
+        });
+      }
+    });
+    
+    // Get handyman score with breakdown
+    app.get("/api/handyman/:id/score", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const usersCol = getCollection();
+        
+        const handyman = await usersCol.findOne({
+          _id: new ObjectId(id),
+          isHandyman: true,
+        });
+        
+        if (!handyman) {
+          return res.status(404).json({
+            success: false,
+            message: "הנדימן לא נמצא",
+          });
+        }
+        
+        // Calculate fresh score
+        const scoreData = await calculateHandymanScore(id);
+        
+        return res.json({
+          success: true,
+          score: scoreData.score,
+          breakdown: scoreData.breakdown,
+          stats: scoreData.stats,
+          lastUpdated: handyman.handymanScore?.lastUpdatedAt || null,
+        });
+      } catch (error) {
+        return res.status(500).json({
+          success: false,
+          message: "שגיאה בטעינת ציון ההנדימן",
+          error: error.message,
+        });
+      }
+    });
+    
+    // Calculate ETA between handyman and client location using MapBox
+    app.post("/api/eta/calculate", async (req, res) => {
+      try {
+        const { handymanLat, handymanLng, clientLat, clientLng } = req.body;
+        
+        if (!handymanLat || !handymanLng || !clientLat || !clientLng) {
+          return res.status(400).json({
+            success: false,
+            message: "Missing required coordinates",
+          });
+        }
+        
+        if (!process.env.MAPBOX_TOKEN) {
+          return res.status(500).json({
+            success: false,
+            message: "MapBox not configured",
+          });
+        }
+        
+        // Call MapBox Directions API
+        const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${handymanLng},${handymanLat};${clientLng},${clientLat}?access_token=${process.env.MAPBOX_TOKEN}`;
+        
+        const response = await axios.get(url);
+        
+        if (response.data && response.data.routes && response.data.routes.length > 0) {
+          const route = response.data.routes[0];
+          const durationSeconds = route.duration;
+          const distanceMeters = route.distance;
+          
+          const etaMinutes = Math.round(durationSeconds / 60);
+          const distanceKm = Math.round((distanceMeters / 1000) * 10) / 10;
+          
+          return res.json({
+            success: true,
+            etaMinutes,
+            distanceKm,
+            durationSeconds,
+            distanceMeters,
+          });
+        } else {
+          return res.status(400).json({
+            success: false,
+            message: "Could not calculate ETA",
+          });
+        }
+      } catch (error) {
+        return res.status(500).json({
+          success: false,
+          message: "Error calculating ETA",
           error: error.message,
         });
       }
@@ -8250,6 +8558,20 @@ function findAvailablePort(startPort) {
           }
         }).catch(err => serverLogger.error("Push error:", err));
 
+        // Push to client (notify that handyman was assigned)
+        if (clientIdStr) {
+          sendPushToUser(clientIdStr, {
+            title: "הנדימן קיבל ✅",
+            body: `${handymanName} קיבל את הקריאה. נפתח צ'אט.`,
+            data: {
+              type: "job_accepted",
+              jobId: jobId.toString(),
+              handymanId: handymanId.toString(),
+              handymanName: handymanName || "",
+            }
+          }).catch(err => serverLogger.error("Push error to client:", err));
+        }
+
         res.json({ success: true, message: "העבודה שובצה בהצלחה" });
       } catch (error) {
         serverLogger.error("Error in client-approval-response:", error);
@@ -8450,8 +8772,9 @@ function findAvailablePort(startPort) {
         });
 
         // Send Push Notification to client (non-blocking - run in background)
+        // CRITICAL: Always send push notification to client when handyman accepts job
         if (clientId) {
-          setImmediate(async () => {
+          (async () => {
             try {
               // Handle both ObjectId and string clientId
               const clientObjectId =
@@ -8465,6 +8788,7 @@ function findAvailablePort(startPort) {
               if (client) {
                 if (client.fcmToken) {
                   // Send notification about job acceptance
+                  serverLogger.log(`[jobs/accept] Sending push to client ${clientId} about handyman ${handymanId} accepting job ${jobId}`);
                   const pushResult = await sendPushNotification(
                     client.fcmToken,
                     "הנדימן קיבל ✅",
@@ -8477,6 +8801,8 @@ function findAvailablePort(startPort) {
                     }
                   );
 
+                  serverLogger.log(`[jobs/accept] Push result:`, pushResult);
+
                   // If token is invalid, remove it from database
                   if (pushResult.shouldRemove) {
                     await usersCol.updateOne(
@@ -8484,12 +8810,19 @@ function findAvailablePort(startPort) {
                       { $unset: { fcmToken: "" } }
                     );
                   }
+                } else {
+                  serverLogger.log(`[jobs/accept] Client ${clientId} has no FCM token`);
                 }
+              } else {
+                serverLogger.log(`[jobs/accept] Client ${clientId} not found in database`);
               }
             } catch (pushError) {
+              serverLogger.error(`[jobs/accept] Error sending push to client:`, pushError);
               // Don't fail the request if push notification fails
             }
-          });
+          })();
+        } else {
+          serverLogger.log(`[jobs/accept] No clientId found for job ${jobId}`);
         }
 
         // Create Payment Intent for Escrow (if job has a price)
@@ -9207,6 +9540,9 @@ function findAvailablePort(startPort) {
           handimanId: handymanIdForCancel
             ? new ObjectId(handymanIdForCancel)
             : null,
+          handymanId: handymanIdForCancel
+            ? new ObjectId(handymanIdForCancel)
+            : null, // Also store as handymanId for score calculation
           customerId: job.clientId ? new ObjectId(job.clientId) : null,
           "handyman-requires": cancel?.handymanRequires || false,
           status: job.status || "cancelled",
@@ -9215,11 +9551,17 @@ function findAvailablePort(startPort) {
           "fine-collected": false,
           "Who-canceled": whoCanceled,
           "Completely canceled": completelyCanceled,
+          personcancel: personCancel, // Store who cancelled for score calculation
           createdAt: new Date(),
           updatedAt: new Date(),
         };
 
         await canceldCol.insertOne(cancellationDoc);
+        
+        // Recalculate handyman score if handyman cancelled (affects their score negatively)
+        if (personCancel === "handyman" && handymanIdForCancel) {
+          recalculateHandymanScore(handymanIdForCancel);
+        }
 
         // If completely canceled, delete the job from DB
         if (completelyCanceled) {
@@ -9857,7 +10199,7 @@ function findAvailablePort(startPort) {
 
     app.post("/jobs/on-the-way", async (req, res) => {
       try {
-        const { jobId, handymanId } = req.body;
+        const { jobId, handymanId, etaMinutes } = req.body;
         if (!jobId || !handymanId) {
           return res
             .status(400)
@@ -9879,8 +10221,62 @@ function findAvailablePort(startPort) {
           handymanId: job.handymanId || handymanId,
         };
 
+        // Calculate expected arrival time (ETA + 5 minutes buffer)
+        const onTheWayAt = new Date();
+        let etaMinutesNum = parseInt(etaMinutes) || 0;
+        
+        // If ETA not provided, calculate it from handyman and job locations
+        if (etaMinutesNum === 0) {
+          try {
+            const usersCol = getCollection();
+            const handymanObjectId = handymanId instanceof ObjectId ? handymanId : new ObjectId(handymanId);
+            const handyman = await usersCol.findOne({ _id: handymanObjectId });
+            
+            if (handyman && handyman.location && handyman.location.coordinates && 
+                job.location && job.location.coordinates) {
+              const handymanLng = handyman.location.coordinates[0];
+              const handymanLat = handyman.location.coordinates[1];
+              const jobLng = job.location.coordinates[0];
+              const jobLat = job.location.coordinates[1];
+              
+              // Calculate ETA using MapBox
+              if (process.env.MAPBOX_TOKEN && 
+                  !isNaN(handymanLng) && !isNaN(handymanLat) &&
+                  !isNaN(jobLng) && !isNaN(jobLat)) {
+                try {
+                  const mapboxUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${handymanLng},${handymanLat};${jobLng},${jobLat}?access_token=${process.env.MAPBOX_TOKEN}`;
+                  const mapboxResponse = await axios.get(mapboxUrl);
+                  
+                  if (mapboxResponse.data && mapboxResponse.data.routes && mapboxResponse.data.routes.length > 0) {
+                    const route = mapboxResponse.data.routes[0];
+                    const durationSeconds = route.duration;
+                    etaMinutesNum = Math.round(durationSeconds / 60);
+                    serverLogger.log(`[on-the-way] Calculated ETA for job ${jobId}: ${etaMinutesNum} minutes`);
+                  }
+                } catch (etaError) {
+                  serverLogger.error(`[on-the-way] Error calculating ETA for job ${jobId}: ${etaError.message}`);
+                }
+              }
+            }
+          } catch (error) {
+            serverLogger.error(`[on-the-way] Error fetching handyman/job data for ETA calculation: ${error.message}`);
+          }
+        }
+        
+        let expectedArrivalAt = null;
+        if (etaMinutesNum > 0) {
+          expectedArrivalAt = new Date(onTheWayAt.getTime() + (etaMinutesNum + 5) * 60 * 1000);
+        }
+
         // If job has cancel field, remove it (job is being reassigned/continued)
-        const updateQuery = { $set: { status: "on_the_way" } };
+        const updateQuery = { 
+          $set: { 
+            status: "on_the_way",
+            onTheWayAt: onTheWayAt,
+            etaMinutes: etaMinutesNum,
+            expectedArrivalAt: expectedArrivalAt,
+          } 
+        };
         if (job?.cancel) {
           updateQuery.$unset = { cancel: "" };
         }
@@ -9891,6 +10287,7 @@ function findAvailablePort(startPort) {
           io.to(`job-${jobId}`).emit("job-status-updated", {
             jobId,
             status: "on_the_way",
+            expectedArrivalAt: expectedArrivalAt,
           });
         }
 
@@ -9954,6 +10351,7 @@ function findAvailablePort(startPort) {
             .json({ success: false, message: "jobId and handymanId required" });
         }
         const jobsCol = getCollectionJobs();
+        const usersCol = getCollection();
 
         // Find the job first to get the correct handymanId format
         const job = await jobsCol.findOne({ _id: new ObjectId(jobId) });
@@ -9969,8 +10367,50 @@ function findAvailablePort(startPort) {
           handymanId: job.handymanId || handymanId,
         };
 
+        // Check if handyman arrived late
+        const arrivedAt = new Date();
+        let wasLate = false;
+        
+        if (job.expectedArrivalAt) {
+          const expectedArrival = new Date(job.expectedArrivalAt);
+          wasLate = arrivedAt > expectedArrival;
+          
+          // If late, increment handyman's lateArrivals counter
+          if (wasLate) {
+            try {
+              const handymanIdToUpdate = Array.isArray(job.handymanId) 
+                ? job.handymanId[0] 
+                : job.handymanId;
+              
+              if (handymanIdToUpdate) {
+                const handymanObjectId = handymanIdToUpdate instanceof ObjectId 
+                  ? handymanIdToUpdate 
+                  : new ObjectId(handymanIdToUpdate);
+                
+                await usersCol.updateOne(
+                  { _id: handymanObjectId },
+                  { $inc: { lateArrivals: 1 } }
+                );
+                
+                serverLogger.log(`[in-progress] Handyman ${handymanIdToUpdate} arrived late for job ${jobId}`);
+                
+                // Recalculate handyman score after late arrival
+                recalculateHandymanScore(handymanIdToUpdate);
+              }
+            } catch (lateError) {
+              serverLogger.error(`[in-progress] Error updating late arrival:`, lateError.message);
+            }
+          }
+        }
+
         // If job has cancel field, remove it (job is being reassigned/continued)
-        const updateQuery = { $set: { status: "in_progress" } };
+        const updateQuery = { 
+          $set: { 
+            status: "in_progress",
+            arrivedAt: arrivedAt,
+            wasLate: wasLate,
+          } 
+        };
         if (job?.cancel) {
           updateQuery.$unset = { cancel: "" };
         }
@@ -9985,8 +10425,7 @@ function findAvailablePort(startPort) {
           });
         }
 
-        // Send Push Notification to client
-        const usersCol = getCollection();
+        // Send Push Notification to client (usersCol already declared above)
         const clientId = job?.clientId;
         if (clientId) {
           try {
@@ -10235,6 +10674,18 @@ function findAvailablePort(startPort) {
     app.post("/api/jobs/approve", async (req, res) => {
       try {
         const { jobId, clientId, hoursWorked, hourlyPrice, totalPrice } = req.body;
+        
+        serverLogger.log(`[jobs/approve] Request received:`, {
+          jobId,
+          clientId,
+          hoursWorked,
+          hourlyPrice,
+          totalPrice
+        });
+        
+        // Check if hourly work data is provided
+        const hasHourlyData =
+          hoursWorked !== undefined && hourlyPrice !== undefined && totalPrice !== undefined;
 
         if (!jobId || !clientId) {
           return res.status(400).json({
@@ -10275,6 +10726,42 @@ function findAvailablePort(startPort) {
           });
         }
 
+        // Detect hourly jobs based on subcategoryInfo/workType/typeWork
+        const isHourlyJob = (() => {
+          const si = job.subcategoryInfo;
+          const isHourlyVal = (v) =>
+            v === "לשעה" || v === "hourly" || v === "Hourly" || v === "HOURLY";
+          if (Array.isArray(si)) {
+            return si.some((s) => isHourlyVal(s?.workType) || isHourlyVal(s?.typeWork));
+          }
+          if (si && typeof si === "object") {
+            return isHourlyVal(si.workType) || isHourlyVal(si.typeWork);
+          }
+          return false;
+        })();
+
+        // For hourly jobs, we must charge the FINAL hours*rate amount at approval time.
+        // If a payment intent already exists (e.g., created at accept), cancel it and create a new one.
+        if (isHourlyJob && hasHourlyData && job.paymentIntentId) {
+          try {
+            serverLogger.warn(
+              `[jobs/approve] Hourly job: cancelling existing paymentIntentId ${job.paymentIntentId} to recreate with final total`
+            );
+            await cancelEscrow(job.paymentIntentId);
+          } catch (cancelErr) {
+            serverLogger.error(
+              `[jobs/approve] Failed cancelling existing payment intent (hourly): ${cancelErr.message}`
+            );
+          }
+
+          // Clear payment intent reference on the job so we create a fresh one below
+          await jobsCol.updateOne(
+            { _id: new ObjectId(jobId) },
+            { $unset: { paymentIntentId: "", paymentStatus: "" } }
+          );
+          job.paymentIntentId = null;
+        }
+
         // Note: Each job in a split call is independent
         // Client can approve and release payment for each handyman separately when their job is done
         // No need to wait for all jobs to complete
@@ -10290,6 +10777,24 @@ function findAvailablePort(startPort) {
               },
             }
           );
+
+          // ✅ Ensure handyman score is up-to-date even if payment was already marked as paid
+          try {
+            let handymanId =
+              Array.isArray(job.handymanId) && job.handymanId.length > 0
+                ? job.handymanId[0]
+                : job.handymanId;
+            if (!handymanId && job.handymanIdSpecial) {
+              handymanId = job.handymanIdSpecial;
+            }
+            if (handymanId) {
+              await recalculateHandymanScore(String(handymanId));
+            }
+          } catch (scoreError) {
+            serverLogger.error(
+              `[jobs/approve] Score recalculation failed (already paid): ${scoreError.message}`
+            );
+          }
 
           return res.json({
             success: true,
@@ -10328,12 +10833,22 @@ function findAvailablePort(startPort) {
           // Calculate job price
           // If hoursWorked, hourlyPrice, and totalPrice are provided (for hourly work), use them
           let calculatedTotalPrice = 0;
-          if (hoursWorked && hourlyPrice && totalPrice) {
+          
+          serverLogger.log(`[jobs/approve] Hourly work check:`, {
+            hoursWorked,
+            hourlyPrice,
+            totalPrice,
+            hasHourlyData
+          });
+          
+          if (hasHourlyData && parseFloat(hoursWorked) > 0 && parseFloat(hourlyPrice) > 0) {
             // Use the totalPrice provided by client (already calculated: hoursWorked * hourlyPrice)
             calculatedTotalPrice = parseFloat(totalPrice);
             serverLogger.log(
               `[jobs/approve] Using hourly work pricing: ${hoursWorked} hours × ${hourlyPrice} ₪ = ${calculatedTotalPrice} ₪`
             );
+          } else if (hasHourlyData) {
+            serverLogger.error(`[jobs/approve] Invalid hourly data - hoursWorked: ${hoursWorked}, hourlyPrice: ${hourlyPrice}`);
           } else {
             // Calculate from subcategoryInfo (for fixed price jobs)
             if (
@@ -10375,12 +10890,12 @@ function findAvailablePort(startPort) {
             calculatedTotalPrice += 10;
           }
           
-          const totalPrice = calculatedTotalPrice;
+          const finalTotalPrice = calculatedTotalPrice;
 
-          if (totalPrice > 0) {
-            // Client pays only the original price (totalPrice)
+          if (finalTotalPrice > 0) {
+            // Client pays only the original price (finalTotalPrice)
             // Platform fee is deducted from handyman, not added to client
-            const originalPriceAgorot = Math.round(totalPrice * 100);
+            const originalPriceAgorot = Math.round(finalTotalPrice * 100);
             const platformFeeAgorot = Math.round(
               (originalPriceAgorot * getPlatformFeePercent()) / 100
             );
@@ -10411,6 +10926,10 @@ function findAvailablePort(startPort) {
                   },
                 }
               );
+
+              // ✅ IMPORTANT: keep local job object in sync so the rest of the flow can confirm/capture
+              job.paymentIntentId = result.paymentIntentId;
+              job.paymentStatus = "pending";
 
               // Calculate VAT (MAAM) for payment record
               const maamPercentForApprove = getMaamPercent();
@@ -10489,7 +11008,7 @@ function findAvailablePort(startPort) {
         };
         
         // Add hourly work data if provided
-        if (hoursWorked && hourlyPrice && totalPrice) {
+        if (hasHourlyData && parseFloat(hoursWorked) > 0 && parseFloat(hourlyPrice) > 0) {
           updateData.hoursWorked = parseFloat(hoursWorked);
           updateData.hourlyPrice = parseFloat(hourlyPrice);
           updateData.hoursTotalPrice = parseFloat(totalPrice);
@@ -10498,16 +11017,24 @@ function findAvailablePort(startPort) {
           );
         }
         
-        if (job.clientApproved !== true || (hoursWorked && hourlyPrice && totalPrice)) {
+        try {
+          if (job.clientApproved !== true || hasHourlyData) {
+            serverLogger.log(`[jobs/approve] Updating job with clientApproved and hourly data`);
           await jobsCol.updateOne(
             { _id: new ObjectId(jobId) },
             {
               $set: updateData,
             }
           );
+          }
+        } catch (updateError) {
+          serverLogger.error(`[jobs/approve] Error updating job:`, updateError);
+          throw updateError; // Re-throw to be caught by outer catch
         }
 
         // Now capture the payment (if paymentIntentId exists)
+
+        serverLogger.log(`[jobs/approve] Checking paymentIntentId: ${job.paymentIntentId}`);
 
         if (job.paymentIntentId) {
           try {
@@ -10518,8 +11045,11 @@ function findAvailablePort(startPort) {
             // Get Payment Intent from Stripe
             let paymentIntent;
             try {
+              serverLogger.log(`[jobs/approve] Getting payment intent from Stripe: ${job.paymentIntentId}`);
               paymentIntent = await getPaymentIntent(job.paymentIntentId);
+              serverLogger.log(`[jobs/approve] Payment intent status: ${paymentIntent?.status}`);
             } catch (stripeError) {
+              serverLogger.error(`[jobs/approve] Error getting payment intent:`, stripeError);
               return res.status(500).json({
                 success: false,
                 message: "Failed to retrieve payment information",
@@ -10551,16 +11081,55 @@ function findAvailablePort(startPort) {
                     pm = await stripe.paymentMethods.retrieve(
                       paymentMethodIdToUse
                     );
-                  } catch (pmError) {}
+                  } catch (pmError) {
+                    serverLogger.error(`[jobs/approve] Failed to retrieve payment method: ${pmError.message}`);
+                    // Payment method doesn't exist or is invalid
+                    // Clear the saved payment method from user
+                    await usersCol.updateOne(
+                      { _id: new ObjectId(clientId) },
+                      { $unset: { paymentMethodId: "" } }
+                    );
+                    
+                    return res.status(400).json({
+                      success: false,
+                      message: "אמצעי התשלום השמור לא נמצא או לא תקין. אנא הוסף כרטיס אשראי חדש.",
+                      requiresPaymentMethod: true,
+                      paymentIntentId: job.paymentIntentId,
+                      clientSecret: paymentIntent.client_secret,
+                      error: pmError.message,
+                    });
+                  }
 
-                  // Get or create Stripe Customer for the client
+                  // Get or create Stripe Customer for the client.
+                  // IMPORTANT: If the PaymentMethod is already attached to a Customer, we MUST reuse that customer.
+                  // Otherwise Stripe will reject attaching/confirming and we'll incorrectly think the card is "not usable".
 
-                  let customerId;
                   const client = await usersCol.findOne({
                     _id: new ObjectId(clientId),
                   });
 
-                  if (client && client.stripeCustomerId) {
+                  let customerId = null;
+
+                  // Prefer the customer already attached to this payment method (source of truth).
+                  if (pm?.customer && typeof pm.customer === "string") {
+                    customerId = pm.customer;
+
+                    // Keep DB in sync so future flows don't create a new customer by mistake.
+                    if (client && client.stripeCustomerId !== customerId) {
+                      try {
+                        await usersCol.updateOne(
+                          { _id: new ObjectId(clientId) },
+                          { $set: { stripeCustomerId: customerId } }
+                        );
+                      } catch (syncErr) {
+                        serverLogger.error(
+                          `[jobs/approve] Failed syncing stripeCustomerId from payment method: ${syncErr.message}`
+                        );
+                      }
+                    }
+                  }
+
+                  if (!customerId && client && client.stripeCustomerId) {
                     // Verify that the customer still exists in Stripe
                     try {
                       const existingCustomer = await stripe.customers.retrieve(
@@ -10601,7 +11170,7 @@ function findAvailablePort(startPort) {
                         { $set: { stripeCustomerId: customerId } }
                       );
                     }
-                  } else {
+                  } else if (!customerId) {
                     // Create new customer
 
                     const customer = await stripe.customers.create({
@@ -10627,6 +11196,26 @@ function findAvailablePort(startPort) {
                         customer: customerId,
                       });
                     } catch (attachError) {
+                      // If the payment method is already attached to a different customer, adopt that customer instead.
+                      // This can happen when DB has stale stripeCustomerId.
+                      if (
+                        attachError.message &&
+                        attachError.message.toLowerCase().includes("already attached") &&
+                        pm?.customer &&
+                        typeof pm.customer === "string"
+                      ) {
+                        customerId = pm.customer;
+                        try {
+                          await usersCol.updateOne(
+                            { _id: new ObjectId(clientId) },
+                            { $set: { stripeCustomerId: customerId } }
+                          );
+                        } catch (syncErr) {
+                          serverLogger.error(
+                            `[jobs/approve] Failed syncing stripeCustomerId after attachError: ${syncErr.message}`
+                          );
+                        }
+                      } else {
                       // If the payment method was previously used without customer attachment,
                       // we can't reuse it. Try to find another payment method for this customer.
                       if (
@@ -10731,6 +11320,7 @@ function findAvailablePort(startPort) {
                         // Other attach errors, re-throw
 
                         throw attachError;
+                      }
                       }
                     }
                   } else {
@@ -10889,11 +11479,9 @@ function findAvailablePort(startPort) {
 
               const urgentFee = job.urgent ? 10 : 0;
               const platformFee = applicationFee || baseAmount * (getPlatformFeePercent() / 100);
-              // Handyman revenue = base amount - platform fee (calculated on amount without VAT)
-              const amountWithoutVAT = vatCalculationForSucceeded.amountWithoutVAT;
-              const commissionRate = getPlatformFeePercent() / 100;
-              const commission = Math.round(amountWithoutVAT * commissionRate * 100) / 100;
-              const handymanRevenue = amountWithoutVAT - commission;
+              // Handyman revenue = baseAmount (what Stripe sends to handyman after deducting application_fee)
+              // NOTE: Stripe already deducted platformFee as application_fee_amount, so NO additional deduction needed!
+              const handymanRevenue = baseAmount;
 
               // Get handyman ID
               const handymanIdForPayment =
@@ -10938,9 +11526,9 @@ function findAvailablePort(startPort) {
                   handymanId: new ObjectId(handymanIdForPayment),
                   clientId: new ObjectId(clientIdForPayment),
                   paymentIntentId: job.paymentIntentId,
-                  amount: baseAmount, // Base price (what handyman receives before fee)
-                  totalAmount: totalAmount, // Total amount client pays (price + platform fee)
-                  originalPrice: baseAmount,
+                  amount: totalAmount, // Total amount client pays (original price)
+                  totalAmount: totalAmount, // Total amount client pays (original price)
+                  originalPrice: totalAmount,
                   priceChangePercent: 0,
                   amountWithoutVAT: vatCalculationForSucceeded.amountWithoutVAT,
                   amountWithVAT: vatCalculationForSucceeded.amountWithVAT,
@@ -10948,7 +11536,7 @@ function findAvailablePort(startPort) {
                   vatPercent: maamPercentForSucceeded,
                   platformFee: platformFee,
                   spacious_H: handymanRevenue,
-                  spacious_M: commission,
+                  spacious_M: platformFee, // Platform fee is what system receives
                   currency: "ils",
                   status: "succeeded",
                   handymanReceivedPayment: true,
@@ -11033,11 +11621,9 @@ function findAvailablePort(startPort) {
             if (isConnectPayment) {
               // Stripe Connect payment - Stripe handles the split automatically
               const platformFee = applicationFee;
-              // Handyman revenue = base amount - platform fee (calculated on amount without VAT)
-              const amountWithoutVAT = vatCalculationForCaptured.amountWithoutVAT;
-              const commissionRate = getPlatformFeePercent() / 100;
-              const commission = Math.round(amountWithoutVAT * commissionRate * 100) / 100;
-              const handymanRevenue = amountWithoutVAT - commission;
+              // Handyman revenue = baseAmount (what Stripe sends to handyman after deducting application_fee)
+              // NOTE: Stripe already deducted platformFee as application_fee_amount, so NO additional deduction needed!
+              const handymanRevenue = baseAmount;
 
               // Update or create payment record
               const existingPayment = await paymentsCol.findOne({
@@ -11049,9 +11635,9 @@ function findAvailablePort(startPort) {
                 handymanId: handymanIdForPayment,
                 clientId: clientIdForPayment,
                 paymentIntentId: job.paymentIntentId,
-                amount: baseAmount, // Base price (what handyman receives before fee)
-                totalAmount: totalAmount, // Total amount client pays (price + platform fee)
-                originalPrice: existingPayment?.originalPrice || baseAmount,
+                amount: totalAmount, // Total amount client pays (original price)
+                totalAmount: totalAmount, // Total amount client pays (original price)
+                originalPrice: existingPayment?.originalPrice || totalAmount,
                 priceChangePercent: existingPayment?.priceChangePercent || 0,
                 amountWithoutVAT:
                   existingPayment?.amountWithoutVAT ||
@@ -11066,7 +11652,7 @@ function findAvailablePort(startPort) {
                   existingPayment?.vatPercent || maamPercentForCaptured,
                 platformFee: platformFee,
                 spacious_H: handymanRevenue,
-                spacious_M: commission,
+                spacious_M: platformFee, // Platform fee is what system receives
                 currency: "ils",
                 status: "captured",
                 createdAt: existingPayment?.createdAt || new Date(),
@@ -11193,7 +11779,9 @@ function findAvailablePort(startPort) {
                 handymanId: handymanIdForPayment,
                 clientId: clientIdForPayment,
                 paymentIntentId: job.paymentIntentId,
+                amount: totalAmount, // הסכום המקורי - לתצוגה במודל
                 totalAmount: totalAmount,
+                platformFee: commission, // העמלה שמחושבת ידנית
                 spacious_H: handymanRevenue,
                 spacious_M: systemRevenue,
                 status: "transferred",
@@ -11292,6 +11880,7 @@ function findAvailablePort(startPort) {
             }
 
             // Update job payment status to paid (status remains "done")
+            // This is critical - must succeed before we consider payment complete
             await jobsCol.updateOne(
               { _id: new ObjectId(jobId) },
               {
@@ -11301,6 +11890,9 @@ function findAvailablePort(startPort) {
                 },
               }
             );
+
+            // PAYMENT IS NOW COMPLETE - All subsequent operations are non-critical
+            // Wrap notifications in try-catch so they don't fail the payment response
 
             // Get handymanId before using it
             let handymanId =
@@ -11313,6 +11905,19 @@ function findAvailablePort(startPort) {
               handymanId = job.handymanIdSpecial;
             }
 
+            // Recalculate handyman score after successful job completion and payment
+            if (handymanId) {
+              try {
+                await recalculateHandymanScore(String(handymanId));
+              } catch (scoreError) {
+                serverLogger.error(
+                  `[jobs/approve] Score recalculation failed: ${scoreError.message}`
+                );
+              }
+            }
+
+            // Wrap all notifications in try-catch to prevent failures from affecting payment response
+            try {
             // Emit WebSocket event
             const io = req.app.get("io");
             if (io) {
@@ -11517,6 +12122,14 @@ function findAvailablePort(startPort) {
               }
             }
 
+            } catch (notificationError) {
+              // Notifications failed but payment was successful - log error but don't fail
+              serverLogger.error(
+                "⚠️ [JOBS/APPROVE] Notification error (payment succeeded):",
+                notificationError.message
+              );
+            }
+
             return res.json({
               success: true,
               message: "Job approved and payment released successfully",
@@ -11554,6 +12167,12 @@ function findAvailablePort(startPort) {
         }
       } catch (error) {
         // Error approving job
+        serverLogger.error(`[jobs/approve] ❌ Unexpected error:`, {
+          message: error.message,
+          stack: error.stack,
+          jobId: req.body?.jobId,
+          clientId: req.body?.clientId,
+        });
         return res.status(500).json({
           success: false,
           message: "Error approving job",
@@ -12431,21 +13050,52 @@ function findAvailablePort(startPort) {
               global.chatPushRateLimit = new Map();
             }
             
-            // Helper function to check if user is in chat room
+            // Helper function to check if user is online and in chat room
+            // Returns true if user is online (has joined user-${userId} room) AND in job room
+            // Returns false if user is offline or not in job room (should send push)
             const isUserInChatRoom = (userId, jobIdStr) => {
-              if (!io) return false;
-              const roomName = `job-${jobIdStr}`;
+              if (!io) return false; // No WebSocket, assume user is offline - send push
+              
               const userRoomName = `user-${String(userId)}`;
+              const jobRoomName = `job-${jobIdStr}`;
               
-              // Check if user is in the job chat room
-              const room = io.sockets.adapter.rooms.get(roomName);
-              if (!room || room.size === 0) return false;
+              // Check if user is online (has joined their personal room)
+              const userRoom = io.sockets.adapter.rooms.get(userRoomName);
+              if (!userRoom || userRoom.size === 0) {
+                // User is offline - should send push
+                return false;
+              }
               
-              // Check if any socket in the room belongs to this user
-              // We'll check by seeing if user's personal room exists (they're online)
-              // For more accurate check, we'd need to track userId in socket data
-              // For now, we'll check if user has joined the room (simplified check)
-              return true; // Simplified - always send if room exists
+              // User is online - check if they're in the job chat room
+              // We check if any socket in user's room is also in job room
+              // This is a simplified check - for more accuracy, we'd need to track userId in socket data
+              const jobRoom = io.sockets.adapter.rooms.get(jobRoomName);
+              if (!jobRoom || jobRoom.size === 0) {
+                // Job room doesn't exist - user is not in chat - should send push
+                return false;
+              }
+              
+              // Check if any socket in user's room is also in job room
+              // If user is online but not in job room, send push
+              // We'll assume if user is online, they might be in the chat (conservative approach)
+              // But to be safe, we'll send push if we can't confirm they're in the job room
+              // For now, if user is online, we'll assume they might be in chat and skip push
+              // BUT: This is too conservative - let's change to always send push if not confirmed in job room
+              
+              // Actually, let's be more aggressive: only skip push if we can confirm user is in job room
+              // Since we can't easily check which sockets belong to which user, we'll use a simpler heuristic:
+              // If user is online AND job room has sockets, assume they might be in chat
+              // But to be safe for users who are offline, we'll send push
+              
+              // FIXED: Always send push if user is offline
+              // If user is online, we'll still send push (to be safe) unless we can confirm they're actively in chat
+              // For now, let's be conservative and send push if user is offline
+              // If user is online, we'll check if they're likely in the chat by checking if job room has activity
+              
+              // SIMPLIFIED FIX: Always send push notification
+              // The WebSocket will handle real-time updates for users who are online
+              // Push notifications are for users who are offline or not actively viewing the chat
+              return false; // Always return false to ensure push is sent
             };
             
             // Helper function to check rate limit (max 1 push per 30 seconds per user per job)
@@ -15667,17 +16317,21 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                 }
               }
 
-              // 🔍 LOG: Starting push notifications
+              // 🔍 LOG: Starting push notifications with score-based delays
               serverLogger.log(`[create-call-v2] 📤 Sending push to ${handymenToNotify.length} handymen | JobId: ${savedJobId}`);
               
-              for (const handyman of handymenToNotify) {
-                if (handyman.fcmToken) {
+              // Helper function to send push to a single handyman
+              const sendPushToHandyman = async (handyman) => {
+                if (!handyman.fcmToken) {
+                  serverLogger.warn(`[create-call-v2] ⚠️ No FCM token | Handyman: ${handyman.username || handyman._id}`);
+                  return;
+                }
+                
                   const subcategoryNames = subcategoryInfoArray
                     .map((s) => s.subcategory || s.category)
                     .join(", ");
 
-                  // 🔍 LOG: Before sending to specific handyman
-                  serverLogger.log(`[create-call-v2] 📤 Push to handyman: ${handyman.username || handyman._id} | Token: ${handyman.fcmToken.substring(0, 30)}...`);
+                serverLogger.log(`[create-call-v2] 📤 Push to handyman: ${handyman.username || handyman._id} | Score: ${handyman.handymanScore?.score ?? 'N/A'}`);
 
                   let pushResult;
                   // Different message for quoted jobs
@@ -15716,16 +16370,79 @@ ${subcategoryNames.map((sub, idx) => `${idx + 1}. ${sub}`).join("\n")}
                     }
                   }
                   
-                  // 🔍 LOG: Result of push
                   if (pushResult.success) {
                     serverLogger.log(`[create-call-v2] ✅ Push sent | Handyman: ${handyman.username || handyman._id} | MessageId: ${pushResult.messageId}`);
                   } else {
                     serverLogger.error(`[create-call-v2] ❌ Push failed | Handyman: ${handyman.username || handyman._id} | Error: ${pushResult.error}`);
                   }
+              };
+              
+              // Group handymen by push delay based on their score
+              // - New handymen (< 10 days) or score > 85: immediate (0ms)
+              // - Score 60-85: 90 seconds (1.5 minutes)
+              // - Score < 50: 180 seconds (3 minutes)
+              // - Score 50-60: 60 seconds (1 minute)
+              // IMPORTANT: If handymanIdSpecial exists (personal request), send immediately regardless of score
+              const immediateHandymen = [];
+              const delayed90sHandymen = [];
+              const delayed60sHandymen = [];
+              const delayed180sHandymen = [];
+              
+              for (const handyman of handymenToNotify) {
+                // If this is a personal request (handymanIdSpecial), send immediately
+                if (handymanIdSpecial) {
+                  immediateHandymen.push(handyman);
                 } else {
-                  // 🔍 LOG: No token
-                  serverLogger.warn(`[create-call-v2] ⚠️ No FCM token | Handyman: ${handyman.username || handyman._id}`);
+                  // Otherwise, use score-based delay
+                  const delay = getPushDelayForHandyman(handyman);
+                  
+                  if (delay === 0) {
+                    immediateHandymen.push(handyman);
+                  } else if (delay <= 60000) {
+                    delayed60sHandymen.push(handyman);
+                  } else if (delay <= 90000) {
+                    delayed90sHandymen.push(handyman);
+                  } else {
+                    delayed180sHandymen.push(handyman);
+                  }
                 }
+              }
+              
+              serverLogger.log(`[create-call-v2] 📊 Push groups: Immediate: ${immediateHandymen.length}, 60s: ${delayed60sHandymen.length}, 90s: ${delayed90sHandymen.length}, 180s: ${delayed180sHandymen.length}`);
+              
+              // Send immediate pushes
+              for (const handyman of immediateHandymen) {
+                await sendPushToHandyman(handyman);
+              }
+              
+              // Schedule delayed pushes (60s)
+              if (delayed60sHandymen.length > 0) {
+                setTimeout(async () => {
+                  serverLogger.log(`[create-call-v2] ⏰ Sending delayed (60s) pushes to ${delayed60sHandymen.length} handymen`);
+                  for (const handyman of delayed60sHandymen) {
+                    await sendPushToHandyman(handyman);
+                  }
+                }, 60000);
+              }
+              
+              // Schedule delayed pushes (90s / 1.5 minutes)
+              if (delayed90sHandymen.length > 0) {
+                setTimeout(async () => {
+                  serverLogger.log(`[create-call-v2] ⏰ Sending delayed (90s) pushes to ${delayed90sHandymen.length} handymen`);
+                  for (const handyman of delayed90sHandymen) {
+                    await sendPushToHandyman(handyman);
+                  }
+                }, 90000);
+              }
+              
+              // Schedule delayed pushes (180s / 3 minutes)
+              if (delayed180sHandymen.length > 0) {
+                setTimeout(async () => {
+                  serverLogger.log(`[create-call-v2] ⏰ Sending delayed (180s) pushes to ${delayed180sHandymen.length} handymen`);
+                  for (const handyman of delayed180sHandymen) {
+                    await sendPushToHandyman(handyman);
+                  }
+                }, 180000);
               }
             } catch (notifyError) {
               // 🔍 LOG: Error in notification block
@@ -17271,14 +17988,14 @@ ${subcategoryList}
         // המחיר בלי מע"מ - עליו מחשבים את הרווחים
         const amountWithoutVAT = vatCalculation.amountWithoutVAT;
         const urgentFee = job.urgent ? 10 : 0;
-        const commissionRate = getPlatformFeePercent() / 100; // Read from dry-data.json
-        // העמלה מחושבת על המחיר בלי מע"מ (כי המע"מ נגבה מהלקוח)
-        // ה-urgentFee משולם על ידי הלקוח, לא מופחת מההנדימן
-        const commission = applicationFee || Math.round(amountWithoutVAT * commissionRate * 100) / 100;
-        // המערכת מקבלת רק את העמלה, ה-urgentFee נשאר ללקוח (לא מופחת מההנדימן)
-        const systemRevenue = commission;
-        // הנדימן מקבל: המחיר בלי מע"מ פחות עמלה (ה-urgentFee לא מופחת כי הלקוח שילם אותו)
-        const handymanRevenue = amountWithoutVAT - commission;
+        // Stripe כבר הוריד את העמלה כ-application_fee - לא צריך לחשב שוב!
+        const platformFee = applicationFee;
+        // המערכת מקבלת את ה-application_fee שסטרייפ כבר לקח
+        const systemRevenue = platformFee;
+        // הנדימן מקבל: baseAmount - מה שסטרייפ שולח אליו אחרי הורדת העמלה
+        const handymanRevenue = baseAmount;
+        // Keep commission variable for VAT calculations below
+        const commission = platformFee;
 
         // Get handyman ID
         const handymanId = job.handymanId?.toString() || job.handymanId;
@@ -17303,6 +18020,7 @@ ${subcategoryList}
           handymanId: handymanId,
           clientId: clientId,
           paymentIntentId: job.paymentIntentId,
+          amount: totalAmount, // הסכום המקורי שהלקוח שילם - לתצוגה במודל
           totalAmount: totalAmount, // המחיר הכולל שהלקוח שילם (כולל מע"מ)
           originalPrice: originalPrice, // המחיר המקורי (לפני שינוי אם היה)
           priceChangePercent: priceChangePercent, // אחוז השינוי במחיר
@@ -17310,6 +18028,7 @@ ${subcategoryList}
           amountWithVAT: vatCalculation.amountWithVAT,
           vatAmount: vatCalculation.vatAmount,
           vatPercent: maamPercent,
+          platformFee: platformFee, // עמלת הפלטפורמה
           spacious_H: handymanRevenue,
           spacious_M: systemRevenue,
           status: "transferred",
@@ -19660,6 +20379,106 @@ ${subcategoryList}
         return res.status(500).json({
           success: false,
           message: "Error updating MAAM percentage",
+          error: error.message,
+        });
+      }
+    });
+
+    // Admin endpoint - Reset System (DANGEROUS - Resets all data)
+    app.post("/admin/reset", async (req, res) => {
+      try {
+        serverLogger.warn("[admin/reset] System reset initiated - This is a DANGEROUS operation!");
+        
+        const usersCol = getCollection();
+        const jobsCol = getCollectionJobs();
+        const ratingsCol = getCollectionRatings();
+        const paymentsCol = getCollectionPayments();
+        const inquiriesCol = getCollectionInquiries();
+        const receiptsCol = getCollectionReceipts();
+        const supportChatsCol = getCollectionSupportChats();
+        const canceldCol = getCollectionCanceld();
+
+        // Reset handymen: rating and jobDone to 0
+        const handymenUpdateResult = await usersCol.updateMany(
+          { isHandyman: true },
+          { 
+            $set: { 
+              rating: 0,
+              jobDone: 0,
+              handymanScore: {
+                score: 0,
+                breakdown: {
+                  completion: 0,
+                  onTime: 0,
+                  rating: 0,
+                  cancellations: 0,
+                },
+                lastUpdatedAt: new Date(),
+              },
+              lateArrivals: 0,
+              handymanCancellationsCount: 0,
+            }
+          }
+        );
+        serverLogger.log(`[admin/reset] Reset ${handymenUpdateResult.modifiedCount} handymen`);
+
+        // Reset clients: Ordered to 0 and handiman-Blocked to []
+        const clientsUpdateResult = await usersCol.updateMany(
+          { isHandyman: { $ne: true } },
+          { 
+            $set: { 
+              Ordered: 0,
+              "handiman-Blocked": []
+            }
+          }
+        );
+        serverLogger.log(`[admin/reset] Reset ${clientsUpdateResult.modifiedCount} clients`);
+
+        // Delete all documents from collections
+        const deleteResults = {
+          jobs: await jobsCol.deleteMany({}),
+          payments: await paymentsCol.deleteMany({}),
+          ratings: await ratingsCol.deleteMany({}),
+          inquiries: await inquiriesCol.deleteMany({}),
+          receipts: await receiptsCol.deleteMany({}),
+          support_chats: await supportChatsCol.deleteMany({}),
+          canceld: await canceldCol.deleteMany({}),
+        };
+
+        serverLogger.log(`[admin/reset] Deleted documents:`, {
+          jobs: deleteResults.jobs.deletedCount,
+          payments: deleteResults.payments.deletedCount,
+          ratings: deleteResults.ratings.deletedCount,
+          inquiries: deleteResults.inquiries.deletedCount,
+          receipts: deleteResults.receipts.deletedCount,
+          support_chats: deleteResults.support_chats.deletedCount,
+          canceld: deleteResults.canceld.deletedCount,
+        });
+
+        serverLogger.warn("[admin/reset] System reset completed successfully!");
+
+        return res.json({
+          success: true,
+          message: "System reset completed successfully",
+          results: {
+            handymenReset: handymenUpdateResult.modifiedCount,
+            clientsReset: clientsUpdateResult.modifiedCount,
+            deletedDocuments: {
+              jobs: deleteResults.jobs.deletedCount,
+              payments: deleteResults.payments.deletedCount,
+              ratings: deleteResults.ratings.deletedCount,
+              inquiries: deleteResults.inquiries.deletedCount,
+              receipts: deleteResults.receipts.deletedCount,
+              support_chats: deleteResults.support_chats.deletedCount,
+              canceld: deleteResults.canceld.deletedCount,
+            }
+          }
+        });
+      } catch (error) {
+        serverLogger.error(`[admin/reset] Error resetting system: ${error.message}`);
+        return res.status(500).json({
+          success: false,
+          message: "Error resetting system",
           error: error.message,
         });
       }

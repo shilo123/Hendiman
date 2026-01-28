@@ -124,12 +124,18 @@
             </button>
 
             <h2 class="ccHeaderTitle">
-              <template v-if="currentStep === 1">צור קריאה</template>
-              <template v-else-if="currentStep === 2"
-                >פרטי הקריאה ומיקום</template
-              >
-              <template v-else-if="currentStep === 4">תשלום ואישור</template>
-              <template v-else>יצירת קריאה</template>
+              <template v-if="isSpecial">
+                <template v-if="currentStep === 1">הזמנה אישית</template>
+                <template v-else-if="currentStep === 2">פרטי הקריאה ומיקום</template>
+                <template v-else-if="currentStep === 4">תשלום ואישור</template>
+                <template v-else>הזמנה אישית</template>
+              </template>
+              <template v-else>
+                <template v-if="currentStep === 1">צור קריאה</template>
+                <template v-else-if="currentStep === 2">פרטי הקריאה ומיקום</template>
+                <template v-else-if="currentStep === 4">תשלום ואישור</template>
+                <template v-else>יצירת קריאה</template>
+              </template>
             </h2>
 
             <div class="ccHeaderSpacer" aria-hidden="true"></div>
@@ -161,6 +167,42 @@
 
         <!-- Content (scroll) -->
         <main class="ccMain custom-scrollbar">
+          <!-- Handyman Specialties Display (for special calls) -->
+          <section
+            v-if="isSpecial && handymanDetails && handymanSpecialties.length > 0"
+            class="ccSpecialCallBanner"
+          >
+            <div class="ccSpecialCallBanner__header">
+              <div class="ccSpecialCallBanner__avatar">
+                <img 
+                  v-if="handymanDetails.imageUrl" 
+                  :src="handymanDetails.imageUrl" 
+                  :alt="handymanDetails.username"
+                />
+                <span v-else class="material-symbols-outlined">person</span>
+              </div>
+              <div class="ccSpecialCallBanner__info">
+                <span class="ccSpecialCallBanner__badge">
+                  <span class="material-symbols-outlined">star</span>
+                  הזמנה אישית
+                </span>
+                <h4 class="ccSpecialCallBanner__name">{{ handymanDetails.username }}</h4>
+              </div>
+            </div>
+            <div class="ccSpecialCallBanner__specialties">
+              <p class="ccSpecialCallBanner__label">תחומי התמחות:</p>
+              <div class="ccSpecialCallBanner__list">
+                <span
+                  v-for="(specialty, index) in handymanSpecialties"
+                  :key="index"
+                  class="ccSpecialCallBanner__chip"
+                >
+                  {{ specialty.name }}
+                </span>
+              </div>
+            </div>
+          </section>
+
           <!-- STEP 1 -->
           <div v-if="currentStep === 1" class="ccStep ccStep--1">
             <div class="ccPad">
@@ -598,9 +640,9 @@
                     </div>
                   </div>
 
-                  <!-- Location Buttons (3 options) -->
+                  <!-- Location Buttons (3 options) - shown ONLY when no location at all -->
                   <div
-                    v-if="!isLoadingLocation && !detectedLocation && !selectedMapLocation && !isEditingLocation"
+                    v-if="!isLoadingLocation && !detectedLocation && !selectedMapLocation && !isEditingLocation && !call.location"
                     class="ccLocBtnsMain"
                   >
                     <button
@@ -696,9 +738,40 @@
                       </div>
                     </div>
 
-                    <!-- Change location button -->
+                    <!-- Location action buttons (below map) -->
+                    <div class="ccLocBtnsBelow">
+                      <button
+                        class="ccLocBtnBelow"
+                        type="button"
+                        @click="setMyLocation"
+                        :disabled="isLoadingLocation"
+                      >
+                        <span class="material-symbols-outlined">near_me</span>
+                        <span>מיקום נוכחי</span>
+                      </button>
+
+                      <button
+                        class="ccLocBtnBelow"
+                        type="button"
+                        @click="openMapPicker"
+                      >
+                        <span class="material-symbols-outlined">map</span>
+                        <span>מיקום במפה</span>
+                      </button>
+
+                      <button
+                        class="ccLocBtnBelow"
+                        type="button"
+                        @click="resetLocation(); isEditingLocation = true;"
+                      >
+                        <span class="material-symbols-outlined">edit_location_alt</span>
+                        <span>בחר ידנית</span>
+                      </button>
+                    </div>
+
+                    <!-- Change location button (legacy - can be removed if buttons above are preferred) -->
                     <button
-                      class="ccLocChangeBtn"
+                      class="ccLocChangeBtn ccLocChangeBtn--hidden"
                       type="button"
                       @click="resetLocation"
                     >
@@ -734,6 +807,7 @@
                     :id="`callImage-${call.imageUrls.length}`"
                     type="file"
                     accept="image/*"
+                    multiple
                     @change="handleCallImageUpload"
                     class="ccFileInput"
                     :disabled="call.imageUrls.length >= 4 || isUploadingImage"
@@ -758,7 +832,7 @@
                         העלאת תמונות ({{ call.imageUrls.length }}/4)
                       </p>
                       <p class="ccUploadHint">
-                        מומלץ לצלם את התקלה מכמה זוויות
+                        בחר עד 4 תמונות בבת אחת
                       </p>
                     </div>
                   </label>
@@ -793,6 +867,101 @@
                 </div>
 
                 <div v-if="errors.image" class="ccErr">{{ errors.image }}</div>
+              </section>
+
+              <!-- Video Upload Toggle Button -->
+              <button
+                v-if="!showVideoUpload && call.videoUrls.length === 0 && call.videoPreviews.length === 0"
+                type="button"
+                class="ccAddVideoBtn"
+                @click="showVideoUpload = true"
+              >
+                <span class="material-symbols-outlined">videocam</span>
+                <span>הוסף סרטון (אופציונלי)</span>
+              </button>
+
+              <!-- Video Upload Section (Expandable) -->
+              <section 
+                v-if="showVideoUpload || call.videoUrls.length > 0 || call.videoPreviews.length > 0" 
+                class="ccCard ccCard--video"
+              >
+                <div class="ccCardHead">
+                  <h3 class="ccSectionTitle">סרטון של התקלה</h3>
+                  <button 
+                    v-if="call.videoUrls.length === 0 && call.videoPreviews.length === 0"
+                    type="button" 
+                    class="ccCloseVideoBtn"
+                    @click="showVideoUpload = false"
+                  >
+                    <span class="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+
+                <div class="ccUpload">
+                  <input
+                    :id="`callVideo-${call.videoUrls.length}`"
+                    type="file"
+                    accept="video/*"
+                    @change="handleCallVideoUpload"
+                    class="ccFileInput"
+                    :disabled="call.videoUrls.length >= 2 || isUploadingVideo"
+                  />
+
+                  <label
+                    :for="`callVideo-${call.videoUrls.length}`"
+                    class="ccUploadDrop ccUploadDrop--video"
+                    :class="{
+                      'is-disabled':
+                        call.videoUrls.length >= 2 || isUploadingVideo,
+                      'is-error': errors.video,
+                    }"
+                  >
+                    <div class="ccUploadIconWrap ccUploadIconWrap--video">
+                      <span class="material-symbols-outlined ccUploadIcon"
+                        >videocam</span
+                      >
+                    </div>
+                    <div class="ccUploadCopy">
+                      <p class="ccUploadTitle">
+                        העלאת סרטון ({{ call.videoUrls.length }}/2)
+                      </p>
+                      <p class="ccUploadHint">
+                        צלם סרטון קצר של התקלה (עד 30 שניות)
+                      </p>
+                    </div>
+                  </label>
+                </div>
+
+                <div
+                  v-if="
+                    call.videoUrls.length > 0 || call.videoPreviews.length > 0
+                  "
+                  class="ccVideoGrid"
+                >
+                  <div
+                    v-for="(video, index) in call.videoUrls.length > 0
+                      ? call.videoUrls
+                      : call.videoPreviews"
+                    :key="index"
+                    class="ccVideo"
+                  >
+                    <video
+                      :src="video"
+                      class="ccVideoEl"
+                      controls
+                      preload="metadata"
+                    ></video>
+                    <button
+                      type="button"
+                      class="ccVideoRm"
+                      @click="removeCallVideo(index)"
+                    >
+                      <span class="material-symbols-outlined">close</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div v-if="errors.video" class="ccErr">{{ errors.video }}</div>
               </section>
 
               <section class="ccCard">
@@ -949,6 +1118,19 @@
                   <span class="ccTotalVal"
                     >₪ {{ Number(totalPrice || 0).toFixed(2) }}</span
                   >
+                </div>
+              </div>
+
+              <!-- Payment timing notice -->
+              <div class="ccPaymentNotice">
+                <div class="ccPaymentNotice__icon">
+                  <span class="material-symbols-outlined">schedule</span>
+                </div>
+                <div class="ccPaymentNotice__content">
+                  <p class="ccPaymentNotice__title">הכסף יוצא רק בסיום העבודה</p>
+                  <p class="ccPaymentNotice__text">
+                    התשלום לא יחויב כעת. הסכום ישמר בצד ויחויב רק לאחר שההנדימן יסיים את העבודה ותאשר את השלמתה.
+                  </p>
                 </div>
               </div>
 
@@ -1366,6 +1548,50 @@
         </div>
       </div>
     </div>
+
+    <!-- Mismatch Modal - התחומים לא תואמים להנדימן -->
+    <div
+      v-if="showMismatchModal"
+      class="modal-overlay"
+      @click.self="showMismatchModal = false"
+    >
+      <div class="modal-content modal-content--mismatch">
+        <div class="modal-header modal-header--warning">
+          <span class="material-symbols-outlined modal-header__icon">warning</span>
+          <h3>תחומי התמחות לא תואמים</h3>
+          <button class="modal-close" @click="showMismatchModal = false">
+            ×
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-text">
+            התחומים שבחרת לא תואמים את תחומי ההתמחות של ההנדימן 
+            <strong v-if="handymanDetails">{{ handymanDetails.username }}</strong>.
+          </p>
+          <div v-if="handymanSpecialties.length > 0" class="modal-specialties">
+            <p class="modal-specialties__label">תחומי ההתמחות של ההנדימן:</p>
+            <div class="modal-specialties__list">
+              <span 
+                v-for="(spec, idx) in handymanSpecialties" 
+                :key="idx" 
+                class="modal-specialty-badge"
+              >
+                {{ spec.name }}
+              </span>
+            </div>
+          </div>
+          <p class="modal-question">האם תרצה להמשיך לקריאה רגילה (לא להנדימן ספציפי)?</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn--secondary" @click="showMismatchModal = false; currentStep = 1;">
+            חזור ובחר מחדש
+          </button>
+          <button class="btn btn--primary" @click="goToRegularCall">
+            כן, המשך לקריאה רגילה
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1408,6 +1634,12 @@ export default {
       isHouseNumberInputFocused: false, // Track if house number input has focus
       pulse: 0, // For loading animation dots
       pulseInterval: null, // Interval for pulse animation
+      // Special call fields (קריאה אישית)
+      isSpecial: false, // Is this a special/personal call to a specific handyman
+      handymanId: null, // The handyman ID for special calls
+      handymanDetails: null, // Details of the handyman for special calls
+      handymanSpecialties: [], // Specialties of the handyman for validation
+      showMismatchModal: false, // Modal for category mismatch
       call: {
         requests: [""], // Array of requests
         desc: "",
@@ -1416,6 +1648,9 @@ export default {
         images: [], // Array of image files
         imageUrls: [], // Array of uploaded image URLs
         imagePreviews: [], // Array of preview URLs
+        videos: [], // Array of video files
+        videoUrls: [], // Array of uploaded video URLs
+        videoPreviews: [], // Array of preview URLs for videos
         coordinates: {},
         workType: "קלה",
       },
@@ -1468,6 +1703,8 @@ export default {
         cvv: "",
       },
       isUploadingImage: false,
+      isUploadingVideo: false,
+      showVideoUpload: false,
       isProcessingPayment: false,
       paymentMethodId: null, // Store payment method ID (token) instead of card details
       isCreditCardValid: false, // Track credit card validation status
@@ -1605,6 +1842,36 @@ export default {
         })
       : [];
 
+    // Check if this is a special call (קריאה אישית להנדימן ספציפי)
+    const queryHandymanId = this.$route.query?.handymanId;
+    const paramHandymanId = this.$route.params?.handymanId;
+    const isSpecialQuery = this.$route.query?.isSpecial === "true";
+    
+    if (queryHandymanId || paramHandymanId || isSpecialQuery) {
+      this.isSpecial = true;
+      this.handymanId = queryHandymanId || paramHandymanId;
+      
+      // Load handyman details
+      if (this.handymanId) {
+        try {
+          const response = await axios.get(
+            `${URL}/Gethandyman/${this.handymanId}`
+          );
+          if (response.data.success && response.data.Handyman) {
+            this.handymanDetails = response.data.Handyman;
+            // Extract only categories (full categories, not subcategories)
+            this.handymanSpecialties = (
+              response.data.Handyman.specialties || []
+            ).filter(
+              (s) => s && (s.type === "category" || s.isFullCategory === true)
+            );
+          }
+        } catch (error) {
+          this.toast?.showError("לא הצלחנו לטעון את פרטי ההנדימן");
+        }
+      }
+    }
+
     // Set default location to user's city (residence location)
     const userCity = this.store?.user?.city;
     if (userCity && userCity.trim()) {
@@ -1733,8 +2000,10 @@ export default {
           return;
         }
 
-        // Validate house number if using manual location input (not "לפי מיקום" or map)
+        // Validate house number ONLY if user clicked "בחר ידנית" (isEditingLocation)
+        // No validation needed for GPS location or map selection
         if (
+          this.isEditingLocation &&
           !this.selectedMapLocation &&
           !this.usingMyLocation &&
           !this.detectedLocation &&
@@ -2539,94 +2808,192 @@ export default {
         params: { id: this.$route.params.id },
       });
     },
+    // Special call validation - check if selected categories match handyman specialties
+    validateCategoriesMatch() {
+      // If not a special call, always return true
+      if (!this.isSpecial) return true;
+      
+      // If no handyman specialties, allow any category
+      if (!this.handymanSpecialties || this.handymanSpecialties.length === 0) {
+        return true;
+      }
+      // If no categories selected, return false
+      if (!this.subcategoryInfoArray || this.subcategoryInfoArray.length === 0) {
+        return false;
+      }
+
+      // Extract category names from handyman specialties
+      const handymanCategoryNames = this.handymanSpecialties.map((s) =>
+        (s.name || "").trim().toLowerCase()
+      );
+
+      // Check if at least one selected category matches handyman specialties
+      for (const subcatInfo of this.subcategoryInfoArray) {
+        const selectedCategory = (subcatInfo.category || "")
+          .trim()
+          .toLowerCase();
+        if (handymanCategoryNames.includes(selectedCategory)) {
+          return true; // At least one match found
+        }
+      }
+
+      return false; // No matches found
+    },
+    goToRegularCall() {
+      this.showMismatchModal = false;
+      // Convert to regular call - remove special flag
+      this.isSpecial = false;
+      this.handymanId = null;
+      this.handymanDetails = null;
+      this.handymanSpecialties = [];
+      // Go back to step 1 to start fresh
+      this.currentStep = 1;
+      this.foundCategories = [];
+      this.subcategoryInfoArray = [];
+      this.toast?.showInfo("המשך ליצירת קריאה רגילה");
+    },
     onToggleUrgent() {
       this.call.urgent = !this.call.urgent;
     },
     async handleCallImageUpload(event) {
-      const file = event.target.files[0];
-      if (!file) return;
+      const files = Array.from(event.target.files);
+      if (!files.length) return;
 
-      // Check if we've reached the limit
-      if (this.call.imageUrls.length >= 4) {
+      // Check how many more images we can add
+      const currentCount = this.call.imageUrls.length + this.call.imagePreviews.length;
+      const remainingSlots = 4 - currentCount;
+      
+      if (remainingSlots <= 0) {
         this.toast?.showError("ניתן להעלות עד 4 תמונות");
         event.target.value = "";
         return;
       }
 
-      const maxSize = 5 * 1024 * 1024;
-      if (file.size > maxSize) {
-        this.errors.image = "גודל התמונה חייב להיות קטן מ-5MB";
-        event.target.value = "";
-        return;
+      // Limit files to remaining slots
+      const filesToUpload = files.slice(0, remainingSlots);
+      if (files.length > remainingSlots) {
+        this.toast?.showWarning(`נבחרו ${files.length} תמונות, מעלים רק ${remainingSlots}`);
       }
 
-      if (!file.type.startsWith("image/")) {
-        this.errors.image = "יש להעלות קובץ תמונה בלבד";
-        event.target.value = "";
-        return;
+      const maxSize = 5 * 1024 * 1024;
+      
+      // Validate all files first
+      for (const file of filesToUpload) {
+        if (file.size > maxSize) {
+          this.errors.image = `התמונה "${file.name}" גדולה מ-5MB`;
+          event.target.value = "";
+          return;
+        }
+        if (!file.type.startsWith("image/")) {
+          this.errors.image = `הקובץ "${file.name}" אינו תמונה`;
+          event.target.value = "";
+          return;
+        }
       }
 
       this.clearError("image");
       this.isUploadingImage = true;
 
-      // Create preview immediately
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        this.call.imagePreviews.push(e.target.result);
-      };
-      reader.readAsDataURL(file);
+      // Track preview indices for each file
+      const previewIndices = [];
 
-      // Add file to images array
-      this.call.images.push(file);
-
-      try {
-        const formData = new FormData();
-        formData.append("image", file);
-
-        const uploadUrl = `${URL}/pick-call123`;
-        const response = await axios.post(uploadUrl, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-          timeout: 30000,
-        });
-
-        if (response.data && response.data.imageUrl) {
-          // Replace preview with actual URL
-          const previewIndex = this.call.imagePreviews.length - 1;
-          if (previewIndex >= 0) {
-            this.call.imagePreviews.splice(previewIndex, 1);
-          }
-          this.call.imageUrls.push(response.data.imageUrl);
-        }
-      } catch (error) {
-        // Remove the preview and file if upload failed
-        this.call.imagePreviews.pop();
-        this.call.images.pop();
-
-        const errorMessage =
-          error.response?.data?.message ||
-          error.response?.data?.error ||
-          error.message ||
-          "שגיאה בהעלאת התמונה. נסה שוב.";
-
-        const isCredentialsIssue =
-          error.response?.data?.isCredentialsIssue ||
-          errorMessage.includes("credentials") ||
-          errorMessage.includes("Credential") ||
-          errorMessage.includes("AWS") ||
-          errorMessage.includes("not configured") ||
-          errorMessage.includes("InvalidAccessKeyId") ||
-          errorMessage.includes("SignatureDoesNotMatch");
-
-        if (isCredentialsIssue) {
-          this.toast.showWarning("התמונה תישמר באופן מקומי (לא הועלתה לענן)");
-          this.clearError("image");
-        } else {
-          this.errors.image = errorMessage;
-          this.toast.showError(`לא הצלחנו להעלות את התמונה: ${errorMessage}`);
-        }
-      } finally {
-        this.isUploadingImage = false;
+      // Create previews for all files immediately
+      for (const file of filesToUpload) {
+        const previewIndex = this.call.imagePreviews.length;
+        previewIndices.push(previewIndex);
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          this.call.imagePreviews.push(e.target.result);
+        };
+        reader.readAsDataURL(file);
+        this.call.images.push(file);
       }
+
+      // Upload all files in parallel
+      const uploadPromises = filesToUpload.map(async (file, index) => {
+        try {
+          const formData = new FormData();
+          formData.append("image", file);
+
+          const uploadUrl = `${URL}/pick-call123`;
+          const response = await axios.post(uploadUrl, formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+            timeout: 30000,
+          });
+
+          if (response.data && response.data.imageUrl) {
+            return { success: true, url: response.data.imageUrl, index };
+          }
+          return { success: false, index };
+        } catch (error) {
+          const errorMessage =
+            error.response?.data?.message ||
+            error.response?.data?.error ||
+            error.message ||
+            "שגיאה בהעלאת התמונה";
+
+          const isCredentialsIssue =
+            error.response?.data?.isCredentialsIssue ||
+            errorMessage.includes("credentials") ||
+            errorMessage.includes("Credential") ||
+            errorMessage.includes("AWS") ||
+            errorMessage.includes("not configured") ||
+            errorMessage.includes("InvalidAccessKeyId") ||
+            errorMessage.includes("SignatureDoesNotMatch");
+
+          return { success: false, index, isCredentialsIssue, errorMessage };
+        }
+      });
+
+      const results = await Promise.all(uploadPromises);
+
+      // Process results - replace previews with actual URLs
+      let successCount = 0;
+      let failedCount = 0;
+      let credentialsIssue = false;
+
+      // Sort results by index in reverse to safely remove previews
+      results.sort((a, b) => b.index - a.index);
+
+      for (const result of results) {
+        if (result.success) {
+          this.call.imageUrls.push(result.url);
+          // Remove the corresponding preview
+          if (this.call.imagePreviews.length > 0) {
+            this.call.imagePreviews.shift();
+          }
+          successCount++;
+        } else {
+          if (result.isCredentialsIssue) {
+            credentialsIssue = true;
+            // Keep the preview for credentials issues (local save)
+          } else {
+            // Remove failed preview and file
+            if (this.call.imagePreviews.length > 0) {
+              this.call.imagePreviews.shift();
+            }
+            if (this.call.images.length > 0) {
+              this.call.images.shift();
+            }
+            failedCount++;
+          }
+        }
+      }
+
+      // Show appropriate messages
+      if (credentialsIssue) {
+        this.toast?.showWarning("התמונות יישמרו באופן מקומי (לא הועלו לענן)");
+        this.clearError("image");
+      } else if (failedCount > 0) {
+        this.toast?.showError(`${failedCount} תמונות לא הועלו`);
+      }
+      
+      if (successCount > 0) {
+        this.toast?.showSuccess(`${successCount} תמונות הועלו בהצלחה`);
+      }
+
+      this.isUploadingImage = false;
 
       // Reset input
       event.target.value = "";
@@ -2643,6 +3010,95 @@ export default {
         this.call.images.splice(index, 1);
       }
       this.clearError("image");
+    },
+    async handleCallVideoUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // Check if we've reached the limit
+      if (this.call.videoUrls.length >= 2) {
+        this.toast?.showError("ניתן להעלות עד 2 סרטונים");
+        event.target.value = "";
+        return;
+      }
+
+      const maxSize = 50 * 1024 * 1024; // 50MB for videos
+      if (file.size > maxSize) {
+        this.errors.video = "גודל הסרטון חייב להיות קטן מ-50MB";
+        event.target.value = "";
+        return;
+      }
+
+      if (!file.type.startsWith("video/")) {
+        this.errors.video = "יש להעלות קובץ וידאו בלבד";
+        event.target.value = "";
+        return;
+      }
+
+      this.clearError("video");
+      this.isUploadingVideo = true;
+
+      // Create preview immediately
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        this.call.videoPreviews.push(e.target.result);
+      };
+      reader.readAsDataURL(file);
+
+      // Add file to videos array
+      this.call.videos.push(file);
+
+      try {
+        const formData = new FormData();
+        formData.append("video", file);
+
+        const uploadUrl = `${URL}/upload-video`;
+        const response = await axios.post(uploadUrl, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+          timeout: 120000, // 2 minutes timeout for videos
+        });
+
+        if (response.data && response.data.videoUrl) {
+          // Replace preview with actual URL
+          const previewIndex = this.call.videoPreviews.length - 1;
+          if (previewIndex >= 0) {
+            this.call.videoPreviews.splice(previewIndex, 1);
+          }
+          this.call.videoUrls.push(response.data.videoUrl);
+          this.toast?.showSuccess("הסרטון הועלה בהצלחה");
+        }
+      } catch (error) {
+        // Remove the preview and file if upload failed
+        this.call.videoPreviews.pop();
+        this.call.videos.pop();
+
+        const errorMessage =
+          error.response?.data?.message ||
+          error.response?.data?.error ||
+          error.message ||
+          "שגיאה בהעלאת הסרטון. נסה שוב.";
+
+        this.errors.video = errorMessage;
+        this.toast?.showError(`לא הצלחנו להעלות את הסרטון: ${errorMessage}`);
+      } finally {
+        this.isUploadingVideo = false;
+      }
+
+      // Reset file input
+      event.target.value = "";
+    },
+    removeCallVideo(index) {
+      // Remove from all arrays
+      if (index < this.call.videoUrls.length) {
+        this.call.videoUrls.splice(index, 1);
+      }
+      if (index < this.call.videoPreviews.length) {
+        this.call.videoPreviews.splice(index, 1);
+      }
+      if (index < this.call.videos.length) {
+        this.call.videos.splice(index, 1);
+      }
+      this.clearError("video");
     },
     clearError(field) {
       if (this.errors[field]) delete this.errors[field];
@@ -2876,6 +3332,14 @@ export default {
               : this.call.imagePreviews.length > 0
               ? this.call.imagePreviews
               : [],
+          videoUrls:
+            this.call.videoUrls.length > 0
+              ? this.call.videoUrls
+              : this.call.videoPreviews.length > 0
+              ? this.call.videoPreviews
+              : [],
+          // Special call: if this is a personal request to specific handyman
+          handymanIdSpecial: this.isSpecial ? this.handymanId : null,
         };
 
         // Add coordinates to callData if they exist
@@ -2955,12 +3419,15 @@ export default {
                 location: finalLocation,
                 imageUrl: callData.imageUrls,
                 imageUrls: callData.imageUrls,
+                videoUrls: callData.videoUrls,
                 when: this.call.when || "asap",
                 urgent: this.call.urgent || false,
                 coordinates: callData.coordinates,
                 usingMyLocation: this.usingMyLocation,
                 locationEnglishName: this.locationEnglishName || null,
                 selectedCity: this.selectedCity || null,
+                // Special call: if this is a personal request to specific handyman
+                handymanIdSpecial: this.isSpecial ? this.handymanId : null,
               };
 
               return axios.post(
@@ -4027,6 +4494,17 @@ export default {
         this.subcategoryInfoArray = processedCategories;
         // Always show categories now - recommendation will be shown on specific card
         this.foundCategories = processedCategories;
+        
+        // SPECIAL CALL VALIDATION: If this is a special call, validate categories match handyman specialties
+        if (this.isSpecial && processedCategories.length > 0) {
+          if (!this.validateCategoriesMatch()) {
+            this.toast?.showError(
+              "התחומים שנמצאו לא תואמים להנדימן שבחרת. אנא נסה שוב עם בקשה אחרת או המשך לקריאה רגילה."
+            );
+            this.showMismatchModal = true;
+            return;
+          }
+        }
         
         // Log IMMEDIATELY AFTER ASSIGNMENT
         logger.log(
@@ -9827,5 +10305,397 @@ select:focus {
   color: rgba(255, 255, 255, 0.5);
   font-size: 15px;
   font-weight: 600;
+}
+
+/* =========
+   Special Call Banner (קריאה אישית)
+   ========= */
+.ccSpecialCallBanner {
+  background: linear-gradient(135deg, rgba(255, 140, 0, 0.12), rgba(255, 85, 0, 0.08));
+  border: 1px solid rgba(255, 140, 0, 0.25);
+  border-radius: 24px;
+  padding: 20px;
+  margin: 16px;
+  margin-bottom: 8px;
+}
+
+.ccSpecialCallBanner__header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.ccSpecialCallBanner__avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid rgba(255, 140, 0, 0.5);
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ccSpecialCallBanner__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ccSpecialCallBanner__avatar .material-symbols-outlined {
+  font-size: 28px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.ccSpecialCallBanner__info {
+  flex: 1;
+}
+
+.ccSpecialCallBanner__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 140, 0, 0.2);
+  color: #ff8c00;
+  margin-bottom: 4px;
+}
+
+.ccSpecialCallBanner__badge .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.ccSpecialCallBanner__name {
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.ccSpecialCallBanner__specialties {
+  margin-top: 8px;
+}
+
+.ccSpecialCallBanner__label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 8px;
+}
+
+.ccSpecialCallBanner__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ccSpecialCallBanner__chip {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* =========
+   Optional Tag
+   ========= */
+.ccOptTag {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* =========
+   Video Upload Section
+   ========= */
+.ccUploadDrop--video {
+  background: rgba(22, 22, 22, 1);
+  border-color: rgba(138, 43, 226, 0.2);
+}
+
+.ccUploadDrop--video:hover:not(.is-disabled) {
+  border-color: rgba(138, 43, 226, 0.4);
+  background: rgba(138, 43, 226, 0.05);
+}
+
+.ccUploadIconWrap--video {
+  background: linear-gradient(135deg, rgba(138, 43, 226, 0.15), rgba(255, 140, 0, 0.1));
+  box-shadow: 0 0 30px rgba(138, 43, 226, 0.12);
+}
+
+.ccVideoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.ccVideo {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.ccVideoEl {
+  width: 100%;
+  height: auto;
+  display: block;
+  max-height: 200px;
+  object-fit: cover;
+}
+
+.ccVideoRm {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.ccVideoRm .material-symbols-outlined {
+  font-size: 16px;
+  color: #fff;
+}
+
+.ccVideoRm:hover {
+  background: rgba(239, 68, 68, 0.9);
+  transform: scale(1.1);
+}
+
+/* =========
+   Mismatch Modal Styles
+   ========= */
+.modal-content--mismatch {
+  max-width: 400px;
+}
+
+.modal-header--warning {
+  background: linear-gradient(135deg, rgba(255, 180, 0, 0.12), rgba(255, 100, 0, 0.08));
+  border-bottom-color: rgba(255, 180, 0, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.modal-header__icon {
+  font-size: 24px;
+  color: #ffb400;
+}
+
+.modal-text {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 15px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.modal-text strong {
+  color: #ff8c00;
+}
+
+.modal-specialties {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.modal-specialties__label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 10px;
+}
+
+.modal-specialties__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.modal-specialty-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 140, 0, 0.15);
+  color: #ff8c00;
+  border: 1px solid rgba(255, 140, 0, 0.25);
+}
+
+.modal-question {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 15px;
+  font-weight: 600;
+  margin-top: 12px;
+}
+
+/* =========
+   Add Video Button (Toggle)
+   ========= */
+.ccAddVideoBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 20px;
+  border-radius: 18px;
+  border: 2px dashed rgba(138, 43, 226, 0.25);
+  background: rgba(138, 43, 226, 0.05);
+  color: rgba(138, 43, 226, 0.9);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.ccAddVideoBtn:hover {
+  border-color: rgba(138, 43, 226, 0.5);
+  background: rgba(138, 43, 226, 0.1);
+}
+
+.ccAddVideoBtn .material-symbols-outlined {
+  font-size: 22px;
+}
+
+.ccCloseVideoBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.ccCloseVideoBtn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.ccCloseVideoBtn .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.ccCard--video {
+  border-color: rgba(138, 43, 226, 0.2);
+}
+
+/* =========
+   Payment Timing Notice
+   ========= */
+.ccPaymentNotice {
+  display: flex;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(16, 185, 129, 0.08));
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  margin-bottom: 16px;
+}
+
+.ccPaymentNotice__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(34, 197, 94, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ccPaymentNotice__icon .material-symbols-outlined {
+  font-size: 24px;
+  color: #22c55e;
+}
+
+.ccPaymentNotice__content {
+  flex: 1;
+}
+
+.ccPaymentNotice__title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #22c55e;
+  margin: 0 0 6px 0;
+  letter-spacing: -0.01em;
+}
+
+.ccPaymentNotice__text {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* =========
+   Location Buttons Below Map
+   ========= */
+.ccLocBtnsBelow {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.ccLocBtnBelow {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ccLocBtnBelow:hover {
+  border-color: rgba(255, 140, 0, 0.3);
+  background: rgba(255, 140, 0, 0.08);
+  color: #ff8c00;
+}
+
+.ccLocBtnBelow:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ccLocBtnBelow .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.ccLocChangeBtn--hidden {
+  display: none;
 }
 </style>

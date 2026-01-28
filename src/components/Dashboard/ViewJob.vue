@@ -238,35 +238,46 @@
 
         <!-- Fixed Bottom Actions -->
         <div class="job-bottom-sheet__actions">
-          <button
-            v-if="isHendiman && jobDetails.status === 'open'"
-            class="job-action-btn job-action-btn--primary"
-            @click="onAccept"
-            :disabled="isAccepting"
-          >
-            <i v-if="!isAccepting" class="ph-bold ph-check-circle"></i>
-            <i v-else class="ph-bold ph-spinner animate-spin"></i>
-            <span v-if="isAccepting">מעדכן...</span>
-            <span v-else>קבל עבודה</span>
-          </button>
-          
-          <div class="job-action-buttons-row">
+          <!-- Handyman: Accept and Skip buttons for open jobs -->
+          <template v-if="isHendiman && jobDetails.status === 'open'">
             <button
-              v-if="isHendiman && jobDetails.status === 'open'"
-              class="job-action-btn job-action-btn--skip"
-              @click="onSkip"
+              class="job-action-btn job-action-btn--primary"
+              @click="onAccept"
+              :disabled="isAccepting"
             >
-              <i class="ph-bold ph-skip-forward"></i>
-              דלג
+              <i v-if="!isAccepting" class="ph-bold ph-check-circle"></i>
+              <i v-else class="ph-bold ph-spinner animate-spin"></i>
+              <span>{{ isAccepting ? 'מעבד...' : 'קבל עבודה' }}</span>
             </button>
+            <div class="job-action-buttons-row">
+              <button
+                class="job-action-btn job-action-btn--skip"
+                @click="onSkip"
+                :disabled="isAccepting"
+              >
+                <i class="ph-bold ph-skip-forward"></i>
+                <span>דלג</span>
+              </button>
+              <button
+                class="job-action-btn job-action-btn--close"
+                @click="onClose"
+              >
+                <i class="ph-bold ph-x"></i>
+                <span>סגור</span>
+              </button>
+            </div>
+          </template>
+          
+          <!-- Client or non-open jobs: Just close button -->
+          <template v-else>
             <button
-              class="job-action-btn job-action-btn--secondary"
+              class="job-action-btn job-action-btn--close-full"
               @click="onClose"
             >
               <i class="ph-bold ph-x"></i>
-              סגור
+              <span>סגור</span>
             </button>
-          </div>
+          </template>
         </div>
       </div>
     </div>
@@ -755,20 +766,21 @@ $danger: #ff3b3b;
   position: relative;
   width: 100%;
   max-width: 448px;
-  height: 90vh;
-  max-height: 90vh;
-  background: $background-dark;
-  border-radius: 2rem 2rem 0 0;
+  height: 85vh;
+  max-height: 85vh;
+  background: linear-gradient(180deg, #1a1a1e 0%, #0f0f12 100%);
+  border-radius: 1.5rem 1.5rem 0 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 -10px 50px rgba(0, 0, 0, 0.6);
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border-top: 1px solid rgba(255, 95, 0, 0.2);
 
   @media (min-width: 640px) {
-    border-radius: 2rem;
+    border-radius: 1.5rem;
     height: auto;
-    max-height: 90vh;
+    max-height: 85vh;
   }
 }
 
@@ -777,9 +789,8 @@ $danger: #ff3b3b;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 12px 0 8px;
-  background: $background-dark;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 10px 0 6px;
+  background: transparent;
   cursor: grab;
   user-select: none;
   z-index: 10;
@@ -790,14 +801,10 @@ $danger: #ff3b3b;
 }
 
 .job-bottom-sheet__handle-bar {
-  width: 40px;
+  width: 36px;
   height: 4px;
   border-radius: 999px;
-  background: rgba(209, 213, 219, 0.3);
-
-  @media (prefers-color-scheme: dark) {
-    background: rgba(255, 255, 255, 0.2);
-  }
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .job-bottom-sheet__header {
@@ -805,8 +812,8 @@ $danger: #ff3b3b;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0 32px 8px;
-  background: $background-dark;
+  padding: 0 20px 8px;
+  background: transparent;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   z-index: 10;
 }
@@ -816,11 +823,11 @@ $danger: #ff3b3b;
   align-items: flex-start;
   justify-content: space-between;
   width: 100%;
-  padding: 8px 0 60px;
+  padding: 6px 0 45px;
   position: relative;
   
   @media (max-width: 640px) {
-    padding-bottom: 50px;
+    padding-bottom: 40px;
   }
 }
 
@@ -939,7 +946,7 @@ $danger: #ff3b3b;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 128px;
+  padding-bottom: 140px;
   scrollbar-width: none;
   -ms-overflow-style: none;
 
@@ -952,7 +959,7 @@ $danger: #ff3b3b;
 .job-image-section {
   position: relative;
   width: 100%;
-  height: 224px;
+  height: 180px;
   margin-top: 0;
 }
 
@@ -1028,62 +1035,65 @@ $danger: #ff3b3b;
 
 // Title Section
 .job-title-section {
-  padding: 16px 24px 24px;
+  padding: 12px 20px 16px;
   text-align: center;
-  margin-top: -24px;
+  margin-top: -20px;
   position: relative;
   z-index: 10;
 }
 
 .job-title {
   margin: 0 0 8px;
-  font-size: 30px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 800;
   letter-spacing: -0.02em;
   color: white;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  line-height: 1.4;
+  line-height: 1.3;
 
   @media (max-width: 640px) {
-    font-size: 24px;
+    font-size: 20px;
   }
 }
 
 .job-price-badge {
-  display: inline-block;
-  background: rgba(255, 123, 0, 0.1);
-  padding: 4px 16px;
+  display: inline-flex;
+  align-items: center;
+  background: linear-gradient(135deg, rgba(255, 95, 0, 0.15), rgba(255, 95, 0, 0.08));
+  padding: 6px 16px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 123, 0, 0.2);
-  margin-bottom: 16px;
+  border: 1px solid rgba(255, 95, 0, 0.25);
+  margin-bottom: 12px;
 }
 
 .job-price-amount {
-  font-size: 24px;
-  font-weight: 700;
-  color: $primary;
+  font-size: 20px;
+  font-weight: 800;
+  color: #FF8F00;
 }
 
 .job-tags-row {
   display: flex;
   justify-content: center;
-  gap: 12px;
-  margin-top: 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .job-tag {
-  background: $card-dark;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  color: rgba(209, 213, 219, 1);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(200, 200, 200, 1);
   font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 0.375rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 8px;
 }
 
 .job-tag--quoted {
-  border-color: rgba($primary, 0.5);
-  background: linear-gradient(135deg, rgba($primary, 0.2), rgba($primary-dark, 0.15));
-  color: $primary-dark;
+  border-color: rgba($primary, 0.4);
+  background: linear-gradient(135deg, rgba($primary, 0.15), rgba($primary-dark, 0.1));
+  color: #FF8F00;
   font-weight: 700;
 }
 
@@ -1627,44 +1637,52 @@ $danger: #ff3b3b;
 
 // Bottom Actions
 .job-bottom-sheet__actions {
-  flex: none;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
   width: 100%;
-  background: rgba(18, 18, 18, 0.95);
+  background: linear-gradient(to top, rgba(10, 10, 12, 1), rgba(15, 15, 18, 0.98));
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 24px));
+  border-top: 1px solid rgba(255, 95, 0, 0.15);
+  padding: 10px 14px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 10px));
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
+  gap: 8px;
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.5);
   z-index: 30;
 
   @media (min-width: 640px) {
-    padding-bottom: 24px;
-    border-radius: 0 0 2rem 2rem;
+    padding-bottom: 16px;
+    border-radius: 0 0 1.5rem 1.5rem;
   }
 }
 
 .job-action-btn {
   width: 100%;
-  height: 56px;
-  border-radius: 16px;
-  font-weight: 800;
-  font-size: 17px;
+  height: 42px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 14px;
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 6px;
   color: white;
   position: relative;
   overflow: hidden;
 
   i {
-    font-size: 22px;
+    font-size: 16px;
+  }
+
+  span {
+    white-space: nowrap;
   }
 
   &:active {
@@ -1672,61 +1690,90 @@ $danger: #ff3b3b;
   }
 
   &:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: not-allowed;
   }
 }
 
 .job-action-btn--primary {
   background: linear-gradient(135deg, #FF8F00 0%, #FF5F00 100%);
-  box-shadow: 0 8px 24px rgba(255, 95, 0, 0.35);
+  box-shadow: 0 4px 16px rgba(255, 95, 0, 0.35);
   color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 200, 150, 0.2);
+  height: 46px;
+  font-size: 15px;
+  font-weight: 800;
+
+  i {
+    font-size: 18px;
+  }
 
   &:hover:not(:disabled) {
-    box-shadow: 0 12px 32px rgba(255, 95, 0, 0.45);
-    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 95, 0, 0.45);
   }
 
   &:active:not(:disabled) {
-    transform: translateY(0) scale(0.97);
-  }
-}
-
-.job-action-btn--secondary {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.9);
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.2);
-  }
-
-  i {
-    color: #ff3b3b;
+    transform: scale(0.98);
   }
 }
 
 .job-action-btn--skip {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.85);
+  height: 38px;
+  font-size: 13px;
+
+  i {
+    font-size: 14px;
+    color: #FF5F00;
+  }
+
+  &:hover {
+    background: rgba(255, 95, 0, 0.08);
+    border-color: rgba(255, 95, 0, 0.25);
+  }
+}
+
+.job-action-btn--close {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+  height: 38px;
+  font-size: 13px;
+
+  i {
+    font-size: 14px;
+    color: rgba(255, 100, 100, 0.7);
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+}
+
+.job-action-btn--close-full {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.9);
+  height: 42px;
+
+  i {
+    font-size: 16px;
+    color: rgba(255, 100, 100, 0.7);
+  }
 
   &:hover {
     background: rgba(255, 255, 255, 0.08);
     border-color: rgba(255, 255, 255, 0.2);
-  }
-
-  i {
-    color: #FF5F00;
   }
 }
 
 .job-action-buttons-row {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
 .animate-spin {

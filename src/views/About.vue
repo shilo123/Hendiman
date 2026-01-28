@@ -14,7 +14,7 @@
         <div class="logo">H</div>
         <div class="brand-text">
           <div class="title">Hendiman</div>
-          <div class="subtitle">הסיפור שלנו • איך זה עובד • למה זה מטורף</div>
+          <div class="subtitle">הסיפור שלנו • איך זה עובד • למה אנחנו שונים</div>
         </div>
       </div>
 
@@ -25,6 +25,9 @@
         </button>
         <button class="btn ghost" @click="scrollTo('about-features')">
           פיצ׳רים
+        </button>
+        <button class="btn ghost" @click="scrollTo('about-trust')">
+          אמינות
         </button>
         <button class="btn ghost" @click="scrollTo('about-faq')">שאלות</button>
       </div>
@@ -45,8 +48,8 @@
           </h1>
 
           <p class="hero-desc">
-            מזמינים הנדימן עד הבית, רואים מיקום בזמן אמת ו-ETA, שולחים תמונות של
-            התקלה, ויש צ׳אט שמתקדם מהר ובצורה מקצועית.
+            מזמינים הנדימן עד הבית, רואים מיקום בזמן אמת ו-ETA מדויק, שולחים תמונות של
+            התקלה, ויש צ׳אט מקצועי שמתקדם מהר. התשלום מאובטח ומשתחרר רק אחרי שהעבודה הושלמה לשביעות רצונך.
           </p>
 
           <div class="hero-cta">
@@ -66,11 +69,11 @@
             </div>
             <div class="stat glass">
               <div class="stat-num">AI</div>
-              <div class="stat-text">זיהוי עבודה מפלט חופשי</div>
+              <div class="stat-text">זיהוי עבודה חכם</div>
             </div>
             <div class="stat glass">
               <div class="stat-num">Secure</div>
-              <div class="stat-text">שחרור תשלום רק באישור לקוח</div>
+              <div class="stat-text">תשלום מאובטח Stripe</div>
             </div>
           </div>
         </div>
@@ -122,12 +125,12 @@
           </div>
 
           <div class="floating glass f1">
-            <div class="f-title">צ׳אט מקצועי</div>
+            <div class="f-title">💬 צ׳אט מקצועי</div>
             <div class="f-sub">נפתח אוטומטית אחרי קבלת עבודה</div>
           </div>
           <div class="floating glass f2">
-            <div class="f-title">Stripe</div>
-            <div class="f-sub">תשלום מוחזק ומשתחרר רק באישור לקוח</div>
+            <div class="f-title">🔒 Stripe</div>
+            <div class="f-sub">תשלום מאובטח ומשתחרר רק באישורך</div>
           </div>
         </div>
       </div>
@@ -138,7 +141,7 @@
       <div class="section-head">
         <h2 class="section-title">איך זה עובד בפועל</h2>
         <p class="section-sub">
-          4 שלבים פשוטים — מהפלט הקצר ועד שהכל מסודר בבית.
+          4 שלבים פשוטים — מהבקשה הראשונית ועד שהכל מסודר בבית.
         </p>
       </div>
 
@@ -146,10 +149,9 @@
         <div class="step glass">
           <div class="step-num">1</div>
           <div class="step-body">
-            <div class="step-title">פלט קצר + AI</div>
+            <div class="step-title">תיאור הבעיה + AI</div>
             <div class="step-text">
-              המשתמש מקליד פלט קצר וה-AI מחפש אובייקט עבודה ומחיר. אם לא נמצא /
-              לא מדויק — פותחים להצעת מחיר.
+              מתארים את הבעיה בטקסט חופשי, מוסיפים תמונות/סרטונים. ה-AI שלנו מזהה אוטומטית את סוג העבודה ומציע מחיר הוגן. אם לא נמצאה התאמה — הקריאה נפתחת להצעות מחיר.
             </div>
           </div>
         </div>
@@ -157,9 +159,9 @@
         <div class="step glass">
           <div class="step-num">2</div>
           <div class="step-body">
-            <div class="step-title">תיאור ומיקום</div>
+            <div class="step-title">מיקום ודחיפות</div>
             <div class="step-text">
-              המשתמש מוסיף תיאור מלא ומיקום, כדי להתאים את ההנדימנים הנכונים.
+              בוחרים כתובת (זיהוי אוטומטי או הזנה ידנית), רמת קושי, ואפשרות לסמן כקריאה דחופה. ההנדימנים באזור מקבלים התראה ומגיבים מהר.
             </div>
           </div>
         </div>
@@ -167,10 +169,9 @@
         <div class="step glass">
           <div class="step-num">3</div>
           <div class="step-body">
-            <div class="step-title">תמונות/וידאו + קושי + דחוף</div>
+            <div class="step-title">הנדימן בדרך</div>
             <div class="step-text">
-              מוסיפים תמונות/סרטונים, בוחרים קלה/מורכבת/קשה, ואפשר לסמן קריאה
-              דחופה (+10 שקלות).
+              רואים את ההנדימן על המפה בזמן אמת, מקבלים ETA מדויק, ויכולים לתקשר בצ׳אט מקצועי. הכל שקוף ונגיש.
             </div>
           </div>
         </div>
@@ -178,12 +179,55 @@
         <div class="step glass">
           <div class="step-num">4</div>
           <div class="step-body">
-            <div class="step-title">תשלום ואישור שחרור</div>
+            <div class="step-title">סיום ותשלום</div>
             <div class="step-text">
-              התשלום נגבה באמצעות Stripe ומוחזק במערכת. רק אחרי סיום עבודה
-              ואישור הלקוח — התשלום משתחרר להנדימן.
+              לאחר סיום העבודה, מאשרים את התוצאה ומשחררים את התשלום. הכסף מוחזק בטוחה ב-Stripe עד לאישור — כך כולם מוגנים.
             </div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TRUST & SCORE -->
+    <section id="about-trust" class="section">
+      <div class="section-head">
+        <h2 class="section-title">מערכת אמינות חכמה</h2>
+        <p class="section-sub">
+          לכל הנדימן יש ציון פנימי שמבוסס על ביצועים אמיתיים — כדי שתקבלו תמיד שירות מקצועי ואמין.
+        </p>
+      </div>
+
+      <div class="trust-grid">
+        <div class="trust-card glass">
+          <div class="trust-icon">📊</div>
+          <h3 class="trust-title">ציון הנדימן</h3>
+          <p class="trust-text">
+            כל הנדימן מקבל ציון מ-0 עד 100 המבוסס על: אחוז השלמת עבודות (30%), הגעה בזמן (25%), דירוג לקוחות (25%), ומעט ביטולים (20%).
+          </p>
+        </div>
+
+        <div class="trust-card glass">
+          <div class="trust-icon">⏱️</div>
+          <h3 class="trust-title">מעקב ETA</h3>
+          <p class="trust-text">
+            המערכת עוקבת אחר זמני ההגעה של ההנדימנים. איחורים נרשמים ומשפיעים על הציון — כך מבטיחים שירות אמין.
+          </p>
+        </div>
+
+        <div class="trust-card glass">
+          <div class="trust-icon">🎯</div>
+          <h3 class="trust-title">שיבוץ חכם</h3>
+          <p class="trust-text">
+            הנדימנים עם ציון גבוה מקבלים עבודות קודם. הנדימנים החדשים מקבלים הזדמנות להוכיח את עצמם.
+          </p>
+        </div>
+
+        <div class="trust-card glass">
+          <div class="trust-icon">⭐</div>
+          <h3 class="trust-title">דירוגים אמיתיים</h3>
+          <p class="trust-text">
+            רק לקוחות שקיבלו שירות בפועל יכולים לדרג. הדירוגים משפיעים ישירות על הציון ועל החשיפה.
+          </p>
         </div>
       </div>
     </section>
@@ -191,35 +235,51 @@
     <!-- FEATURES / VIDEOS -->
     <section id="about-features" class="section">
       <div class="section-head">
-        <h2 class="section-title">מה רואים בתוך האפליקקה</h2>
+        <h2 class="section-title">הפיצ׳רים שלנו</h2>
         <p class="section-sub">
-          הסברים טקסטואליים + סרטון לכל נושא (מוכן לשים את הקישורים שלך).
+          כל מה שצריך לחוויית שירות חלקה ומקצועית.
         </p>
       </div>
 
       <div class="features-grid">
         <article class="feature glass">
           <div class="feature-top">
-            <h3 class="feature-title">איך יוצרים קריאה</h3>
-            <span class="pill-tag">Step-by-step</span>
+            <h3 class="feature-title">זיהוי AI חכם</h3>
+            <span class="pill-tag">Smart</span>
           </div>
           <p class="feature-text">
-            יצירת קריאה בארבעה שלבים: פלט קצר (AI), תיאור ומיקום, מדיה וקושי,
-            תשלום.
+            מתארים את הבעיה בטקסט חופשי והמערכת מזהה אוטומטית את סוג העבודה, הקטגוריה והמחיר המומלץ.
           </p>
+        </article>
 
-          <div class="video-wrap">
-            <video
-              class="video"
-              controls
-              preload="metadata"
-              :poster="posters.create"
-            >
-              <source src="" type="video/mp4" />
-              הדפדפן לא תומך בוידאו.
-            </video>
-            <div class="video-hint">הדבק כאן קישור/קובץ mp4</div>
+        <article class="feature glass">
+          <div class="feature-top">
+            <h3 class="feature-title">מיקום בזמן אמת</h3>
+            <span class="pill-tag">Live</span>
           </div>
+          <p class="feature-text">
+            עוקבים אחר ההנדימן על המפה, רואים ETA מדויק ויודעים בדיוק מתי הוא יגיע.
+          </p>
+        </article>
+
+        <article class="feature glass">
+          <div class="feature-top">
+            <h3 class="feature-title">צ׳אט + הקלטה קולית</h3>
+            <span class="pill-tag">Chat</span>
+          </div>
+          <p class="feature-text">
+            צ׳אט מקצועי עם תמונות, הקלטות קוליות בסגנון WhatsApp — תקשורת מהירה ונוחה.
+          </p>
+        </article>
+
+        <article class="feature glass">
+          <div class="feature-top">
+            <h3 class="feature-title">תשלום מאובטח</h3>
+            <span class="pill-tag">Secure</span>
+          </div>
+          <p class="feature-text">
+            התשלום נשמר בצורה מאובטחת ב-Stripe ומשתחרר רק לאחר אישור הלקוח — שקט נפשי לשני הצדדים.
+          </p>
         </article>
 
         <article class="feature glass">
@@ -228,68 +288,38 @@
             <span class="pill-tag">Special</span>
           </div>
           <p class="feature-text">
-            אפשר לבחור הנדימן ספציפי (ספיישל) ואז מוצג הנדימן אחד בלבד לקריאה.
+            אפשר לבחור הנדימן מסוים שכבר הכרתם ולהזמין אותו ישירות לעבודה.
           </p>
-
-          <div class="video-wrap">
-            <video
-              class="video"
-              controls
-              preload="metadata"
-              :poster="posters.pickOne"
-            >
-              <source src="" type="video/mp4" />
-              הדפדפן לא תומך בוידאו.
-            </video>
-            <div class="video-hint">הדבק כאן קישור/קובץ mp4</div>
-          </div>
         </article>
 
         <article class="feature glass">
           <div class="feature-top">
-            <h3 class="feature-title">בחירת הצעת מחיר</h3>
+            <h3 class="feature-title">קריאה דחופה</h3>
+            <span class="pill-tag">Urgent</span>
+          </div>
+          <p class="feature-text">
+            סימון קריאה כדחופה מקדם אותה ברשימה ומבטיח תגובה מהירה יותר מההנדימנים.
+          </p>
+        </article>
+
+        <article class="feature glass">
+          <div class="feature-top">
+            <h3 class="feature-title">עבודה לפי שעה</h3>
+            <span class="pill-tag">Hourly</span>
+          </div>
+          <p class="feature-text">
+            עבודות מסוימות מתומחרות לפי שעה. בסיום העבודה הלקוח מזין את מספר השעות והתשלום מחושב בהתאם.
+          </p>
+        </article>
+
+        <article class="feature glass">
+          <div class="feature-top">
+            <h3 class="feature-title">הצעות מחיר</h3>
             <span class="pill-tag">Quote</span>
           </div>
           <p class="feature-text">
-            אם ה-AI לא מצא התאמה לקטגוריות/מחיר — הקריאה נפתחת להצעת מחיר מצד
-            ההנדימן.
+            כשה-AI לא מצליח לזהות את העבודה, ההנדימנים יכולים להגיש הצעות מחיר והלקוח בוחר.
           </p>
-
-          <div class="video-wrap">
-            <video
-              class="video"
-              controls
-              preload="metadata"
-              :poster="posters.quote"
-            >
-              <source src="" type="video/mp4" />
-              הדפדפן לא תומך בוידאו.
-            </video>
-            <div class="video-hint">הדבק כאן קישור/קובץ mp4</div>
-          </div>
-        </article>
-
-        <article class="feature glass">
-          <div class="feature-top">
-            <h3 class="feature-title">חסימה</h3>
-            <span class="pill-tag">Safety</span>
-          </div>
-          <p class="feature-text">
-            ניתן לחסום משתמשים שמפרים את תנאי השימוש (ניהול מערכת).
-          </p>
-
-          <div class="video-wrap">
-            <video
-              class="video"
-              controls
-              preload="metadata"
-              :poster="posters.block"
-            >
-              <source src="" type="video/mp4" />
-              הדפדפן לא תומך בוידאו.
-            </video>
-            <div class="video-hint">הדבק כאן קישור/קובץ mp4</div>
-          </div>
         </article>
 
         <article class="feature glass">
@@ -298,45 +328,8 @@
             <span class="pill-tag">Trust</span>
           </div>
           <p class="feature-text">
-            לאחר סיום עבודה ניתן לדרג את ההנדימן ולכתוב תגובה.
+            לאחר כל עבודה אפשר לדרג את ההנדימן ולכתוב תגובה — עוזר להנדימנים הטובים לבלוט.
           </p>
-
-          <div class="video-wrap">
-            <video
-              class="video"
-              controls
-              preload="metadata"
-              :poster="posters.rating"
-            >
-              <source src="" type="video/mp4" />
-              הדפדפן לא תומך בוידאו.
-            </video>
-            <div class="video-hint">הדבק כאן קישור/קובץ mp4</div>
-          </div>
-        </article>
-
-        <article class="feature glass">
-          <div class="feature-top">
-            <h3 class="feature-title">קריאה דחופה</h3>
-            <span class="pill-tag">Boost</span>
-          </div>
-          <p class="feature-text">
-            המשתמש יכול לסמן קריאה דחופה בעלות 10 שקלות כדי שתוצג מעל קריאות
-            אחרות.
-          </p>
-
-          <div class="video-wrap">
-            <video
-              class="video"
-              controls
-              preload="metadata"
-              :poster="posters.urgent"
-            >
-              <source src="" type="video/mp4" />
-              הדפדפן לא תומך בוידאו.
-            </video>
-            <div class="video-hint">הדבק כאן קישור/קובץ mp4</div>
-          </div>
         </article>
       </div>
     </section>
@@ -345,34 +338,56 @@
     <section id="about-faq" class="section">
       <div class="section-head">
         <h2 class="section-title">שאלות נפוצות</h2>
-        <p class="section-sub">בלי חפירות — תשובות קצרות וברורות.</p>
+        <p class="section-sub">תשובות קצרות וברורות לשאלות הנפוצות ביותר.</p>
       </div>
 
       <div class="faq">
         <details class="qa glass" open>
           <summary>מתי הכסף משתחרר להנדימן?</summary>
           <p>
-            רק אחרי שההנדימן מסיים את העבודה ורק באישור הלקוח התשלום משתחרר.
+            רק אחרי שההנדימן מסיים את העבודה <strong>ורק באישור הלקוח</strong> התשלום משתחרר. הכסף נשמר בצורה מאובטחת עד לאישור.
           </p>
         </details>
 
         <details class="qa glass">
-          <summary>איך נפתח הצ׳אט?</summary>
+          <summary>איך הצ׳אט עובד?</summary>
           <p>
-            ברגע שהנדימן מקבל את העבודה — הצ׳אט נפתח אוטומטית בין הלקוח להנדימן.
+            ברגע שהנדימן מקבל את העבודה, הצ׳אט נפתח אוטומטית. אפשר לשלוח הודעות, תמונות והקלטות קוליות — בדיוק כמו WhatsApp.
           </p>
         </details>
 
         <details class="qa glass">
           <summary>מה קורה אם ה-AI לא מצא התאמה?</summary>
-          <p>הקריאה נפתחת להצעת מחיר על ידי ההנדימן.</p>
+          <p>
+            הקריאה נפתחת להצעת מחיר. ההנדימנים באזור יכולים להגיש הצעות ואתם בוחרים את ההצעה המתאימה ביותר.
+          </p>
         </details>
 
         <details class="qa glass">
           <summary>אפשר לבטל עבודה?</summary>
           <p>
-            כן. בביטול יש אפשרות טקסט חופשי, וההנהלה מחליטה האם לגבות קנס עד 200
-            שקלות.
+            כן. יש אפשרות לבטל עבודה עם הסבר. ביטולים חוזרים משפיעים על הציון של המבטל.
+          </p>
+        </details>
+
+        <details class="qa glass">
+          <summary>מה זה ציון הנדימן?</summary>
+          <p>
+            ציון פנימי מ-0 עד 100 שמחושב על בסיס: אחוז השלמת עבודות, הגעה בזמן, דירוג לקוחות ומעט ביטולים. ציון גבוה = הנדימן אמין יותר.
+          </p>
+        </details>
+
+        <details class="qa glass">
+          <summary>איך עובד המעקב אחרי ההנדימן?</summary>
+          <p>
+            מהרגע שההנדימן יוצא לדרך, אפשר לראות אותו על המפה בזמן אמת עם ETA מדויק שמתעדכן לפי התנועה בפועל.
+          </p>
+        </details>
+
+        <details class="qa glass">
+          <summary>מה קורה אם ההנדימן מאחר?</summary>
+          <p>
+            המערכת עוקבת אחר זמני ההגעה. איחורים נרשמים ומשפיעים על ציון ההנדימן — כך מבטיחים שירות אמין לטווח הארוך.
           </p>
         </details>
       </div>
@@ -382,12 +397,12 @@
     <footer class="footer glass">
       <div class="foot-left">
         <div class="foot-title">Hendiman</div>
-        <div class="foot-sub">שחור • כתום • אפור • חד • נקי</div>
+        <div class="foot-sub">שחור • כתום • אמינות • מקצועיות</div>
       </div>
 
       <div class="foot-right">
         <button class="btn ghost" @click="scrollTo('about-hero')">
-          חזרה למעלה
+          חזרה למעלה ↑
         </button>
       </div>
     </footer>
@@ -397,89 +412,6 @@
 <script>
 export default {
   name: "AboutView",
-  data() {
-    return {
-      posters: {
-        create:
-          "data:image/svg+xml;charset=UTF-8," +
-          encodeURIComponent(`
-            <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675">
-              <defs>
-                <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stop-color="#0b0b10"/>
-                  <stop offset="1" stop-color="#1a1a24"/>
-                </linearGradient>
-              </defs>
-              <rect width="1200" height="675" fill="url(#g)"/>
-              <circle cx="220" cy="180" r="120" fill="rgba(255,140,0,0.22)"/>
-              <circle cx="980" cy="520" r="180" fill="rgba(255,140,0,0.14)"/>
-              <text x="70" y="370" font-size="58" fill="rgba(255,255,255,0.92)" font-family="Arial">איך יוצרים קריאה</text>
-              <text x="70" y="430" font-size="28" fill="rgba(255,255,255,0.62)" font-family="Arial">וידאו דמו • MP4</text>
-            </svg>
-          `),
-        pickOne:
-          "data:image/svg+xml;charset=UTF-8," +
-          encodeURIComponent(`
-            <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675">
-              <rect width="1200" height="675" fill="#0b0b10"/>
-              <rect x="0" y="0" width="1200" height="675" fill="rgba(255,140,0,0.10)"/>
-              <text x="70" y="370" font-size="58" fill="rgba(255,255,255,0.92)" font-family="Arial">בחירת הנדימן ספציפי</text>
-              <text x="70" y="430" font-size="28" fill="rgba(255,255,255,0.62)" font-family="Arial">וידאו דמו • MP4</text>
-            </svg>
-          `),
-        quote:
-          "data:image/svg+xml;charset=UTF-8," +
-          encodeURIComponent(`
-            <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675">
-              <defs>
-                <radialGradient id="r" cx="30%" cy="30%" r="80%">
-                  <stop offset="0" stop-color="rgba(255,140,0,0.25)"/>
-                  <stop offset="1" stop-color="#0b0b10"/>
-                </radialGradient>
-              </defs>
-              <rect width="1200" height="675" fill="url(#r)"/>
-              <text x="70" y="370" font-size="58" fill="rgba(255,255,255,0.92)" font-family="Arial">בחירת הצעת מחיר</text>
-              <text x="70" y="430" font-size="28" fill="rgba(255,255,255,0.62)" font-family="Arial">וידאו דמו • MP4</text>
-            </svg>
-          `),
-        block:
-          "data:image/svg+xml;charset=UTF-8," +
-          encodeURIComponent(`
-            <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675">
-              <rect width="1200" height="675" fill="#0b0b10"/>
-              <circle cx="600" cy="340" r="230" fill="rgba(255,140,0,0.16)"/>
-              <text x="70" y="370" font-size="58" fill="rgba(255,255,255,0.92)" font-family="Arial">חסימה</text>
-              <text x="70" y="430" font-size="28" fill="rgba(255,255,255,0.62)" font-family="Arial">וידאו דמו • MP4</text>
-            </svg>
-          `),
-        rating:
-          "data:image/svg+xml;charset=UTF-8," +
-          encodeURIComponent(`
-            <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675">
-              <rect width="1200" height="675" fill="#0b0b10"/>
-              <text x="70" y="370" font-size="58" fill="rgba(255,255,255,0.92)" font-family="Arial">דירוג ותגובות</text>
-              <text x="70" y="430" font-size="28" fill="rgba(255,255,255,0.62)" font-family="Arial">וידאו דמו • MP4</text>
-              <text x="70" y="500" font-size="40" fill="rgba(255,140,0,0.95)" font-family="Arial">★★★★★</text>
-            </svg>
-          `),
-        urgent:
-          "data:image/svg+xml;charset=UTF-8," +
-          encodeURIComponent(`
-            <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675">
-              <defs>
-                <linearGradient id="g2" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0" stop-color="#0b0b10"/>
-                  <stop offset="1" stop-color="rgba(255,140,0,0.18)"/>
-                </linearGradient>
-              </defs>
-              <rect width="1200" height="675" fill="url(#g2)"/>
-              <text x="70" y="370" font-size="58" fill="rgba(255,255,255,0.92)" font-family="Arial">קריאה דחופה</text>
-              <text x="70" y="430" font-size="28" fill="rgba(255,255,255,0.62)" font-family="Arial">וידאו דמו • MP4</text>
-            </svg>
-          `),
-      },
-    };
-  },
   methods: {
     scrollTo(id) {
       const el = document.getElementById(id);
@@ -499,7 +431,7 @@ export default {
   position: relative;
   overflow-x: hidden;
   padding-bottom: 30px;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  font-family: 'Noto Sans Hebrew', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
 }
 
 /* Background orbs + grid */
@@ -521,21 +453,21 @@ export default {
   height: 520px;
   left: -120px;
   top: -140px;
-  background: rgba(255, 140, 0, 0.18);
+  background: rgba(242, 127, 13, 0.18);
 }
 .o2 {
   width: 460px;
   height: 460px;
   right: -140px;
   top: 120px;
-  background: rgba(255, 140, 0, 0.14);
+  background: rgba(242, 127, 13, 0.14);
 }
 .o3 {
   width: 640px;
   height: 640px;
   left: 20%;
   bottom: -280px;
-  background: rgba(255, 140, 0, 0.12);
+  background: rgba(242, 127, 13, 0.12);
 }
 .grid {
   position: absolute;
@@ -571,7 +503,7 @@ export default {
   width: min(1180px, calc(100% - 24px));
   z-index: 10;
   border-radius: 18px;
-  padding: 12px 12px;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -591,10 +523,10 @@ export default {
   letter-spacing: 0.5px;
   background: linear-gradient(
     135deg,
-    rgba(255, 140, 0, 0.95),
-    rgba(255, 140, 0, 0.35)
+    rgba(242, 127, 13, 0.95),
+    rgba(242, 127, 13, 0.45)
   );
-  box-shadow: 0 20px 50px rgba(255, 140, 0, 0.18);
+  box-shadow: 0 20px 50px rgba(242, 127, 13, 0.18);
 }
 .brand-text .title {
   font-weight: 800;
@@ -618,12 +550,15 @@ export default {
   border: 0;
   outline: none;
   cursor: pointer;
-  padding: 10px 12px;
+  padding: 10px 14px;
   border-radius: 14px;
   color: rgba(255, 255, 255, 0.92);
   transition: transform 160ms ease, background 160ms ease, border 160ms ease,
     box-shadow 160ms ease;
   user-select: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
 }
 .btn:active {
   transform: translateY(1px) scale(0.99);
@@ -635,22 +570,22 @@ export default {
 }
 .btn.ghost:hover {
   background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 140, 0, 0.2);
+  border-color: rgba(242, 127, 13, 0.2);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
 }
 
 .btn.primary {
   background: linear-gradient(
     135deg,
-    rgba(255, 140, 0, 0.95),
-    rgba(255, 140, 0, 0.45)
+    rgba(242, 127, 13, 0.95),
+    rgba(242, 127, 13, 0.55)
   );
-  box-shadow: 0 22px 70px rgba(255, 140, 0, 0.18);
+  box-shadow: 0 22px 70px rgba(242, 127, 13, 0.18);
   font-weight: 800;
 }
 .btn.primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 26px 80px rgba(255, 140, 0, 0.24);
+  box-shadow: 0 26px 80px rgba(242, 127, 13, 0.24);
 }
 
 .btn.glassy {
@@ -658,7 +593,7 @@ export default {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 .btn.glassy:hover {
-  border-color: rgba(255, 140, 0, 0.22);
+  border-color: rgba(242, 127, 13, 0.22);
   transform: translateY(-1px);
 }
 
@@ -685,7 +620,7 @@ export default {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 10px 14px;
   border-radius: 999px;
   font-size: 12px;
   opacity: 0.9;
@@ -694,8 +629,8 @@ export default {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: rgba(255, 140, 0, 0.95);
-  box-shadow: 0 0 0 6px rgba(255, 140, 0, 0.12);
+  background: rgba(242, 127, 13, 0.95);
+  box-shadow: 0 0 0 6px rgba(242, 127, 13, 0.12);
 }
 
 .hero-title {
@@ -708,7 +643,7 @@ export default {
 .accent {
   background: linear-gradient(
     135deg,
-    rgba(255, 140, 0, 0.95),
+    rgba(242, 127, 13, 0.95),
     rgba(255, 255, 255, 0.88)
   );
   -webkit-background-clip: text;
@@ -734,12 +669,12 @@ export default {
   margin-top: 16px;
 }
 .stat {
-  padding: 12px 12px;
+  padding: 12px 14px;
   border-radius: 16px;
 }
 .stat-num {
   font-weight: 900;
-  color: rgba(255, 140, 0, 0.95);
+  color: rgba(242, 127, 13, 0.95);
   font-size: 16px;
 }
 .stat-text {
@@ -790,10 +725,10 @@ export default {
   height: 210px;
   background: radial-gradient(
       circle at 30% 30%,
-      rgba(255, 140, 0, 0.2),
+      rgba(242, 127, 13, 0.2),
       transparent 50%
     ),
-    radial-gradient(circle at 75% 70%, rgba(255, 140, 0, 0.14), transparent 55%),
+    radial-gradient(circle at 75% 70%, rgba(242, 127, 13, 0.14), transparent 55%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0));
   overflow: hidden;
 }
@@ -819,7 +754,7 @@ export default {
   right: 12px;
   top: 12px;
   border-radius: 14px;
-  padding: 10px 10px;
+  padding: 10px 12px;
 }
 .badge-title {
   font-weight: 900;
@@ -836,8 +771,8 @@ export default {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: rgba(255, 140, 0, 0.95);
-  box-shadow: 0 0 0 8px rgba(255, 140, 0, 0.15);
+  background: rgba(242, 127, 13, 0.95);
+  box-shadow: 0 0 0 8px rgba(242, 127, 13, 0.15);
   z-index: 2;
   animation: pulse 1.9s ease-in-out infinite;
 }
@@ -859,9 +794,9 @@ export default {
   height: 2px;
   background: linear-gradient(
     90deg,
-    rgba(255, 140, 0, 0),
-    rgba(255, 140, 0, 0.95),
-    rgba(255, 140, 0, 0)
+    rgba(242, 127, 13, 0),
+    rgba(242, 127, 13, 0.95),
+    rgba(242, 127, 13, 0)
   );
   transform: rotate(-18deg);
   opacity: 0.85;
@@ -880,7 +815,7 @@ export default {
 }
 
 .card {
-  padding: 12px 12px;
+  padding: 12px 14px;
 }
 .card-row {
   display: flex;
@@ -912,8 +847,9 @@ export default {
   font-size: 11px;
   padding: 6px 10px;
   border-radius: 999px;
-  background: rgba(255, 140, 0, 0.16);
-  border: 1px solid rgba(255, 140, 0, 0.25);
+  background: rgba(74, 222, 128, 0.16);
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  color: #4ade80;
 }
 
 .chip-row {
@@ -942,7 +878,7 @@ export default {
 }
 .msg {
   font-size: 12px;
-  padding: 10px 10px;
+  padding: 10px 12px;
   border-radius: 14px;
   line-height: 1.35;
 }
@@ -955,16 +891,16 @@ export default {
 .msg.right {
   justify-self: end;
   max-width: 78%;
-  background: rgba(255, 140, 0, 0.16);
-  border: 1px solid rgba(255, 140, 0, 0.22);
+  background: rgba(242, 127, 13, 0.16);
+  border: 1px solid rgba(242, 127, 13, 0.22);
 }
 
 .floating {
   position: absolute;
   right: 18px;
-  padding: 10px 10px;
+  padding: 10px 12px;
   border-radius: 16px;
-  width: 210px;
+  width: 220px;
   z-index: 2;
   animation: floaty 4.4s ease-in-out infinite;
 }
@@ -979,7 +915,7 @@ export default {
 }
 .f-title {
   font-weight: 900;
-  font-size: 12px;
+  font-size: 13px;
 }
 .f-sub {
   font-size: 11px;
@@ -1000,22 +936,22 @@ export default {
 .section {
   position: relative;
   z-index: 1;
-  padding: 28px 0;
+  padding: 32px 0;
 }
 .section-head {
   width: min(1180px, calc(100% - 24px));
-  margin: 0 auto 14px;
+  margin: 0 auto 18px;
 }
 .section-title {
   font-weight: 1000;
   letter-spacing: -0.3px;
   margin: 0;
-  font-size: 22px;
+  font-size: 24px;
 }
 .section-sub {
   margin: 8px 0 0;
   opacity: 0.72;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
   max-width: 80ch;
 }
@@ -1026,40 +962,75 @@ export default {
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: 14px;
 }
 .step {
   border-radius: 18px;
-  padding: 14px 14px;
+  padding: 16px;
   display: flex;
-  gap: 12px;
+  gap: 14px;
   transition: transform 180ms ease, border-color 180ms ease;
 }
 .step:hover {
   transform: translateY(-2px);
-  border-color: rgba(255, 140, 0, 0.22);
+  border-color: rgba(242, 127, 13, 0.22);
 }
 .step-num {
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   border-radius: 14px;
   display: grid;
   place-items: center;
   font-weight: 1000;
-  color: rgba(255, 140, 0, 0.95);
-  background: rgba(255, 140, 0, 0.14);
-  border: 1px solid rgba(255, 140, 0, 0.22);
+  font-size: 16px;
+  color: rgba(242, 127, 13, 0.95);
+  background: rgba(242, 127, 13, 0.14);
+  border: 1px solid rgba(242, 127, 13, 0.22);
   flex: 0 0 auto;
 }
 .step-title {
   font-weight: 900;
-  font-size: 13px;
+  font-size: 14px;
 }
 .step-text {
   margin-top: 6px;
+  font-size: 13px;
+  opacity: 0.72;
+  line-height: 1.6;
+}
+
+/* Trust Grid */
+.trust-grid {
+  width: min(1180px, calc(100% - 24px));
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+.trust-card {
+  border-radius: 18px;
+  padding: 20px 16px;
+  text-align: center;
+  transition: transform 180ms ease, border-color 180ms ease;
+}
+.trust-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(242, 127, 13, 0.22);
+}
+.trust-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+.trust-title {
+  font-weight: 900;
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+.trust-text {
   font-size: 12px;
   opacity: 0.72;
   line-height: 1.6;
+  margin: 0;
 }
 
 /* Features grid */
@@ -1068,16 +1039,16 @@ export default {
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  gap: 14px;
 }
 .feature {
   border-radius: 18px;
-  padding: 14px 14px;
+  padding: 18px 16px;
   transition: transform 180ms ease, border-color 180ms ease;
 }
 .feature:hover {
   transform: translateY(-2px);
-  border-color: rgba(255, 140, 0, 0.22);
+  border-color: rgba(242, 127, 13, 0.22);
 }
 .feature-top {
   display: flex;
@@ -1087,48 +1058,23 @@ export default {
 }
 .feature-title {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 950;
 }
 .pill-tag {
   font-size: 11px;
   padding: 6px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(242, 127, 13, 0.12);
+  border: 1px solid rgba(242, 127, 13, 0.2);
+  color: rgba(242, 127, 13, 0.95);
   opacity: 0.9;
 }
 .feature-text {
-  margin: 10px 0 12px;
-  font-size: 12px;
+  margin: 10px 0 0;
+  font-size: 13px;
   opacity: 0.72;
   line-height: 1.6;
-}
-
-/* Video */
-.video-wrap {
-  position: relative;
-  border-radius: 16px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.25);
-}
-.video {
-  width: 100%;
-  display: block;
-  aspect-ratio: 16 / 9;
-  background: rgba(0, 0, 0, 0.25);
-}
-.video-hint {
-  position: absolute;
-  left: 10px;
-  bottom: 10px;
-  font-size: 11px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  opacity: 0.85;
 }
 
 /* FAQ */
@@ -1140,12 +1086,12 @@ export default {
 }
 .qa {
   border-radius: 18px;
-  padding: 12px 14px;
+  padding: 14px 16px;
 }
 .qa summary {
   cursor: pointer;
   font-weight: 900;
-  font-size: 13px;
+  font-size: 14px;
   list-style: none;
 }
 .qa summary::-webkit-details-marker {
@@ -1153,7 +1099,7 @@ export default {
 }
 .qa p {
   margin: 10px 0 0;
-  font-size: 12px;
+  font-size: 13px;
   opacity: 0.72;
   line-height: 1.6;
 }
@@ -1161,9 +1107,9 @@ export default {
 /* Footer */
 .footer {
   width: min(1180px, calc(100% - 24px));
-  margin: 18px auto 0;
+  margin: 24px auto 0;
   border-radius: 18px;
-  padding: 12px 14px;
+  padding: 14px 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1173,6 +1119,7 @@ export default {
 }
 .foot-title {
   font-weight: 1000;
+  font-size: 16px;
 }
 .foot-sub {
   opacity: 0.7;
@@ -1194,11 +1141,20 @@ export default {
   .features-grid {
     grid-template-columns: 1fr;
   }
+  .trust-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
   .stats-row {
     grid-template-columns: 1fr;
   }
   .actions {
     display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .trust-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

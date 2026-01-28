@@ -310,7 +310,62 @@ async function sendPushNotificationToMultiple(
   }
 }
 
+/**
+ * Send push notification to a user by their userId (looks up FCM token from DB)
+ * @param {string} userId - The user's MongoDB _id
+ * @param {object} notification - Object containing title, body, and data
+ * @returns {Promise}
+ */
+async function sendPushToUser(userId, notification) {
+  serverLogger.log("[Push] 📤 sendPushToUser | userId:", userId);
+  
+  try {
+    // We need to get the user's FCM token from the database
+    // This requires passing the collection or getting it here
+    // For now, let's use a dynamic import approach
+    const { MongoClient, ObjectId } = require("mongodb");
+    
+    // Get the database connection from environment
+    const mongoUrl = process.env.MONGODB_URI || process.env.MONGO_URL;
+    if (!mongoUrl) {
+      serverLogger.error("[Push] ❌ MongoDB URL not configured");
+      return { success: false, error: "Database not configured" };
+    }
+    
+    const client = new MongoClient(mongoUrl);
+    await client.connect();
+    
+    const db = client.db();
+    const usersCol = db.collection("users");
+    
+    // Convert userId to ObjectId if it's a string
+    const userObjectId = typeof userId === "string" ? new ObjectId(userId) : userId;
+    
+    const user = await usersCol.findOne({ _id: userObjectId });
+    await client.close();
+    
+    if (!user) {
+      serverLogger.error("[Push] ❌ User not found:", userId);
+      return { success: false, error: "User not found" };
+    }
+    
+    if (!user.fcmToken) {
+      serverLogger.log("[Push] ⚠️ User has no FCM token:", userId);
+      return { success: false, error: "User has no FCM token", silent: true };
+    }
+    
+    // Now send the push notification
+    const { title, body, data } = notification;
+    return await sendPushNotification(user.fcmToken, title, body, data || {});
+    
+  } catch (error) {
+    serverLogger.error("[Push] ❌ sendPushToUser error:", error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   sendPushNotification,
   sendPushNotificationToMultiple,
+  sendPushToUser,
 };

@@ -1,55 +1,34 @@
 <template>
-  <div class="quick">
-    <div class="quick__row">
-      <div class="badgeLine">
-        <span class="badgeLine__k">תחומי ההתמחות שלי </span>
-        <div class="badgeLine__v">
+  <div class="specialties-block" dir="rtl">
+    <h2 class="specialties-title">תחומי ההתמחות שלי</h2>
+    
+    <div class="specialties-grid" v-if="specialties && specialties.length">
+      <div
+        class="spec-chip"
+        v-for="(subcat, index) in specialties"
+        :key="subcat.name || subcat || index"
+      >
+        <div class="spec-chip__top">
+          <span class="spec-chip__name">{{ subcat.name || subcat }}</span>
+        </div>
+        
+        <div class="spec-chip__meta" v-if="subcat.price || subcat.typeWork">
+          <span v-if="subcat.price" class="spec-chip__price">{{ subcat.price }}₪</span>
           <span
-            class="chip"
-            v-for="(subcat, index) in specialties"
-            :key="subcat.name || subcat || index"
-          >
-            <span class="chip__name">{{ subcat.name || subcat }}</span>
-            <span v-if="subcat.price" class="chip__price"
-              >{{ subcat.price }}₪</span
-            >
-            <span
-              v-if="subcat.typeWork"
-              class="chip__type"
-              :class="{
-                'chip__type--hourly': subcat.typeWork === 'לשעה',
-                'chip__type--fixed': subcat.typeWork === 'קבלנות',
-              }"
-            >
-              {{ subcat.typeWork }}
-            </span>
-          </span>
+            v-if="subcat.typeWork"
+            class="spec-chip__type-dot"
+            :class="{
+              'spec-chip__type-dot--hourly': subcat.typeWork === 'לשעה',
+              'spec-chip__type-dot--fixed': subcat.typeWork === 'קבלנות',
+            }"
+            :title="subcat.typeWork"
+          ></span>
         </div>
       </div>
     </div>
-
-    <div class="quick__row">
-      <button
-        class="btn btn--primary btn--full"
-        type="button"
-        @click="$emit('edit-profile')"
-      >
-        ערוך פרופיל (אזור פעילות/זמינות)
-      </button>
-      <!-- <button
-        class="btn btn--ghost btn--full"
-        type="button"
-        @click="$emit('open-chat')"
-      >
-        פתח צ׳אט הנדימנים
-      </button> -->
-    </div>
-
-    <div class="note">
-      <div class="note__icon">🧠</div>
-      <div class="note__txt">
-        טיפ: סנן לפי <b>פתוחות</b> כדי לראות רק קריאות חדשות, ואז קבל מהר.
-      </div>
+    
+    <div v-else class="specialties-empty">
+      טרם הוגדרו תחומי התמחות
     </div>
   </div>
 </template>
@@ -68,207 +47,171 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-$orange: #ff6a00;
-$orange2: #ff8a2b;
-$orange3: #ffb36b;
-$text: rgba(255, 255, 255, 0.92);
+// Color variables
+$primary: #ff6a00;
+$primary-light: #ff8a2b;
+$surface: #1c1c24;
+$border: rgba(255, 255, 255, 0.1);
+$text: rgba(255, 255, 255, 0.95);
 
-@mixin focusRing {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba($orange, 0.32);
+.specialties-block {
+  background: $surface;
+  border-radius: 20px;
+  padding: 18px;
+  border: 1px solid $border;
+  width: 100%;
+  max-width: 650px;
+  margin: 0 auto 20px auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
 }
 
-.quick {
-  &__row {
-    margin-bottom: 16px;
-
-    @media (max-width: 768px) {
-      margin-bottom: 12px;
-    }
-  }
-}
-
-.badgeLine {
-  &__k {
-    display: block;
-    font-size: 12px;
-    font-weight: 900;
-    color: rgba(255, 255, 255, 0.62);
-    margin-bottom: 8px;
-
-    @media (max-width: 768px) {
-      font-size: 10px;
-      margin-bottom: 6px;
-    }
-  }
-
-  &__v {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-
-    @media (max-width: 768px) {
-      gap: 4px;
-    }
-  }
-}
-
-.chip {
-  display: inline-flex;
+.specialties-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: $text;
+  margin: 0 0 16px 0;
+  text-align: right;
+  opacity: 0.9;
+  display: flex;
   align-items: center;
   gap: 8px;
-  border-radius: 999px;
-  padding: 8px 12px;
-  border: 1px solid rgba($orange, 0.18);
-  background: rgba($orange, 0.1);
-  font-weight: 1000;
-  font-size: 12px;
-  color: $text;
-  flex-wrap: wrap;
-  margin: 4px;
 
-  @media (max-width: 768px) {
-    padding: 4px 8px;
-    font-size: 9px;
-    gap: 4px;
-    margin: 3px;
+  &::before {
+    content: '';
+    width: 3px;
+    height: 16px;
+    background: $primary;
+    border-radius: 2px;
+  }
+}
+
+.specialties-grid {
+  display: grid;
+  /* Force consistent rows: 4 on desktop, 3 on tablet, 2 on small mobile */
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.spec-chip {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid $border;
+  border-radius: 12px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: all 0.2s ease;
+  min-height: 52px;
+  min-width: 0; /* allow ellipsis in grid */
+  box-sizing: border-box;
+
+  &:hover {
+    background: rgba($primary, 0.08);
+    border-color: rgba($primary, 0.3);
+    transform: translateY(-1px);
+  }
+
+  &__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
   }
 
   &__name {
+    font-size: 0.85rem;
+    font-weight: 700;
     color: $text;
-    font-weight: 1000;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  &__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
   }
 
   &__price {
-    color: $orange3;
-    font-weight: 1100;
-    font-size: 11px;
-    padding: 2px 6px;
-    border-radius: 999px;
-    background: rgba($orange, 0.15);
-    border: 1px solid rgba($orange, 0.25);
-
-    @media (max-width: 768px) {
-      font-size: 8px;
-      padding: 1px 4px;
-    }
+    font-size: 0.72rem;
+    font-weight: 900;
+    color: $primary-light;
   }
 
-  &__type {
-    font-size: 10px;
-    font-weight: 900;
-    padding: 2px 6px;
-    border-radius: 999px;
-    border: 1px solid;
-
-    @media (max-width: 768px) {
-      font-size: 7px;
-      padding: 1px 4px;
-    }
+  &__type-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #94a3b8;
 
     &--hourly {
-      color: $orange2;
-      background: rgba($orange2, 0.15);
-      border-color: rgba($orange2, 0.25);
+      background: #60a5fa; // Blue for hourly
+      box-shadow: 0 0 8px rgba(96, 165, 250, 0.4);
     }
 
     &--fixed {
-      color: $orange;
-      background: rgba($orange, 0.15);
-      border-color: rgba($orange, 0.25);
+      background: #34d399; // Green for fixed
+      box-shadow: 0 0 8px rgba(52, 211, 153, 0.4);
     }
   }
 }
 
-.btn {
-  border-radius: 16px;
-  padding: 11px 12px;
-  border: 1px solid rgba($orange, 0.18);
-  background: rgba(255, 255, 255, 0.06);
-  color: $text;
-  cursor: pointer;
-  font-weight: 1000;
-  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
-  font-size: 13px;
+.specialties-empty {
+  text-align: center;
+  padding: 20px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.9rem;
+  border: 1px dashed $border;
+  border-radius: 12px;
+}
 
-  @media (max-width: 768px) {
-    padding: 6px 8px;
-    font-size: 10px;
-    border-radius: 10px;
-    min-height: 32px;
-  }
-
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 14px 22px rgba($orange, 0.12);
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  &:active {
-    transform: translateY(0) scale(0.99);
-  }
-
-  &:focus {
-    @include focusRing;
-  }
-
-  &--primary {
-    color: #111;
-    border: none;
-    background: linear-gradient(135deg, $orange, $orange2);
-    box-shadow: 0 18px 44px rgba(255, 106, 0, 0.18);
-  }
-
-  &--ghost {
-    background: rgba(0, 0, 0, 0.22);
-    border-color: rgba(255, 255, 255, 0.12);
-  }
-
-  &--full {
-    width: 100%;
-    justify-content: center;
+@media (max-width: 820px) {
+  .specialties-grid {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
-.note {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding: 12px;
-  border-radius: 16px;
-  border: 1px solid rgba($orange, 0.18);
-  background: rgba($orange, 0.08);
-  margin-top: 12px;
+@media (max-width: 480px) {
+  .specialties-block {
+    padding: 14px;
+    border-radius: 16px;
+    margin-bottom: 14px;
+  }
 
-  @media (max-width: 768px) {
-    padding: 8px;
+  .specialties-title {
+    font-size: 1rem;
+    margin-bottom: 12px;
+  }
+
+  .specialties-grid {
+    grid-template-columns: repeat(3, 1fr);
     gap: 8px;
-    border-radius: 12px;
   }
 
-  &__icon {
-    font-size: 20px;
-    flex-shrink: 0;
+  .spec-chip {
+    padding: 6px 8px;
+    min-height: 44px;
+    border-radius: 10px;
 
-    @media (max-width: 768px) {
-      font-size: 16px;
+    &__name {
+      font-size: 0.72rem;
+    }
+
+    &__price {
+      font-size: 0.68rem;
     }
   }
+}
 
-  &__txt {
-    font-size: 12px;
-    font-weight: 900;
-    color: rgba(255, 255, 255, 0.84);
-    line-height: 1.4;
-
-    @media (max-width: 768px) {
-      font-size: 10px;
-    }
-
-    b {
-      color: $orange3;
-      font-weight: 1100;
-    }
+@media (max-width: 360px) {
+  .specialties-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 </style>

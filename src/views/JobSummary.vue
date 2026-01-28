@@ -184,17 +184,8 @@
       v-if="showClientApprovalModal && !isHandyman && pendingApprovalJob"
       class="clientApprovalModal"
       dir="rtl"
-      @click.self="showClientApprovalModal = false"
     >
       <div class="clientApprovalModal__content">
-        <button
-          class="clientApprovalModal__close"
-          type="button"
-          @click="showClientApprovalModal = false"
-          aria-label="סגור"
-        >
-          ✕
-        </button>
         <div class="clientApprovalModal__icon">✅</div>
         <h2 class="clientApprovalModal__title">ההנדימן סיים את העבודה</h2>
         <p class="clientApprovalModal__message">
@@ -202,34 +193,43 @@
           לשחרר את התשלום?
         </p>
         
-        <!-- Hours Worked Input (for hourly work) -->
-        <div v-if="isPendingJobHourly" class="clientApprovalModal__hoursSection">
-          <label class="clientApprovalModal__hoursLabel">
-            כמה שעות ההנדימן עבד?
-          </label>
-          <div class="clientApprovalModal__hoursInputWrapper">
+        <!-- Hourly Work Hours Input -->
+        <div v-if="isPendingJobHourly" class="clientApprovalModal__hourly">
+          <label class="clientApprovalModal__hourlyLabel">כמה שעות עבד ההנדימן?</label>
+          <div class="clientApprovalModal__hourlyRow">
+            <button
+              type="button"
+              class="clientApprovalModal__hourlyBtn"
+              :disabled="isApprovingPayment"
+              @click="hoursWorkedForApproval = Math.max(0.5, (parseFloat(hoursWorkedForApproval) || 0) - 0.5)"
+              aria-label="הפחת 0.5 שעות"
+            >−</button>
+
             <input
+              class="clientApprovalModal__hourlyField"
               type="number"
-              v-model.number="hoursWorkedForApproval"
-              min="0.5"
+              inputmode="decimal"
               step="0.5"
-              placeholder="0.5"
-              class="clientApprovalModal__hoursInput"
+              min="0.5"
+              :disabled="isApprovingPayment"
+              v-model.number="hoursWorkedForApproval"
               @input="onHoursWorkedInput"
             />
-            <span class="clientApprovalModal__hoursUnit">שעות</span>
+
+            <button
+              type="button"
+              class="clientApprovalModal__hourlyBtn"
+              :disabled="isApprovingPayment"
+              @click="hoursWorkedForApproval = (parseFloat(hoursWorkedForApproval) || 0) + 0.5"
+              aria-label="הוסף 0.5 שעות"
+            >+</button>
           </div>
-          <div v-if="hoursWorkedForApproval > 0 && hourlyPriceForApproval > 0" class="clientApprovalModal__priceDisplay">
-            <div class="clientApprovalModal__priceRow">
-              <span class="clientApprovalModal__priceLabel">מחיר לשעה:</span>
-              <span class="clientApprovalModal__priceValue">{{ hourlyPriceForApproval.toFixed(2) }} ₪</span>
-            </div>
-            <div class="clientApprovalModal__priceRow clientApprovalModal__priceRow--total">
-              <span class="clientApprovalModal__priceLabel">סה"כ לתשלום:</span>
-              <span class="clientApprovalModal__priceValue clientApprovalModal__priceValue--total">
-                {{ totalPriceForApproval.toFixed(2) }} ₪
-              </span>
-            </div>
+
+          <div class="clientApprovalModal__hourlyPrice" v-if="hourlyPriceForApproval > 0">
+            <span>מחיר לשעה: {{ hourlyPriceForApproval.toFixed(2) }} ₪</span>
+            <span class="clientApprovalModal__hourlyTotal">
+              סה"כ: {{ totalPriceForApproval.toFixed(2) }} ₪
+            </span>
           </div>
         </div>
         
@@ -586,6 +586,20 @@ export default {
           }
         }
       } catch (error) {
+        if (error.response?.data?.requiresPaymentMethod) {
+          try {
+            this.showClientApprovalModal = false;
+            this.showProblemReportModal = false;
+            this.pendingApprovalJob = null;
+            this.hoursWorkedForApproval = null;
+            if (clientId) {
+              this.$router.push(`/Dashboard/${clientId}/create-call`);
+            }
+          } catch (navErr) {
+            // ignore navigation errors
+          }
+          return;
+        }
         const errorMessage =
           error.response?.data?.message ||
           error.message ||
@@ -1149,36 +1163,14 @@ $muted: rgba(255, 255, 255, 0.62);
 
 .clientApprovalModal__content {
   position: relative;
-  background: linear-gradient(
-    180deg,
-    rgba(0, 0, 0, 0.95),
-    rgba(15, 16, 22, 0.98)
-  );
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  padding: 32px;
-  max-width: 450px;
-  width: calc(100% - 40px);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  width: calc(100% - 32px);
+  max-width: 340px;
+  background: #0b0b0f;
+  border-radius: 22px;
+  padding: 28px 24px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   text-align: center;
-}
-
-.clientApprovalModal__close {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  background: transparent;
-  border: 0;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 24px;
-  cursor: pointer;
-  padding: 8px;
-  line-height: 1;
-  transition: color 0.2s;
-}
-
-.clientApprovalModal__close:hover {
-  color: rgba(255, 255, 255, 0.9);
 }
 
 .clientApprovalModal__icon {
@@ -1200,6 +1192,84 @@ $muted: rgba(255, 255, 255, 0.62);
   color: rgba(255, 255, 255, 0.8);
   margin: 0 0 24px 0;
   line-height: 1.6;
+}
+
+.clientApprovalModal__hourly {
+  margin: 18px 0 10px;
+  padding: 14px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: right;
+}
+
+.clientApprovalModal__hourlyLabel {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 10px;
+  text-align: right;
+}
+
+.clientApprovalModal__hourlyRow {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  gap: 10px;
+  align-items: center;
+}
+
+.clientApprovalModal__hourlyBtn {
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 18px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 0.08s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.clientApprovalModal__hourlyBtn:active {
+  transform: translateY(1px);
+}
+
+.clientApprovalModal__hourlyBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.clientApprovalModal__hourlyField {
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.25);
+  color: white;
+  font-size: 18px;
+  font-weight: 900;
+  text-align: center;
+  outline: none;
+  padding: 0 10px;
+  min-width: 0;
+}
+
+.clientApprovalModal__hourlyField:disabled {
+  opacity: 0.8;
+}
+
+.clientApprovalModal__hourlyPrice {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.clientApprovalModal__hourlyTotal {
+  color: rgba(255, 180, 80, 0.95);
+  font-weight: 900;
 }
 
 .clientApprovalModal__hoursSection {
@@ -1364,8 +1434,8 @@ $muted: rgba(255, 255, 255, 0.62);
 @media (max-width: 768px) {
   .clientApprovalModal__content {
     padding: 24px;
-    border-radius: 16px;
-    max-width: 100%;
+    border-radius: 18px;
+    max-width: 320px;
   }
 
   .clientApprovalModal__icon {

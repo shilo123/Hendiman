@@ -421,35 +421,79 @@
 
       <input
         v-else
-        v-model="newMessage"
+        ref="messageInput"
+        :value="newMessage"
         class="composer__input"
         type="text"
         placeholder="הקלד הודעה…"
-        @keyup.enter="sendMessage"
-        @input="handleTyping"
+        @input="onMessageInput"
+        @keydown.enter.prevent="onEnterPress"
+        @compositionstart="isComposing = true"
+        @compositionend="onCompositionEnd"
         aria-label="הקלד הודעה"
+        enterkeyhint="send"
       />
 
-      <button
-        v-if="!isRecording && !audioPreview"
-        class="composer__record"
-        type="button"
-        @click="startRecording"
-        aria-label="הקלט"
-        :disabled="imagePreview"
+      <!-- WhatsApp-style voice recording -->
+      <div 
+        v-if="!audioPreview"
+        class="composer__voice-area"
+        :class="{ 
+          'composer__voice-area--recording': isRecording,
+          'composer__voice-area--locked': isRecordingLocked,
+          'composer__voice-area--cancel': isRecordingCancel
+        }"
       >
-        🎤
-      </button>
-
-      <button
-        v-else-if="isRecording"
-        class="composer__record composer__record--recording"
-        type="button"
-        @click="stopRecording"
-        aria-label="הפסק הקלטה"
-      >
-        ⏹
-      </button>
+        <!-- Cancel indicator (shown when dragging right) -->
+        <div v-if="isRecording && isRecordingCancel" class="voice-cancel-hint">
+          <font-awesome-icon icon="xmark" />
+          <span>שחרר לביטול</span>
+        </div>
+        
+        <!-- Lock indicator (shown when dragging up) -->
+        <div v-if="isRecording && !isRecordingLocked && recordingDragY < -40" class="voice-lock-hint">
+          <font-awesome-icon icon="lock" />
+        </div>
+        
+        <!-- Recording time display -->
+        <div v-if="isRecording" class="voice-recording-info">
+          <div class="voice-recording-pulse"></div>
+          <span class="voice-recording-time">{{ formatRecordingTime(recordingTime) }}</span>
+          <span v-if="!isRecordingLocked" class="voice-swipe-hint">החלק למעלה לנעילה</span>
+        </div>
+        
+        <!-- Main record button -->
+        <button
+          ref="recordButton"
+          class="composer__record"
+          :class="{
+            'composer__record--active': isRecording && !isRecordingLocked,
+            'composer__record--locked': isRecordingLocked
+          }"
+          type="button"
+          :disabled="imagePreview"
+          @touchstart.prevent="onRecordTouchStart"
+          @touchmove.prevent="onRecordTouchMove"
+          @touchend.prevent="onRecordTouchEnd"
+          @mousedown.prevent="onRecordMouseDown"
+          aria-label="הקלט"
+        >
+          <font-awesome-icon v-if="!isRecording" icon="microphone" class="record-icon" />
+          <font-awesome-icon v-else-if="isRecordingLocked" icon="paper-plane" class="record-icon" />
+          <font-awesome-icon v-else icon="microphone" class="record-icon record-icon--active" />
+        </button>
+        
+        <!-- Stop button when locked -->
+        <button
+          v-if="isRecordingLocked"
+          class="composer__record-cancel"
+          type="button"
+          @click="cancelRecording"
+          aria-label="ביטול"
+        >
+          <font-awesome-icon icon="xmark" />
+        </button>
+      </div>
 
       <button
         class="composer__send"
@@ -998,85 +1042,6 @@
       </div>
     </div>
 
-    <!-- Hours Worked Modal -->
-    <div
-      v-if="showHoursWorkedModal"
-      class="modal"
-      dir="rtl"
-      @click.self="showHoursWorkedModal = false"
-      role="dialog"
-      aria-label="שעות עבודה"
-    >
-      <div class="hoursWorkedModal">
-        <div class="hoursWorkedModal__header">
-          <h3 class="hoursWorkedModal__title">שעות עבודה</h3>
-          <button
-            class="hoursWorkedModal__close"
-            type="button"
-            @click="showHoursWorkedModal = false"
-            aria-label="סגור"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div class="hoursWorkedModal__body">
-          <div class="hoursWorkedModal__message">כמה שעות עבדת על העבודה?</div>
-
-          <div class="hoursWorkedModal__field">
-            <label class="hoursWorkedModal__label" for="hoursWorked"
-              >שעות</label
-            >
-            <input
-              id="hoursWorked"
-              v-model.number="hoursWorked"
-              type="number"
-              min="0.5"
-              step="0.5"
-              class="hoursWorkedModal__input"
-            />
-          </div>
-
-          <div class="hoursWorkedModal__priceInfo">
-            <div class="hoursWorkedModal__priceRow">
-              <span class="hoursWorkedModal__priceLabel">מחיר לשעה:</span>
-              <span class="hoursWorkedModal__priceValue"
-                >{{ hourlyPrice.toFixed(2) }} ₪</span
-              >
-            </div>
-            <div
-              class="hoursWorkedModal__priceRow hoursWorkedModal__priceRow--total"
-            >
-              <span class="hoursWorkedModal__priceLabel">סה"כ לתשלום:</span>
-              <span
-                class="hoursWorkedModal__priceValue hoursWorkedModal__priceValue--total"
-              >
-                {{ (hoursWorked * hourlyPrice).toFixed(2) }} ₪
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div class="hoursWorkedModal__footer">
-          <button
-            class="hoursWorkedModal__btn hoursWorkedModal__btn--cancel"
-            type="button"
-            @click="showHoursWorkedModal = false"
-          >
-            ביטול
-          </button>
-          <button
-            class="hoursWorkedModal__btn hoursWorkedModal__btn--submit"
-            type="button"
-            :disabled="hoursWorked <= 0 || isSubmittingHours"
-            @click="submitHoursWorked"
-          >
-            {{ isSubmittingHours ? "שולח..." : "אישור" }}
-          </button>
-        </div>
-      </div>
-    </div>
-
     <!-- Handyman Route Modal -->
     <div
       v-if="showHandymanRouteModal"
@@ -1174,6 +1139,30 @@
         </div>
       </div>
     </div>
+    
+    <!-- Phone Number Block Modal -->
+    <div 
+      v-if="showPhoneBlockModal" 
+      class="phoneBlockModal"
+      @click.self="showPhoneBlockModal = false"
+    >
+      <div class="phoneBlockModal__content">
+        <div class="phoneBlockModal__badge">
+          <span class="phoneBlockModal__badgeIcon">⚠</span>
+          <span class="phoneBlockModal__badgeText">אזהרה</span>
+        </div>
+        <h3 class="phoneBlockModal__title">לא ניתן לשלוח מספר טלפון</h3>
+        <p class="phoneBlockModal__text">
+          משתמש שלא קובע דרך הפלטפורמה מפר את תנאי השימוש ויחסם על ידי צוות הנדימן.
+        </p>
+        <button 
+          class="phoneBlockModal__btn"
+          @click="showPhoneBlockModal = false"
+        >
+          הבנתי
+        </button>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -1268,13 +1257,10 @@ export default {
       // Job images state
       showJobImagesModal: false,
 
-      // Hours worked state (for hourly work)
-      showHoursWorkedModal: false,
-      hoursWorked: 1,
-      isSubmittingHours: false,
-
       // Audio recording state
       isRecording: false,
+      isRecordingLocked: false, // WhatsApp lock mode
+      isRecordingCancel: false, // Dragging to cancel
       recordingTime: 0,
       recordingInterval: null,
       mediaRecorder: null,
@@ -1282,12 +1268,20 @@ export default {
       audioPreview: null,
       audioChunks: [],
       audioUrlsToDelete: [], // Track audio URLs for cleanup
+      recordingStartX: 0, // Touch start position
+      recordingStartY: 0,
+      recordingDragX: 0, // Current drag offset
+      recordingDragY: 0,
 
       // Typing indicator state
       isTyping: false,
       isOtherTyping: false,
+      isComposing: false, // Track IME composition state (Android fix)
       typingTimeout: null,
       typingEmitTimeout: null,
+      
+      // Phone number block modal
+      showPhoneBlockModal: false,
     };
   },
   computed: {
@@ -1389,24 +1383,6 @@ export default {
         subcategoryInfo?.workType === "hourly"
       );
     },
-    hourlyPrice() {
-      const job = this.currentJob;
-      if (!job) return 0;
-      const subcategoryInfo = job.subcategoryInfo;
-      if (Array.isArray(subcategoryInfo)) {
-        const hourlySub = subcategoryInfo.find(
-          (sub) => sub?.workType === "לשעה" || sub?.workType === "hourly"
-        );
-        return hourlySub?.price || 0;
-      }
-      if (
-        subcategoryInfo?.workType === "לשעה" ||
-        subcategoryInfo?.workType === "hourly"
-      ) {
-        return subcategoryInfo?.price || 0;
-      }
-      return 0;
-    },
     jobImages() {
       const job = this.currentJob;
       if (!job) return [];
@@ -1436,24 +1412,6 @@ export default {
         subcategoryInfo?.workType === "לשעה" ||
         subcategoryInfo?.workType === "hourly"
       );
-    },
-    hourlyPrice() {
-      const job = this.currentJob;
-      if (!job) return 0;
-      const subcategoryInfo = job.subcategoryInfo;
-      if (Array.isArray(subcategoryInfo)) {
-        const hourlySub = subcategoryInfo.find(
-          (sub) => sub?.workType === "לשעה" || sub?.workType === "hourly"
-        );
-        return hourlySub?.price || 0;
-      }
-      if (
-        subcategoryInfo?.workType === "לשעה" ||
-        subcategoryInfo?.workType === "hourly"
-      ) {
-        return subcategoryInfo?.price || 0;
-      }
-      return 0;
     },
     clientName() {
       return this.currentJob?.clientName || "לקוח";
@@ -2180,6 +2138,14 @@ export default {
           this.localJobStatus = data.status;
           this.$emit("status-updated", data.status);
 
+          // Stop recording immediately if job ends
+          if (['done', 'paid', 'cancelled', 'completed'].includes(data.status)) {
+            if (this.isRecording) {
+              this.cancelRecording();
+              this.toast?.showInfo("ההקלטה הופסקה - העבודה הסתיימה");
+            }
+          }
+
           // When handyman status changes to "on_the_way", save the starting location
           // This is the FIXED point where handyman started the journey
           if (data.status === "on_the_way" && previousStatus !== "on_the_way") {
@@ -2193,29 +2159,40 @@ export default {
             }
           }
 
-          // Add status message to chat for client (not handyman)
-          if (!this.isHandyman) {
-            const statusMessages = {
-              on_the_way: "ההנדימן יצא לדרך",
-              in_progress: "עדכון סטטוס: ההנדימן הגיע",
-              done: "עדכון סטטוס: ההנדימן סיים את העבודה",
-            };
-            const statusMessage = statusMessages[data.status];
-            if (statusMessage) {
-              const systemMessage = {
-                sender: "system",
-                text: statusMessage,
-                time: new Date().toLocaleTimeString("he-IL", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
-                createdAt: new Date(),
-                isSystem: true,
-              };
-              this.messages.push(systemMessage);
-              this.updateMessagesCache();
-              this.scrollToBottom();
+          // Add status message to chat for both client and handyman
+          let statusMessage = "";
+          if (data.status === "on_the_way") {
+            // Add expected arrival time if available (shown to both client and handyman)
+            if (data.expectedArrivalAt) {
+              const arrivalDate = new Date(data.expectedArrivalAt);
+              const arrivalTime = arrivalDate.toLocaleTimeString("he-IL", {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+              statusMessage = `עדכון סטטוס: ההנדימן יצא לדרך - שעת הגעה ${arrivalTime}`;
+            } else {
+              statusMessage = "עדכון סטטוס: ההנדימן יצא לדרך";
             }
+          } else if (data.status === "in_progress") {
+            statusMessage = "עדכון סטטוס: ההנדימן הגיע";
+          } else if (data.status === "done") {
+            statusMessage = "עדכון סטטוס: ההנדימן סיים את העבודה";
+          }
+          
+          if (statusMessage) {
+            const systemMessage = {
+              sender: "system",
+              text: statusMessage,
+              time: new Date().toLocaleTimeString("he-IL", {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              createdAt: new Date(),
+              isSystem: true,
+            };
+            this.messages.push(systemMessage);
+            this.updateMessagesCache();
+            this.scrollToBottom();
           }
         }
       });
@@ -3463,8 +3440,19 @@ export default {
     },
 
     async sendMessage() {
+      // Get value from input element directly if available (Android fix)
+      if (this.$refs.messageInput) {
+        this.newMessage = this.$refs.messageInput.value;
+      }
+      
       const t = this.newMessage.trim();
       if (!t) return;
+
+      // Check for phone numbers
+      if (this.containsPhoneNumber(t)) {
+        this.showPhoneBlockModal = true;
+        return;
+      }
 
       const job = this.currentJob;
       const jobId = job?.id || job?._id;
@@ -3493,7 +3481,11 @@ export default {
       });
       this.updateMessagesCache();
 
+      // Clear input (both v-model and DOM element)
       this.newMessage = "";
+      if (this.$refs.messageInput) {
+        this.$refs.messageInput.value = "";
+      }
       this.scrollToBottom();
 
       try {
@@ -3638,11 +3630,8 @@ export default {
       try {
         const job = this.currentJob;
 
-        // If status is "done" and work is hourly, show hours worked modal first
-        if (newStatus === "done" && this.isHandyman && this.isHourlyWork) {
-          this.showHoursWorkedModal = true;
-          return; // Don't update status yet, wait for hours input
-        }
+        // For hourly work, the CLIENT will enter hours when approving payment
+        // Handyman just marks as done without entering hours
 
         const endpoint = `/jobs/${newStatus.replaceAll("_", "-")}`;
 
@@ -3658,10 +3647,36 @@ export default {
           handymanId = foundHandyman || handymanId[0];
         }
 
-        // Send status update IMMEDIATELY - don't wait for location
+        // Calculate ETA if status is "on_the_way" and we have locations
+        let etaMinutes = 0;
+        if (newStatus === "on_the_way" && this.isHandyman && this.jobLocation) {
+          try {
+            // Try to get current location first
+            const currentLoc = await getCurrentLocation();
+            if (currentLoc && currentLoc.lat && currentLoc.lon) {
+              // Calculate ETA using MapBox
+              const etaResponse = await axios.post(`${URL}/api/eta/calculate`, {
+                handymanLat: currentLoc.lat,
+                handymanLng: currentLoc.lon,
+                clientLat: this.jobLocation.lat,
+                clientLng: this.jobLocation.lng,
+              });
+              
+              if (etaResponse.data && etaResponse.data.success && etaResponse.data.etaMinutes) {
+                etaMinutes = etaResponse.data.etaMinutes;
+              }
+            }
+          } catch (etaError) {
+            // If ETA calculation fails, server will calculate it
+            logger.warn("Failed to calculate ETA on client, server will calculate:", etaError);
+          }
+        }
+
+        // Send status update with ETA if available
         await axios.post(`${URL}${endpoint}`, {
           jobId: job._id || job.id,
           handymanId: handymanId,
+          etaMinutes: etaMinutes > 0 ? etaMinutes : undefined,
         });
 
         // Send handyman location in the background (don't await - let it happen async)
@@ -3793,45 +3808,6 @@ export default {
         this.isRespondingToMaterials = false;
       }
     },
-    async submitHoursWorked() {
-      if (this.hoursWorked <= 0 || this.isSubmittingHours) return;
-
-      this.isSubmittingHours = true;
-      try {
-        const job = this.currentJob;
-        const jobId = job._id || job.id;
-        const handymanId = this.store.user?._id || this.store.user?.id;
-
-        const totalPrice = this.hoursWorked * this.hourlyPrice;
-
-        // First update status to "done"
-        await axios.post(`${URL}/jobs/done`, {
-          jobId,
-          handymanId,
-        });
-
-        // Then submit hours worked
-        await axios.post(`${URL}/jobs/${jobId}/hours`, {
-          handymanId,
-          hoursWorked: this.hoursWorked,
-          hourlyPrice: this.hourlyPrice,
-          totalPrice,
-        });
-
-        this.toast.showSuccess("שעות העבודה נשמרו");
-        this.showHoursWorkedModal = false;
-        this.hoursWorked = 1;
-        this.localJobStatus = "done";
-        this.$emit("status-updated", "done");
-      } catch (error) {
-        this.toast.showError(
-          error.response?.data?.message || "שגיאה בשמירת שעות העבודה"
-        );
-      } finally {
-        this.isSubmittingHours = false;
-      }
-    },
-
     async submitRating() {
       if (this.rating === 0) {
         this.toast.showError("אנא בחר דירוג");
@@ -4177,13 +4153,160 @@ export default {
       }
     },
 
-    // Audio recording methods
+    // Audio recording methods - WhatsApp style
+    
+    // Touch event handlers for recording
+    onRecordTouchStart(e) {
+      if (this.isRecordingLocked) {
+        // If locked, tap sends the recording
+        this.sendRecordingAndReset();
+        return;
+      }
+      
+      const touch = e.touches[0];
+      this.recordingStartX = touch.clientX;
+      this.recordingStartY = touch.clientY;
+      this.recordingDragX = 0;
+      this.recordingDragY = 0;
+      this.isRecordingCancel = false;
+      this.startRecording();
+    },
+    
+    onRecordTouchMove(e) {
+      if (!this.isRecording || this.isRecordingLocked) return;
+      
+      const touch = e.touches[0];
+      this.recordingDragX = touch.clientX - this.recordingStartX;
+      this.recordingDragY = touch.clientY - this.recordingStartY;
+      
+      // Check for cancel gesture (drag right more than 80px)
+      if (this.recordingDragX > 80) {
+        this.isRecordingCancel = true;
+      } else {
+        this.isRecordingCancel = false;
+      }
+      
+      // Check for lock gesture (drag up more than 80px)
+      if (this.recordingDragY < -80 && !this.isRecordingCancel) {
+        this.isRecordingLocked = true;
+      }
+    },
+    
+    onRecordTouchEnd() {
+      if (this.isRecordingLocked) {
+        // Recording is locked - don't stop, wait for tap
+        return;
+      }
+      
+      if (this.isRecordingCancel) {
+        // Cancel recording
+        this.cancelRecording();
+      } else if (this.isRecording) {
+        // Send recording
+        this.sendRecordingAndReset();
+      }
+    },
+    
+    // Mouse event handler (for desktop testing)
+    onRecordMouseDown() {
+      if (this.isRecordingLocked) {
+        this.sendRecordingAndReset();
+        return;
+      }
+      
+      this.startRecording();
+      
+      // Add mouse up listener for desktop
+      const onMouseUp = () => {
+        if (!this.isRecordingLocked && this.isRecording) {
+          this.sendRecordingAndReset();
+        }
+        document.removeEventListener('mouseup', onMouseUp);
+      };
+      document.addEventListener('mouseup', onMouseUp);
+    },
+    
+    async sendRecordingAndReset() {
+      // Stop recording and send
+      if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
+        this.mediaRecorder.stop();
+        
+        // Wait for onstop to fire and create audioBlob
+        await new Promise(resolve => {
+          const checkBlob = setInterval(() => {
+            if (this.audioBlob) {
+              clearInterval(checkBlob);
+              resolve();
+            }
+          }, 50);
+          // Timeout after 2 seconds
+          setTimeout(() => {
+            clearInterval(checkBlob);
+            resolve();
+          }, 2000);
+        });
+      }
+      
+      if (this.recordingInterval) {
+        clearInterval(this.recordingInterval);
+        this.recordingInterval = null;
+      }
+      
+      // Reset state
+      this.isRecording = false;
+      this.isRecordingLocked = false;
+      this.isRecordingCancel = false;
+      this.recordingDragX = 0;
+      this.recordingDragY = 0;
+      
+      // Send the audio if we have it
+      if (this.audioBlob) {
+        this.audioPreview = window.URL.createObjectURL(this.audioBlob);
+        await this.sendAudio();
+      }
+    },
+    
+    cancelRecording() {
+      // Stop and discard recording
+      if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
+        this.mediaRecorder.stop();
+      }
+      if (this.recordingInterval) {
+        clearInterval(this.recordingInterval);
+        this.recordingInterval = null;
+      }
+      
+      // Stop all tracks
+      if (this.mediaRecorder && this.mediaRecorder.stream) {
+        this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      }
+      
+      // Reset all state
+      this.isRecording = false;
+      this.isRecordingLocked = false;
+      this.isRecordingCancel = false;
+      this.recordingDragX = 0;
+      this.recordingDragY = 0;
+      this.audioBlob = null;
+      this.audioChunks = [];
+      this.recordingTime = 0;
+      
+      this.toast?.showInfo("ההקלטה בוטלה");
+    },
+    
+    formatRecordingTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    },
+
     async startRecording() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
         });
         this.audioChunks = [];
+        this.audioBlob = null;
         this.mediaRecorder = new MediaRecorder(stream, {
           mimeType: "audio/webm;codecs=opus",
         });
@@ -4196,7 +4319,6 @@ export default {
 
         this.mediaRecorder.onstop = () => {
           this.audioBlob = new Blob(this.audioChunks, { type: "audio/webm" });
-          this.audioPreview = window.URL.createObjectURL(this.audioBlob);
           stream.getTracks().forEach((track) => track.stop());
         };
 
@@ -4388,6 +4510,66 @@ export default {
         bars.push(Math.max(10, Math.min(80, height)));
       }
       return bars;
+    },
+
+    // Phone number detection
+    containsPhoneNumber(text) {
+      if (!text) return false;
+      
+      // Remove all spaces, dashes, dots, and parentheses for analysis
+      const cleanText = text.replace(/[\s\-\.\(\)]/g, '');
+      
+      // Israeli phone patterns:
+      // 1. 05xxxxxxxx (10 digits starting with 05)
+      // 2. +97205xxxxxxxx or 97205xxxxxxxx (international format)
+      // 3. 05x-xxx-xxxx or 05x xxx xxxx (with separators)
+      
+      // Check for 10-digit numbers starting with 05
+      const israeliMobileRegex = /05\d{8}/;
+      if (israeliMobileRegex.test(cleanText)) return true;
+      
+      // Check for international format +972 or 972
+      const internationalRegex = /\+?972[05]\d{8}/;
+      if (internationalRegex.test(cleanText)) return true;
+      
+      // Check for landline patterns 0x-xxxxxxx
+      const landlineRegex = /0[2-9]\d{7,8}/;
+      if (landlineRegex.test(cleanText)) return true;
+      
+      // Check original text for formatted phone numbers
+      // Pattern: 05x-xxx-xxxx or 05x xxx xxxx or similar
+      const formattedPhoneRegex = /0[5][0-9][\s\-\.]?[0-9]{3}[\s\-\.]?[0-9]{4}/;
+      if (formattedPhoneRegex.test(text)) return true;
+      
+      // Check for any 10-digit sequence that looks like a phone
+      const anyPhoneRegex = /\b0[5][0-9]{8}\b/;
+      if (anyPhoneRegex.test(cleanText)) return true;
+      
+      return false;
+    },
+
+    // Android-safe input handlers
+    onMessageInput(e) {
+      // Get value directly from the DOM element (more reliable on Android)
+      this.newMessage = e.target.value;
+      this.handleTyping();
+    },
+
+    onEnterPress() {
+      // Don't send if IME is still composing (Android fix)
+      if (this.isComposing) return;
+      
+      // Make sure we have the latest value from the input
+      if (this.$refs.messageInput) {
+        this.newMessage = this.$refs.messageInput.value;
+      }
+      this.sendMessage();
+    },
+
+    onCompositionEnd(e) {
+      this.isComposing = false;
+      // Update newMessage with final composed value
+      this.newMessage = e.target.value;
     },
 
     handleTyping() {
@@ -5507,13 +5689,250 @@ export default {
   }
 }
 
-.composer__record--recording {
-  border-color: rgba(239, 68, 68, 0.45);
+/* WhatsApp-style voice recording */
+.composer__voice-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.composer__voice-area--recording {
+  flex: 1;
+  background: rgba(239, 68, 68, 0.08);
+  border-radius: 20px;
+  padding: 6px 12px;
+  margin-right: -8px;
+}
+
+.composer__voice-area--cancel {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.composer__record {
+  position: relative;
+  z-index: 2;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.composer__record--active {
+  transform: scale(1.2);
+  border-color: rgba(239, 68, 68, 0.6);
   background: linear-gradient(
     180deg,
-    rgba(239, 68, 68, 0.18),
-    rgba(255, 255, 255, 0.02)
+    rgba(239, 68, 68, 0.25),
+    rgba(255, 255, 255, 0.05)
   );
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+}
+
+.composer__record--locked {
+  border-color: rgba(255, 106, 0, 0.6);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 106, 0, 0.25),
+    rgba(255, 255, 255, 0.05)
+  );
+}
+
+.composer__record-cancel {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background: rgba(239, 68, 68, 0.25);
+  }
+}
+
+.voice-recording-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.voice-recording-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.voice-recording-time {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.voice-swipe-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-right: auto;
+}
+
+.voice-lock-hint {
+  position: absolute;
+  top: -50px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 106, 0, 0.2);
+  border: 1px solid rgba(255, 106, 0, 0.4);
+  border-radius: 12px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  animation: bounceUp 0.3s ease;
+  color: #ff6a00;
+  font-size: 18px;
+}
+
+@keyframes bounceUp {
+  0% { transform: translateX(-50%) translateY(10px); opacity: 0; }
+  100% { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+.voice-cancel-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ef4444;
+  font-size: 13px;
+  font-weight: 500;
+  
+  svg {
+    font-size: 16px;
+  }
+}
+
+/* FontAwesome record icons */
+.record-icon {
+  font-size: 18px;
+  transition: transform 0.2s ease;
+}
+
+.record-icon--active {
+  color: #ef4444;
+  animation: pulse-icon 1s infinite;
+}
+
+@keyframes pulse-icon {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+/* Phone Number Block Modal */
+.phoneBlockModal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.2s ease;
+}
+
+.phoneBlockModal__content {
+  background: linear-gradient(180deg, #1c1d24 0%, #12131a 100%);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-bottom: none;
+  border-radius: 28px 28px 0 0;
+  padding: 28px 24px 36px;
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+  animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 -10px 50px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0.5; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.phoneBlockModal__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(245, 158, 11, 0.1));
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 30px;
+  padding: 10px 20px;
+  margin-bottom: 20px;
+}
+
+.phoneBlockModal__badgeIcon {
+  font-size: 18px;
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: rotate(0); }
+  25% { transform: rotate(-10deg); }
+  75% { transform: rotate(10deg); }
+}
+
+.phoneBlockModal__badgeText {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fbbf24;
+  letter-spacing: 0.5px;
+}
+
+.phoneBlockModal__title {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0 0 14px;
+  line-height: 1.4;
+}
+
+.phoneBlockModal__text {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.7;
+  margin: 0 0 26px;
+}
+
+.phoneBlockModal__btn {
+  width: 100%;
+  height: 50px;
+  border-radius: 16px;
+  border: none;
+  background: linear-gradient(135deg, #ff6a00 0%, #ff8533 100%);
+  color: white;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 20px rgba(255, 106, 0, 0.3);
+  
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 25px rgba(255, 106, 0, 0.4);
+  }
+  
+  &:active {
+    transform: scale(0.98) translateY(0);
+  }
 }
 
 .composer__input {

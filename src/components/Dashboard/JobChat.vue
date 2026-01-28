@@ -933,6 +933,7 @@ import { io } from "socket.io-client";
 import { useToast } from "@/composables/useToast";
 import { useMainStore } from "@/store/index";
 import { getCurrentLocation } from "@/utils/geolocation";
+import logger from "@/utils/logger";
 
 export default {
   name: "JobChatLux",
@@ -2164,9 +2165,36 @@ export default {
     async updateStatus(newStatus) {
       try {
         const endpoint = `/jobs/${newStatus.replaceAll("_", "-")}`;
+        
+        // Calculate ETA if status is "on_the_way" and we have locations
+        let etaMinutes = 0;
+        if (newStatus === "on_the_way" && this.isHandyman && this.jobLocation) {
+          try {
+            // Try to get current location first
+            const currentLoc = await getCurrentLocation();
+            if (currentLoc && currentLoc.lat && currentLoc.lon) {
+              // Calculate ETA using MapBox
+              const etaResponse = await axios.post(`${URL}/api/eta/calculate`, {
+                handymanLat: currentLoc.lat,
+                handymanLng: currentLoc.lon,
+                clientLat: this.jobLocation.lat,
+                clientLng: this.jobLocation.lng,
+              });
+              
+              if (etaResponse.data && etaResponse.data.success && etaResponse.data.etaMinutes) {
+                etaMinutes = etaResponse.data.etaMinutes;
+              }
+            }
+          } catch (etaError) {
+            // If ETA calculation fails, server will calculate it
+            logger.warn("Failed to calculate ETA on client, server will calculate:", etaError);
+          }
+        }
+        
         await axios.post(`${URL}${endpoint}`, {
           jobId: this.job._id || this.job.id,
           handymanId: this.job.handymanId,
+          etaMinutes: etaMinutes > 0 ? etaMinutes : undefined,
         });
         this.$emit("status-updated", newStatus);
       } catch (err) {

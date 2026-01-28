@@ -85,6 +85,10 @@ import {
   faEnvelope,
   faBan,
   faUnlock,
+  faMicrophone,
+  faPaperPlane,
+  faLock,
+  faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 
 library.add(
@@ -108,7 +112,11 @@ library.add(
   faCircleUser,
   faEnvelope,
   faBan,
-  faUnlock
+  faUnlock,
+  faMicrophone,
+  faPaperPlane,
+  faLock,
+  faXmark
 );
 
 const app = createApp(App);

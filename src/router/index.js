@@ -17,7 +17,7 @@ import JobView from "@/views/JobView.vue";
 import RatingPage from "@/views/RatingPage.vue";
 import HandymanRatings from "@/views/HandymanRatings.vue";
 import Payments from "@/views/Payments.vue";
-import PersonalRequestCall from "@/views/PersonalRequestCall.vue";
+// PersonalRequestCall - now redirects to CreateCall with isSpecial flag
 import SubscriptionPaymentSettings from "@/views/SubscriptionPaymentSettings.vue";
 
 // Admin routes
@@ -120,7 +120,16 @@ const routes = [
   {
     path: "/Dashboard/:id/personal-request/:handymanId",
     name: "PersonalRequestCall",
-    component: PersonalRequestCall,
+    redirect: (to) => ({
+      name: "CreateCall",
+      params: { id: to.params.id },
+      query: { handymanId: to.params.handymanId, isSpecial: "true" },
+    }),
+  },
+  {
+    path: "/Dashboard/:id/create-call/special/:handymanId",
+    name: "CreateCallSpecial",
+    component: CreateCall,
     props: true,
   },
 
